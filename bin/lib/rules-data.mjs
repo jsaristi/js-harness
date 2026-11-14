@@ -468,7 +468,7 @@ export const RULES = [
   },
   {
     "id": "remote-control-yes",
-    "subject": "turning Remote Control back on in each work session after a restart of the Claude app, which turns it off: the review step of a host update (doctor's host-update row) does it without asking only where this rule holds, and asks the user first anywhere else",
+    "subject": "turning Remote Control back on in the orchestrator session after a restart of the Claude app, which turns it off: the review step of a host update (doctor's host-update row) does it without asking only where this rule holds, and asks the user first anywhere else; the sessions the orchestrator tasks get no Remote Control",
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-24",

@@ -2001,7 +2001,7 @@ test('a host update since the reviewed versions is stale, with the versions and 
     const host = () => ({ found: true, desktop: '2.42304.0', staged: '2.42304.0', code: '2.1.299' });
     // A project without the rule remote-control-yes is told to ask before turning Remote Control back on.
     const asking = await runDoctor(['--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, host });
-    assert.ok(asking.output.includes('\n    ask the user whether to turn Remote Control back on in each work session, and turn it on only where they say yes; '), asking.output);
+    assert.ok(asking.output.includes('\n    ask the user whether to turn Remote Control back on in the orchestrator session, and turn it on only if they say yes: '), asking.output);
     assert.doesNotMatch(asking.output, /without asking the user/);
     // This repository's rules file declares it.
     fs.mkdirSync(path.join(project, 'bin', 'lib'), { recursive: true });
@@ -2015,7 +2015,7 @@ test('a host update since the reviewed versions is stale, with the versions and 
       '    read https://claude.com/docs/cowork/claude-desktop-changelog from 2.37337.1 to 2.42304.0',
       '    read the Claude Code CHANGELOG (https://code.claude.com/docs/en/changelog) from 2.1.295 to 2.1.299',
       '    check that the harness hooks in ~/.claude/settings.json still run',
-      '    turn Remote Control back on in each work session without asking the user (rule remote-control-yes: a standing yes of 2026-10-15); a session that has run no turn since the restart refuses it, so send it a message first',
+      '    turn Remote Control back on in the orchestrator session alone, without asking the user (rule remote-control-yes: a standing yes of 2026-10-15): the sessions it tasks have none; an orchestrator that has run no turn since the restart refuses it, so send it a message first',
       '    report to the user a full summary in everyday words: what improved, what changed and what was fixed; for each, how it helps or hurts the harness and the way the user works; and what the harness should change to work better, or must change; a version the changelog has no entry for is reported as having none',
       '    write that account to docs/host-updates/claude-desktop-2.42304.0.md in the project that keeps the host reviews: the line "Code tab CLI: 2.1.299", a table of Change, Decision (adopt, adapt or ignore) and Reason, one row a change the update brings, and a "## Sources" list of what was read, the changelogs above among it, each with its span "(<from> to <to>)"',
       '    then record the review: js-harness doctor --host-reviewed, which refuses while that file lacks any of it',

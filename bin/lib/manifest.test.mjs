@@ -3335,6 +3335,17 @@ test('the orchestrator skill says how the lead pauses everything before it tells
   assert.ok(text.indexOf('## The restart') < text.indexOf('## The recap'), 'it sits with the lead\'s other protocols');
 });
 
+// His words of 2026-11-14 (odd/tasks/remote-control-lead-only.md, spec 4): he talks only to the lead, so no session it
+// tasks has Remote Control, neither at its start nor after a restart.
+test('the orchestrator skill gives Remote Control to no session it tasks', () => {
+  const text = components[1].content('0.1.0');
+  assert.doesNotMatch(text, /with Remote Control on \(claude\.ai\/code/);
+  assert.doesNotMatch(text, /then turn its Remote Control back on/);
+  assert.ok(text.includes('runs it in the background with no Remote Control, since the user talks only to you (`--remote-control` turns it on),'), 'the start line');
+  const restart = text.slice(text.indexOf('\n## The restart\n'), text.indexOf('\n## The recap\n'));
+  assert.ok(restart.includes('then turn your own Remote Control back on (`rule:remote-control-yes`): no session you task has it.'), restart);
+});
+
 // On 2026-11-04 the lead restarted a background session with sessions stop and start, and the stop's claude rm deleted
 // the files of its worktree (odd/tasks/stop-keeps-worktree.md): a message resumes one, and stop is only for removal.
 test('the orchestrator skill resumes a background session by message and never restarts one with stop and start', () => {
