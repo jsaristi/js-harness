@@ -922,7 +922,7 @@ The two records of the template gate: what a page command rendered, and what the
 - `decision`: string, one of `refused`, `admitted`, `free`, `unchecked` (before a call) or `shown` (after one).
 - `sha256`: string or `null`, the page's hash.
 - `reason`: string or `null`; on a board-summary write (`recordSummary`, tool `ArtifactData`, no template) it is `fields: <JSON array>` of the top-level fields written, or `fields unknown: <why>`.
-- `board`: string or `null`, only on a board-summary write: the artifact URL it wrote to.
+- `board`: string or `null`, only on a board-summary write: the board it wrote to, `artifact:<id>` for a claude.ai artifact link of either shape, any other URL without its query, fragment and trailing slash.
 - `yours`: array of strings or `null`, only on a board-summary write that touched the summary's `yours` (`yoursAfter` of `bin/lib/template-gate.mjs`): the list it left, `null` when it is not known (a file not read). `template gate --hook` refuses the next write to the same `board` that drops an item of the last list known (a `null` is passed over) with no `yoursDropped: [{ item, reason }]` entry of its own for it, and a `str_replace` of `yours` (`decideSummary`).
 - `dropped`: array of `{ item, reason }`, only on a board-summary write whose `yoursDropped` gave reasons: what left `yours` and why.
 

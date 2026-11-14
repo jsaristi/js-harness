@@ -325,10 +325,14 @@ test('gate --hook holds each artifact\'s board/summary to its own yours, and --s
   write('--shown', 'b2', 'https://claude.ai/artifact/test', { yours: [] });
   assert.equal(write('--hook', 'b3', 'https://claude.ai/artifact/test', { yours: [] }).out, '{}', 'another board is held to its own list');
   assert.equal(JSON.parse(write('--hook', 'b4', 'https://claude.ai/artifact/board', { yours: [] }).out).hookSpecificOutput.permissionDecision, 'deny');
+  // The verifier on 7c4f91fd..86a1becb: another spelling of the same board's link is the same board.
+  for (const url of ['https://claude.ai/artifact/board/', 'https://claude.ai/artifact/board?x=1', 'https://claude.ai/code/artifact/board']) {
+    assert.equal(JSON.parse(write('--hook', 'b4s', url, { yours: [] }).out).hookSpecificOutput?.permissionDecision, 'deny', url);
+  }
   const reasoned = { yours: [], yoursDropped: [{ item: 'Revisa el PR 867', reason: 'merged as 96ce3c9', extra: 'x' }] };
   write('--shown', 'b5', 'https://claude.ai/artifact/board', reasoned);
   const line = shownLines(home).at(-1);
-  assert.deepEqual([line.board, line.yours, line.dropped], ['https://claude.ai/artifact/board', [], [{ item: 'Revisa el PR 867', reason: 'merged as 96ce3c9' }]]);
+  assert.deepEqual([line.board, line.yours, line.dropped], ['artifact:board', [], [{ item: 'Revisa el PR 867', reason: 'merged as 96ce3c9' }]]);
 });
 
 test('gate --hook reads the nearest harness.json at or above the payload\'s folder, and answers {} where it does not turn templates on', (t) => {

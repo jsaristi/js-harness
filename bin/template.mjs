@@ -215,6 +215,16 @@ function readChanges(changes, folder) {
   });
 }
 
+/** The board an ArtifactData `url` names, as the summary's record keys it: `artifact:<id>` for a claude.ai artifact
+ * link of either shape (`/artifact/<id>`, `/code/artifact/<id>`), whatever follows the id; any other string without
+ * its query, fragment and trailing slash; `null` for no string. One board spelt two ways is one baseline (the verifier
+ * on 7c4f91fd..86a1becb). */
+function boardKey(url) {
+  if (typeof url !== 'string') return null;
+  const id = /\/artifact\/([^/?#]+)/.exec(url)?.[1];
+  return id === undefined ? url.replace(/[?#].*$/, '').replace(/\/+$/, '') : `artifact:${id}`;
+}
+
 /** What a summary line keeps of a call's writes and `yours` (`yoursAfter`): the list they left and the reasons given for
  * what left it, nothing when they did not touch it. */
 function yoursRecord(changes) {
@@ -263,7 +273,7 @@ function runGate(mode, seams, { stdout, stderr }) {
   // A write of the board's summary is decided before the call, by what it takes from yours, and recorded after it
   // succeeded, for the reply hook's stale-board check and the next write's decision.
   const summary = summaryChanges(tool, payload?.tool_input);
-  const board = typeof payload?.tool_input?.url === 'string' ? payload.tool_input.url : null;
+  const board = boardKey(payload?.tool_input?.url);
   if (target === null && summary === null) return stdout('{}'), 0;
   const folder = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : seams.cwd;
   const on = templatesOn(seams.root ?? nearestHarness(folder));
