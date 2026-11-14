@@ -734,9 +734,52 @@ test('sessions stop --remove-worktree refuses a worktree git cannot read while i
   const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
   assert.equal(result.code, 1, result.stdout);
   assert.match(result.stderr, /git could not read it as a worktree/);
+  // The verifier on 9dfd7afc..2e3b9f94 (L17): git status repairs nothing; git worktree repair mends a broken link, run
+  // from the main checkout, since from inside a worktree whose gitdir moved git finds no repository (reliability lens on 0045b27c).
+  assert.match(result.stderr, /from the main checkout with git worktree repair \S+/);
   assert.equal(actions(world).some((call) => call[0] === 'rm'), false, 'no claude rm');
   assert.equal(fs.readFileSync(path.join(worktree, 'work.js'), 'utf8'), 'uncommitted\n');
   assert.deepEqual(keptCopies(world), []);
+}));
+
+// The verifier on 9dfd7afc..2e3b9f94 (L17): a branch with no commit yet is a worktree git reads, so it is not told to
+// repair it; what it holds lives only in its files and its index.
+test('sessions stop --remove-worktree refuses a branch with no commit yet, naming it, and removes nothing', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const { worktree, git } = realWorktree(world, 'thing');
+  git('checkout', '-q', '--orphan', 'fresh');
+  fs.writeFileSync(path.join(worktree, 'work.js'), 'on no commit\n');
+  const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
+  assert.equal(result.code, 1, result.stdout);
+  assert.match(result.stderr, /its branch fresh has no commit yet/);
+  assert.doesNotMatch(result.stderr, /could not read it as a worktree/);
+  assert.equal(actions(world).some((call) => call[0] === 'rm'), false, 'no claude rm');
+  assert.equal(fs.readFileSync(path.join(worktree, 'work.js'), 'utf8'), 'on no commit\n');
+  assert.deepEqual(keptCopies(world), []);
+}));
+
+// The verifier on 4187cb1..edbc9df1, L1: a branch whose ref was deleted has no HEAD commit either, but its commits live
+// in the HEAD reflog; it is not told to commit, which would hide them.
+test('sessions stop --remove-worktree does not read a deleted branch ref as a branch with no commit yet', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const { worktree, git } = realWorktree(world, 'thing');
+  fs.writeFileSync(path.join(worktree, 'lone.txt'), 'only the reflog holds this\n');
+  git('add', 'lone.txt');
+  git('commit', '-q', '-m', 'lone');
+  git('commit', '-q', '--amend', '-m', 'lone, amended');
+  const tip = git('rev-parse', 'HEAD').trim();
+  git('update-ref', '-d', 'refs/heads/worktree-thing');
+  const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
+  assert.equal(result.code, 1, result.stdout);
+  assert.doesNotMatch(result.stderr, /has no commit yet/);
+  assert.match(result.stderr, new RegExp(`its HEAD reflog holds ${tip.slice(0, 12)}, which no branch holds: git -C \\S+ branch <name> ${tip.slice(0, 12)}`));
+  // The resilience lens on 58492d90: once the tip is kept, the commit the amend left behind is not asked for.
+  git('branch', 'keep', tip);
+  const again = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
+  assert.equal(again.code, 1, again.stdout);
+  assert.match(again.stderr, /its branch worktree-thing has no commit yet/);
+  assert.equal(actions(world).some((call) => call[0] === 'rm'), false, 'no claude rm');
+  assert.ok(fs.existsSync(path.join(worktree, 'lone.txt')));
 }));
 
 test('sessions stop --remove-worktree refuses a detached head whose commits no ref holds, and removes nothing', withWorld((world) => {

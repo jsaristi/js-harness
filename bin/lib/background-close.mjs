@@ -391,19 +391,47 @@ const listOf = (out) => out.split('\0').filter((item) => item !== '');
 function unkeptPaths(worktree, gitIn) {
   const head = gitIn(worktree, 'rev-parse', '--verify', '--quiet', 'HEAD');
   const top = gitIn(worktree, 'rev-parse', '--show-toplevel');
-  if (!head.ok || !top.ok || !sameFolder(top.out.trim(), worktree)) {
-    // Copied whole only when git keeps nothing of its own for it; a git folder still there holds its index and its own
-    // refs, which no copy of its files keeps (Codex P1 on 62a71b56).
-    if (noGitFolder(worktree)) return { why: null };
-    const said = !top.ok ? top.err : !head.ok ? head.err : `its top is ${top.out.trim()}`;
-    return { why: `git could not read it as a worktree (${said || 'git gave no reason'}) while its git folder is there, so what only that folder holds could not be checked: repair it with git -C ${worktree} status, then run this again` };
-  }
+  const readable = top.ok && sameFolder(top.out.trim(), worktree);
   // A ref of the worktree's own (refs/worktree, refs/bisect, refs/rewritten) lives in its git folder, which the removal
   // deletes: only a shared ref holds a commit (the verifier on 1d982b38).
   const sharedHolds = (commit) => {
     const held = gitIn(worktree, 'for-each-ref', '--contains', commit, '--format=%(refname)');
     return held.ok ? held.out.split(/\r?\n/).some((ref) => ref !== '' && !OWN_REFS.test(ref)) : { err: held.err || 'git gave no reason' };
   };
+  // A branch with no commit yet is a worktree git reads: what it holds is in its files and its index, not git's to repair
+  // (the verifier on 9dfd7afc..2e3b9f94).
+  if (readable && !head.ok) {
+    const unborn = gitIn(worktree, 'symbolic-ref', '--quiet', '--short', 'HEAD');
+    if (unborn.ok) {
+      const name = unborn.out.trim();
+      // A branch whose ref was deleted has no HEAD commit either, and its commits may live only in the HEAD reflog, which
+      // goes with the removal; "commit it" would hide them (the verifier on 4187cb1..edbc9df1, L1). Only the last entry
+      // is read: the tip HEAD last had, which holds its history; the commits an amend or a rebase left behind are older
+      // entries and stay unread (the resilience lens on 58492d90).
+      const gitDir = gitIn(worktree, 'rev-parse', '--absolute-git-dir');
+      if (!gitDir.ok) return { why: `git could not name its git folder (${gitDir.err})` };
+      let log = '';
+      try {
+        log = fs.readFileSync(path.join(gitDir.out.trim(), 'logs', 'HEAD'), 'utf8');
+      } catch (err) {
+        if (err.code !== 'ENOENT') return { why: `its HEAD reflog could not be read (${err.code ?? err.message})` };
+      }
+      const remembered = log.split(/\r?\n/).map((line) => line.split(' ')[1]).filter((hash) => /^[0-9a-f]{40,64}$/.test(hash ?? '') && !/^0+$/.test(hash)).slice(-1);
+      for (const commit of remembered) {
+        const shared = sharedHolds(commit);
+        if (shared?.err !== undefined) return { why: `git could not say whether a branch holds ${commit.slice(0, 12)} (${shared.err})` };
+        if (!shared) return { why: `its branch ${name} has no commit, and its HEAD reflog holds ${commit.slice(0, 12)}, which no branch holds: git -C ${worktree} branch <name> ${commit.slice(0, 12)} keeps it, then run this again` };
+      }
+      return { why: `its branch ${name} has no commit yet, so no branch keeps what it holds: commit it, or keep it by hand, then run this again` };
+    }
+  }
+  if (!head.ok || !readable) {
+    // Copied whole only when git keeps nothing of its own for it; a git folder still there holds its index and its own
+    // refs, which no copy of its files keeps (Codex P1 on 62a71b56).
+    if (noGitFolder(worktree)) return { why: null };
+    const said = !top.ok ? top.err : !head.ok ? head.err : `its top is ${top.out.trim()}`;
+    return { why: `git could not read it as a worktree (${said || 'git gave no reason'}) while its git folder is there, so what only that folder holds could not be checked: repair it from the main checkout with git worktree repair ${worktree} (from inside it git may find no repository), then run this again` };
+  }
   const branch = gitIn(worktree, 'symbolic-ref', '--quiet', '--short', 'HEAD');
   const tips = [...(branch.ok ? [] : ['HEAD'])];
   const own = gitIn(worktree, 'for-each-ref', '--format=%(objectname) %(refname)', 'refs/worktree', 'refs/bisect', 'refs/rewritten');

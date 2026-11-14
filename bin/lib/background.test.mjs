@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { BACKGROUND_SCHEMA, LOCK_WAIT_MS, RM_TRIES, backgroundChanges, backgroundOf, idOfStart, readRecord, recordFileOf, resumedChain, startArgs, undoSession, worktreeHolding, worktreeOf } from './background.mjs';
+import { BACKGROUND_SCHEMA, LOCK_WAIT_MS, RM_TRIES, backgroundChanges, backgroundOf, idOfStart, readRecord, recordFileOf, resumedChain, startArgs, undoSession, within, worktreeHolding, worktreeOf } from './background.mjs';
 
 test('idOfStart reads the id claude --bg prints, and the attach hint when the first line is missing', () => {
   assert.equal(idOfStart('backgrounded · 0db8bc5e · jh-bg-probe-1\n  claude agents             list sessions\n'), '0db8bc5e');
@@ -192,4 +192,39 @@ test('undoSession tries nothing again when claude refuses for another reason', (
   assert.equal(done.outcome, 'kept');
   assert.deepEqual(world.calls, [['stop', '4a9694ea'], ['rm', '4a9694ea']]);
   assert.deepEqual(world.paused, []);
+});
+
+// The verifier on 9dfd7afc..2e3b9f94 (odd/tasks/audit-cement.md, L17): a first segment that only begins with two dots
+// is a folder inside, not a step out.
+test('within reads a first segment like ..foo as inside, and .. itself as outside, on both platforms', () => {
+  assert.equal(within('/a/..foo', '/a', 'linux'), true);
+  assert.equal(within('/a/..foo/b', '/a', 'linux'), true);
+  assert.equal(within('/a/../b', '/a', 'linux'), false);
+  assert.equal(within('/b', '/a', 'linux'), false);
+  assert.equal(within('C:\\A\\..foo', 'c:\\a', 'win32'), true);
+  assert.equal(within('C:\\A\\..\\b', 'c:\\a', 'win32'), false);
+  assert.equal(within('D:\\a', 'C:\\a', 'win32'), false);
+  assert.equal(within('/a', '/a/b', 'linux'), false, 'a parent is not inside its child (the relative path is exactly ..)');
+});
+
+// The verifier on 4187cb1..edbc9df1, M1: sameFolder follows a junction, so within must too, or a session standing in a
+// worktree by its real path is not seen when the record holds the junction's spelling.
+test('within reads a folder reached through a junction or a link by its real path', () => {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'within-')));
+  try {
+    const real = path.join(dir, 'real');
+    const link = path.join(dir, 'link');
+    fs.mkdirSync(path.join(real, 'sub'), { recursive: true });
+    fs.symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir');
+    assert.equal(within(path.join(real, 'sub'), link), true);
+    assert.equal(within(path.join(link, 'sub'), real), true);
+    assert.equal(within(dir, link), false);
+    // Codex and the lenses on 58492d90: a child not there yet keeps its parent's form, as a copy's destination does.
+    assert.equal(within(path.join(link, 'missing', 'deeper'), link), true);
+    assert.equal(within(path.join(link, 'missing'), real), true);
+    assert.equal(within(path.join(real, 'missing'), link), true);
+    assert.equal(within(path.join(dir, 'missing'), link), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

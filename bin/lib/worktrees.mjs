@@ -32,8 +32,19 @@ function worktreesOf(porcelain) {
  * app) or `orca/workspaces` (the Orca app, which leaves no marker of its own in the worktree; T11). */
 const appsOwn = (dir) => /(^|\/)(\.claude\/worktrees|orca\/workspaces)\//i.test(`${dir.replace(/\\/g, '/')}/`);
 
-/** Two paths of one folder, as git and a caller may spell them differently on Windows. */
+/** Two paths of one folder, as git and a caller may spell them differently on Windows, or one reached through a junction
+ * or a link: git prints a worktree's real path (the verifier on 9dfd7afc..2e3b9f94). A folder that is not there is
+ * compared by its spelling only. */
 export const sameFolder = (a, b) => {
+  if (sameSpelling(a, b)) return true;
+  try {
+    return sameSpelling(fs.realpathSync.native(a), fs.realpathSync.native(b));
+  } catch {
+    return false;
+  }
+};
+
+const sameSpelling = (a, b) => {
   const plain = (dir) => path.resolve(dir).replace(/\\/g, '/').replace(/\/$/, '');
   return process.platform === 'win32' ? plain(a).toLowerCase() === plain(b).toLowerCase() : plain(a) === plain(b);
 };

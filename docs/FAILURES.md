@@ -473,6 +473,9 @@ asked that decisions pass through the advisor.
   advisor call in either stretch; since then it calls the advisor alone before each land, question and delete (three
   covered). What stops it is the hook's refusal once the warning week ends; its proof is `js-harness advisor-gate
   report` showing no flagged land or question of the lead in a day
+- Seen: 2026-11-14 — JH 196's note of 15:08 local (claimed; relayed by the lead to JH 198) — JH 196 sent its ready
+  notice for pull request 871 at 20:03Z with no advisor call in its stretch, flagged by the hook while it was still in
+  warning mode; the refusal mode is installed since 15:24 local (main a20aa33)
 
 ### design-not-faithful
 A design document passed gentle-ai and its own contract and still dropped or misstated decisions of
