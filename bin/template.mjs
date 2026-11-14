@@ -14,7 +14,7 @@ import { FIELDS, firstMissing, scaffold } from './lib/template-scaffold.mjs';
 import { askTarget, decideAsk, decidePage, decideSummary, pageTarget, shownReport, summaryChanges, yoursAfter } from './lib/template-gate.mjs';
 import { answeredMoments, render as renderQuestion } from './lib/template-question.mjs';
 import { readNotices, recordedQuestions } from './lib/channel.mjs';
-import { RENDERED_SCHEMA, SHOWN_SCHEMA, SUMMARY_SUBJECT, lastYours, readRecord, recordShown, recordSummary, renderedFile, shownFile } from './lib/template-record.mjs';
+import { RENDERED_SCHEMA, SHOWN_SCHEMA, SUMMARY_SUBJECT, boardKey, lastYours, readRecord, recordShown, recordSummary, renderedFile, shownFile } from './lib/template-record.mjs';
 import { harnessOfTree } from './lib/project-functions.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
@@ -213,16 +213,6 @@ function readChanges(changes, folder) {
       return { ...change, unreadable: `cannot read ${file} (${err.code ?? err.message})` };
     }
   });
-}
-
-/** The board an ArtifactData `url` names, as the summary's record keys it: `artifact:<id>` for a claude.ai artifact
- * link of either shape (`/artifact/<id>`, `/code/artifact/<id>`), whatever follows the id; any other string without
- * its query, fragment and trailing slash; `null` for no string. One board spelt two ways is one baseline (the verifier
- * on 7c4f91fd..86a1becb). */
-function boardKey(url) {
-  if (typeof url !== 'string') return null;
-  const id = /\/artifact\/([^/?#]+)/.exec(url)?.[1];
-  return id === undefined ? url.replace(/[?#].*$/, '').replace(/\/+$/, '') : `artifact:${id}`;
 }
 
 /** What a summary line keeps of a call's writes and `yours` (`yoursAfter`): the list they left and the reasons given for

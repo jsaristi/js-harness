@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  RENDERED_SCHEMA, SHOWN_SCHEMA, SUMMARY_SUBJECT, appendRecord, isSummaryWrite, lastYours, normalText, readRecord, recordRendered,
+  RENDERED_SCHEMA, SHOWN_SCHEMA, SUMMARY_SUBJECT, appendRecord, boardKey, isSummaryWrite, lastYours, normalText, readRecord, recordRendered,
   recordShown, recordSummary, renderedFile, shownFile, summaryContent,
 } from './template-record.mjs';
 
@@ -125,6 +125,9 @@ test('recordSummary keeps the yours a write left, and lastYours reads the last l
     assert.deepEqual(lastYours(readRecord(file, SHOWN_SCHEMA), 'w'), ['a', 'b']);
     recordSummary(file, { at: '2026-10-31T06:00:00.000Z', session: 's', call: 'c6', board: 'v', yours: null });
     assert.equal(lastYours(readRecord(file, SHOWN_SCHEMA), 'v'), null);
+    // Codex on a253097f: a line that kept the link as it came is the board its key names.
+    recordSummary(file, { at: '2026-10-31T07:00:00.000Z', session: 's', call: 'c7', board: 'https://claude.ai/code/artifact/abc/', yours: ['k'] });
+    assert.deepEqual(lastYours(readRecord(file, SHOWN_SCHEMA), boardKey('https://claude.ai/artifact/abc')), ['k']);
     assert.deepEqual(readRecord(file, SHOWN_SCHEMA).find((line) => line.call === 'c5').dropped, [{ item: 'a', reason: 'merged as 96ce3c9' }]);
   });
 });

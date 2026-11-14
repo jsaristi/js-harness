@@ -119,6 +119,16 @@ export function recordSummary(file, { at, session, call, fields = [], unreadable
   return recordShown(file, { at, session, tool: 'ArtifactData', call, subject: SUMMARY_SUBJECT, decision: 'shown', reason, board, yours, dropped }, fileSystem);
 }
 
+/** The board an ArtifactData `url` names, as the summary's record keys it: `artifact:<id>` for a claude.ai artifact
+ * link of either shape (`/artifact/<id>`, `/code/artifact/<id>`), whatever follows the id; any other string without
+ * its query, fragment and trailing slash; `null` for no string. One board spelt two ways is one baseline (the verifier
+ * on 7c4f91fd..86a1becb). */
+export function boardKey(url) {
+  if (typeof url !== 'string') return null;
+  const id = /\/artifact\/([^/?#]+)/.exec(url)?.[1];
+  return id === undefined ? url.replace(/[?#].*$/, '').replace(/\/+$/, '') : `artifact:${id}`;
+}
+
 /** The `yours` of the last summary write to the artifact `board` in `lines` that knew it; `null` when only writes
  * that left it not known are there, `undefined` when no write said it. A write that left it not known is passed over
  * for a list known before it, so the next write is held to that list rather than to nothing (the reliability lens on
@@ -126,8 +136,9 @@ export function recordSummary(file, { at, session, call, fields = [], unreadable
  * that name no board, as recorded before each line named its board. */
 export function lastYours(lines, board = null) {
   const said = lines.filter((one) => isSummaryWrite(one) && Object.hasOwn(one, 'yours'));
-  const own = said.filter((one) => (one.board ?? null) === board);
-  const these = own.length > 0 || board === null ? own : said.filter((one) => (one.board ?? null) === null);
+  // A line's board read as `boardKey` reads it, so a line written with the link as it came is the same board (Codex on a253097f).
+  const own = said.filter((one) => boardKey(one.board) === board);
+  const these = own.length > 0 || board === null ? own : said.filter((one) => boardKey(one.board) === null);
   if (these.length === 0) return undefined;
   return these.findLast((one) => Array.isArray(one.yours))?.yours ?? null;
 }
