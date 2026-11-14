@@ -115,8 +115,18 @@ function noteLeft(tool, input, readNote) {
 /** The text of the project's rules file, or null when it has none. Any other failure throws. */
 const rulesTextOf = (root, readFile) => optionalText(path.join(root, 'bin', 'lib', 'rules-data.mjs'), readFile);
 
+/** The lister `worktreeCdRefusal` asks: the linked worktrees of the repository at `cwd`, each git call bounded so a
+ * hook never hangs on a lock; null where git cannot list them. */
+async function worktreeLister(cwd) {
+  const { boundedGit, linkedWorktrees } = await import('./lib/worktrees.mjs');
+  return () => {
+    const listed = linkedWorktrees(cwd, boundedGit(undefined, 5000));
+    return listed === null ? null : { linked: listed.linked.map((tree) => tree.path).filter(Boolean), here: listed.here || null };
+  };
+}
+
 /** Why the call of `payload` is refused, or null. */
-async function refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains, readApp, env = {}, homedir = os.homedir }) {
+async function refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains, readApp, listWorktrees, env = {}, homedir = os.homedir }) {
   const tool = payload?.tool_name;
   const input = payload?.tool_input ?? {};
   if (Object.hasOwn(PATH_FIELDS, tool)) {
@@ -162,10 +172,10 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     const rules = rulesTextOf(root, readFile);
     // A lead's title holds the start to rule:lead-effort, any other to rule:session-effort; both to rule:session-model.
     const { leadTitle, seniorTitle } = await import('./lib/session-title-guard.mjs');
-    // A senior (odd/tasks/senior-orchestrator.md) starts only by the command, which holds it to its own model with no
-    // advisor; this tool would hold it to the home's.
+    // A senior (odd/tasks/senior-orchestrator.md) starts only by the command, which holds it to its own model and names
+    // no advisor (his settings' advisorModel still gives it one); this tool would hold it to the home's.
     if (seniorTitle(input.title)) {
-      return `js-harness guard: start_session does not start a senior ("${input.title}"): start it with js-harness sessions start --title "${input.title}", which holds it to rule:senior-model with no advisor.`;
+      return `js-harness guard: start_session does not start a senior ("${input.title}"): start it with js-harness sessions start --title "${input.title}", which holds it to rule:senior-model and names no advisor (his settings' advisorModel still gives it one).`;
     }
     const lead = leadTitle(input.title);
     const start = sessionStartRefusal(input, rules, { lead });
@@ -197,6 +207,10 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   const chained = chainedStep(input.command) === null ? null : chainedStepRefusal(input.command, rulesTextOf(rootOf(), readFile));
   if (chained !== null) return chained;
   const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
+  // git is asked for the worktrees only when the command moves (odd/tasks/audit-cement.md, spec 2).
+  const { worktreeCdRefusal } = await import('./lib/worktrees.mjs');
+  const moved = worktreeCdRefusal(input.command, { cwd, worktrees: listWorktrees ?? (await worktreeLister(cwd)), home: homedir() });
+  if (moved !== null) return moved;
   const base = reviewBaseRefusal(input.command, { cwd, ...(baseContains && { contains: baseContains }) });
   if (base !== null) return base;
   const run = testRun ?? (await import('./lib/test-run-warning.mjs')).testRunWarning;
@@ -316,6 +330,8 @@ export async function guardMain(argv, {
   homedir = os.homedir,
   exists = fs.existsSync,
   remoteGate,
+  // The linked worktrees a cd is checked against (`worktreeLister`), a seam for the tests.
+  listWorktrees,
   // The desktop app's records of its sessions by session id, read only for a start_session.
   readApp = async () => {
     const { appRoot, appSessions } = await import('./lib/app-record.mjs');
@@ -341,7 +357,7 @@ export async function guardMain(argv, {
   let hint = null;
   try {
     const payload = JSON.parse(readStdin());
-    reason = await refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains, readApp, env, homedir });
+    reason = await refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains, readApp, listWorktrees, env, homedir });
     // A denial wins; a Bash call that runs adds the hint for a wrapped commit beside its result (commit-gates-first S4).
     if (reason === null && payload?.tool_name === 'Bash') hint = await hintOf(payload, { env, projectRoot, exists, remoteGate });
   } catch {

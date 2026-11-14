@@ -328,7 +328,7 @@ test('a start of a senior is held to the rule senior-model and names no advisor,
   const SENIOR = RULES.find((rule) => rule.id === 'senior-model').value;
   assert.equal(sessionStartRefusal({ ...BRIEF, model: SENIOR, effort: RULES.find((rule) => rule.id === 'senior-effort').value }, HERE, { senior: true, cli: true }), null);
   assert.match(sessionStartRefusal({ ...BRIEF, model: RULES.find((rule) => rule.id === 'session-model').value, effort: RULES.find((rule) => rule.id === 'senior-effort').value }, HERE, { senior: true, cli: true }), /not the one of the rule senior-model: /);
-  assert.match(sessionStartRefusal({ ...BRIEF, model: SENIOR, effort: RULES.find((rule) => rule.id === 'senior-effort').value, advisor: SENIOR }, HERE, { senior: true, cli: true }), /a senior runs with no advisor/);
+  assert.match(sessionStartRefusal({ ...BRIEF, model: SENIOR, effort: RULES.find((rule) => rule.id === 'senior-effort').value, advisor: SENIOR }, HERE, { senior: true, cli: true }), /a senior starts with no advisor named.*advisorModel still gives it one/);
   assert.match(sessionStartRefusal({ ...BRIEF, model: SENIOR, effort: HELD }, HERE, { cli: true }), /not the one of the rule session-model: /);
   const home = sessionStartHome(HERE, { senior: true });
   assert.deepEqual([home.model, home.advisor], [SENIOR, null], 'a senior takes its model and no advisor where the call names none');

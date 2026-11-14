@@ -4,6 +4,7 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { COMMAND_KEYWORDS, shellWords } from './guard.mjs';
 
 /** The minutes a worktree's index must have stood still before the worktree is removed: a session that staged
  * something a moment ago may be about to commit there. */
@@ -139,3 +140,92 @@ export function worktreesInMain({ cwd, run = spawnSync, now = Date.now }) {
   const base = gitIn(cwd, 'rev-parse', '--verify', '--quiet', 'origin/main').out.trim();
   return base ? removableWorktrees({ cwd, base, gitIn, now }) : null;
 }
+// The commands that move the shell to another folder, and the options they take before it.
+// Compared in lower case, as PowerShell takes them in any case; `builtin` and `command` may stand before one.
+const CD_COMMANDS = new Set(['cd', 'pushd', 'chdir', 'set-location', 'sl']);
+const CD_PREFIXES = new Set(['builtin', 'command']);
+const CD_OPTIONS = /^-(?:[LPe@]+|Path|LiteralPath)$/i;
+// PowerShell's option and its folder in one word: `-Path:<dir>`.
+const CD_JOINED = /^-(?:Path|LiteralPath):(.+)$/i;
+
+/** A folder as a forward-slash path, a Git Bash drive (`/d/x`) as Windows writes it (`D:/x`), `..` and `.` resolved
+ * against `cwd` for a relative one; lower case, so two spellings of one Windows folder compare equal. The platform's
+ * own `path` is not used: the gate's tests run on Linux with Windows paths. `~`, `$HOME` and `${HOME}` stand for
+ * `home` where it is given, since worktrees live under it (the verifier on 0444b5de); `null` for `-` and for a
+ * home not given, which name no folder a command can tell. */
+function folderOf(target, cwd, home = null) {
+  if (target === '' || target === '-') return null;
+  const homed = /^(?:~|\$HOME|\$\{HOME\})(?=[\\/]|$)/;
+  if (homed.test(target)) {
+    if (home === null) return null;
+    target = target.replace(homed, home);
+  } else if (target.startsWith('~')) return null;
+  const slashed = (dir) => dir.replace(/\\/g, '/').replace(/^\/([A-Za-z])(?=\/|$)/, '$1:');
+  let full = slashed(target);
+  if (!/^[A-Za-z]:/.test(full) && !full.startsWith('/')) full = `${slashed(cwd)}/${full}`;
+  const parts = [];
+  for (const part of full.split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') parts.pop();
+    else parts.push(part);
+  }
+  return `${full.startsWith('/') ? '/' : ''}${parts.join('/')}`.toLowerCase();
+}
+
+/** Whether the folder `dir` is `tree` or inside it, both as `folderOf` gives them. */
+const within = (dir, tree) => dir === tree || dir.startsWith(`${tree}/`);
+
+/** Why the Bash command `command`, run in `cwd`, is refused for moving into another session's worktree, or null: a
+ * `cd`, `pushd` or `Set-Location` that starts a command and names a folder inside a linked worktree of the repository
+ * other than the one `cwd` is in. On 2026-11-13 the lead did this twice (relief file, lines 2654 and 2695): the next
+ * commands of a session then run on another session's branch. A hook cannot list the app's sessions, so every other
+ * linked worktree counts, the lead's choice of 2026-11-13 (odd/tasks/audit-cement.md, L3). `worktrees()` gives
+ * `{ linked, here }` as `linkedWorktrees` of ./worktrees.mjs does, or null when git cannot say; it is asked only
+ * when the command moves, and a null refuses nothing. */
+export function worktreeCdRefusal(command, { cwd, worktrees, home = null }) {
+  const words = shellWords(command, { groups: true });
+  const { operators } = words;
+  const targets = [];
+  // Where the shell may stand at each cd. A cd in a subshell, a background job or before a || that fails leaves the
+  // parent where it was, so a relative cd is resolved from every folder named before it, whatever operator came
+  // between (Codex on 8bbbdbf3): one that lands in another worktree is enough. After `;` or `&&` this refuses more
+  // than the shell would do (`cd D:/elsewhere/sub && cd ../other` from a worktree beside `other`), the safe side: such
+  // a command runs as two calls, or with an absolute path.
+  const places = new Set([folderOf(cwd, cwd)]);
+  for (let i = 0; i < words.length; i += 1) {
+    const atStart = i === 0 || operators.has(i - 1) || (!operators.has(i - 1) && COMMAND_KEYWORDS.has(words[i - 1]) && (i === 1 || operators.has(i - 2)));
+    if (!atStart || operators.has(i)) continue;
+    const named = CD_PREFIXES.has(words[i]) && i + 1 < words.length && !operators.has(i + 1) ? i + 1 : i;
+    if (!CD_COMMANDS.has(words[named].toLowerCase())) continue;
+    let at = named + 1;
+    let given = null;
+    while (at < words.length && !operators.has(at) && given === null && (CD_OPTIONS.test(words[at]) || CD_JOINED.test(words[at]))) {
+      given = CD_JOINED.exec(words[at])?.[1] ?? null;
+      at += 1;
+    }
+    if (given === null && words[at] === '--' && !operators.has(at)) at += 1;
+    if (given === null && (at >= words.length || operators.has(at))) continue;
+    const folder = given ?? words[at];
+    const reached = [...places].map((place) => folderOf(folder, place, home)).filter((target) => target !== null);
+    targets.push(...reached);
+    for (const target of reached) places.add(target);
+  }
+  if (targets.length === 0) return null;
+  const listed = worktrees();
+  if (listed === null || listed === undefined) return null;
+  // The session's own worktree is the one git says `cwd` is in, or, where git gives none or another, the one `cwd`
+  // stands inside (lenses on 8bbbdbf3): a cd within it is never refused.
+  const here = listed.here ? folderOf(listed.here, cwd) : null;
+  const start = folderOf(cwd, cwd);
+  const own = (dir) => dir === here || within(start, dir);
+  for (const target of targets) {
+    const tree = listed.linked.map((dir) => folderOf(dir, cwd)).find((dir) => dir !== null && within(target, dir) && !own(dir));
+    if (tree === undefined) continue;
+    return `js-harness guard: this command moves into ${tree}, another session's worktree: the commands after it would `
+      + 'run on that session\'s branch, and its files are its own. Read it from where you are instead: '
+      + '`git show <branch>:<path>` for a file of its branch, `git -C <worktree> <command>` for a git question, or the '
+      + 'file\'s absolute path to Read.';
+  }
+  return null;
+}
+

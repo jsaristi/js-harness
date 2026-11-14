@@ -106,13 +106,14 @@ export function sessionStartRefusal(toolInput, projectData, { cli = false, lead 
   if (typeof toolInput?.prompt !== 'string' || toolInput.prompt === '') return null;
   const home = claudeHeld(projectData);
   const who = cli ? 'js-harness sessions start' : 'js-harness guard: start_session';
-  // A senior (odd/tasks/senior-orchestrator.md) runs on its own model with no advisor, where its rule is declared.
+  // A senior (odd/tasks/senior-orchestrator.md) starts on its own model with no advisor named, where its rule is
+  // declared; his settings' advisorModel still gives it the advisor tool (odd/tasks/audit-cement.md, spec 7).
   const ofSenior = senior && home.senior !== null;
   const held = ofSenior ? home.senior : home.model;
   const model = held === null ? null : modelReason(toolInput, held.value, who, cli, ofSenior ? SENIOR_HOME.model : CLAUDE_HOME.model);
   if (model !== null) return `${model}${held.note}`;
   if (ofSenior && typeof toolInput.advisor === 'string' && toolInput.advisor !== '') {
-    return `${who} names the advisor "${toolInput.advisor}", and a senior runs with no advisor: its model is the advisor's (rule ${SENIOR_HOME.model}: ${home.senior.value}). Pass none.`;
+    return `${who} names the advisor "${toolInput.advisor}", and a senior starts with no advisor named: its model is the advisor's (rule ${SENIOR_HOME.model}: ${home.senior.value}), and his settings' advisorModel still gives it one. Pass none.`;
   }
   const advisor = home.advisor === null || ofSenior ? null : advisorReason(toolInput, home.advisor.value, who, cli);
   if (advisor !== null) return `${advisor}${home.advisor.note}`;
