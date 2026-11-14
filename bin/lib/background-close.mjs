@@ -403,7 +403,7 @@ function unkeptPaths(worktree, gitIn) {
     // refs, which no copy of its files keeps (Codex P1 on 62a71b56).
     if (noGitFolder(worktree)) return { why: null };
     const said = !top.ok ? top.err : !head.ok ? head.err : `its top is ${top.out.trim()}`;
-    return { why: `git could not read it as a worktree (${said || 'git gave no reason'}) while its git folder is there, so what only that folder holds could not be checked: repair it with git -C ${worktree} worktree repair, then run this again` };
+    return { why: `git could not read it as a worktree (${said || 'git gave no reason'}) while its git folder is there, so what only that folder holds could not be checked: repair it from the main checkout with git worktree repair ${worktree} (from inside it git may find no repository), then run this again` };
   }
   // A ref of the worktree's own (refs/worktree, refs/bisect, refs/rewritten) lives in its git folder, which the removal
   // deletes: only a shared ref holds a commit (the verifier on 1d982b38).

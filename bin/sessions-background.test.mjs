@@ -721,8 +721,9 @@ test('sessions stop --remove-worktree refuses a worktree git cannot read while i
   const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
   assert.equal(result.code, 1, result.stdout);
   assert.match(result.stderr, /git could not read it as a worktree/);
-  // The verifier on 9dfd7afc..2e3b9f94 (L17): git status repairs nothing; git worktree repair mends a broken link.
-  assert.match(result.stderr, /git -C \S+ worktree repair/);
+  // The verifier on 9dfd7afc..2e3b9f94 (L17): git status repairs nothing; git worktree repair mends a broken link, run
+  // from the main checkout, since from inside a worktree whose gitdir moved git finds no repository (reliability lens on 0045b27c).
+  assert.match(result.stderr, /from the main checkout with git worktree repair \S+/);
   assert.equal(actions(world).some((call) => call[0] === 'rm'), false, 'no claude rm');
   assert.equal(fs.readFileSync(path.join(worktree, 'work.js'), 'utf8'), 'uncommitted\n');
   assert.deepEqual(keptCopies(world), []);
