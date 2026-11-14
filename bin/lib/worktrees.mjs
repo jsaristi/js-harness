@@ -141,15 +141,25 @@ export function worktreesInMain({ cwd, run = spawnSync, now = Date.now }) {
   return base ? removableWorktrees({ cwd, base, gitIn, now }) : null;
 }
 // The commands that move the shell to another folder, and the options they take before it.
-const CD_COMMANDS = new Set(['cd', 'pushd', 'chdir', 'Set-Location', 'sl']);
+// Compared in lower case, as PowerShell takes them in any case; `builtin` and `command` may stand before one.
+const CD_COMMANDS = new Set(['cd', 'pushd', 'chdir', 'set-location', 'sl']);
+const CD_PREFIXES = new Set(['builtin', 'command']);
 const CD_OPTIONS = /^-(?:[LPe@]+|Path|LiteralPath)$/i;
+// PowerShell's option and its folder in one word: `-Path:<dir>`.
+const CD_JOINED = /^-(?:Path|LiteralPath):(.+)$/i;
 
 /** A folder as a forward-slash path, a Git Bash drive (`/d/x`) as Windows writes it (`D:/x`), `..` and `.` resolved
  * against `cwd` for a relative one; lower case, so two spellings of one Windows folder compare equal. The platform's
- * own `path` is not used: the gate's tests run on Linux with Windows paths. `null` for `~` and `-`, which name no
- * folder a command can tell. */
-function folderOf(target, cwd) {
-  if (target === '' || target.startsWith('~') || target === '-') return null;
+ * own `path` is not used: the gate's tests run on Linux with Windows paths. `~`, `$HOME` and `${HOME}` stand for
+ * `home` where it is given, since worktrees live under it (the verifier on 0444b5de); `null` for `-` and for a
+ * home not given, which name no folder a command can tell. */
+function folderOf(target, cwd, home = null) {
+  if (target === '' || target === '-') return null;
+  const homed = /^(?:~|\$HOME|\$\{HOME\})(?=[\\/]|$)/;
+  if (homed.test(target)) {
+    if (home === null) return null;
+    target = target.replace(homed, home);
+  } else if (target.startsWith('~')) return null;
   const slashed = (dir) => dir.replace(/\\/g, '/').replace(/^\/([A-Za-z])(?=\/|$)/, '$1:');
   let full = slashed(target);
   if (!/^[A-Za-z]:/.test(full) && !full.startsWith('/')) full = `${slashed(cwd)}/${full}`;
@@ -172,7 +182,7 @@ const within = (dir, tree) => dir === tree || dir.startsWith(`${tree}/`);
  * linked worktree counts, the lead's choice of 2026-11-13 (odd/tasks/audit-cement.md, L3). `worktrees()` gives
  * `{ linked, here }` as `linkedWorktrees` of ./worktrees.mjs does, or null when git cannot say; it is asked only
  * when the command moves, and a null refuses nothing. */
-export function worktreeCdRefusal(command, { cwd, worktrees }) {
+export function worktreeCdRefusal(command, { cwd, worktrees, home = null }) {
   const words = shellWords(command, { groups: true });
   const { operators } = words;
   const targets = [];
@@ -184,12 +194,19 @@ export function worktreeCdRefusal(command, { cwd, worktrees }) {
   const places = new Set([folderOf(cwd, cwd)]);
   for (let i = 0; i < words.length; i += 1) {
     const atStart = i === 0 || operators.has(i - 1) || (!operators.has(i - 1) && COMMAND_KEYWORDS.has(words[i - 1]) && (i === 1 || operators.has(i - 2)));
-    if (!atStart || operators.has(i) || !CD_COMMANDS.has(words[i])) continue;
-    let at = i + 1;
-    while (at < words.length && !operators.has(at) && CD_OPTIONS.test(words[at])) at += 1;
-    if (words[at] === '--' && !operators.has(at)) at += 1;
-    if (at >= words.length || operators.has(at)) continue;
-    const reached = [...places].map((place) => folderOf(words[at], place)).filter((target) => target !== null);
+    if (!atStart || operators.has(i)) continue;
+    const named = CD_PREFIXES.has(words[i]) && i + 1 < words.length && !operators.has(i + 1) ? i + 1 : i;
+    if (!CD_COMMANDS.has(words[named].toLowerCase())) continue;
+    let at = named + 1;
+    let given = null;
+    while (at < words.length && !operators.has(at) && given === null && (CD_OPTIONS.test(words[at]) || CD_JOINED.test(words[at]))) {
+      given = CD_JOINED.exec(words[at])?.[1] ?? null;
+      at += 1;
+    }
+    if (given === null && words[at] === '--' && !operators.has(at)) at += 1;
+    if (given === null && (at >= words.length || operators.has(at))) continue;
+    const folder = given ?? words[at];
+    const reached = [...places].map((place) => folderOf(folder, place, home)).filter((target) => target !== null);
     targets.push(...reached);
     for (const target of reached) places.add(target);
   }

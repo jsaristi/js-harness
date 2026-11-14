@@ -119,6 +119,12 @@ test('a cd, pushd or Set-Location into another linked worktree is refused, namin
     '(cd bin); cd ../other',
     'cd bin & cd ../other',
     'cd nowhere || cd ../other',
+    // The verifier on 0444b5de: case, builtin and command prefixes, PowerShell's -Path:<dir>.
+    'CD ../other',
+    'set-location ..\\other',
+    'builtin cd ../other',
+    'command cd ../other',
+    'Set-Location -Path:D:/repo/.claude/worktrees/other',
     'pushd D:/repo-worktrees/feat',
     'Set-Location -Path D:/REPO/.claude/worktrees/OTHER',
     'cd -P D:/repo-worktrees/feat/bin/lib',
@@ -148,6 +154,17 @@ test('a cd within the own worktree, to the main checkout or elsewhere passes, an
   }
   // A git that cannot list the worktrees refuses nothing.
   assert.equal(worktreeCdRefusal('cd D:/repo/.claude/worktrees/other', { cwd, worktrees: () => null }), null);
+});
+
+test('a cd by ~ or $HOME into a worktree under the home is refused (the verifier on 0444b5de)', () => {
+  const trees = () => ({ linked: ['C:/Users/me/repo-worktrees/mine', 'C:/Users/me/repo-worktrees/far'], here: 'C:/Users/me/repo-worktrees/mine' });
+  const cwd = 'C:/Users/me/repo-worktrees/mine';
+  for (const command of ['cd ~/repo-worktrees/far', 'cd "$HOME/repo-worktrees/far"', 'cd ${HOME}/repo-worktrees/far', 'cd ~']) {
+    const refused = worktreeCdRefusal(command, { cwd, worktrees: trees, home: 'C:/Users/me' });
+    if (command === 'cd ~') assert.equal(refused, null, command);
+    else assert.match(refused ?? '', /another session's worktree/, command);
+  }
+  assert.equal(worktreeCdRefusal('cd ~/repo-worktrees/mine/bin', { cwd, worktrees: trees, home: 'C:/Users/me' }), null);
 });
 
 test('from the main checkout, a cd into any linked worktree is refused', () => {

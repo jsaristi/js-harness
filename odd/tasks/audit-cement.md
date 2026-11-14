@@ -187,5 +187,11 @@ jamas vuelva a suceder" (69918425:2679).
   reliability (own worktree only by git's `here`); both fixed, and the real lister checked by hand from this worktree
   (own subfolder passes, `tui-gentle-level-a6afd3` refused, main checkout passes). The verifier ended on an API error
   (subscription not allowed, 403) and is run again on the fix.
+- L6b T2 second round: Codex on 8bbbdbf3..0444b5de correct 0.94, both P2 fixed; lenses risk and reliability 0, readability
+  one (the comment understated the over-refusal after `;`/`&&`; answered in the comment, kept as the safe side).
+  Verifier (Opus, inherited; the installed copy still refused `opus` on 2026-11-14) held 3 of 3, no false refusal;
+  its medium finding (`~` and `$HOME` skipped while worktrees live under the home) and its cheap low ones (case,
+  `builtin`/`command`, `-Path:<dir>`) fixed. Left, said here: the PowerShell tool is not in the guard's matcher
+  (`bin/lib/hook-entries.mjs:82`), outside spec 2's Bash guard; `$(...)`, `X=1 cd` and `$VAR` other than HOME pass.
 - L7 2026-11-14: the machine rebooted at 05:56Z and this session was resumed; PR 863 landed (main 236f720). The lead
   added the auto-archive item to spec 8.

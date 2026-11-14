@@ -209,7 +209,7 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
   // git is asked for the worktrees only when the command moves (odd/tasks/audit-cement.md, spec 2).
   const { worktreeCdRefusal } = await import('./lib/worktrees.mjs');
-  const moved = worktreeCdRefusal(input.command, { cwd, worktrees: listWorktrees ?? (await worktreeLister(cwd)) });
+  const moved = worktreeCdRefusal(input.command, { cwd, worktrees: listWorktrees ?? (await worktreeLister(cwd)), home: homedir() });
   if (moved !== null) return moved;
   const base = reviewBaseRefusal(input.command, { cwd, ...(baseContains && { contains: baseContains }) });
   if (base !== null) return base;
