@@ -461,6 +461,7 @@ function runShown({ days, json }, seams, { stdout, stderr }) {
   for (const page of report.free) stdout(`free: ${page.reason} (${page.at})`);
   for (const escape of report.escapes) stdout(`escape: ${escape}`);
   if (report.unchecked > 0 && code !== 3) stdout(`${calls(report.unchecked)} unchecked`);
+  if (report.summaryUnchecked > 0) stdout(`board/summary: ${report.summaryUnchecked} write${report.summaryUnchecked === 1 ? '' : 's'} unchecked, where an item may have left yours with no reason`);
   return code;
 }
 

@@ -267,5 +267,5 @@ test('a page decoded from bytes that are not UTF-8 is matched by its bytes, as t
 test('shownReport names a shown page whose rendered line names no moment, and holds with nothing recorded', () => {
   const orphan = { at: hoursAgo(2), decision: 'shown', template: 'stretch-return', subject: null, reason: null };
   assert.deepEqual(shownReport({ rendered: [], shown: [orphan], moments: [] }).escapes, [`a page of stretch-return shown at ${hoursAgo(2)} names no moment`]);
-  assert.deepEqual(shownReport({ rendered: [], shown: [], moments: [] }), { templates: {}, free: [], escapes: [], unchecked: 0 });
+  assert.deepEqual(shownReport({ rendered: [], shown: [], moments: [] }), { templates: {}, free: [], escapes: [], unchecked: 0, summaryUnchecked: 0 });
 });

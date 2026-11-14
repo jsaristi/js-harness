@@ -119,11 +119,11 @@ export function recordSummary(file, { at, session, call, fields = [], unreadable
   return recordShown(file, { at, session, tool: 'ArtifactData', call, subject: SUMMARY_SUBJECT, decision: 'shown', reason, board, yours, dropped }, fileSystem);
 }
 
-/** The `yours` of the last summary write to the artifact `board` in `lines` that says it: an array, `null` when it
- * was not known, `undefined` when no line says it. */
+/** The `yours` of the last summary write to the artifact `board` in `lines` that knew it, `undefined` when none did. A
+ * write that left it not known (`null`) is passed over, so the next write is held to the last list known rather than
+ * to nothing (the reliability lens on 36bde347): what that write took from it asks its reason again. */
 export function lastYours(lines, board = null) {
-  const line = lines.findLast((one) => isSummaryWrite(one) && Object.hasOwn(one, 'yours') && (one.board ?? null) === board);
-  return line === undefined ? undefined : line.yours;
+  return lines.findLast((one) => isSummaryWrite(one) && Array.isArray(one.yours) && (one.board ?? null) === board)?.yours;
 }
 
 /** Whether a line of the shown record is a write of the summary, as `recordSummary` writes it. */

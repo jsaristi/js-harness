@@ -308,11 +308,13 @@ test('gate --hook refuses a summary write that drops an item of yours with no yo
   assert.equal(unread.out, '{}');
   assert.match(unread.err, /cannot read gone\.json.*unchecked/);
   assert.deepEqual(shownLines(home).slice(-2).map((line) => [line.decision, line.yours]), [['unchecked', undefined], ['shown', null]]);
-  assert.equal(pre('y7', { action: 'update', data: { yours: [] } }).out, '{}');
-  assert.match(shownLines(home).at(-1).reason, /not known.*unchecked/);
-  // The verifier on 7c4f91fd: a summary write it could not judge is no page or question unchecked.
-  const report = call(['shown', '--json'], { root, home, slug: 'p', now: GATE_NOW });
-  assert.equal(JSON.parse(report.out).unchecked, 0);
+  // The reliability lens on 36bde347: a list not known is no baseline; the last known one holds the next write.
+  assert.equal(JSON.parse(pre('y7', { action: 'update', data: { yours: [] } }).out).hookSpecificOutput.permissionDecision, 'deny');
+  assert.match(shownLines(home).at(-1).reason, /"Elige el nombre"/);
+  // The verifier on 7c4f91fd: a summary write it could not judge is no page or question unchecked, and is counted apart.
+  const report = JSON.parse(call(['shown', '--json'], { root, home, slug: 'p', now: GATE_NOW }).out);
+  assert.deepEqual([report.unchecked, report.summaryUnchecked], [0, 1]);
+  assert.match(call(['shown'], { root, home, slug: 'p', now: GATE_NOW }).out, /board\/summary: 1 write unchecked/);
 });
 
 test('gate --hook holds each artifact\'s board/summary to its own yours, and --shown keeps the reasons given', (t) => {

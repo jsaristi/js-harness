@@ -194,9 +194,12 @@ export function shownReport({ rendered, shown, moments }) {
     ...shown.filter((line) => line.decision === 'shown' && line.template !== null && (typeof line.subject !== 'string' || line.subject === ''))
       .map((line) => `a page of ${line.template} shown at ${line.at} names no moment`),
   ];
-  // A write of the board's summary the gate could not judge shows no page or question, so it is no call unchecked here.
-  const unchecked = shown.filter((line) => line.decision === 'unchecked' && line.subject !== SUMMARY_SUBJECT).length;
-  return { templates, free, escapes, unchecked };
+  // A write of the board's summary the gate could not judge shows no page or question, so it is no call unchecked here:
+  // it is counted apart, `summaryUnchecked`, where an item may have left yours with no reason.
+  const isUnchecked = (line) => line.decision === 'unchecked';
+  const unchecked = shown.filter((line) => isUnchecked(line) && line.subject !== SUMMARY_SUBJECT).length;
+  const summaryUnchecked = shown.filter((line) => isUnchecked(line) && line.subject === SUMMARY_SUBJECT).length;
+  return { templates, free, escapes, unchecked, summaryUnchecked };
 }
 
 /** The decision on one page, `{ decision, template, subject, sha256, reason }`: `admitted` when a fresh rendered line
