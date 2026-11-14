@@ -605,7 +605,7 @@ function realWorktree(world, name) {
 
 /** The folders `sessions stop --remove-worktree` copied into under the world's home. */
 const keptCopies = (world) => {
-  const dir = path.join(world.home, '.js-harness', 'background', 'kept');
+  const dir = path.join(world.home, '.js-harness', 'kept');
   return fs.existsSync(dir) ? fs.readdirSync(dir).map((name) => path.join(dir, name)) : [];
 };
 
@@ -645,6 +645,42 @@ test('sessions stop --remove-worktree copies what no branch keeps before claude 
   assert.deepEqual(manifest.leftOut, ['node_modules/']);
 }));
 
+// The verifier and Codex on f71380ea: what only the index holds, a file git is told not to look at, a tracked change in
+// a folder named as a left-out one, and submodules.
+test('sessions stop --remove-worktree keeps the index, skip-worktree files and tracked changes in a left-out name', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const { worktree, git } = realWorktree(world, 'thing');
+  fs.mkdirSync(path.join(worktree, 'vendor', 'node_modules'), { recursive: true });
+  fs.writeFileSync(path.join(worktree, 'vendor', 'node_modules', 'kept.js'), 'v1\n');
+  fs.writeFileSync(path.join(worktree, 'local.cfg'), 'shared\n');
+  git('add', '-f', 'vendor', 'local.cfg');
+  git('commit', '-q', '-m', 'vendor');
+  fs.writeFileSync(path.join(worktree, 'tracked.txt'), 'staged\n');
+  git('add', 'tracked.txt');
+  fs.writeFileSync(path.join(worktree, 'tracked.txt'), 'base\n');
+  fs.writeFileSync(path.join(worktree, 'vendor', 'node_modules', 'kept.js'), 'v2\n');
+  git('update-index', '--skip-worktree', 'local.cfg');
+  fs.writeFileSync(path.join(worktree, 'local.cfg'), 'mine\n');
+  const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
+  assert.equal(result.code, 0, result.stderr);
+  const [kept] = keptCopies(world);
+  assert.match(fs.readFileSync(path.join(kept, 'staged.patch'), 'utf8'), /\+staged/);
+  assert.equal(fs.readFileSync(path.join(kept, 'files', 'local.cfg'), 'utf8'), 'mine\n');
+  assert.equal(fs.readFileSync(path.join(kept, 'files', 'vendor', 'node_modules', 'kept.js'), 'utf8'), 'v2\n');
+}));
+
+test('sessions stop --remove-worktree refuses a worktree with submodules, and removes nothing', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const { worktree, git } = realWorktree(world, 'thing');
+  const head = git('rev-parse', 'HEAD').trim();
+  git('update-index', '--add', '--cacheinfo', `160000,${head},sm`);
+  const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
+  assert.equal(result.code, 1, result.stdout);
+  assert.match(result.stderr, /submodules \(sm\)/);
+  assert.equal(actions(world).some((call) => call[0] === 'rm'), false, 'no claude rm');
+  assert.ok(fs.existsSync(worktree));
+}));
+
 test('sessions stop --remove-worktree refuses a detached head whose commits no ref holds, and removes nothing', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
   const { worktree, git } = realWorktree(world, 'thing');
@@ -666,8 +702,8 @@ test('sessions stop --remove-worktree refuses when the copy cannot be written, a
   const { worktree } = realWorktree(world, 'thing');
   fs.writeFileSync(path.join(worktree, 'work.js'), 'uncommitted\n');
   // A file where the folder of the copies goes: no copy can be made under it.
-  fs.mkdirSync(path.join(world.home, '.js-harness', 'background'), { recursive: true });
-  fs.writeFileSync(path.join(world.home, '.js-harness', 'background', 'kept'), 'in the way\n');
+  fs.mkdirSync(path.join(world.home, '.js-harness'), { recursive: true });
+  fs.writeFileSync(path.join(world.home, '.js-harness', 'kept'), 'in the way\n');
   const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
   assert.equal(result.code, 1, result.stdout);
   assert.match(result.stderr, /could not be copied/);

@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { appendRecord, backgroundLines, boardBackground, finishedHere, finishedOf, readRecord, recordFileOf, strandedDirOf } from './background.mjs';
-import { REMOVAL_WAIT_MS, closeAfterLand, closeFinished, closeFinishedIn, closedLines, finishedIn } from './background-close.mjs';
+import { REMOVAL_WAIT_MS, closeAfterLand, closeFinished, closeFinishedIn, closedLines, finishedIn, keepUnkept, sharingSession } from './background-close.mjs';
 import { NOTICE_SCHEMA, recordPath } from './channel.mjs';
 import { projectSlug } from './sessions.mjs';
 import { sameFolder } from './worktrees.mjs';
@@ -673,3 +673,36 @@ test('closeFinished closes nothing when git cannot list the worktrees', withWorl
   assert.deepEqual(world.claudeCalls, []);
   assert.equal(fs.existsSync(entry.worktreePath), true);
 }));
+
+// Codex P1 on f71380ea: a session started or listed in the worktree with no worktree of its own also uses it.
+test('sharingSession names a session that works in the worktree, with a worktree of its own or only a folder in it', () => {
+  const root = path.join(os.tmpdir(), 'proj');
+  const tree = path.join(root, '.claude', 'worktrees', 'thing');
+  const mine = { id: 'aaaa1111', root, worktree: 'thing' };
+  const named = { id: 'bbbb2222', root, worktree: 'thing' };
+  const inside = { id: 'cccc3333', root, worktree: null, cwd: path.join(tree, 'src') };
+  const elsewhere = { id: 'dddd4444', root, worktree: null, cwd: root };
+  const record = (others) => ({ sessions: [mine, ...others], resumedAs: new Map() });
+  assert.equal(sharingSession(record([named]), [], [mine], tree)?.id, 'bbbb2222');
+  assert.equal(sharingSession(record([inside]), [], [mine], tree)?.id, 'cccc3333');
+  assert.equal(sharingSession(record([elsewhere]), [], [mine], tree), undefined);
+  assert.equal(sharingSession(record([named]), [{ entry: named }], [mine], tree), undefined, 'one that said closed');
+});
+
+test('keepUnkept waits for the process the lock of the worktree names before it copies, and refuses while it runs', (t) => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'keep-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const worktree = path.join(home, 'wt', 'thing');
+  fs.mkdirSync(worktree, { recursive: true });
+  const porcelain = `worktree ${path.join(home, 'main')}\nHEAD ${'a'.repeat(40)}\nbranch refs/heads/main\n\nworktree ${worktree}\nHEAD ${'b'.repeat(40)}\nbranch refs/heads/worktree-thing\nlocked claude session thing (pid 4321)\n`;
+  // git answers the listing and nothing else: the folder then reads as no worktree, and the copy stops there.
+  const gitIn = (dir, ...args) => (args[0] === 'worktree' ? { ok: true, out: porcelain, err: '' } : { ok: args[0] === 'rev-parse' && args[1] === '--show-toplevel', out: '', err: '' });
+  let clock = 0;
+  let looks = 0;
+  const pause = (ms) => { clock += ms; };
+  const ended = keepUnkept({ id: 'aaaa1111' }, worktree, { home, gitIn, now: () => clock, alive: (pid) => pid === 4321 && (looks += 1) < 3, pause });
+  assert.equal(looks, 3, 'it looked until the process ended');
+  assert.deepEqual(ended, { dir: null, count: 0, leftOut: [] });
+  const running = keepUnkept({ id: 'aaaa1111' }, worktree, { home, gitIn, now: () => clock, alive: () => true, pause });
+  assert.match(running.why, /pid 4321, still ran 60 s after claude stop/);
+});

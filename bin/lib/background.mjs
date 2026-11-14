@@ -425,7 +425,7 @@ function removeJob(id, { run, now, alive, pause }) {
  * `worktreeMissing` one that was not there before the stop, which claude never made or something else removed (R3-004).
  * The jobs it resumed (`resumedChain`) are undone with it, after it: they share its worktree and brief. Each claude rm
  * waits for the job's process to end and tries again while files are busy (`removeJob`); `alive` and `pause` are the
- * look at a pid and the wait, handed in by the tests. `beforeRemove()`, when given, runs once the session's own job
+ * look at a pid and the wait, handed in by the tests. `beforeRemove()`, when given, runs once every job of the chain
  * is stopped and before any claude rm: a reason it returns keeps the session, stopped and recorded, with nothing removed
  * (`sessions stop --remove-worktree` copies there what no branch keeps, odd/tasks/audit-cement.md, spec 5). */
 export function undoSession(entry, { home, run, now, alive = exists, pause = sleepSync, beforeRemove = null }) {
@@ -435,13 +435,25 @@ export function undoSession(entry, { home, run, now, alive = exists, pause = sle
   const chain = [entry, ...liveChain(record, entry)];
   const worktree = worktreeOf(entry);
   const was = worktree !== null && fs.existsSync(worktree);
-  for (const job of chain) {
+  const stops = new Map();
+  const stopJob = (job) => {
     const stop = run(['stop', job.id]);
-    if ((stop.error || stop.status !== 0) && !lostSaid(stop)) return { outcome: 'kept', why: `claude stop ${job.id}: ${saidBy(stop)}` };
-    if (job === entry && beforeRemove !== null) {
-      const why = beforeRemove();
-      if (why) return { outcome: 'kept', why, stopped: true };
+    stops.set(job, stop);
+    return (stop.error || stop.status !== 0) && !lostSaid(stop) ? `claude stop ${job.id}: ${saidBy(stop)}` : null;
+  };
+  // With a hook, every job of the chain is stopped before it runs, so none writes in the worktree while it looks.
+  if (beforeRemove !== null) {
+    for (const job of chain) {
+      const why = stopJob(job);
+      if (why !== null) return { outcome: 'kept', why };
     }
+    const why = beforeRemove();
+    if (why) return { outcome: 'kept', why, stopped: true };
+  }
+  for (const job of chain) {
+    const refused = stops.has(job) ? null : stopJob(job);
+    if (refused !== null) return { outcome: 'kept', why: refused };
+    const stop = stops.get(job);
     const rm = removeJob(job.id, { run, now, alive, pause });
     if ((rm.error || rm.status !== 0) && !lostSaid(rm)) return { outcome: 'kept', why: `claude rm ${job.id}: ${saidBy(rm)}${rm.why ? `\n  ${rm.why}` : ''}` };
     if (job === entry) [stopped, removed] = [stop, rm];

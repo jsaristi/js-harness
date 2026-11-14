@@ -211,3 +211,14 @@ jamas vuelva a suceder" (69918425:2679).
   `undoSession`; the lead cleared `bin/lib/background.mjs` for it (cross-session message, 2026-11-14 03:5x local). A
   folder git does not read as the worktree is copied whole but its `.git`. Not covered: the Claude app's
   `archive_session`, which removes a worktree with no word to the harness; the refusal says so, and FAILURES (T6).
+- L9 2026-11-14 T4 round 2, on f71380ea. Codex incorrect 0.98, three P1, all fixed: the index's content (now
+  `staged.patch`), the job's process still ending at the copy (the copy waits for the pid claude's lock on the worktree
+  names, as claude rm does), and a session in the folder with no worktree of its own (`sharingSession` reads its `cwd`
+  and `worktreePath`). Lenses risk, reliability and resilience: one warning each, the same, that jobs which resumed the
+  entry still run at the copy; answered: the chain holds the jobs the entry resumed, older ones (`resumedChain`), and
+  stop refuses an entry another job resumed; still, with a hook every job of the chain is now stopped before it runs.
+  Verifier (Opus): six ways, fixed but one: copies moved to `~/.js-harness/kept/` (the uninstall deletes
+  `background/` once no session is left); submodules refused; skip-worktree and assume-unchanged files copied; a path
+  git names that cannot be found refuses (a name git spells otherwise, Linux); left-out names apply only to untracked
+  or ignored paths. Not covered, said in `keepUnkept`: a change a clean filter hides from git (refusing every clean
+  filter would refuse every machine with git-lfs).

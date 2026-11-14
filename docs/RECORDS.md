@@ -683,10 +683,10 @@ The sessions the lead starts with `claude --bg`, which are no row in the user's 
 
 - One `started` entry, with its schema, whose line the record would not take after `claude` ran; read as a line of the record until the session is removed.
 
-### `kept/<id>-<time>/kept.json`
+### `~/.js-harness/kept/<id>-<time>/kept.json`
 
-- What `sessions stop <id> --remove-worktree` copied of the worktree before claude rm (`bin/lib/background-close.mjs` `keepUnkept`): the files under `files/` beside it, at their paths in the worktree; `<time>` is the ISO time with `:` and `.` made `-`. Kept for the user, who deletes the folder once nothing in it is needed.
-- `id`, `title`: the recorded job; `worktree`: its folder; `branch`, `head`: as git gave them, or `null` for a folder git did not read as the worktree (then copied whole but its `.git`); `at`: ISO time; `paths`: what was copied; `leftOut`: the paths under `node_modules` or `.codegraph`, not copied.
+- What `sessions stop <id> --remove-worktree` copied of the worktree before claude rm (`bin/lib/background-close.mjs` `keepUnkept`), beside the record's folder and not in it, which the uninstall deletes once no session is left: the files under `files/` beside it, at their paths in the worktree, and `staged.patch`, the index against HEAD as a binary patch, when anything is staged; `<time>` is the ISO time with `:` and `.` made `-`. Kept for the user, who deletes the folder once nothing in it is needed.
+- `id`, `title`: the recorded job; `worktree`: its folder; `branch`, `head`: as git gave them, or `null` for a folder git did not read as the worktree (then copied whole but its `.git`); `at`: ISO time; `paths`: what was copied; `staged`: whether `staged.patch` is there; `leftOut`: the paths under `node_modules` or `.codegraph`, not copied.
 
 ## Loops
 
