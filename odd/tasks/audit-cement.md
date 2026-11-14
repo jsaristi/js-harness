@@ -4,14 +4,14 @@ Branch: worktree-audit-cement (the document), then one branch per slice from ori
 Delivery: ask-on-risk. Tests: `node --test`. Opened 2026-11-13 by JH 198 (Opus 5.5, medium) from the lead's brief.
 
 ## State
-The lead's OK is in (L3). T1 landed (PR 863), T2 landed (PR 864, main 4a77d99), T3 ready as PR 865 (landing).
-T4 on `fix/audit-cement-close`, stacked on T3's branch: `sessions stop --remove-worktree` refuses while another
-recorded session that did not say closed has the worktree (A5, `sharingSession` taken out of `closeFinished`), and
-copies what no branch keeps to `~/.js-harness/background/kept/<id>-<time>/` between claude stop and claude rm
-(`undoSession`'s new `beforeRemove`, `bin/lib/background.mjs` cleared by the lead, L8). Tests written first, 95 pass in
-the three suites. Next: commit, independent verifier (high risk: it deletes), Codex and lenses with base 9cba7501,
-PR, ready. Then T5, T6, T8; T7 waits for the lead's word that JH 196 landed (and carries manifest.mjs:157, which
-describes --remove-worktree). Spec 8's FAILURES lines go in T6, with the `stretch-not-opened` line.
+T1 landed (PR 863), T2 landed (PR 864, main 4a77d99), T3 ready as PR 865 (the lead lands it). T4 on
+`fix/audit-cement-close` (from T3's branch): f71380ea, then 1d982b38 after round 1 (L9). Round 2 running: Codex and
+lenses with base f71380ea, and the same verifier re-checking 1d982b38. When clean: merge origin/main in if 865 landed
+(never rebase), push, PR, `notify --kind ready --pr` (base must be main). Next T5: the lead cleared `bin/template.mjs`
+and its test besides template-gate.mjs and template-record.mjs; a pure `decideSummary` in template-gate.mjs, the
+`yours` items kept in the summary's shown line (template-record.mjs), runGate deciding a board/summary write before
+the call; the refusal names the exact field `yoursDropped: [{ item, reason }]`; it is a gate: verifier, Codex,
+lenses. Then T6, T8; T7 waits for the lead's word that JH 196 landed (and carries manifest.mjs:157).
 
 ## Goal
 Every correction the audit and its two blind reviews found is fixed where a check can hold it, and each of the
