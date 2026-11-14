@@ -177,8 +177,10 @@ export function worktreeCdRefusal(command, { cwd, worktrees }) {
   const { operators } = words;
   const targets = [];
   // Where the shell may stand at each cd. A cd in a subshell, a background job or before a || that fails leaves the
-  // parent where it was, and the words do not say which ran, so a relative cd is resolved from every folder the shell
-  // may be in by then (Codex on 8bbbdbf3): one that lands in another worktree is enough.
+  // parent where it was, so a relative cd is resolved from every folder named before it, whatever operator came
+  // between (Codex on 8bbbdbf3): one that lands in another worktree is enough. After `;` or `&&` this refuses more
+  // than the shell would do (`cd D:/elsewhere/sub && cd ../other` from a worktree beside `other`), the safe side: such
+  // a command runs as two calls, or with an absolute path.
   const places = new Set([folderOf(cwd, cwd)]);
   for (let i = 0; i < words.length; i += 1) {
     const atStart = i === 0 || operators.has(i - 1) || (!operators.has(i - 1) && COMMAND_KEYWORDS.has(words[i - 1]) && (i === 1 || operators.has(i - 2)));
