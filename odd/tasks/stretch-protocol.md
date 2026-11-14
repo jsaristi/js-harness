@@ -164,7 +164,7 @@ itself is not limited to an absence: the skill text names it for any stretch.
 - [x] T5 (kind: build) the open stretch on the live board (`bin/sessions-live.mjs`, `docs/live-board.html`). Spec 5. In 4e6dbdd7. Route: inline.
 - [x] T6 (kind: build) the rule change, on `rule/away-autonomy-stretch`, in 865ec2e7 (PR 634, stacked on PR 633). Spec 1, 3. Route: inline.
 - [ ] T7 (kind: verify) a real stretch opened, checked and closed on this machine; reviews (Codex and the Claude lenses) on each slice. Route: inline.
-- [ ] T8 (kind: build) the departure, status and return pages made plain (spec 6), on `feat/stretch-departure-clear` from main a20aa337, JH 196. Route: inline.
+- [x] T8 (kind: build) the departure, status and return pages made plain (spec 6), on `feat/stretch-departure-clear` from main a20aa337, JH 196. Route: inline. Commits 7550f4ad, 2c29560c (L9).
 
 ## Log
 - L1. 2026-10-28, the lead's brief for JH 71: his decision in question 103 ("Próximo cupo", line 8326), his words
@@ -223,17 +223,25 @@ itself is not limited to an absence: the skill text names it for any stretch.
   838c9fe1, 765baf9a, b1d9f90a, 4e6dbdd7 and b651463a, gentle-ai not due, are approved by Codex and the lenses (L5).
 - L8. 2026-10-28, the rule branch: `gentle-ai review assess --committed-only` from the merge it starts at rated it
   (6 paths, 76 lines) medium, under_budget, not due; 865ec2e7, gentle-ai not due, is approved by Codex and the lenses (L6).
+- L9. 2026-11-14, JH 196, T8 (spec 6). The advisor, before code, found the design's first section empty on the real
+  plan of that day (named 0, no rows): it would have read as "nothing advances". So each item leads by its title, which
+  says what it delivers, and a plan naming no row says once that the shares do not move. `outcome` is no plan field
+  (grep of bin/stretch.mjs), so none was added: the record's format is out of scope. Built in 7550f4ad: what will
+  advance first; coverage as a sentence with its arithmetic and its condition (idle by the low estimate); hours as
+  "X h (estimado Y h, ajustado ×f por lo que tardaron los trabajos de K)" or "sin ajustar: hay menos de 3 trabajos
+  medidos" (HISTORY_MIN); the phase table, shared with status and return, only the phases that move, forecast or
+  measured, past tense once closed and measured. Phase names stay in English, as the roadmap writes them, said above
+  the table: translating them would make the page disagree with the roadmap it counts. Codex (0.93) found a shared
+  row's when said as each item's and a "no phase changed" with the map unread; the lenses found the plural for one
+  session, unrounded session-hours, "JH 19" taken as named by "JH 196: …", and a stale test name. A cold reader (Opus,
+  read-only, only the page text of the real plan and of a copy closing S8) said what advances, item by item, and the
+  rows that move and when, matching the plans; four phrases it found unclear were reworded. All fixed in 2c29560c;
+  rechecked: Codex 0.98, 2 of 2 fixed; lenses 0 findings, 4 of 4 fixed. What it still flagged and stays: the plan's
+  own titles use internal names (T1, pregunta 285), which is the plan's text, not the page's.
 
 ## Next step
-NOW (2026-11-14, JH 196, worktree `D:\js-harness\.claude\worktrees\advisor-refuse`, branch
-`feat/stretch-departure-clear` from a20aa337): T8, spec 6. Defects the lead saw on today's departure page (its
-scratchpad `stretch-2026-11-14c.html`): it opens with a 20-row phase table whose now and return columns are equal; "no
-plan item says what it closes" is buried; "covers your 4 h? no, 9 h of session with no work" reads as a contradiction
-beside 7-16 h queued; phase names in English; "escrito / corregido / sin historia aún" is jargon; no item says what he
-will have on return. Plan: read `bin/lib/stretch-render.mjs` and its test; render a page from a real `stretch open
---json`; test first that the departure page leads with what will advance (each item and what he gets back), a plain
-coverage sentence, Spanish phase names and no jargon; same words on status and return; Codex and lenses; PR; ready.
-Found so far: the departure is bin/lib/stretch-render.mjs renderDeparture (forecastSection first: plan tiles, the phase table of every phase, rows table; then departureFragment: tiles Tiempo fuera / Trabajo en cola / Cubre, lanes, items with correctionNote jargon, goals, waits). bin/stretch.mjs carries item outcome and closes fields (grep them) and view.idle {hours, from}. Today page: C:/Users/Oficina/AppData/Local/Temp/claude/731488af2ce20e67/69918425-3b43-430f-9f50-62b6422422ce/scratchpad/stretch-2026-11-14c.html. Design decided (JH 196): (1) a first section "Lo que va a avanzar": per non-waiting item its title, the rows it closes (forecast.rows whose items hold it) with WHEN_WORDS and ~corrected hours, or "no dice qué cierra: ninguna fila del mapa cambia por él"; the named===0 note moves to the top of it. (2) coverage as a sentence, not a tile: fills -> the queue fills your N h; else the queue (range) is spread over K slots and from hour F there are I h of slot time with no work. (3) the phase table keeps only phases whose forecast differs from done, else one sentence that no phase moves; names stay as the roadmap writes them, the header says so. (4) correctionNote/escrito/corregido -> "~Y h (estimado X h, ajustado ×f por trabajos de tipo K)" or "(sin trabajos anteriores para ajustarlo)". forecastSection is shared by status and return, so (3) holds on all three. Tests first in bin/lib/stretch-render.test.mjs. Older state below.
+NOW (2026-11-14, JH 196, branch `feat/stretch-departure-clear`): T8 is built and reviewed (L9). What stays: push, open
+the PR, bind it, `js-harness notify --to orchestrator --kind ready --pr <n>`. Older state below.
 State at 2026-10-28 ~16:00Z (JH 71, worktree `D:\js-harness\.claude\worktrees\stretch`, branch `feat/stretch`):
 - Done and committed: T1 (12e954b6), T2 (838c9fe1, 765baf9a). T3+T4 staged with docs/SPEC.md "The stretch" entry;
   its commit (message in the job tmp `msg-t3.txt`) was running the gate; check `git log` for
