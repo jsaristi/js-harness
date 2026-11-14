@@ -25,13 +25,15 @@ export { LIVE_USAGE, sessionsLiveMain } from './sessions-live.mjs';
 
 export const START_USAGE = [
   'Usage: js-harness sessions start --title <title> --brief <file> [--worktree <name>] [--model <model>] [--effort <level>]',
-  '                                 [--advisor <model>] [--no-remote-control] [--cwd <path>] [--home <path>]',
+  '                                 [--advisor <model>] [--remote-control] [--cwd <path>] [--home <path>]',
   '       js-harness sessions start --resume <id> [--brief <file>] [--model <model>] [--effort <level>] [--advisor <model>]',
-  '                                 [--no-remote-control] [--home <path>]',
+  '                                 [--remote-control] [--home <path>]',
   '       js-harness sessions stop <id> [--remove-worktree] [--home <path>]',
   '       js-harness sessions stop --finished [--home <path>]',
   '         start runs claude --bg in the folder (a worktree of its own with --worktree), titled as start_session titles a session,',
-  '         with Remote Control on (claude.ai/code and the phone reach it) unless --no-remote-control; the session reads a copy',
+  '         with no Remote Control unless --remote-control (claude.ai/code and the phone reach it then): the user talks only',
+  '         to the lead, and an ended session with it on stays an offline row in his sidebar (his words of 2026-11-14);',
+  '         --no-remote-control is still taken, and both together are a usage error. The session reads a copy',
   '         of the brief that ends by telling it to report through js-harness notify --to orchestrator. It prints the id and records',
   '         the start under <home>/.js-harness/background/; exit 1 when claude is missing or refuses (nothing is recorded), 2 for a',
   '         usage error or a title, an effort or a model the rules session-title, session-effort, lead-effort and session-model',
@@ -43,7 +45,8 @@ export const START_USAGE = [
   '         that rule\'s, as a model must, and claude is given the rule\'s exact id; it is recorded with the start.',
   '         --resume resumes a recorded session whose job stopped (a restart ends every one) with claude --bg --resume, in a',
   '         new job in its folder, under its title (its model, effort and advisor too, where the rules declare none), and',
-  '         records the new job; one that still runs is refused.',
+  '         records the new job; one that still runs is refused. It has Remote Control only with its own --remote-control,',
+  '         whatever the record holds.',
   '         The lead uses it only on a turn the user did not type, where start_session would leave a card: a background session',
   '         is not a row in the desktop sidebar. The board lists the project\'s background sessions, what each waits for',
   '         (a permission prompt included) and whether start recorded it; --watch returns when one starts waiting.',
@@ -74,12 +77,17 @@ class StartArgError extends Error {}
 
 const VALUED = new Map([['--title', 'title'], ['--brief', 'brief'], ['--worktree', 'worktree'], ['--model', 'model'], ['--effort', 'effort'], ['--advisor', 'advisor'], ['--cwd', 'cwd'], ['--home', 'home'], ['--resume', 'resume']]);
 
+/** Remote Control is off unless asked for (odd/tasks/remote-control-lead-only.md, spec 1): the sessions the lead tasks
+ * report by notices and messages, and one whose process ends with it on stays an offline row in his sidebar. */
 function parseStart(argv) {
-  const parsed = { remoteControl: true };
+  const parsed = { remoteControl: false };
+  const said = new Set();
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
-    if (token === '--no-remote-control') {
-      parsed.remoteControl = false;
+    if (token === '--remote-control' || token === '--no-remote-control') {
+      said.add(token);
+      if (said.size > 1) throw new StartArgError('--remote-control and --no-remote-control together: name one, or neither for none');
+      parsed.remoteControl = token === '--remote-control';
       continue;
     }
     if (!VALUED.has(token)) throw new StartArgError(`unknown argument: ${token}`);
@@ -98,6 +106,9 @@ function parseStart(argv) {
   if (parsed.brief === undefined) throw new StartArgError('--brief is required: the file that says what the session does');
   return parsed;
 }
+
+/** The line a start or a resume prints for its Remote Control. */
+const remoteControlLine = (on) => (on ? "  Remote Control is on: claude.ai/code and the user's phone reach it" : '  Remote Control is off: only --remote-control turns it on');
 
 /** The git top level of `cwd`, where the project's rules file is, or `cwd` outside a repository. */
 function topLevel(run, cwd) {
@@ -344,7 +355,7 @@ export function sessionsStartMain(argv, given = {}) {
   }
   stdout(`started ${id} · ${parsed.title}`);
   stdout(`  js-harness sessions stop ${id} removes it; claude attach ${id} opens it here; js-harness sessions lists it`);
-  if (parsed.remoteControl) stdout("  Remote Control is on: claude.ai/code and the user's phone reach it");
+  stdout(remoteControlLine(parsed.remoteControl));
   return 0;
 }
 
@@ -421,7 +432,8 @@ function resumeStart(parsed, deps) {
     fs.writeFileSync(copy, briefCopyOf(text));
   }
   const drop = () => copy !== entry.brief && fs.rmSync(copy, { force: true });
-  const remoteControl = parsed.remoteControl && entry.remoteControl !== false;
+  // Only the resume's own flag (spec 2): every record written before the default changed holds true.
+  const remoteControl = parsed.remoteControl;
   let result;
   try {
     result = claude(startArgs({ title: entry.title, briefs: briefsDirOf(home), model, effort, advisor, remoteControl, prompt: resumePrompt(copy), resume: entry.sessionId }), { cwd: folder });
@@ -469,6 +481,7 @@ function resumeStart(parsed, deps) {
     return refuse(`the job ${id} resumed ${name} and could not be recorded (${err.code ?? err.message}), so ${stopped ? 'it was stopped' : 'it still runs'}${strandedWords(home, job)}`);
   }
   stdout(`resumed ${entry.id} as ${id} · ${entry.title}`);
+  stdout(remoteControlLine(remoteControl));
   if (id === entry.id) {
     stdout(`  claude kept the job's id; js-harness sessions stop ${id} removes it; claude attach ${id} opens it here`);
     return 0;
