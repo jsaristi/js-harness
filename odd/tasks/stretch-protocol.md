@@ -59,6 +59,11 @@ and his words already decide the feature.
 5. Make it a harness protocol that measures the workflow in real time: "quiero que volvamos esto un protocolo del
    arnes y que nos sirva para ir miediendo en tiempo real nuestro flujo de trabajo" (line 8296).
 
+6. Make the departure page say plainly what will advance: "El antes de irte no se ve muy claro en realidad que es lo
+   que va a avanzar por favor arreglalo o mejoralo en mi ausencia por que no se entiende" (session
+   69918425-3b43-430f-9f50-62b6422422ce, line 7461, 2026-11-14). Done when a cold reader given only the page can say
+   what will advance, and that matches the plan; the departure, status and return pages stay consistent; the stretch
+   record's format, the measures and the learned estimates do not change.
 ## Design
 
 ### The command
@@ -159,6 +164,7 @@ itself is not limited to an absence: the skill text names it for any stretch.
 - [x] T5 (kind: build) the open stretch on the live board (`bin/sessions-live.mjs`, `docs/live-board.html`). Spec 5. In 4e6dbdd7. Route: inline.
 - [x] T6 (kind: build) the rule change, on `rule/away-autonomy-stretch`, in 865ec2e7 (PR 634, stacked on PR 633). Spec 1, 3. Route: inline.
 - [ ] T7 (kind: verify) a real stretch opened, checked and closed on this machine; reviews (Codex and the Claude lenses) on each slice. Route: inline.
+- [x] T8 (kind: build) the departure, status and return pages made plain (spec 6), on `feat/stretch-departure-clear` from main a20aa337, JH 196. Route: inline. Commits 7550f4ad, 2c29560c (L9).
 
 ## Log
 - L1. 2026-10-28, the lead's brief for JH 71: his decision in question 103 ("Próximo cupo", line 8326), his words
@@ -217,8 +223,36 @@ itself is not limited to an absence: the skill text names it for any stretch.
   838c9fe1, 765baf9a, b1d9f90a, 4e6dbdd7 and b651463a, gentle-ai not due, are approved by Codex and the lenses (L5).
 - L8. 2026-10-28, the rule branch: `gentle-ai review assess --committed-only` from the merge it starts at rated it
   (6 paths, 76 lines) medium, under_budget, not due; 865ec2e7, gentle-ai not due, is approved by Codex and the lenses (L6).
+- L9. 2026-11-14, JH 196, T8 (spec 6). The advisor, before code, found the design's first section empty on the real
+  plan of that day (named 0, no rows): it would have read as "nothing advances". So each item leads by its title, which
+  says what it delivers, and a plan naming no row says once that the shares do not move. `outcome` is no plan field
+  (grep of bin/stretch.mjs), so none was added: the record's format is out of scope. Built in 7550f4ad: what will
+  advance first; coverage as a sentence with its arithmetic and its condition (idle by the low estimate); hours as
+  "X h (estimado Y h, ajustado ×f por lo que tardaron los trabajos de K)" or "sin ajustar: hay menos de 3 trabajos
+  medidos" (HISTORY_MIN); the phase table, shared with status and return, only the phases that move, forecast or
+  measured, past tense once closed and measured. Phase names stay in English, as the roadmap writes them, said above
+  the table: translating them would make the page disagree with the roadmap it counts. Codex (0.93) found a shared
+  row's when said as each item's and a "no phase changed" with the map unread; the lenses found the plural for one
+  session, unrounded session-hours, "JH 19" taken as named by "JH 196: …", and a stale test name. A cold reader (Opus,
+  read-only, only the page text of the real plan and of a copy closing S8) said what advances, item by item, and the
+  rows that move and when, matching the plans; four phrases it found unclear were reworded. All fixed in 2c29560c;
+  rechecked: Codex 0.98, 2 of 2 fixed; lenses 0 findings, 4 of 4 fixed. Open, the lead's call, out of this scope: the
+  cold reader said only JH 196's title says what he gets back ("aterrizado e instalado"); the other three name work,
+  not a result, so defect 6 (no item says what he will have) is closed only where the plan's title says it. Closing it
+  needs titles written as outcomes or a plan field, and the plan's format is outside spec 6. The English phase names
+  stay too (above). The titles also use internal names (T1, pregunta 285). On HEAD: 137 convention and stretch tests
+  pass (`js-harness gate --`); the departure from HEAD and the real closed stretch's return (a copy of the throughput
+  folder in a scratch home) read consistently. Not fixed, minor: a kind's factor of exactly 1 prints "ajustado ×1".
 
 ## Next step
+NOW (2026-11-14, JH 196, worktree `D:\js-harness\.claude\worktrees\advisor-refuse`, branch `feat/stretch-departure-clear`, head pushed): T8 built and
+reviewed (L9); PR 875 open and bound (872 unbound). Before ready, the advisor asked: (1) correct the PR body and L9:
+the cold reader said only JH 196 says what he gets back, so defect 6 (no item says what he will have) and the English
+phase names stay open, the lead's call (titles as outcomes, or a plan field out of scope); put both first in the
+ready; (2) CI showed 0 checks: run `js-harness gate -- node --test bin/conventions-*.test.mjs bin/stretch.test.mjs
+bin/lib/stretch*.test.mjs` on HEAD; (3) re-render dep-c from HEAD and a return from a copy of the throughput folder in a
+scratch home, read the forecast sections. Not blocking: factor 1 prints "ajustado ×1". Then
+`js-harness notify --to orchestrator --kind ready --pr 875`. Older state below.
 State at 2026-10-28 ~16:00Z (JH 71, worktree `D:\js-harness\.claude\worktrees\stretch`, branch `feat/stretch`):
 - Done and committed: T1 (12e954b6), T2 (838c9fe1, 765baf9a). T3+T4 staged with docs/SPEC.md "The stretch" entry;
   its commit (message in the job tmp `msg-t3.txt`) was running the gate; check `git log` for
