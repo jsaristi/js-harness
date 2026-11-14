@@ -58,6 +58,7 @@ kept, with no word to the harness.
   `rule-lead-effort-split-aac740`. `sessions stop --remove-worktree` now copies what no branch keeps to
   `~/.js-harness/kept/`, which `uninstall everything` removes with the rest of the folder, or refuses (JH 198, T4);
   the app's `archive_session` stays outside it, and whether auto-archive stays on is his decision
+- Control: check — bin/lib/manifest.test.mjs — "asks for the closing steps before the last ready" — since 2026-11-14
 
 ### asked-yes-not-his
 A session stopped and asked him for a yes on a step that was not one of the things that are his.
