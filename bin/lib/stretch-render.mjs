@@ -7,6 +7,7 @@
 import { localMinute } from './local-time.mjs';
 import { escapeHtml, page, table, tiles } from './pages.mjs';
 import { mapNowSection, mapSection, planSections, sharesTiles, timelineSection } from './pages-sections.mjs';
+import { HISTORY_MIN } from './stretch.mjs';
 
 const STYLE = `<style>
 .js-stretch{--ink:#1f2328;--soft:#59636e;--line:#d1d9e0;--est:#c8d1da;--real:#2f6feb;--lost:#d1242f;--ok:#1a7f37;--bg:#ffffff;
@@ -28,11 +29,44 @@ const clock = (iso) => new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digi
 const tile = (label, value, note = '') => `<div class="tile"><span class="soft">${label}</span><b>${value}</b>${note ? `<span class="soft">${note}</span>` : ''}</div>`;
 const bar = (kind, from, width, scale) => (width > 0 ? `<span class="bar ${kind}" style="left:${pct(from, scale)};width:${pct(width, scale)}"></span>` : '');
 
-/** How an estimate was corrected, in words: by the kind's history, every kind's, or not at all. */
-function correctionNote(item) {
+// The kinds of an item (TASK_KINDS of ./contract.mjs) in the page's words; a kind not here is shown as written.
+const KIND_WORDS = { design: 'diseño', build: 'construcción', verify: 'verificación', docs: 'documentación' };
+
+/** An item's hours as the reader takes them: the adjusted range, then how it was adjusted in words (by the kind's
+ * history, every kind's) or why it was not (fewer than HISTORY_MIN items measured). */
+function hoursNote(item) {
   const { factor, from } = item.correction ?? { factor: 1, from: 'none' };
-  if (from === 'none') return 'sin historia aún';
-  return `×${factor} por ${from === 'kind' ? `la historia de ${escapeHtml(item.kind)}` : 'la historia de todos los tipos'}`;
+  if (from === 'none') return `${range(item.corrected)} (sin ajustar: hay menos de ${HISTORY_MIN} trabajos medidos)`;
+  const whose = from === 'kind' ? `de ${escapeHtml(KIND_WORDS[item.kind] ?? item.kind)}` : 'anteriores de todos los tipos';
+  return `${range(item.corrected)} (estimado ${range(item.hours)}, ajustado ×${factor} por lo que tardaron los trabajos ${whose})`;
+}
+
+/** What will advance (spec 6): each item that can run while the user is away, by its title, which says what it
+ * delivers, with its session, its hours and, when the forecast was read, the roadmap rows it closes and when. A plan
+ * whose items name no row says so once, above them, so the shares below are read as unmoved, not as no work. */
+function advanceList(view, forecast) {
+  const read = forecast && !forecast.unavailable ? forecast : null;
+  const quiet = read?.named === 0 ? '<p>Ninguno de estos trabajos dice qué fila de la hoja de ruta cierra, así que los porcentajes de abajo no se mueven: cada uno avanza lo que dice su título.</p>' : '';
+  const items = view.items.filter((item) => !item.waitsFor).map((item) => {
+    const rows = read ? read.rows.filter((row) => row.items.includes(item.id)) : [];
+    const closes = rows.length
+      ? `. Fila que cierra: ${rows.map((row) => `«${escapeHtml(row.text)}» en ${escapeHtml(row.in)}, ${WHEN_WORDS[row.when] ?? escapeHtml(row.when)}`).join('; ')}`
+      : read && read.named > 0 ? '. <span class="soft">No dice qué fila cierra: ninguna fila de la hoja de ruta cambia por él.</span>' : '';
+    // A title that starts with its session (JH 196: ...) already names it.
+    const who = !item.session ? ' <span class="soft">(sin sesión aún)</span>' : item.title.startsWith(item.session) ? '' : ` <span class="soft">(${escapeHtml(item.session)})</span>`;
+    return `<li><strong>${escapeHtml(item.title)}</strong>${who}: ${hoursNote(item)}${closes}</li>`;
+  }).join('');
+  return `${quiet}${items ? `<ul>${items}</ul>` : '<p class="soft">Ningún trabajo puede correr mientras no estás.</p>'}`;
+}
+
+/** Whether the queued work fills the stretch, as a sentence with its arithmetic: the sessions times the hours against
+ * the queue, and, when it does not fill, the idle session-hours, which `laneOut` counts by the low estimate. */
+function coverSentence(view) {
+  const sessions = view.lanes.length;
+  const queue = `El trabajo en cola suma ${range(view.queued)}`;
+  if (view.fills) return `<p>${queue} y llena tus ${view.hours} h: aunque todo vaya rápido, ninguna sesión se queda sin trabajo antes de tu vuelta.</p>`;
+  const from = view.idle.from === 0 ? 'desde el principio' : `${view.idle.from} h después de que salgas`;
+  return `<p>Corren ${sessions} sesiones a la vez durante tus ${view.hours} h: ${sessions * view.hours} h de sesión. ${queue}. Si todo va tan rápido como su estimado más bajo, quedan ${view.idle.hours} h de sesión sin trabajo antes de tu vuelta; la primera sesión se queda libre ${from}.</p>`;
 }
 
 function goalList(goals, checked) {
@@ -66,15 +100,23 @@ function scopeTiles({ name, unit, counts, now }) {
 
 /** How far the stretch moves the roadmap (`forecastOf`, with `now` from `forecastNow` once `status` measured it): each
  * plan section by its steps, the migration, then the map's total, two numbers each; the phases; the rows the plan
- * closes and when; and, measured, the named rows done and the rows the map gained. `titles` names an item by its id. */
-export function forecastSection(forecast, titles = new Map()) {
+ * closes and when; and, measured, the named rows done and the rows the map gained. `titles` names an item by its id.
+ * Only a phase that moves is shown, forecast or measured, so a long map does not bury the few that change; `closed`
+ * says it in the past, and `saidAbove` drops the note on a plan naming no row when the page already said it. */
+export function forecastSection(forecast, titles = new Map(), { closed = false, saidAbove = false } = {}) {
   if (forecast.unavailable) return `<p class="note">El mapa no se pudo leer: ${escapeHtml(forecast.unavailable)}; sin él no hay pronóstico.</p>`;
   const measured = forecast.now && !forecast.now.unavailable ? forecast.now : null;
   const scopes = [
     ...forecast.plans.map((plan) => ({ name: plan.name, unit: 'pasos', counts: plan, now: measured?.plans.find((one) => one.name === plan.name) ?? null })),
     { name: 'Mapa del proyecto', unit: 'filas', counts: forecast.total, now: measured?.total ?? null },
   ];
-  const phaseRows = forecast.phases.map((phase) => {
+  const moving = forecast.phases.filter((phase) => {
+    if (phase.forecast !== phase.done || phase.low !== phase.done || phase.high !== phase.done) return true;
+    if (!measured) return false;
+    const now = measured.phases.find((one) => one.title === phase.title);
+    return !now || now.done !== phase.done || now.total !== phase.total;
+  });
+  const phaseRows = moving.map((phase) => {
     const now = measured?.phases.find((one) => one.title === phase.title);
     return [phase.title, { text: counted(phase.done, phase.total), mono: true }, { text: `~${counted(phase.forecast, phase.total)}`, mono: true }, { text: `${share(phase.low, phase.total)} a ${share(phase.high, phase.total)}`, mono: true }, ...(measured ? [{ text: now ? counted(now.done, now.total) : '—', mono: true }] : [])];
   });
@@ -86,51 +128,55 @@ export function forecastSection(forecast, titles = new Map()) {
     WHEN_WORDS[row.when] ?? row.when,
     ...(measured ? [NOW_WORDS[rowsNow.get(`${row.in}\u0000${row.text}`)] ?? '—'] : []),
   ]);
-  const said = forecast.named === 0 ? '<p class="note">Ningún trabajo del plan dice qué cierra: el pronóstico es lo que ya hay.</p>' : '';
+  const said = forecast.named === 0 && !saidAbove ? '<p class="note">Ningún trabajo del plan dice qué fila de la hoja de ruta cierra: el pronóstico es lo que ya hay.</p>' : '';
+  const phases = phaseRows.length
+    ? `<p class="note">Solo las fases que se mueven, como las nombra la hoja de ruta.</p>${table(['Fase', measured ? 'Al abrir' : 'Ahora', 'Al volver (aprox.)', 'Rango', ...(measured ? ['Ahora'] : [])], phaseRows)}`
+    : `<p>${closed ? 'Ninguna fase del mapa del proyecto cambió.' : 'Ninguna fase del mapa del proyecto cambia con este plan.'}</p>`;
   const gained = measured === null ? '' : measured.gained === 0 ? 'el mapa no ganó filas' : measured.gained > 0 ? `el mapa ganó ${measured.gained} filas` : `el mapa perdió ${-measured.gained} filas`;
   const against = measured === null ? '' : `<p>${measured.forecastDone.done} de ${measured.forecastDone.of} filas y pasos del pronóstico hechos; ${gained} desde la apertura, que el porcentaje de ahora cuenta y el pronóstico no.</p>`;
   const unread = forecast.now?.unavailable ? `<p class="note">El mapa de ahora no se pudo leer: ${escapeHtml(forecast.now.unavailable)}.</p>` : '';
   const problems = (forecast.problems ?? []).map((one) => `<li>${escapeHtml(titles.get(one.item) ?? one.item)}: ${escapeHtml(one.error)}</li>`).join('');
   return `${scopes.map(scopeTiles).join('')}${said}${against}${unread}
-${table(['Fase', measured ? 'Al abrir' : 'Ahora', 'Al volver (aprox.)', 'Rango', ...(measured ? ['Ahora'] : [])], phaseRows)}
+${phases}
 ${rows.length ? table(['Lo que cierra', 'Dónde', 'Trabajo', 'Cuándo', ...(measured ? ['Ahora'] : [])], rows) : ''}${problems ? `<ul class="no">${problems}</ul>` : ''}`;
 }
 
-/** The departure: the forecast first, then the hours, whether the queued work fills them, each lane on an hour scale
- * with the return marked, the items as written and as corrected, the goals and what waits for the user. */
+/** The departure: what will advance first, each item and the rows it closes; then how far that moves the roadmap;
+ * then the plan: whether the queued work fills the hours, each lane on an hour scale with the return marked, the goals
+ * and what waits for the user; then the map as it is. */
 export function renderDeparture(view) {
-  if (!view.map) return departureFragment(view);
+  if (!view.map) return departureFragment(view, { advance: true });
   const titles = new Map(view.items.map((item) => [item.id, item.title]));
   return page({
     title: 'Antes de irte',
     heading: `Antes de irte: ${view.hours} h`,
-    lead: 'Cuánto avanzaremos, el plan del tramo y lo que existe ahora, de la hoja de ruta en main.',
+    lead: 'Qué avanza mientras no estás, cuánto mueve la hoja de ruta, cómo se reparte el trabajo y lo que existe ahora en main.',
     sections: [
-      ...(view.forecast ? [{ title: 'Cuánto avanzaremos', html: forecastSection(view.forecast, titles), note: FORECAST_NOTE }] : []),
-      { title: 'El plan', html: departureFragment(view) },
+      { title: 'Lo que va a avanzar', html: advanceList(view, view.forecast) },
+      ...(view.forecast ? [{ title: 'Cuánto avanzaremos', html: forecastSection(view.forecast, titles, { saidAbove: true }), note: FORECAST_NOTE }] : []),
+      { title: 'El plan', html: departureFragment(view, { advance: false }) },
       { title: 'Lo que existe ahora', html: mapNowSection(view.map) },
     ],
   });
 }
 
-function departureFragment(view) {
+/** The plan as a fragment; `advance` opens it with what will advance, when no page section shows it already. */
+function departureFragment(view, { advance }) {
   const scale = Math.max(view.hours, ...view.lanes.map((lane) => lane.end[1]));
   const byId = new Map(view.items.map((item) => [item.id, item]));
   const lanes = view.lanes.map((lane, index) => {
     const bars = lane.items.map((one) => bar('real', one.start[0], one.end[0] - one.start[0], scale) + bar('low', one.end[0], one.end[1] - one.end[0], scale)).join('');
     const names = lane.items.map((one) => escapeHtml(byId.get(one.id)?.title ?? one.id)).join(', ') || '<span class="soft">sin trabajo</span>';
-    return `<div class="row"><span>Cupo ${index + 1}<br><span class="soft">${names}</span></span><div class="track">${bars}<span class="mark" style="left:${pct(view.hours, scale)}"></span></div></div>`;
+    return `<div class="row"><span>Sesión ${index + 1}<br><span class="soft">${names}</span></span><div class="track">${bars}<span class="mark" style="left:${pct(view.hours, scale)}"></span></div></div>`;
   }).join('');
-  const items = view.items.filter((item) => !item.waitsFor).map((item) => `<li>${escapeHtml(item.title)} <span class="soft">(${escapeHtml(item.kind)}${item.session ? `, ${escapeHtml(item.session)}` : ''})</span>: ${range(item.hours)} escrito, ${range(item.corrected)} corregido <span class="soft">${correctionNote(item)}</span></li>`).join('');
   const waiting = [
     ...view.items.filter((item) => item.waitsFor).map((item) => `${escapeHtml(item.title)}: espera ${escapeHtml(item.waitsFor)}`),
     ...view.waits.map(escapeHtml),
   ];
-  const cover = view.fills ? 'Sí cubre' : 'No cubre';
   return `${STYLE}<div class="js-stretch"><h2>Antes de irte: ${view.hours} h, vuelves a las ${clock(view.returnAt)}</h2>
-<div class="tiles">${tile('Tiempo fuera', `${view.hours} h`)}${tile('Trabajo en cola', range(view.queued), 'estimado corregido')}${tile(`¿Cubre tus ${view.hours} h?`, cover, view.fills ? '' : `${view.idle.hours} h de sesión sin trabajo desde la hora ${view.idle.from}`)}</div>
-<h3>Carriles (la línea marca tu vuelta; claro, lo que puede alargarse)</h3>${lanes}
-<h3>Trabajo</h3><ul>${items}</ul>
+${advance ? `<h3>Lo que va a avanzar</h3>${advanceList(view, null)}` : ''}
+<h3>Cómo se reparte</h3>${coverSentence(view)}
+<h3>Sesiones (la línea marca tu vuelta; claro, lo que puede alargarse)</h3>${lanes}
 <h3>Metas: cada una es un comando que termina en 0</h3>${goalList(view.goals, false)}
 <h3>Espera por ti</h3>${waiting.length ? `<ul>${waiting.map((line) => `<li>${line}</li>`).join('')}</ul>` : '<p class="soft">nada</p>'}</div>`;
 }
@@ -204,7 +250,7 @@ export function renderReturn(view, { generatedAt = null } = {}) {
   const outsideRows = moments.outside.sessions.map((one) => [one.title, { text: localMinute(one.first), mono: true }, { text: localMinute(one.last), mono: true }, { text: String(one.notices), mono: true }]);
   const titles = new Map(view.items.map((item) => [item.id, item.title]));
   const sections = [
-    ...(moments.forecast ? [{ title: closed ? 'Cuánto avanzó, contra el pronóstico' : 'Cuánto avanzaremos', html: forecastSection(moments.forecast, titles), note: FORECAST_NOTE }] : []),
+    ...(moments.forecast ? [{ title: closed ? 'Cuánto avanzó, contra el pronóstico' : 'Cuánto avanzaremos', html: forecastSection(moments.forecast, titles, { closed }), note: FORECAST_NOTE }] : []),
     { title: 'Cuánto se cumplió de lo planeado', html: sharesTiles(moments) },
     ...(moments.why ? [{ title: 'Qué faltó, por qué y cómo se arregla', html: whySection(moments.why), note: 'Cada texto lleva el registro que lo dice; lo que ninguno dice queda "no registrado".' }] : []),
     { title: 'Metas y tiempos', html: renderView(view) },

@@ -23,15 +23,51 @@ const departure = {
 test('the departure says the hours, whether the work fills them, each lane on the hour scale, the goals and what waits for the user', () => {
   const html = renderDeparture(departure);
   assert.match(html, /8 h/);
-  assert.match(html, /No cubre/);
-  assert.match(html, /13 h de sesión sin trabajo desde la hora 0/);
-  assert.match(html, /Cupo 1/);
+  assert.match(html, /Sesión 1/);
   assert.match(html, /PR 630 en main/);
   assert.match(html, /git merge-base --is-ancestor x origin\/main/);
   assert.match(html, /el gasto de S5c-a/);
   assert.match(html, /gasto.*su sí/s);
-  // A corrected estimate says by how much and from what.
-  assert.match(html, /×1\.5/);
+});
+
+// --- the departure made plain (spec 6) ---
+
+test('the departure opens with what will advance: each item that can run, as its title says, its session and hours', () => {
+  const html = renderDeparture(departure);
+  const advance = html.indexOf('Lo que va a avanzar');
+  assert.ok(advance > 0 && advance < html.indexOf('Sesión 1'), 'what will advance comes before the lanes');
+  assert.match(html, /Lo que va a avanzar[\s\S]*registros &lt;b&gt;[\s\S]*JH 69/);
+  // An item that waits for the user cannot run while they are away: it is under what waits, not under what advances.
+  assert.doesNotMatch(html.slice(advance, html.indexOf('Sesión 1')), /gasto/);
+});
+
+test('whether the queue fills the hours is a sentence that shows its arithmetic and its condition, not a yes or no', () => {
+  const html = renderDeparture(departure);
+  assert.doesNotMatch(html, /No cubre|Sí cubre/);
+  // 2 sessions over 8 h are 16 session-hours against 3-4.5 h queued; idle is by the low estimate.
+  assert.match(html, /2 sesiones a la vez durante tus 8 h: 16 h de sesión/);
+  assert.match(html, /suma 3-4\.5 h/);
+  assert.match(html, /si todo va tan rápido como su estimado más bajo, quedan 13 h de sesión sin trabajo antes de tu vuelta/i);
+  assert.match(html, /desde el principio/);
+  assert.match(renderDeparture({ ...departure, idle: { hours: 2, from: 3 } }), /3 h después de que salgas/);
+  const full = renderDeparture({ ...departure, fills: true, idle: { hours: 0, from: null } });
+  assert.match(full, /llena tus 8 h: aunque todo vaya rápido, ninguna sesión se queda sin trabajo antes de tu vuelta/);
+});
+
+test('an estimate reads as hours, with how it was adjusted in words; one not adjusted says why', () => {
+  const unadjusted = { id: 'W3', title: 'JH 70: plantillas', kind: 'docs', hours: [1, 2], corrected: [1, 2], correction: { factor: 1, samples: 1, from: 'none' }, session: 'JH 70' };
+  const html = renderDeparture({ ...departure, items: [...departure.items, unadjusted] });
+  assert.match(html, /3-4\.5 h \(estimado 2-3 h, ajustado ×1\.5 por lo que tardaron los trabajos de construcción\)/);
+  assert.match(html, /1-2 h \(sin ajustar: hay menos de 3 trabajos medidos\)/);
+  assert.doesNotMatch(html, /escrito|corregido|sin historia/);
+  // A title that starts with its session does not repeat it.
+  assert.doesNotMatch(html, /\(JH 70\)/);
+});
+
+test('with no map the departure fragment still opens with what will advance', () => {
+  const html = renderDeparture(departure);
+  assert.doesNotMatch(html, /Cuánto avanzaremos/);
+  assert.match(html, /Lo que va a avanzar/);
 });
 
 test('a text from the plan is escaped: the fragment shows it and never runs it', () => {
@@ -136,9 +172,37 @@ test('the departure leads with the migration\'s plan and then the map: the share
 
 test('a departure whose items name nothing says the forecast is today\'s share; one with no map says why', () => {
   const none = renderDeparture({ ...departure, map: MAP, forecast: { ...FORECAST, named: 0, rows: [], total: { ...FORECAST.total, forecast: 99, high: 99 } } });
-  assert.match(none, /Ningún trabajo del plan dice qué cierra/);
+  // Said once, at the top of what will advance, and the items are still listed by what they deliver.
+  const advance = none.slice(none.indexOf('Lo que va a avanzar'), none.indexOf('Cuánto avanzaremos'));
+  assert.equal(advance.match(/Ninguno de estos trabajos dice qué fila de la hoja de ruta cierra/g)?.length, 1);
+  assert.match(advance, /registros &lt;b&gt;/);
+  assert.doesNotMatch(advance, /no dice qué fila cierra/i);
   const blind = renderDeparture({ ...departure, map: MAP, forecast: { unavailable: 'git show: fatal' } });
   assert.match(blind, /no se pudo leer: git show: fatal/);
+});
+
+test('on the page, what will advance leads, each item with the rows it closes and when; one that names none says so', () => {
+  const forecast = { ...FORECAST, rows: [{ in: 'F8 plan', step: 'S13', plan: true, text: 'S13 <x>', items: ['W1'], when: 'likely' }] };
+  const extra = { id: 'W3', title: 'plantillas', kind: 'docs', hours: [1, 2], corrected: [1, 2], correction: { factor: 1, samples: 0, from: 'none' }, session: null };
+  const html = renderDeparture({ ...departure, items: [...departure.items, extra], map: MAP, forecast });
+  const advance = html.indexOf('Lo que va a avanzar');
+  assert.ok(advance > 0 && advance < html.indexOf('Cuánto avanzaremos'), 'what will advance is the first section');
+  const section = html.slice(advance, html.indexOf('Cuánto avanzaremos'));
+  assert.match(section, /registros &lt;b&gt;[\s\S]*Fila que cierra: «S13 &lt;x&gt;» en F8 plan, cierra si va como se estimó/);
+  assert.match(section, /plantillas[\s\S]*no dice qué fila cierra/i);
+  // The plan's items are listed once on the page, under what will advance; the plan keeps only their lanes.
+  assert.doesNotMatch(html, /<h3>Lo que va a avanzar<\/h3>|<h3>Trabajo<\/h3>/);
+});
+
+test('the phase table keeps only the phases that move, with their names as the roadmap writes them; none moving is one sentence', () => {
+  const html = renderDeparture({ ...departure, map: MAP, forecast: FORECAST });
+  const section = html.slice(html.indexOf('Cuánto avanzaremos'), html.indexOf('El plan'));
+  assert.match(section, /Review and release/);
+  assert.doesNotMatch(section, /F1 Skeleton/);
+  assert.match(section, /como las nombra la hoja de ruta/);
+  const still = { ...FORECAST, phases: [FORECAST.phases[0]] };
+  const quiet = renderDeparture({ ...departure, map: MAP, forecast: still });
+  assert.match(quiet.slice(quiet.indexOf('Cuánto avanzaremos'), quiet.indexOf('El plan')), /Ninguna fase del mapa del proyecto cambia con este plan/);
 });
 
 test('the status measures the stretch against its forecast: at the opening, the forecast, now, the named rows done and the rows added', () => {
@@ -173,6 +237,13 @@ test('the status measures the stretch against its forecast: at the opening, the 
   assert.match(html, /el mapa ganó 2 filas/);
   assert.match(html, />hecha</);
   assert.match(html, /ya no está/);
+  // Measured, a phase moved outside the forecast is kept; a closed stretch with no phase moved says it in the past.
+  const moved = { ...now, phases: [{ title: 'F1 Skeleton', done: 3, total: 4 }] };
+  const shown = renderReturn({ ...view, state: 'open', moments: { ...moments, forecast: { ...FORECAST, now: moved } } });
+  assert.match(shown, /F1 Skeleton/);
+  const still = { ...FORECAST, phases: [FORECAST.phases[0]], now: { ...now, phases: [{ title: 'F1 Skeleton', done: 3, total: 3 }] } };
+  const closed = renderReturn({ ...view, state: 'closed', moments: { ...moments, forecast: still } });
+  assert.match(closed, /Ninguna fase del mapa del proyecto cambió/);
 });
 
 test('the open stretch reads as in course, goals not checked yet said so', () => {
