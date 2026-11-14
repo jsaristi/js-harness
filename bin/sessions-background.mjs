@@ -11,8 +11,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { CLOSE_FINISHED, appendRecord, atWork, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, resumedNote, resumePrompt, saidBy, startArgs, startPrompt, strandedWords, undoSession, within, worktreeHolding, worktreeOf } from './lib/background.mjs';
-import { closeFinishedIn, closedLines } from './lib/background-close.mjs';
+import { CLOSE_FINISHED, appendRecord, atWork, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, finishedOf, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, resumedChain, resumedNote, resumePrompt, saidBy, startArgs, startPrompt, strandedWords, undoSession, within, worktreeHolding, worktreeOf } from './lib/background.mjs';
+import { KEEP_LEFT_OUT, closeFinishedIn, closedLines, keepUnkept, sharingSession } from './lib/background-close.mjs';
+import { boundedGit } from './lib/worktrees.mjs';
 import { sessionStartHome, sessionStartRefusal } from './lib/guard.mjs';
 import { leadTitle, seniorTitle, sessionTitleRefusal } from './lib/session-title-guard.mjs';
 import { appendNotice, newNotice, nextSessionNumber, placeOf, readNotices } from './lib/channel.mjs';
@@ -53,6 +54,10 @@ export const START_USAGE = [
   '         a worktree with uncommitted changes stays, and stop says where.',
   '         While the session\'s worktree holds files (anything but .git), stop refuses and runs nothing unless --remove-worktree:',
   '         claude rm deletes them (2026-11-04). It is not how a background session restarts: a message resumes it.',
+  '         --remove-worktree refuses while another recorded session that did not say closed has the worktree, and, once',
+  '         the job is stopped and before claude rm, copies what no branch keeps (changed, untracked and ignored files, but',
+  '         node_modules and .codegraph) to ~/.js-harness/background/kept/; a detached head on commits no ref holds, or a',
+  '         copy that fails, keeps the session with nothing removed.',
   '         stop --finished closes every finished session of the project that loses nothing, as a land does after it lands:',
   '         one whose newest notice of its state is closed and that has no job at work. Its worktree must pass first: its',
   '         head in the default branch as origin holds it here, git status showing nothing (ignored files too, but the',
@@ -579,18 +584,44 @@ export function sessionsStopMain(argv, given = {}) {
     ].join('\n'));
     return 1;
   }
+  const name = `${entry.id} · ${entry.title}`;
+  const worktree = removeWorktree ? worktreeOf(entry) : null;
+  if (worktree !== null) {
+    // Another recorded session that did not say closed may work in the same folder: it is not removed from under it
+    // (A5). The Claude app's own archive removes a worktree with no word to the harness, which nothing here can stop.
+    const refused = (why) => {
+      stderr(`js-harness sessions stop: ${name} was not stopped: ${why}; nothing ran. The Claude app's archive of a session removes its worktree without asking the harness: archive no session whose worktree another one uses.`);
+      return 1;
+    };
+    if (record.unavailable !== undefined) return refused(`the record of background sessions could not be read (${record.unavailable}), so whether another session has its worktree ${worktree} cannot be told`);
+    const channel = readNotices(home, projectSlug(entry.root ?? ''));
+    if (channel.unavailable !== undefined) return refused(`the channel's record ${channel.path} could not be read (${channel.unavailable}), so whether another session using its worktree said closed cannot be told`);
+    const chain = [entry, ...resumedChain(record.started ?? [], entry)];
+    const sharing = sharingSession(record, finishedOf(record, channel.notices, entry.root), chain, worktree);
+    if (sharing !== undefined) return refused(`the session ${sharing.id}${sharing.title ? ` · ${sharing.title}` : ''}, which did not say closed, has the same worktree ${worktree}`);
+  }
   const claude = deps.claude === undefined ? claudeRunner({ env }) : deps.claude;
   if (claude === null) {
     stderr('js-harness sessions stop: claude is not on PATH: install the Claude Code CLI, then run this again');
     return 1;
   }
-  const done = undoSession(entry, { home, run: claude, now });
-  const name = `${entry.id} · ${entry.title}`;
+  // What no branch keeps is copied once the session's job is stopped and writes no more, and before claude rm, which
+  // deletes the worktree (audit C5): a copy that cannot be made keeps the session, stopped, with nothing removed.
+  let kept = null;
+  const beforeRemove = worktree === null ? null : () => {
+    const copy = keepUnkept(entry, worktree, { home, gitIn: boundedGit(deps.run), now });
+    if (copy.why) return `${copy.why}; nothing was removed and its job is stopped: a message resumes it`;
+    kept = copy;
+    return null;
+  };
+  const done = undoSession(entry, { home, run: claude, now, beforeRemove });
   if (done.outcome === 'kept') {
     stderr(`js-harness sessions stop: ${name} is still recorded: ${done.why}`);
     return 1;
   }
   stdout(done.outcome === 'gone' ? `${name} was already gone: its record is closed` : `removed ${name}: its transcript stays, as every session's does`);
+  if (kept?.dir) stdout(`  what no branch kept of its worktree, ${kept.count} path${kept.count === 1 ? '' : 's'}, was copied to ${kept.dir}`);
+  if (kept?.leftOut.length > 0) stdout(`  left out: ${kept.leftOut.join(', ')} (${[...KEEP_LEFT_OUT].map(([folder, why]) => `${folder}: ${why}`).join('; ')})`);
   if (done.worktreeKept) stdout(`  its worktree ${done.worktreeKept} stays: claude keeps a worktree with uncommitted changes, locked; git worktree remove --force twice removes it once they are not needed`);
   if (done.worktreeGone) stdout(`  its worktree ${done.worktreeGone} is gone`);
   if (done.worktreeMissing) stdout(`  its worktree ${done.worktreeMissing} was not there when stop ran: claude never made it, or something else removed it`);

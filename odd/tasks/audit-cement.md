@@ -4,15 +4,14 @@ Branch: worktree-audit-cement (the document), then one branch per slice from ori
 Delivery: ask-on-risk. Tests: `node --test`. Opened 2026-11-13 by JH 198 (Opus 5.5, medium) from the lead's brief.
 
 ## State
-The lead's OK is in (L3). T1 landed (PR 863, main 236f720); the installed copy still refuses `opus` until a
-`--refresh-copy`. T2 ready: PR 864 (`fix/audit-cement-guard`). T3 on `fix/audit-cement-stall`, stacked on T2:
-spec 4 (8053d2d6, wait skips its own notices) and spec 3 (16b63f65, stall skips a session with a batch in its
-worktree or an open question it recorded). Codex on 16b63f65: P2, only the first live batch mark was read; lens
-reliability: readStalled's wiring had no test. Fixed in the next commit: `readBatches` in `bin/lib/batch-mark.mjs`
-(searched: `readBatch` returned the first mark only; `readBatch` now takes the first of it) and a readStalled test
-with two marks and a question. Next: Codex and lenses with base 16b63f65, push, PR on `fix/audit-cement-guard`,
-ready. Then T4 to T6, then T8; T7 waits for the lead's word that JH 196 landed. Spec 8's FAILURES lines go in T6,
-with the `stretch-not-opened` line.
+The lead's OK is in (L3). T1 landed (PR 863), T2 landed (PR 864, main 4a77d99), T3 ready as PR 865 (landing).
+T4 on `fix/audit-cement-close`, stacked on T3's branch: `sessions stop --remove-worktree` refuses while another
+recorded session that did not say closed has the worktree (A5, `sharingSession` taken out of `closeFinished`), and
+copies what no branch keeps to `~/.js-harness/background/kept/<id>-<time>/` between claude stop and claude rm
+(`undoSession`'s new `beforeRemove`, `bin/lib/background.mjs` cleared by the lead, L8). Tests written first, 95 pass in
+the three suites. Next: commit, independent verifier (high risk: it deletes), Codex and lenses with base 9cba7501,
+PR, ready. Then T5, T6, T8; T7 waits for the lead's word that JH 196 landed (and carries manifest.mjs:157, which
+describes --remove-worktree). Spec 8's FAILURES lines go in T6, with the `stretch-not-opened` line.
 
 ## Goal
 Every correction the audit and its two blind reviews found is fixed where a check can hold it, and each of the
@@ -161,9 +160,9 @@ jamas vuelva a suceder" (69918425:2679).
 
 ## Tasks
 - [x] T1 (kind: build) spec 1 — `js-harness rules change session-model` on `rule/opus-alias`, alias `opus`, quoting 2679 — commit 85fa628c, PR 863
-- [ ] T2 (kind: build) specs 2, 7 (advisor texts), 11 — `bin/lib/guard.mjs`, `bin/guard.mjs`, `bin/lib/home-sessions.mjs`, `bin/lib/rules-change.mjs`, `bin/lib/worktrees.mjs` (the cd check: `guard.mjs` is at its 1,000-line limit) + tests — commit `fix(guard): refuse cd into another session's worktree`
-- [ ] T3 (kind: build) specs 3, 4 — `bin/lib/stall.mjs`, `bin/wait.mjs` + tests — commit `fix(stall): no stall for a batch or an open question; wait ignores own notices`
-- [ ] T4 (kind: build) spec 5 — `bin/sessions-background.mjs`, `bin/lib/background-close.mjs` + tests — commit `fix(sessions): remove-worktree copies or refuses`
+- [x] T2 (kind: build) specs 2, 7 (advisor texts), 11 — `bin/lib/guard.mjs`, `bin/guard.mjs`, `bin/lib/home-sessions.mjs`, `bin/lib/rules-change.mjs`, `bin/lib/worktrees.mjs` (the cd check: `guard.mjs` is at its 1,000-line limit) + tests — commit `fix(guard): refuse cd into another session's worktree`, PR 864 (landed)
+- [x] T3 (kind: build) specs 3, 4 — `bin/lib/stall.mjs`, `bin/wait.mjs` + tests — commits 8053d2d6, 16b63f65, 9cba7501, PR 865
+- [ ] T4 (kind: build) spec 5 — `bin/sessions-background.mjs`, `bin/lib/background-close.mjs`, `bin/lib/background.mjs` (L8) + tests — commit `fix(sessions): remove-worktree copies or refuses`
 - [ ] T5 (kind: build) spec 6 — template gate/record + tests, if cleared — commit `fix(template): yours drops only with a reason`
 - [ ] T6 (kind: docs) specs 7 (texts), 8 — `CLAUDE.md`, `bin/lib/protocols-skill.mjs`, `docs/FAILURES.md` — commit `docs: throughput command, senior strongest, 2026-11-13 failures`
 - [ ] T7 (kind: build) spec 9 — `bin/lib/manifest.mjs` after JH 196 — commit `docs(skill): senior section; close before ready`
@@ -202,3 +201,13 @@ jamas vuelva a suceder" (69918425:2679).
   (`bin/lib/hook-entries.mjs:82`), outside spec 2's Bash guard; `$(...)`, `X=1 cd` and `$VAR` other than HOME pass.
 - L7 2026-11-14: the machine rebooted at 05:56Z and this session was resumed; PR 863 landed (main 236f720). The lead
   added the auto-archive item to spec 8.
+- L8 2026-11-14 T3: Codex on 16b63f65 P2 (only the first live batch mark read) and a lens warning (readStalled's
+  wiring untested), both fixed in 9cba7501 (`readBatches`); Codex correct 0.98, lenses 0. PR 865; `notify --kind
+  ready` refuses a PR whose base is not main, so it waited for 864 to land (4a77d99, a merge commit) and was
+  retargeted. T4: the advisor named three ways a copy still loses data: ignored files (copied, but `node_modules` and
+  `.codegraph`, named in the output), commits (claude rm keeps the `worktree-<name>` branch: 8 of 8 removed sessions'
+  branches are listed by `git branch --list worktree-*`; so only a detached head on commits no ref holds is lost, and
+  it is refused), and the order (the copy runs after claude stop and before claude rm). That order needs a hook in
+  `undoSession`; the lead cleared `bin/lib/background.mjs` for it (cross-session message, 2026-11-14 03:5x local). A
+  folder git does not read as the worktree is copied whole but its `.git`. Not covered: the Claude app's
+  `archive_session`, which removes a worktree with no word to the harness; the refusal says so, and FAILURES (T6).

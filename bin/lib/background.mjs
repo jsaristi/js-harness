@@ -425,8 +425,10 @@ function removeJob(id, { run, now, alive, pause }) {
  * `worktreeMissing` one that was not there before the stop, which claude never made or something else removed (R3-004).
  * The jobs it resumed (`resumedChain`) are undone with it, after it: they share its worktree and brief. Each claude rm
  * waits for the job's process to end and tries again while files are busy (`removeJob`); `alive` and `pause` are the
- * look at a pid and the wait, handed in by the tests. */
-export function undoSession(entry, { home, run, now, alive = exists, pause = sleepSync }) {
+ * look at a pid and the wait, handed in by the tests. `beforeRemove()`, when given, runs once the session's own job
+ * is stopped and before any claude rm: a reason it returns keeps the session, stopped and recorded, with nothing removed
+ * (`sessions stop --remove-worktree` copies there what no branch keeps, odd/tasks/audit-cement.md, spec 5). */
+export function undoSession(entry, { home, run, now, alive = exists, pause = sleepSync, beforeRemove = null }) {
   let stopped;
   let removed;
   const record = readRecord(home);
@@ -436,6 +438,10 @@ export function undoSession(entry, { home, run, now, alive = exists, pause = sle
   for (const job of chain) {
     const stop = run(['stop', job.id]);
     if ((stop.error || stop.status !== 0) && !lostSaid(stop)) return { outcome: 'kept', why: `claude stop ${job.id}: ${saidBy(stop)}` };
+    if (job === entry && beforeRemove !== null) {
+      const why = beforeRemove();
+      if (why) return { outcome: 'kept', why, stopped: true };
+    }
     const rm = removeJob(job.id, { run, now, alive, pause });
     if ((rm.error || rm.status !== 0) && !lostSaid(rm)) return { outcome: 'kept', why: `claude rm ${job.id}: ${saidBy(rm)}${rm.why ? `\n  ${rm.why}` : ''}` };
     if (job === entry) [stopped, removed] = [stop, rm];

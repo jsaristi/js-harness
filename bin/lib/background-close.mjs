@@ -13,7 +13,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { CLOSE_FINISHED, LOCK_WAIT_MS, atWork, exists, finishedHere, finishedOf, readRecord, recordFileOf, saidBy, sleepSync, undoSession, within, workingIn, worktreeHolding, worktreeOf } from './background.mjs';
+import { CLOSE_FINISHED, LOCK_WAIT_MS, atWork, backgroundDir, exists, finishedHere, finishedOf, readRecord, recordFileOf, saidBy, sleepSync, undoSession, within, workingIn, worktreeHolding, worktreeOf } from './background.mjs';
 import { readNotices } from './channel.mjs';
 import { defaultBranchOf } from './default-branch.mjs';
 import { projectSlug } from './sessions.mjs';
@@ -150,8 +150,7 @@ export function closeFinished({ home, root, cwd = root, base, baseName = base, n
     if (worktree !== null && worktreeHolding(entry) !== null) {
       // A job at rest is no guest below, so the record says whose worktree it is: one a session that did not say
       // closed also has is not removed from under it, whatever claude lists.
-      const sharing = (record.sessions ?? []).find((other) => !chain.some((job) => job.id === other.id) && !record.resumedAs?.has(other.id)
-        && !finished.some((item) => item.entry.id === other.id) && worktreeOf(other) !== null && sameFolder(worktreeOf(other), worktree));
+      const sharing = sharingSession(record, finished, chain, worktree);
       if (sharing !== undefined) {
         kept.push({ entry, why: `the session ${sharing.id}${sharing.title ? ` · ${sharing.title}` : ''}, which did not say closed, has the same worktree ${worktree}`, settle: `once that session says closed, ${CLOSE_FINISHED} closes both` });
         continue;
@@ -331,4 +330,88 @@ export function closeAfterLand({ home, root, cwd = root, base, run, claude, list
   say(`Finished background sessions: ${done.closed.length} closed, ${done.kept.length} kept.`);
   for (const line of closedLines(done)) say(line);
   return done.closed.map(({ entry, worktree }) => ({ id: entry.id, title: entry.title ?? null, worktree }));
+}
+
+/** The recorded session other than the jobs of `chain` that has the worktree `worktree` and did not say closed, or
+ * `undefined`: one `finished` (`finishedOf`) does not name, not resumed by a later job. Its worktree is not removed from
+ * under it, by the close or by `sessions stop --remove-worktree` (A5 of the directives audit). */
+export function sharingSession(record, finished, chain, worktree) {
+  return (record.sessions ?? []).find((other) => !chain.some((job) => job.id === other.id) && !record.resumedAs?.has(other.id)
+    && !finished.some((item) => item.entry.id === other.id) && worktreeOf(other) !== null && sameFolder(worktreeOf(other), worktree));
+}
+
+/** Folders no copy takes, by name at any depth, each with why: an install or an index rebuilds them, and one of them
+ * can hold more files than the copy is worth. A copy names what it left out. */
+export const KEEP_LEFT_OUT = new Map([
+  ['node_modules', 'an install rebuilds it'],
+  ['.codegraph', 'codegraph rebuilds its index'],
+]);
+
+/** The folder a copy of what the worktree of the recorded job `id` held goes into, under the harness home `home`. */
+export const keptDirOf = (home, id, at) => path.join(backgroundDir(home), 'kept', `${id}-${new Date(at).toISOString().replace(/[:.]/g, '-')}`);
+
+/** The paths of the worktree `worktree` that no branch keeps, relative and with `/`: tracked files changed since HEAD
+ * (staged or not), untracked ones, and ignored ones, a folder git reports whole ending in `/`. `{ paths, branch, head }`,
+ * or `{ why }` when git cannot answer (`null`, for a folder git does not read as a worktree), or when HEAD is detached on
+ * commits no branch, tag or remote holds, which `git worktree remove` would leave to the reflog alone. */
+function unkeptPaths(worktree, gitIn) {
+  const head = gitIn(worktree, 'rev-parse', '--verify', '--quiet', 'HEAD');
+  const top = gitIn(worktree, 'rev-parse', '--show-toplevel');
+  if (!head.ok || !top.ok || !sameFolder(top.out.trim(), worktree)) return { why: null };
+  const branch = gitIn(worktree, 'symbolic-ref', '--quiet', '--short', 'HEAD');
+  if (!branch.ok) {
+    const held = gitIn(worktree, 'for-each-ref', '--count=1', '--contains', 'HEAD', '--format=%(refname)');
+    if (!held.ok) return { why: `git could not say whether a ref holds its detached head (${held.err})` };
+    if (held.out.trim() === '') return { why: `its head ${head.out.trim().slice(0, 12)} is detached on commits no branch holds: git -C ${worktree} branch <name> keeps them, then run this again` };
+  }
+  const lists = [
+    gitIn(worktree, 'diff', '--name-only', '-z', '--no-renames', 'HEAD'),
+    gitIn(worktree, 'ls-files', '-z', '--others', '--exclude-standard'),
+    gitIn(worktree, 'ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory'),
+  ];
+  const failed = lists.find((list) => !list.ok);
+  if (failed !== undefined) return { why: `git could not list what it holds (${failed.err})` };
+  const paths = [...new Set(lists.flatMap((list) => list.out.split('\0')).filter((item) => item !== ''))].sort();
+  return { paths, branch: branch.ok ? branch.out.trim() : null, head: head.out.trim() };
+}
+
+/** Copies what no branch keeps of the worktree `worktree` of the recorded job `entry` (`unkeptPaths`) into
+ * `keptDirOf(home, ...)`: the paths under `files/`, and `kept.json`, what the copy is of. A folder git does not read as
+ * a worktree is copied whole but its `.git`. `{ dir, count, leftOut }` once it is copied, `dir` null when there was
+ * nothing to copy; `{ why }` when something cannot be copied or told, and then the worktree is not to be removed
+ * (odd/tasks/audit-cement.md, spec 5). */
+export function keepUnkept(entry, worktree, { home, gitIn, now = Date.now, fileSystem: io = fs }) {
+  if (!io.existsSync(worktree)) return { dir: null, count: 0, leftOut: [] };
+  const found = unkeptPaths(worktree, gitIn);
+  if (found.why) return { why: found.why };
+  let paths = found.paths;
+  if (found.why === null) {
+    try {
+      paths = io.readdirSync(worktree).filter((name) => name !== '.git');
+    } catch (err) {
+      return { why: `its worktree ${worktree} could not be read (${err.code ?? err.message})` };
+    }
+  }
+  const leftOut = [];
+  const leaves = (item) => {
+    const named = item.replace(/\/$/, '').split(/[\\/]/).find((part) => KEEP_LEFT_OUT.has(part));
+    if (named === undefined) return false;
+    leftOut.push(item);
+    return true;
+  };
+  const copied = paths.filter((item) => !leaves(item) && io.existsSync(path.join(worktree, item)));
+  if (copied.length === 0) return { dir: null, count: 0, leftOut };
+  const dir = keptDirOf(home, entry.id, now());
+  try {
+    for (const item of copied) {
+      io.cpSync(path.join(worktree, item), path.join(dir, 'files', item), {
+        recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true,
+        filter: (source) => !path.relative(worktree, source).split(/[\\/]/).some((part) => KEEP_LEFT_OUT.has(part)),
+      });
+    }
+    io.writeFileSync(path.join(dir, 'kept.json'), `${JSON.stringify({ id: entry.id, title: entry.title ?? null, worktree, branch: found.branch ?? null, head: found.head ?? null, at: new Date(now()).toISOString(), paths: copied, leftOut }, null, 2)}\n`);
+  } catch (err) {
+    return { why: `what no branch keeps could not be copied to ${dir} (${err.code ?? err.message})` };
+  }
+  return { dir, count: copied.length, leftOut };
 }

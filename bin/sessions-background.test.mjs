@@ -565,6 +565,10 @@ test('sessions stop refuses a session whose worktree holds files, runs no claude
   assert.equal(removed.code, 0, removed.stderr);
   assert.deepEqual(actions(world).slice(acted), [['stop', '0db8bc5e'], ['rm', '0db8bc5e']]);
   assert.equal(fs.existsSync(worktree), false);
+  // A folder git does not read as a worktree is copied whole, but its .git.
+  const [kept] = keptCopies(world);
+  assert.equal(fs.readFileSync(path.join(kept, 'files', 'src', 'work.js'), 'utf8'), 'uncommitted\n');
+  assert.equal(fs.existsSync(path.join(kept, 'files', '.git')), false);
 }));
 
 test('sessions stop runs on a worktree that holds only .git, and takes --remove-worktree with --home in any order', withWorld((world) => {
@@ -579,6 +583,112 @@ test('sessions stop runs on a worktree that holds only .git, and takes --remove-
   assert.equal(both.code, 0, both.stderr);
   const twice = js(world, ['sessions', 'stop', 'c779ed44', '--remove-worktree', '--remove-worktree']);
   assert.equal(twice.code, 2);
+}));
+
+/** Makes the fake's worktree `name` of the world's session a real linked worktree of the project on its own branch,
+ * with a tracked file committed, as claude makes one. */
+function realWorktree(world, name) {
+  const git = (cwd, ...args) => {
+    const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout;
+  };
+  fs.writeFileSync(path.join(world.project, 'tracked.txt'), 'base\n');
+  fs.writeFileSync(path.join(world.project, '.gitignore'), 'runs/\nnode_modules/\n');
+  git(world.project, 'add', '.');
+  git(world.project, 'commit', '-q', '-m', 'base');
+  const worktree = path.join(world.project, '.claude', 'worktrees', name);
+  fs.rmSync(worktree, { recursive: true, force: true });
+  git(world.project, 'worktree', 'add', '-q', '-b', `worktree-${name}`, worktree);
+  return { worktree, git: (...args) => git(worktree, ...args) };
+}
+
+/** The folders `sessions stop --remove-worktree` copied into under the world's home. */
+const keptCopies = (world) => {
+  const dir = path.join(world.home, '.js-harness', 'background', 'kept');
+  return fs.existsSync(dir) ? fs.readdirSync(dir).map((name) => path.join(dir, name)) : [];
+};
+
+// On 2026-11-13 the app's archive deleted an untracked file of 34,069 bytes with its worktree, and --remove-worktree
+// removed a worktree with no copy of what no branch keeps (audit C5; odd/tasks/audit-cement.md, spec 5).
+test('sessions stop --remove-worktree copies what no branch keeps before claude rm, and says where', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const { worktree, git } = realWorktree(world, 'thing');
+  fs.writeFileSync(path.join(worktree, 'tracked.txt'), 'changed\n');
+  fs.writeFileSync(path.join(worktree, 'staged.txt'), 'staged only\n');
+  git('add', 'staged.txt');
+  fs.mkdirSync(path.join(worktree, 'notes', 'deep'), { recursive: true });
+  fs.writeFileSync(path.join(worktree, 'notes', 'deep', 'a note.md'), 'untracked\n');
+  fs.mkdirSync(path.join(worktree, 'runs'));
+  fs.writeFileSync(path.join(worktree, 'runs', 'trial.json'), '{"ignored":true}\n');
+  fs.mkdirSync(path.join(worktree, 'node_modules', 'pkg'), { recursive: true });
+  fs.writeFileSync(path.join(worktree, 'node_modules', 'pkg', 'index.js'), 'rebuilt by an install\n');
+  const acted = actions(world).length;
+  const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(actions(world).slice(acted), [['stop', '0db8bc5e'], ['rm', '0db8bc5e']]);
+  assert.equal(fs.existsSync(worktree), false);
+  const [kept] = keptCopies(world);
+  assert.ok(kept, 'a copy was made');
+  assert.ok(result.stdout.includes(kept), result.stdout);
+  assert.match(result.stdout, /left out: node_modules/);
+  const files = path.join(kept, 'files');
+  assert.equal(fs.readFileSync(path.join(files, 'tracked.txt'), 'utf8'), 'changed\n');
+  assert.equal(fs.readFileSync(path.join(files, 'staged.txt'), 'utf8'), 'staged only\n');
+  assert.equal(fs.readFileSync(path.join(files, 'notes', 'deep', 'a note.md'), 'utf8'), 'untracked\n');
+  assert.equal(fs.readFileSync(path.join(files, 'runs', 'trial.json'), 'utf8'), '{"ignored":true}\n');
+  assert.equal(fs.existsSync(path.join(files, 'node_modules')), false);
+  const manifest = JSON.parse(fs.readFileSync(path.join(kept, 'kept.json'), 'utf8'));
+  assert.equal(manifest.id, '0db8bc5e');
+  assert.equal(manifest.branch, 'worktree-thing');
+  assert.match(manifest.head, /^[0-9a-f]{40}$/);
+  assert.deepEqual(manifest.leftOut, ['node_modules/']);
+}));
+
+test('sessions stop --remove-worktree refuses a detached head whose commits no ref holds, and removes nothing', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const { worktree, git } = realWorktree(world, 'thing');
+  git('checkout', '-q', '--detach');
+  fs.writeFileSync(path.join(worktree, 'lone.txt'), 'committed on no branch\n');
+  git('add', 'lone.txt');
+  git('commit', '-q', '-m', 'lone');
+  const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
+  assert.equal(result.code, 1, result.stdout);
+  assert.match(result.stderr, /no branch/);
+  assert.match(result.stderr, /git -C .* (branch|push)/);
+  assert.equal(actions(world).some((call) => call[0] === 'rm'), false, 'no claude rm');
+  assert.equal(fs.readFileSync(path.join(worktree, 'lone.txt'), 'utf8'), 'committed on no branch\n');
+  assert.deepEqual(recordLines(world).map((line) => line.event), ['started']);
+}));
+
+test('sessions stop --remove-worktree refuses when the copy cannot be written, and removes nothing', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const { worktree } = realWorktree(world, 'thing');
+  fs.writeFileSync(path.join(worktree, 'work.js'), 'uncommitted\n');
+  // A file where the folder of the copies goes: no copy can be made under it.
+  fs.mkdirSync(path.join(world.home, '.js-harness', 'background'), { recursive: true });
+  fs.writeFileSync(path.join(world.home, '.js-harness', 'background', 'kept'), 'in the way\n');
+  const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
+  assert.equal(result.code, 1, result.stdout);
+  assert.match(result.stderr, /could not be copied/);
+  assert.equal(actions(world).some((call) => call[0] === 'rm'), false, 'no claude rm');
+  assert.equal(fs.readFileSync(path.join(worktree, 'work.js'), 'utf8'), 'uncommitted\n');
+  assert.deepEqual(recordLines(world).map((line) => line.event), ['started']);
+}));
+
+test('sessions stop --remove-worktree refuses while another recorded session that did not say closed has the worktree', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  patchState(world, { nextId: 'c779ed44' });
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Same folder', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const worktree = path.join(world.project, '.claude', 'worktrees', 'thing');
+  fs.writeFileSync(path.join(worktree, 'work.js'), 'uncommitted\n');
+  const acted = actions(world).length;
+  const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
+  assert.equal(result.code, 1, result.stdout);
+  assert.match(result.stderr, /c779ed44 · Same folder.*did not say closed/);
+  assert.match(result.stderr, /archive/);
+  assert.equal(actions(world).length, acted, 'no claude stop, no claude rm');
+  assert.equal(fs.readFileSync(path.join(worktree, 'work.js'), 'utf8'), 'uncommitted\n');
 }));
 
 // claude agents lists a session it just started in the folder it was started from: the record and stop name the
