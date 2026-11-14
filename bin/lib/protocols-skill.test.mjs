@@ -126,7 +126,9 @@ test('the throughput review section holds its judgment steps, its five questions
   for (const step of ['- Candidates: ', '- Readers: ', '- Stop rule: ', "- The user's decisions: ", '- Five questions: ', '- What leaves: ']) assert.ok(text.includes(step), step);
   assert.ok(review.lines.some((line) => /^- Cost: .+ Reviewed by 2026-11-16\.$/.test(line)), text);
   for (const id of ['throughput-quiet-runs', 'throughput-quiet-days', 'double-review']) assert.ok(text.includes(`\`rule:${id}\``), id);
-  assert.ok(text.includes('js-harness throughput reviewed'), 'it says how a review is recorded');
+  // The directives audit, A14 (odd/tasks/audit-cement.md, spec 7): it names the command as it exists, the workshop's.
+  assert.ok(text.includes('node workshop/js-harness-workshop.mjs throughput reviewed'), 'it says how a review is recorded');
+  assert.ok(!/js-harness throughput/.test(text), 'no js-harness throughput command exists');
   assert.ok(text.includes('no check, review or test is removed or weakened'), 'the hard limit is a candidate\'s condition');
 });
 
@@ -143,7 +145,7 @@ test('a proposal reaches the user only after two readers, and a handoff names th
   assert.match(asking, /Everything that proposes something, whether a plan, a design before it is built, an analysis with figures, a protocol or a document put to the user, asked or reported, first passes a Claude reader and a Codex reader, blind, on one frozen copy/);
   assert.match(asking, /only the user's typed "no quiero la revisión" skips it\./);
   assert.match(asking, /Code passes its own pair, Codex and the Claude lenses \(section 3\), judged against what was asked\./);
-  assert.match(asking, /In both, a review that finds nothing approves at once; a correction gets a confirming review; at most three reviews, and where the third still finds a real failure the user gets it as a problem and the work passes to the strongest model the rules name, `rule:session-model`\./);
+  assert.match(asking, /In both, a review that finds nothing approves at once; a correction gets a confirming review; at most three reviews, and where the third still finds a real failure the user gets it as a problem and the work passes to the strongest model the rules name, `rule:senior-model` where the project declares it and `rule:session-model` where it does not\./);
   assert.match(asking, /Not for a question of fact \(a figure or an outcome looked up, nothing proposed\), nor for a step or a choice whose reviewed text the question names by path\./);
   assert.ok(handoff.includes('- A plan or a design handed on has passed its double review first (`rule:double-review`, section 1).'), handoff);
   assert.ok(handoff.includes('- What the user reads to understand or decide (research, a proposal, an audit, a map, a report) reaches them in their language as a visual, didactic page (`rule:reports-spanish-visual`)'), handoff);

@@ -61,10 +61,10 @@ happened; the fix now and whether it is checked; what stops it recurring (a chec
 line before a protocol); where that enters and when; the command or count that will prove it has
 not come back. It goes into `docs/FAILURES.md` as a `- Seen:` line.
 
-A throughput review (the heartbeat's `DUE:` line, `js-harness throughput`) gives each candidate
-its baseline, target, cost and why no check, review or test weakens; one whose gain is below its
-cost is dropped with the reason written, and the review is recorded with
-`js-harness throughput reviewed`.
+A throughput review (the heartbeat's `DUE:` line, `node workshop/js-harness-workshop.mjs
+throughput`) gives each candidate its baseline, target, cost and why no check, review or test
+weakens; one whose gain is below its cost is dropped with the reason written, and the review is
+recorded with `node workshop/js-harness-workshop.mjs throughput reviewed`.
 
 ## Running what costs, and review
 
