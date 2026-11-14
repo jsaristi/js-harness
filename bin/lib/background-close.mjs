@@ -375,7 +375,7 @@ function unkeptPaths(worktree, gitIn) {
   // deletes: only a shared ref holds a commit (the verifier on 1d982b38).
   const sharedHolds = (commit) => {
     const held = gitIn(worktree, 'for-each-ref', '--contains', commit, '--format=%(refname)');
-    return held.ok ? held.out.split(/\r?\n/).some((ref) => ref !== '' && !OWN_REFS.test(ref)) : { err: held.err };
+    return held.ok ? held.out.split(/\r?\n/).some((ref) => ref !== '' && !OWN_REFS.test(ref)) : { err: held.err || 'git gave no reason' };
   };
   const branch = gitIn(worktree, 'symbolic-ref', '--quiet', '--short', 'HEAD');
   const tips = [...(branch.ok ? [] : ['HEAD'])];
