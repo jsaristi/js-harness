@@ -663,12 +663,14 @@ test('sessions stop --remove-worktree keeps the index, skip-worktree files and t
   fs.writeFileSync(path.join(worktree, 'local.cfg'), 'mine\n');
   // The patch is git's own, whatever color the user's config asks a diff for (the verifier on 1d982b38).
   git('config', 'color.diff', 'always');
+  git('config', 'diff.noprefix', 'true');
   const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
   assert.equal(result.code, 0, result.stderr);
   const [kept] = keptCopies(world);
   const patch = fs.readFileSync(path.join(kept, 'staged.patch'), 'utf8');
   assert.match(patch, /\n\+staged\n/);
   assert.equal(patch.includes('\u001b'), false, 'no color codes');
+  assert.match(patch, /^--- a\/tracked\.txt$/m, 'the a/ and b/ prefixes git apply takes');
   assert.equal(fs.readFileSync(path.join(kept, 'files', 'local.cfg'), 'utf8'), 'mine\n');
   assert.equal(fs.readFileSync(path.join(kept, 'files', 'vendor', 'node_modules', 'kept.js'), 'utf8'), 'v2\n');
 }));

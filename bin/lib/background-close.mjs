@@ -375,7 +375,7 @@ function unkeptPaths(worktree, gitIn) {
   // deletes: only a shared ref holds a commit (the verifier on 1d982b38).
   const sharedHolds = (commit) => {
     const held = gitIn(worktree, 'for-each-ref', '--contains', commit, '--format=%(refname)');
-    return held.ok ? held.out.split(/\r?\n/).some((ref) => ref !== '' && !OWN_REFS.test(ref)) : null;
+    return held.ok ? held.out.split(/\r?\n/).some((ref) => ref !== '' && !OWN_REFS.test(ref)) : { err: held.err };
   };
   const branch = gitIn(worktree, 'symbolic-ref', '--quiet', '--short', 'HEAD');
   const tips = [...(branch.ok ? [] : ['HEAD'])];
@@ -384,7 +384,7 @@ function unkeptPaths(worktree, gitIn) {
   tips.push(...own.out.split(/\r?\n/).filter((line) => line !== '').map((line) => line.split(' ')[0]));
   for (const tip of tips) {
     const shared = sharedHolds(tip);
-    if (shared === null) return { why: `git could not say whether a branch holds ${tip}` };
+    if (shared?.err !== undefined) return { why: `git could not say whether a branch holds ${tip} (${shared.err})` };
     if (!shared) return { why: `${tip === 'HEAD' ? `its head ${head.out.trim().slice(0, 12)} is detached` : `a ref of its own points at ${tip.slice(0, 12)}`}, on commits no branch holds: git -C ${worktree} branch <name> ${tip === 'HEAD' ? '' : `${tip.slice(0, 12)} `}keeps them, then run this again` };
   }
   // A submodule's repository lives in the worktree's git folder even once the index no longer names it.
@@ -398,7 +398,7 @@ function unkeptPaths(worktree, gitIn) {
     ignored: gitIn(worktree, 'ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory'),
     stage: gitIn(worktree, 'ls-files', '-z', '--stage'),
     // A backup is git's own patch: no external diff, text conversion or color the user's config asks for.
-    staged: gitIn(worktree, 'diff', '--cached', '--binary', '--no-renames', '--no-ext-diff', '--no-textconv', '--no-color', 'HEAD'),
+    staged: gitIn(worktree, 'diff', '--cached', '--binary', '--no-renames', '--no-ext-diff', '--no-textconv', '--no-color', '--src-prefix=a/', '--dst-prefix=b/', 'HEAD'),
   };
   const failed = Object.values(asked).find((answer) => !answer.ok);
   if (failed !== undefined) return { why: `git could not list what it holds (${failed.err})` };
