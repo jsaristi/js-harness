@@ -4,7 +4,7 @@ Branch: worktree-audit-cement (the document), then one branch per slice from ori
 Delivery: ask-on-risk. Tests: `node --test`. Opened 2026-11-13 by JH 198 (Opus 5.5, medium) from the lead's brief.
 
 ## State
-T1-T7 and the 867 follow-up landed (876 at main 01f7588). T8 is on feat/progress-baseline: 13c0a5d4, the lens fixes 6c6889ca, main merged at 29075bd9, reviewed; with it the session summary docs/sessions/2026-11-14-jh-198-cement-the-directives-audit-s-corrections.md. Next: push, draft PR, advisor, ready, gh pr ready, then closed. Nothing else is open in this feature.
+T1-T7 landed (876 at main 01f7588). T8 is PR 877 (draft) on feat/progress-baseline, head 5b5bf12d pushed, reviewed (Codex 0.87 and 0.98, lenses fixed). The 0 closed holds: git grep -c of open checkboxes per plan file at 5f3919f8 and origin/main, no file fell. Done: the summary fixes and two FAILURES Seen lines (chained-step-not-conditional, script-ate-backslashes). Next: gh pr view 877 mergeable, gh pr ready 877, notify ready (say SPEC.md edited, two lines), advisor, TaskStop the wait, notify closed --summary docs/sessions/2026-11-14-jh-198-cement-the-directives-audit-s-corrections.md.
 
 ## Goal
 Every correction the audit and its two blind reviews found is fixed where a check can hold it, and each of the

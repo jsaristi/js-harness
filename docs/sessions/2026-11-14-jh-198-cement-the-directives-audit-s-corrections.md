@@ -40,7 +40,7 @@ Implement every correction of the directives audit and its two blind reviews, an
 - The low findings of the T4 follow-up's verifier are answered in L29, not fixed: a junction inside a worktree that points out of it, `realpath` on an unreachable UNC host, and a branch ref moved from outside and then deleted.
 
 ## Cost
-- Time: the brief was written 2026-11-13T21:21Z; T7's ready went out 2026-11-14T22:54Z. This session was compacted twice, at 18:35Z and 22:12Z.
+- Time: the brief was written 2026-11-13T21:21Z; T7's ready went out 2026-11-14T22:54Z. The host compacted this session more than once; the last two were at 18:35Z and 22:12Z (the resume hook's lines).
 - Context at the last notice: 43%.
-- Reviews: Codex and the Claude lenses on every code commit of each slice. The independent verifier ran on the high-risk slices: T1, T2 and T3, T4 over three rounds (L11, L12), T5 (L21), and the T4 follow-up (L27, L29).
+- Reviews: Codex and the Claude lenses on every code commit of each slice. The independent verifier ran on the high-risk slices, as the log records it: T1 (spec 11's finding), the guard slice T2, T4 over three rounds (L11, L12), T5 (L21) and the T4 follow-up (L27, L29).
 - Gates: `js-harness gate` on the touched suites before each commit, and the pre-commit `npm run check` on GitHub's machines.
