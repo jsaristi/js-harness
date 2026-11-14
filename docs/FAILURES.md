@@ -45,6 +45,19 @@ depend on `sessions --quote` exiting 0.
 - Control: check — bin/notify.test.mjs — "an answer to a question-tool call is verified when the call
   was asked after its question, and answers it only by its prefix" — since 2026-10-13
 
+### app-archive-cut-work
+The Claude app stopped or archived sessions on its own, so a paid run was cut and a worktree lost a file no branch
+kept, with no word to the harness.
+- Class: unseen-state
+- Seen: 2026-11-13 — relief file, line 2747, and the app's log `Claude/logs/main.log`, lines 7747-7935 and 7760
+  (claimed; the lead's reading, odd/tasks/audit-cement.md, spec 8) — from 17:57 to 19:09 local (UTC-05:00) the lead's
+  turns failed and JH 193's batch-2 stopped (current-2 at turn 22 of 30, its third runs never started) on an account
+  subscription error (HTTP 403, "payment is past due"); after it the app's auto-archive (`auto_archive_on_pr_close`)
+  archived sessions with a merged pull request bound, and deleted one untracked 34,069-byte file in
+  `rule-lead-effort-split-aac740`. `sessions stop --remove-worktree` now copies what no branch keeps to
+  `~/.js-harness/kept/`, which `uninstall everything` removes with the rest of the folder, or refuses (JH 198, T4);
+  the app's `archive_session` stays outside it, and whether auto-archive stays on is his decision
+
 ### asked-yes-not-his
 A session stopped and asked him for a yes on a step that was not one of the things that are his.
 - Class: asked-of-him
@@ -163,6 +176,19 @@ not the real one.
   that as "that session no longer waits" and took the lock it was written to yield
 - Control: check — bin/check.test.mjs — "main waits for the gate that holds the lock, says once on
   stderr whose it is, and reports the time it waited" — since 2026-10-11
+
+### cd-into-session-worktree
+The lead ran `cd` into another session's worktree to read it, which moved its own shell there, where a later
+command could write into that session's work.
+- Class: rule-not-acting
+- Seen: 2026-11-12 — relief file, line 2654 (the lead's own) — a `cd` into JH 192's worktree for a read moved the
+  lead's folder there for one call; moved back at once, nothing written
+- Seen: 2026-11-13 — relief file, line 2695 (the lead's own) — a `cd` into JH 193's worktree, the same way; read
+  only, moved back
+- Seen: 2026-11-14 — relief file, line 2747 (the lead's own) — a `cd` into `rule-lead-effort-split-aac740`, the third
+  time, at 02:48 local, before the guard below landed at 03:46
+- Control: check — bin/lib/worktrees.test.mjs — "a cd, pushd or Set-Location into another linked worktree is refused,
+  naming git show and git -C" — since 2026-11-14
 
 ### chained-step-not-conditional
 A check and the step it should allow were started in one command, and the step ran whatever the
@@ -436,6 +462,16 @@ session can neither be told nor tell, and each notice becomes his paste.
 - Proof: a practice step: a notice read with no message sent (owed: the journey's step `channel`,
   `scripts/practice-lib.mjs` JOURNEY, ran "13 of 13 steps passed" on b0d0af2 in draft pull request
   199, not on main yet; odd/tasks/session-channel.md, Progress, 2026-10-15 06:27)
+
+### decided-without-advisor
+A session took an act that decides (a land, a question to him) with no advisor call in its stretch, though he had
+asked that decisions pass through the advisor.
+- Class: rule-not-acting
+- Seen: 2026-11-14 — odd/tasks/audit-cement.md, L20 (claimed; the lead's own, flagged by `advisor-gate` in its
+  warning week) — the lead landed pull request 867 at about 05:56 and recorded question 284 at 06:33 local with no
+  advisor call in either stretch; since then it calls the advisor alone before each land, question and delete (three
+  covered). What stops it is the hook's refusal once the warning week ends; its proof is `js-harness advisor-gate
+  report` showing no flagged land or question of the lead in a day
 
 ### design-not-faithful
 A design document passed gentle-ai and its own contract and still dropped or misstated decisions of
@@ -981,6 +1017,9 @@ Hours written in the relief file were not read from a clock.
   by the clock", committed at 15:12: the clock was read after the line was written); the lead found
   the first when a notice printed the clock. Corrected with the commits' hours in ed3b2006 and the
   commit after it. These lines open with "At" and no date, which the documents control does not read
+- Seen: 2026-11-13 — relief file, lines 2707, 2708 and 2728, and the correction at line 2729 (the lead's own) — three
+  relief lines begin with a literal `%Y-%m-%d %H:%M:%S` instead of the time: written with `printf` and a `%%`
+  mistake instead of `js-harness notify --relief`, which stamps the clock itself
 - Control: check — bin/notify.test.mjs — "a notice whose text stamps an hour more than a minute off
   the clock is refused, with the right hour, and not recorded" — since 2026-10-16
 - Proof: messages to another session: bin/guard.test.mjs:54, "a message to another session, by
@@ -2030,12 +2069,29 @@ the reply before he leaves; so the return had no goals to check and no forecast 
 - Seen: 2026-11-13 — the lead's transcript 93b72703 (the lead's own; the reply hook's return warning at 15:18:17Z) — he
   last wrote at 02:17 and came back at 10:18, local time (UTC-05:00); the lead was not held by a question and opened
   no stretch for the absence, so his return had no estimate to measure against
+- Seen: 2026-11-13 — odd/tasks/audit-cement.md, spec 8 (claimed; the lead's own) — he was away from 17:07 on
+  2026-11-13 to 02:46 on 2026-11-14 local (UTC-05:00) with no stretch open
+- Seen: 2026-11-14 — odd/tasks/audit-cement.md, L20 (claimed; the lead's own) — the lead opened the stretch for an
+  absence from 02:54 only at 04:56 local, the second late one after 2026-11-13 17:07
+- Seen: 2026-11-14 — relief file, line 2775 (the lead's own) — away since 07:31 local with no stretch; the lead opened
+  one at 13:33, late a third time
 - Control: check — bin/loop-bodies.test.mjs — "heartbeat ends with the AWAY line when he last wrote to its session two
   hours ago and no stretch covers the time since" — since 2026-11-11
 - Was: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
   once, naming the failure to record" — replaced on 2026-11-11: it acts at his return, after the time away it is
   about, and 16 sightings came after it (the Fable 5.2 audit, M9); it stays in force as the backstop, and the control
   is now the heartbeat's line, which acts when the absence starts
+
+### sub-agents-inherited-model
+Sub-agents launched with no model ran on their session's model, the scarcest one, because the guard let a
+sub-agent name no short name for the home's model.
+- Class: rule-not-acting
+- Seen: 2026-11-13 — relief file, line 2731 (the lead's own) — the senior's nine audit readers, launched at 20:13Z with
+  no model, ran on claude-fable-5-2 and spent about 80% of that afternoon's weighted Fable use (cache writes 2.72M,
+  cache reads 11.6M, output 688k); the guard refused `opus`, since `rule:session-model` declared no alias
+  (lead-audit-report.md, "Fuera de regla hoy"). Since JH 198's T1, `opus` is that rule's alias
+- Control: check — bin/lib/guard.test.mjs — "model, on its short name where it has one, or on none" — since
+  2026-11-14
 
 ### taskstop-leaves-work-alive
 Stopping a background task of the host ends its shell and not what that shell started, so the work
@@ -2244,6 +2300,17 @@ names something that does not exist.
   (odd/tasks/install-update.md, T5)
 - Control: check — bin/update.test.mjs — "upgrade with no source installs nothing and runs no
   sync, whatever a registry would answer" — since 2026-10-13
+
+### verifier-before-last-fix
+The independent verifier of a high-risk change ran before the change's last fixes, so the head that shipped was
+never verified, and the ready notice named only Codex and the lenses.
+- Class: delivery
+- Seen: 2026-11-14 — odd/tasks/audit-cement.md, L22 (JH 198's own) — pull request 867 (`sessions stop
+  --remove-worktree`): the verifier ran before the round that fixed Codex's last P1, and the lead caught it
+- Seen: 2026-11-14 — odd/tasks/audit-cement.md, L22 (JH 198's own) — pull request 868 (the board's `yours` gate): the
+  same, and the lead held the land until a verifier ran on the range ending at the head that shipped. Since then the
+  verifier runs last on that range and the ready line carries its result; its proof is each ready notice of a guard
+  naming a verifier range that ends at the pull request's head
 
 ### wait-blind-to-notices
 A session waited with `js-harness wait` on one event, and the lead's notices to it did not end the
