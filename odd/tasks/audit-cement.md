@@ -4,7 +4,7 @@ Branch: worktree-audit-cement (the document), then one branch per slice from ori
 Delivery: ask-on-risk. Tests: `node --test`. Opened 2026-11-13 by JH 198 (Opus 5.5, medium) from the lead's brief.
 
 ## State
-T1-T6 and the 867 follow-up landed (PRs 863-865, 867-869, 873; main 83678e0). NOW: T7 on docs/audit-cement-skill from 83678e0: spec 9, bin/lib/manifest.mjs, the orchestrator skill gets a senior section (A2b) and puts the closing steps before ready (A4); lines 157 and 202 stay JH 200s until its slice 2 lands (merge main before T7s commit). T7 is docs in a skill: Codex and lenses (manifest.mjs is code), no verifier unless a guard is touched. Then T8 (progress baseline share, its own PR), then closed (advisor, then notify closed with a docs/sessions summary). Wait: one js-harness wait --notice-to 198 in the background.
+T1-T6 and the 867 follow-up landed (main 83678e0). NOW: T7 on docs/audit-cement-skill (main merged at 6a3cd57d): committed: the closing-before-ready line in bin/lib/manifest.mjs; the ## The senior section in bin/lib/lead-protocols.mjs, after A new model, so manifest.mjs stays at its ceiling of 1644 (a first commit was refused at 1648; the lead cleared lead-protocols.mjs at 22:3xZ); a manifest test that fails on the old text; the two spans declared in text order (d2ccc22abbcd context, 292f5fac6950 owed). Next: Codex+lenses from 6a3cd57d, PR, advisor, ready. Then T8, then closed. Wait: b5s9ecjm3 was the 873 wait (ended); arm one js-harness wait --notice-to 198.
 
 ## Goal
 Every correction the audit and its two blind reviews found is fixed where a check can hold it, and each of the

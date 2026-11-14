@@ -1,5 +1,6 @@
 // Two protocols of the orchestrator skill that a lead runs on the user's word: before a reinstall of the machine, and
-// a new model or effort (odd/tasks/backup-ready.md, L5; odd/tasks/one-model-home.md, specs 9 and 10). They are
+// a new model or effort (odd/tasks/backup-ready.md, L5; odd/tasks/one-model-home.md, specs 9 and 10); then the
+// senior session the lead sends a task to (odd/tasks/audit-cement.md, T7). They are
 // sections of the skill's text, which bin/lib/manifest.mjs gives between "The lead" and "A work session". They live
 // in a module of their own because the manifest is over the size at which a module stops growing
 // (bin/conventions-structure.test.mjs), and a protocol is read whole by whoever changes it. bin/lib/manifest.test.mjs
@@ -25,7 +26,11 @@ When the user says the sessions or the reviews move to another model or another 
 7. Then the sessions. \`js-harness rules applied\` lists each one off the home with the act that corrects it, since no session changes its own model or effort: the host's session tools for another open session, the line it gives for the user's menu where the session is the user's to set, a resume for a background job. Run it again until it lists none, and say what it could not read.
 8. Give the user, as it is printed, what the switch leaves outside the repository (their settings, which it reads and never writes) and what a new model may make stale that no rule holds.
 
-The day before a switch of Codex's home lands, check three things: the id the installed \`codex\` takes (the probe of step 3, one cheap call, said before it runs); that \`js-harness codex-meter\` still reads its limits; and that a review of one small slice runs end to end from the branch's copy. A switch of Codex's home moves the figures too: the plan of a review estimates from every measured part until five parts exist on the new model and effort, so its first estimates come from the model that leaves, and \`rule:codex-review-rate\`, \`rule:codex-review-floor\` and the double review's measured cost were measured on that model.`;
+The day before a switch of Codex's home lands, check three things: the id the installed \`codex\` takes (the probe of step 3, one cheap call, said before it runs); that \`js-harness codex-meter\` still reads its limits; and that a review of one small slice runs end to end from the branch's copy. A switch of Codex's home moves the figures too: the plan of a review estimates from every measured part until five parts exist on the new model and effort, so its first estimates come from the model that leaves, and \`rule:codex-review-rate\`, \`rule:codex-review-floor\` and the double review's measured cost were measured on that model.
+
+## The senior
+
+Where the project declares \`rule:senior-model\`, one senior session stands beside the work sessions: titled \`<code> SR · <purpose>\`, started with \`js-harness sessions start\` on \`rule:senior-model\` at \`rule:senior-effort\`, with no advisor named (the user's settings still give it one). It is long-lived and runs nothing until you send it a task as a message; send it one when, in your judgment, the task needs more intelligence or complexity than a work session brings, such as a design, an audit or the strongest reader of a proposal. Its sub-agents name a model (\`opus\` where \`rule:session-model\` declares that alias), never inherit the senior's, and it reports through the same notices as any work session.`;
 
 /** `LEAD_PROTOCOLS` without its last full stop, for a text that writes that stop itself after the placeholder. The
  * list of rules cuts a rule's sentence after the last full stop of its home's source (`sentenceOf` of
