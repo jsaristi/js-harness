@@ -537,7 +537,8 @@ export function within(child, parent, platform = process.platform) {
   const paths = platform === 'win32' ? path.win32 : path;
   const fold = (text) => (platform === 'win32' ? paths.resolve(text).toLowerCase() : paths.resolve(text));
   const rel = paths.relative(fold(parent), fold(child));
-  return rel === '' || (!rel.startsWith('..') && !paths.isAbsolute(rel));
+  // Only a first segment that is `..` steps out: `..foo` is a folder inside (the verifier on 9dfd7afc..2e3b9f94).
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${paths.sep}`) && !paths.isAbsolute(rel));
 }
 
 /** The board's fact (S4): the background sessions `agents` lists whose folder is the project's (`roots`, its main

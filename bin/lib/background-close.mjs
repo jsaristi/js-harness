@@ -391,12 +391,19 @@ const listOf = (out) => out.split('\0').filter((item) => item !== '');
 function unkeptPaths(worktree, gitIn) {
   const head = gitIn(worktree, 'rev-parse', '--verify', '--quiet', 'HEAD');
   const top = gitIn(worktree, 'rev-parse', '--show-toplevel');
-  if (!head.ok || !top.ok || !sameFolder(top.out.trim(), worktree)) {
+  const readable = top.ok && sameFolder(top.out.trim(), worktree);
+  // A branch with no commit yet is a worktree git reads: what it holds is in its files and its index, not git's to repair
+  // (the verifier on 9dfd7afc..2e3b9f94).
+  if (readable && !head.ok) {
+    const unborn = gitIn(worktree, 'symbolic-ref', '--quiet', '--short', 'HEAD');
+    if (unborn.ok) return { why: `its branch ${unborn.out.trim()} has no commit yet, so no branch keeps what it holds: commit it, or keep it by hand, then run this again` };
+  }
+  if (!head.ok || !readable) {
     // Copied whole only when git keeps nothing of its own for it; a git folder still there holds its index and its own
     // refs, which no copy of its files keeps (Codex P1 on 62a71b56).
     if (noGitFolder(worktree)) return { why: null };
     const said = !top.ok ? top.err : !head.ok ? head.err : `its top is ${top.out.trim()}`;
-    return { why: `git could not read it as a worktree (${said || 'git gave no reason'}) while its git folder is there, so what only that folder holds could not be checked: repair it with git -C ${worktree} status, then run this again` };
+    return { why: `git could not read it as a worktree (${said || 'git gave no reason'}) while its git folder is there, so what only that folder holds could not be checked: repair it with git -C ${worktree} worktree repair, then run this again` };
   }
   // A ref of the worktree's own (refs/worktree, refs/bisect, refs/rewritten) lives in its git folder, which the removal
   // deletes: only a shared ref holds a commit (the verifier on 1d982b38).

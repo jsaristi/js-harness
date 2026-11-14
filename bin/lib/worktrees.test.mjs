@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { HOST_FILES, worktreeCdRefusal, worktreeKept, worktreesInMain } from './worktrees.mjs';
+import { HOST_FILES, sameFolder, worktreeCdRefusal, worktreeKept, worktreesInMain } from './worktrees.mjs';
 
 // `doctor` counts with these git calls: one that hangs in one worktree must not hold the report (T11).
 test('worktreesInMain bounds every git call it makes with a timeout', () => {
@@ -170,4 +170,23 @@ test('a cd by ~ or $HOME into a worktree under the home is refused (the verifier
 test('from the main checkout, a cd into any linked worktree is refused', () => {
   const trees = () => ({ linked: ['D:/repo/.claude/worktrees/other'], here: 'D:/repo' });
   assert.match(worktreeCdRefusal('cd .claude/worktrees/other', { cwd: 'D:/repo', worktrees: trees }) ?? '', /another session's worktree/);
+});
+
+// The verifier on 9dfd7afc..2e3b9f94 (odd/tasks/audit-cement.md, L17): git prints a worktree's real path, so one reached
+// through a junction or a link is the same folder.
+test('sameFolder takes a folder reached through a junction or a link as the folder itself', () => {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'same-folder-')));
+  try {
+    const real = path.join(dir, 'real');
+    const link = path.join(dir, 'link');
+    fs.mkdirSync(real);
+    fs.mkdirSync(path.join(dir, 'other'));
+    fs.symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir');
+    assert.equal(sameFolder(link, real), true);
+    assert.equal(sameFolder(real, `${link}${path.sep}`), true);
+    assert.equal(sameFolder(link, path.join(dir, 'other')), false);
+    assert.equal(sameFolder(path.join(dir, 'gone'), real), false, 'a folder that is not there is no other folder');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

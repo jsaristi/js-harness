@@ -721,8 +721,26 @@ test('sessions stop --remove-worktree refuses a worktree git cannot read while i
   const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
   assert.equal(result.code, 1, result.stdout);
   assert.match(result.stderr, /git could not read it as a worktree/);
+  // The verifier on 9dfd7afc..2e3b9f94 (L17): git status repairs nothing; git worktree repair mends a broken link.
+  assert.match(result.stderr, /git -C \S+ worktree repair/);
   assert.equal(actions(world).some((call) => call[0] === 'rm'), false, 'no claude rm');
   assert.equal(fs.readFileSync(path.join(worktree, 'work.js'), 'utf8'), 'uncommitted\n');
+  assert.deepEqual(keptCopies(world), []);
+}));
+
+// The verifier on 9dfd7afc..2e3b9f94 (L17): a branch with no commit yet is a worktree git reads, so it is not told to
+// repair it; what it holds lives only in its files and its index.
+test('sessions stop --remove-worktree refuses a branch with no commit yet, naming it, and removes nothing', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const { worktree, git } = realWorktree(world, 'thing');
+  git('checkout', '-q', '--orphan', 'fresh');
+  fs.writeFileSync(path.join(worktree, 'work.js'), 'on no commit\n');
+  const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
+  assert.equal(result.code, 1, result.stdout);
+  assert.match(result.stderr, /its branch fresh has no commit yet/);
+  assert.doesNotMatch(result.stderr, /could not read it as a worktree/);
+  assert.equal(actions(world).some((call) => call[0] === 'rm'), false, 'no claude rm');
+  assert.equal(fs.readFileSync(path.join(worktree, 'work.js'), 'utf8'), 'on no commit\n');
   assert.deepEqual(keptCopies(world), []);
 }));
 

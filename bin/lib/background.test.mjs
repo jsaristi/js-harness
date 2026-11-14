@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { BACKGROUND_SCHEMA, LOCK_WAIT_MS, RM_TRIES, backgroundChanges, backgroundOf, idOfStart, readRecord, recordFileOf, resumedChain, startArgs, undoSession, worktreeHolding, worktreeOf } from './background.mjs';
+import { BACKGROUND_SCHEMA, LOCK_WAIT_MS, RM_TRIES, backgroundChanges, backgroundOf, idOfStart, readRecord, recordFileOf, resumedChain, startArgs, undoSession, within, worktreeHolding, worktreeOf } from './background.mjs';
 
 test('idOfStart reads the id claude --bg prints, and the attach hint when the first line is missing', () => {
   assert.equal(idOfStart('backgrounded · 0db8bc5e · jh-bg-probe-1\n  claude agents             list sessions\n'), '0db8bc5e');
@@ -192,4 +192,16 @@ test('undoSession tries nothing again when claude refuses for another reason', (
   assert.equal(done.outcome, 'kept');
   assert.deepEqual(world.calls, [['stop', '4a9694ea'], ['rm', '4a9694ea']]);
   assert.deepEqual(world.paused, []);
+});
+
+// The verifier on 9dfd7afc..2e3b9f94 (odd/tasks/audit-cement.md, L17): a first segment that only begins with two dots
+// is a folder inside, not a step out.
+test('within reads a first segment like ..foo as inside, and .. itself as outside, on both platforms', () => {
+  assert.equal(within('/a/..foo', '/a', 'linux'), true);
+  assert.equal(within('/a/..foo/b', '/a', 'linux'), true);
+  assert.equal(within('/a/../b', '/a', 'linux'), false);
+  assert.equal(within('/b', '/a', 'linux'), false);
+  assert.equal(within('C:\\A\\..foo', 'c:\\a', 'win32'), true);
+  assert.equal(within('C:\\A\\..\\b', 'c:\\a', 'win32'), false);
+  assert.equal(within('D:\\a', 'C:\\a', 'win32'), false);
 });
