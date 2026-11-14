@@ -338,12 +338,13 @@ function reconcile(projects, from, decisions) {
     if (!harnessOf.has(cwd)) harnessOf.set(cwd, nearestHarness(cwd) !== null);
     return harnessOf.get(cwd);
   };
-  const acts = { found: 0, decided: 0, missing: [] };
+  const acts = { found: 0, decided: 0, missing: [], unread: 0 };
   for (const file of transcriptsUnder(projects, from.slice(0, 10))) {
     let entries;
     try {
       entries = entriesOf(file);
     } catch {
+      acts.unread++;
       continue;
     }
     const created = new Set(entries.filter((e) => e.toolUseResult?.type === 'create').flatMap((e) => (Array.isArray(e.message?.content) ? e.message.content : []).map((b) => b?.tool_use_id)));
@@ -439,9 +440,10 @@ export function advisorGateReport({ home, since = null, projects = path.join(hom
       }
     }
   }
-  const first = all.reduce((min, d) => (min === null || d.at < min ? d.at : min), null);
+  // Decisions written before `toolUseId` was recorded cannot be matched, so the reconciliation starts after them.
+  const first = all.filter((d) => 'toolUseId' in d).reduce((min, d) => (min === null || d.at < min ? d.at : min), null);
   const from = first === null ? null : since !== null && since > first ? since : first;
-  const acts = from === null ? { found: 0, decided: 0, missing: [] } : reconcile(projects, from, all);
+  const acts = from === null ? { found: 0, decided: 0, missing: [], unread: 0 } : reconcile(projects, from, all);
   return {
     days: [...days.values()].sort((a, b) => a.day.localeCompare(b.day)),
     acts, unchecked: shown.filter((d) => d.decision === 'unchecked').length, decisions: shown.length,
@@ -460,6 +462,7 @@ function formatReport({ days, acts, unchecked, decisions, unread, untraced, esti
   }
   const missing = acts.found - acts.decided;
   lines.push(`acts found in the transcripts: ${acts.found}, with a decision: ${acts.decided}, with none: ${missing} (${share(missing, acts.found)})`);
+  if (acts.unread > 0) lines.push(`  ${acts.unread} transcript(s) could not be read; their acts are in neither count.`);
   for (const m of acts.missing.slice(0, 10)) lines.push(`  no decision: ${m.act} (${m.tool}) at ${m.at} in ${m.transcript}`);
   lines.push(`let through unchecked: ${unchecked} of ${decisions} decisions (${share(unchecked, decisions)})`);
   if (unread > 0) lines.push(`${unread} transcript(s) could not be read; their flags count, their calls and tokens do not.`);

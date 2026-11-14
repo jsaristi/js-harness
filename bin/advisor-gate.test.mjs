@@ -347,16 +347,17 @@ test('report: reconciles the decisions with the gated acts found in the transcri
     use(6, 'tE', 'ExitPlanMode', {}, elsewhere),
   ]);
   writeDecisions(home, [
+    { at: '2026-11-14T10:00:00.000Z', act: 'plan', decision: 'covered' },
     { at: '2026-11-14T11:00:30.000Z', act: 'land', decision: 'covered', toolUseId: 'tX', transcript: path.join(home, 'other.jsonl') },
     { at: '2026-11-14T11:01:02.000Z', act: 'land', decision: 'covered', toolUseId: 'tA', transcript: t },
     { at: '2026-11-14T11:02:03.000Z', act: 'question', decision: 'unchecked', transcript: t },
   ]);
   const r = advisorGateReport({ home });
-  assert.deepEqual(r.acts, { found: 3, decided: 2, missing: [{ act: 'plan', tool: 'Write', at: at(4), transcript: t }] },
-    'acts before the first decision, outside a project, not gated or not a new task document are left out; one matched by id, one by time');
+  assert.deepEqual(r.acts, { found: 3, decided: 2, missing: [{ act: 'plan', tool: 'Write', at: at(4), transcript: t }], unread: 0 },
+    'acts before the first decision that recorded toolUseId, outside a project, not gated or not a new task document are left out; one matched by id, one by time');
   assert.equal(r.unchecked, 1);
   const out = [];
   advisorGateMain(['report'], { stdout: (s) => out.push(s), stderr: () => {}, home });
   assert.match(out.join(''), /acts found in the transcripts: 3, with a decision: 2, with none: 1 \(33%\)/);
-  assert.match(out.join(''), /let through unchecked: 1 of 3 decisions \(33%\)/);
+  assert.match(out.join(''), /let through unchecked: 1 of 4 decisions \(25%\)/);
 });
