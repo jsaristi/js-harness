@@ -683,6 +683,11 @@ The sessions the lead starts with `claude --bg`, which are no row in the user's 
 
 - One `started` entry, with its schema, whose line the record would not take after `claude` ran; read as a line of the record until the session is removed.
 
+### `~/.js-harness/kept/<id>-<time>/kept.json`
+
+- What `sessions stop <id> --remove-worktree` copied of the worktree before claude rm (`bin/lib/background-close.mjs` `keepUnkept`), beside the record's folder and not in it, which the uninstall deletes once no session is left: the files under `files/` beside it, at their paths in the worktree, and `staged.patch`, the index against HEAD as a binary patch, when anything is staged; `<time>` is the ISO time with `:` and `.` made `-`. Kept for the user, who deletes the folder once nothing in it is needed.
+- `id`, `title`: the recorded job; `worktree`: its folder; `branch`, `head`: as git gave them, or `null` for a folder git did not read as the worktree (then copied whole, its `.git` included); `at`: ISO time; `paths`: what was copied; `staged`: whether `staged.patch` is there; `leftOut`: the paths under `node_modules` or `.codegraph`, not copied.
+
 ## Loops
 
 The owner record of one background loop a session runs, so a stop or a status can tell whose it is and whether its processes still run; `bin/loop.mjs` `claimLoop` builds it and `bin/lib/loops.mjs` `writeRecord` writes it whole (a temporary file, then a hard link for a new claim or a rename for an update). A `<name>.json.lock` file beside it, holding a token line, is held while a session reads, claims or removes the record (`bin/lib/loops.mjs` `withRecordLock`).

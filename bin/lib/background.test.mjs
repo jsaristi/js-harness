@@ -145,6 +145,23 @@ test('undoSession waits for the process claude\'s lock names, then removes the s
   assert.equal(readRecord(world.home).sessions.length, 0);
 });
 
+test('undoSession runs beforeRemove after claude stop and before claude rm, and a reason it gives keeps the session', (t) => {
+  const kept = undoWorld([null]);
+  t.after(() => fs.rmSync(kept.home, { recursive: true, force: true }));
+  const seen = [];
+  const refused = undoSession(entry, { ...kept.options, beforeRemove: () => {
+    seen.push(kept.calls.map((call) => call[0]));
+    return 'the copy failed';
+  } });
+  assert.deepEqual(seen, [['stop']], 'it ran once, after the stop');
+  assert.deepEqual(refused, { outcome: 'kept', why: 'the copy failed', stopped: true });
+  assert.deepEqual(kept.calls, [['stop', '4a9694ea']], 'no claude rm');
+  const removed = undoWorld([null]);
+  t.after(() => fs.rmSync(removed.home, { recursive: true, force: true }));
+  assert.equal(undoSession(entry, { ...removed.options, beforeRemove: () => null }).outcome, 'removed');
+  assert.deepEqual(removed.calls, [['stop', '4a9694ea'], ['rm', '4a9694ea']]);
+});
+
 test('undoSession keeps the session when the lock\'s process outlives the wait, and says which', (t) => {
   const world = undoWorld([LOCKED('4a9694ea', 48324)]);
   t.after(() => fs.rmSync(world.home, { recursive: true, force: true }));

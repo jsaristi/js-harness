@@ -4,15 +4,14 @@ Branch: worktree-audit-cement (the document), then one branch per slice from ori
 Delivery: ask-on-risk. Tests: `node --test`. Opened 2026-11-13 by JH 198 (Opus 5.5, medium) from the lead's brief.
 
 ## State
-The lead's OK is in (L3). T1 landed (PR 863, main 236f720); the installed copy still refuses `opus` until a
-`--refresh-copy`. T2 ready: PR 864 (`fix/audit-cement-guard`). T3 on `fix/audit-cement-stall`, stacked on T2:
-spec 4 (8053d2d6, wait skips its own notices) and spec 3 (16b63f65, stall skips a session with a batch in its
-worktree or an open question it recorded). Codex on 16b63f65: P2, only the first live batch mark was read; lens
-reliability: readStalled's wiring had no test. Fixed in the next commit: `readBatches` in `bin/lib/batch-mark.mjs`
-(searched: `readBatch` returned the first mark only; `readBatch` now takes the first of it) and a readStalled test
-with two marks and a question. Next: Codex and lenses with base 16b63f65, push, PR on `fix/audit-cement-guard`,
-ready. Then T4 to T6, then T8; T7 waits for the lead's word that JH 196 landed. Spec 8's FAILURES lines go in T6,
-with the `stretch-not-opened` line.
+T1 landed (PR 863), T2 landed (PR 864, main 4a77d99), T3 ready as PR 865 (the lead lands it). T4 on
+`fix/audit-cement-close` (from T3's branch): f71380ea, then 1d982b38 after round 1 (L9). Round 2 running: Codex and
+lenses with base f71380ea, and the same verifier re-checking 1d982b38. When clean: merge origin/main in if 865 landed
+(never rebase), push, PR, `notify --kind ready --pr` (base must be main). Next T5: the lead cleared `bin/template.mjs`
+and its test besides template-gate.mjs and template-record.mjs; a pure `decideSummary` in template-gate.mjs, the
+`yours` items kept in the summary's shown line (template-record.mjs), runGate deciding a board/summary write before
+the call; the refusal names the exact field `yoursDropped: [{ item, reason }]`; it is a gate: verifier, Codex,
+lenses. Then T6, T8; T7 waits for the lead's word that JH 196 landed (and carries manifest.mjs:157).
 
 ## Goal
 Every correction the audit and its two blind reviews found is fixed where a check can hold it, and each of the
@@ -161,9 +160,9 @@ jamas vuelva a suceder" (69918425:2679).
 
 ## Tasks
 - [x] T1 (kind: build) spec 1 — `js-harness rules change session-model` on `rule/opus-alias`, alias `opus`, quoting 2679 — commit 85fa628c, PR 863
-- [ ] T2 (kind: build) specs 2, 7 (advisor texts), 11 — `bin/lib/guard.mjs`, `bin/guard.mjs`, `bin/lib/home-sessions.mjs`, `bin/lib/rules-change.mjs`, `bin/lib/worktrees.mjs` (the cd check: `guard.mjs` is at its 1,000-line limit) + tests — commit `fix(guard): refuse cd into another session's worktree`
-- [ ] T3 (kind: build) specs 3, 4 — `bin/lib/stall.mjs`, `bin/wait.mjs` + tests — commit `fix(stall): no stall for a batch or an open question; wait ignores own notices`
-- [ ] T4 (kind: build) spec 5 — `bin/sessions-background.mjs`, `bin/lib/background-close.mjs` + tests — commit `fix(sessions): remove-worktree copies or refuses`
+- [x] T2 (kind: build) specs 2, 7 (advisor texts), 11 — `bin/lib/guard.mjs`, `bin/guard.mjs`, `bin/lib/home-sessions.mjs`, `bin/lib/rules-change.mjs`, `bin/lib/worktrees.mjs` (the cd check: `guard.mjs` is at its 1,000-line limit) + tests — commit `fix(guard): refuse cd into another session's worktree`, PR 864 (landed)
+- [x] T3 (kind: build) specs 3, 4 — `bin/lib/stall.mjs`, `bin/wait.mjs` + tests — commits 8053d2d6, 16b63f65, 9cba7501, PR 865
+- [ ] T4 (kind: build) spec 5 — `bin/sessions-background.mjs`, `bin/lib/background-close.mjs`, `bin/lib/background.mjs` (L8) + tests — commit `fix(sessions): remove-worktree copies or refuses`
 - [ ] T5 (kind: build) spec 6 — template gate/record + tests, if cleared — commit `fix(template): yours drops only with a reason`
 - [ ] T6 (kind: docs) specs 7 (texts), 8 — `CLAUDE.md`, `bin/lib/protocols-skill.mjs`, `docs/FAILURES.md` — commit `docs: throughput command, senior strongest, 2026-11-13 failures`
 - [ ] T7 (kind: build) spec 9 — `bin/lib/manifest.mjs` after JH 196 — commit `docs(skill): senior section; close before ready`
@@ -202,3 +201,53 @@ jamas vuelva a suceder" (69918425:2679).
   (`bin/lib/hook-entries.mjs:82`), outside spec 2's Bash guard; `$(...)`, `X=1 cd` and `$VAR` other than HOME pass.
 - L7 2026-11-14: the machine rebooted at 05:56Z and this session was resumed; PR 863 landed (main 236f720). The lead
   added the auto-archive item to spec 8.
+- L8 2026-11-14 T3: Codex on 16b63f65 P2 (only the first live batch mark read) and a lens warning (readStalled's
+  wiring untested), both fixed in 9cba7501 (`readBatches`); Codex correct 0.98, lenses 0. PR 865; `notify --kind
+  ready` refuses a PR whose base is not main, so it waited for 864 to land (4a77d99, a merge commit) and was
+  retargeted. T4: the advisor named three ways a copy still loses data: ignored files (copied, but `node_modules` and
+  `.codegraph`, named in the output), commits (claude rm keeps the `worktree-<name>` branch: 8 of 8 removed sessions'
+  branches are listed by `git branch --list worktree-*`; so only a detached head on commits no ref holds is lost, and
+  it is refused), and the order (the copy runs after claude stop and before claude rm). That order needs a hook in
+  `undoSession`; the lead cleared `bin/lib/background.mjs` for it (cross-session message, 2026-11-14 03:5x local). A
+  folder git does not read as the worktree is copied whole but its `.git`. Not covered: the Claude app's
+  `archive_session`, which removes a worktree with no word to the harness; the refusal says so, and FAILURES (T6).
+- L9 2026-11-14 T4 round 2, on f71380ea. Codex incorrect 0.98, three P1, all fixed: the index's content (now
+  `staged.patch`), the job's process still ending at the copy (the copy waits for the pid claude's lock on the worktree
+  names, as claude rm does), and a session in the folder with no worktree of its own (`sharingSession` reads its `cwd`
+  and `worktreePath`). Lenses risk, reliability and resilience: one warning each, the same, that jobs which resumed the
+  entry still run at the copy; answered: the chain holds the jobs the entry resumed, older ones (`resumedChain`), and
+  stop refuses an entry another job resumed; still, with a hook every job of the chain is now stopped before it runs.
+  Verifier (Opus): six ways, fixed but one: copies moved to `~/.js-harness/kept/` (the uninstall deletes
+  `background/` once no session is left); submodules refused; skip-worktree and assume-unchanged files copied; a path
+  git names that cannot be found refuses (a name git spells otherwise, Linux); left-out names apply only to untracked
+  or ignored paths. Not covered, said in `keepUnkept`: a change a clean filter hides from git (refusing every clean
+  filter would refuse every machine with git-lfs).
+- L10 2026-11-14 T4 round 2 on 1d982b38: Codex correct 0.88; lenses risk 0, resilience 0, reliability one warning
+  (a later resumed job's pid is not the lock's), answered: the chain holds only older jobs the entry resumed, which
+  stop refuses to act on alone, and claude's lock names the one live job. T5 design (cleared: template.mjs and its
+  test; asked: rules-coverage-data.mjs for two GATE_SAYS spans): `yours` is an array of strings, an item's identity
+  its text without the level prefix (`URGENTE · `, `docs/live-board.html` `yoursLevel`), trimmed. `--shown` keeps in
+  the summary line `yours`, the list after the call (`set` without `yours` gives `[]`; `update` without it keeps
+  the line's `yours` absent, so the last line with an array stands). `--hook` decides each board/summary write
+  before the call (`decideSummary`, pure): the items of the last recorded list missing from the new one (a batch in
+  order; a `delete` drops all) must each be named in the same write's `yoursDropped: [{ item, reason }]`, a reason
+  of 10 characters or more; else deny, naming each item and that exact field. No previous list, a `str_replace`, or
+  a record or file it cannot read: through, as the gate fails open, recorded unchecked.
+- L11 2026-11-14 T4 verifier round 2 on 1d982b38: the six earlier findings held fixed; three new, all fixed: a
+  submodule taken out of the index (refused when the worktree's git folder holds `modules/`), commits held only by
+  the worktree's own refs (`refs/worktree`, `refs/bisect`, `refs/rewritten` no longer count as holding, and such a
+  ref whose commit no shared ref holds refuses), and `staged.patch` following `diff.external`, textconv or color
+  (now `--no-ext-diff --no-textconv --no-color`). `uninstall everything` removes `kept/` with all of
+  `~/.js-harness`: an explicit request, left as it is.
+- L12 2026-11-14 T4 round 3 on 4ee5ec61: Codex correct 0.88, no finding; verifier round 3: its three earlier findings
+  held fixed, one new and low, left: a commit made on a detached head and left behind by switching back to the branch
+  is pointed at only by the worktree's HEAD reflog, which goes with it. Git warned "leaving 1 commit behind" at the
+  switch, `git fsck --lost-found` finds it until gc prunes it, and refusing on every reflog entry no shared ref holds
+  would refuse every worktree after a rebase.
+- L13 2026-11-14 05:1x local: T4 reviews clean through 9dfd7afc; origin/main merged in (4977072e); the push asked one
+  Codex run over 6ba747e..4977072e (a commit whose only review said incorrect is not covered), running. The lead: PR
+  866 (JH 196) landed, main 96ce3c9, which clears bin/lib/manifest.mjs for T7. T5 starts on a new branch from main
+  (no rebase, no force-push), so its rules-coverage-data.mjs entries sit on 866's.
+- L14 Codex over 6ba747e..4977072e: P1 (git unable to read an existing worktree: the whole-folder copy left .git out) and P2 (a copy inside the worktree it outlives), both fixed: the copy takes .git, and refuses a destination inside the worktree.
+- L15 Codex over 4977072e..62a71b56: P2 fixed; P1 open, since a linked worktree's .git is only a pointer and its index and own refs stay in its git folder. Fixed: the whole-folder copy runs only when git keeps nothing of the folder's own (no .git, or a .git file whose gitdir is gone); a worktree git cannot read while its git folder is there is refused. Lenses risk,resilience on 62a71b56: 0 findings. This is the last of Codex's three rechecks.
+- L16 Codex over 62a71b56..6e243065 (third recheck): P1 still open, since existsSync says false for a gitdir it may not reach (EACCES), so an unreachable git folder read as gone. Fixed: noGitFolder takes only a confirmed ENOENT from statSync as gone, any other error refuses; its unit test injects EACCES and EPERM. Lenses risk,resilience on 6e243065: 0 findings. Codex's three rechecks did not settle P1, so it goes to the lead as a problem (rule:session-model: this session already runs claude-opus-5-5); one more Codex run over 62a71b56..head covers the fix.
