@@ -2027,6 +2027,9 @@ the reply before he leaves; so the return had no goals to check and no forecast 
   its proof is `node --test bin/loop-bodies.test.mjs bin/lib/return-report.test.mjs`, and no later sighting of an
   absence the lead was not held through without the time of its `AWAY:` line beside it (the mark under
   `~/.js-harness/loops/<project>/away/`)
+- Seen: 2026-11-13 — the lead's transcript 93b72703 (the lead's own; the reply hook's return warning at 15:18:17Z) — he
+  last wrote at 02:17 and came back at 10:18, local time (UTC-05:00); the lead was not held by a question and opened
+  no stretch for the absence, so his return had no estimate to measure against
 - Control: check — bin/loop-bodies.test.mjs — "heartbeat ends with the AWAY line when he last wrote to its session two
   hours ago and no stretch covers the time since" — since 2026-11-11
 - Was: check — bin/lib/return-report.test.mjs — "a return after an absence no stretch covered is turned back
