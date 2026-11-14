@@ -35,8 +35,14 @@ const USAGE = `Usage: js-harness advisor-gate --hook    (PreToolUse: the hook pa
 /** A command runs js-harness (installed or `node bin/js-harness.mjs`) with `verb` somewhere after it. */
 const runs = (command, verb) => new RegExp(`js-harness(?:\\.mjs)?\\b[^\\n]*?\\s${verb}\\b`).test(command);
 /** The command with its quoted text blanked, so a message, a commit body or a grep pattern that names a gated command
- * is not one; a value quoted right after `--kind` (`--kind "ready"`) keeps its text, as the shell passes it. */
-const unquoted = (command) => command.replace(/(--kind\s+)?("[^"]*"|'[^']*')/g, (quoted, option, text) => (option ? option + text.slice(1, -1) : '""'));
+ * is not one. Quoted text that the shell runs keeps its text: a value right after `--kind` (`--kind "ready"`), the
+ * command of a `-c` (`bash -c "js-harness sessions start ..."`), and a quoted path to js-harness
+ * (`node "C:/work/bin/js-harness.mjs" merge-queue --land`). */
+const unquoted = (command) => command.replace(/(--kind\s+|-c\s+)?("[^"]*"|'[^']*')/g, (quoted, before, text) => {
+  const inner = text.slice(1, -1);
+  if (before || /(?:^|[\\/])js-harness(?:\.mjs)?$/.test(inner)) return (before ?? '') + inner;
+  return '""';
+});
 /** The value of `--kind` in an unquoted command. */
 const kindOf = (command) => /--kind\s+(\w+)/.exec(command)?.[1] ?? null;
 

@@ -66,6 +66,9 @@ test('gatedAct names the acts of P1 and nothing else', () => {
   assert.equal(gatedAct('Bash', { command: "js-harness notify --kind 'question'" }, cwd), 'question');
   assert.equal(gatedAct('Bash', { command: 'git commit -m "explain js-harness merge-queue --land"' }, cwd), null, 'a commit body that names a land is none');
   assert.equal(gatedAct('Bash', { command: "grep -n 'js-harness sessions start' docs/x.md" }, cwd), null, 'a grep pattern is none');
+  assert.equal(gatedAct('Bash', { command: 'node "C:/work/bin/js-harness.mjs" merge-queue --land 4' }, cwd), 'land', 'a quoted path to js-harness is run');
+  assert.equal(gatedAct('Bash', { command: 'node "bin/js-harness.mjs" notify --kind question' }, cwd), 'question');
+  assert.equal(gatedAct('Bash', { command: 'bash -c "js-harness sessions start --title x"' }, cwd), 'session', 'the command of a -c is run');
   assert.equal(gatedAct('Bash', { command: 'git status' }, cwd), null);
   assert.equal(gatedAct('Read', {}, cwd), null);
 });
