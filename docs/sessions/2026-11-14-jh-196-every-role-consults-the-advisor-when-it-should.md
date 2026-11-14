@@ -46,3 +46,9 @@ refuse; one consultation covers 60 calls or until his next message.
 - From 2026-11-13 to 2026-11-14 10:50Z; two compactions; the context share at the end is an estimate, about 40%.
 - Reviews: Codex on every code range (8 runs), the Claude lenses on every code range (8 runs, one refused for an
   unknown lens). Gate runs: the pre-commit check on every commit, three targeted suites through `js-harness gate`.
+
+## Second stretch: refusal (question 285)
+- His answer "Bloquear desde ya (Recomendada)" (69918425, line 6944). PR https://github.com/jsaristi/js-harness/pull/871, open and ready: MODE refuse for the five PreToolUse acts, a sub-agent's included (9e0ae5f2, e9b7aec1, ba96d4e7); verifier, Codex and lenses on every round (feature document L20-L23).
+- Failure: this session's ready went out with no advisor call, flagged by the installed hook (`2026-11-14T20:03:09Z`); consulted after; the PR is what refuses it once installed.
+- Failure: the app archived the session mid-build because it was still bound to the merged PR 866; unbound, PR 871 bound instead; the lost review runs were rerun.
+- Left to the lead: land and install 871; outside the yes, sub-agent transcripts missing (ENOENT) let their acts through, the senior's sub-agents are not exempt, heredoc text gives false refusals.
