@@ -6,7 +6,7 @@ Delivery: ask-on-risk. Tests: `node --test`. Opened 2026-11-13 by JH 198 (Opus 5
 ## State
 T1-T4 landed (PRs 863, 864, 865, 867; 867 is main b07c7b5). T5 on `fix/audit-cement-gate` (from main 96ce3c9, main
 b07c7b5 merged in): 7c4f91fd, then fixes 36bde347, b46b65ac and 86a1becb (L18-L19); Codex correct on each, the last
-lenses answered (L19). Next: push, PR against main, `notify --kind ready --pr`. Then a follow-up PR from main with the
+lenses answered (L19). PR 868 open, HELD by the lead: its verifier read only 7c4f91fd; a verifier on 7c4f91fd..86a1becb runs (2026-11-14 07:00). Next: read it, fix what it finds, then notify --kind ready --pr 868 with its result in the line (advisor call alone first). FAILURES line for T6: the verifier ran before the last fixes twice (867, 868); stops it: the verifier is the last review, on the range ending at the head that ships. Then a follow-up PR from main with the
 867 verifier's items (L17), T6 (with the lead's two FAILURES lines, L20), T7 (cleared; carries manifest.mjs:157), T8.
 
 ## Goal
