@@ -20,7 +20,7 @@ const departure = {
   waits: ['el gasto de S5c-a'],
 };
 
-test('the departure says the hours, whether the work fills them, each lane on the hour scale, the goals and what waits for the user', () => {
+test('the departure says the hours, each lane on the hour scale, the goals and what waits for the user', () => {
   const html = renderDeparture(departure);
   assert.match(html, /8 h/);
   assert.match(html, /Sesión 1/);
@@ -50,6 +50,12 @@ test('whether the queue fills the hours is a sentence that shows its arithmetic 
   assert.match(html, /si todo va tan rápido como su estimado más bajo, quedan 13 h de sesión sin trabajo antes de tu vuelta/i);
   assert.match(html, /desde el principio/);
   assert.match(renderDeparture({ ...departure, idle: { hours: 2, from: 3 } }), /3 h después de que salgas/);
+  // One session and one idle hour read in the singular; fractional hours print rounded.
+  const one = renderDeparture({ ...departure, hours: 2.2, lanes: [departure.lanes[0]], idle: { hours: 1, from: 0 } });
+  assert.match(one, /Corre 1 sesión durante tus 2\.2 h: 2\.2 h de sesión/);
+  assert.match(one, /queda 1 h de sesión sin trabajo/);
+  const three = renderDeparture({ ...departure, hours: 2.2, lanes: [departure.lanes[0], departure.lanes[1], departure.lanes[1]] });
+  assert.match(three, /3 sesiones a la vez durante tus 2\.2 h: 6\.6 h de sesión/);
   const full = renderDeparture({ ...departure, fills: true, idle: { hours: 0, from: null } });
   assert.match(full, /llena tus 8 h: aunque todo vaya rápido, ninguna sesión se queda sin trabajo antes de tu vuelta/);
 });
@@ -60,8 +66,10 @@ test('an estimate reads as hours, with how it was adjusted in words; one not adj
   assert.match(html, /3-4\.5 h \(estimado 2-3 h, ajustado ×1\.5 por lo que tardaron los trabajos de construcción\)/);
   assert.match(html, /1-2 h \(sin ajustar: hay menos de 3 trabajos medidos\)/);
   assert.doesNotMatch(html, /escrito|corregido|sin historia/);
-  // A title that starts with its session does not repeat it.
+  // A title that starts with its session does not repeat it; one that starts with a longer label does.
   assert.doesNotMatch(html, /\(JH 70\)/);
+  const other = renderDeparture({ ...departure, items: [{ ...unadjusted, title: 'JH 196: el hook', session: 'JH 19' }] });
+  assert.match(other, /\(JH 19\)/);
 });
 
 test('with no map the departure fragment still opens with what will advance', () => {
@@ -190,6 +198,10 @@ test('on the page, what will advance leads, each item with the rows it closes an
   const section = html.slice(advance, html.indexOf('Cuánto avanzaremos'));
   assert.match(section, /registros &lt;b&gt;[\s\S]*Fila que cierra: «S13 &lt;x&gt;» en F8 plan, cierra si va como se estimó/);
   assert.match(section, /plantillas[\s\S]*no dice qué fila cierra/i);
+  // A row two items name closes with the first to end: the row's when is said as the row's, not each item's.
+  const shared = { ...forecast, rows: [{ ...forecast.rows[0], items: ['W1', 'W3'] }] };
+  const both = renderDeparture({ ...departure, items: [...departure.items, extra], map: MAP, forecast: shared });
+  assert.match(both, /cierra si va como se estimó \(la cierra el primero de los 2 trabajos que la nombran\)/);
   // The plan's items are listed once on the page, under what will advance; the plan keeps only their lanes.
   assert.doesNotMatch(html, /<h3>Lo que va a avanzar<\/h3>|<h3>Trabajo<\/h3>/);
 });
@@ -244,6 +256,10 @@ test('the status measures the stretch against its forecast: at the opening, the 
   const still = { ...FORECAST, phases: [FORECAST.phases[0]], now: { ...now, phases: [{ title: 'F1 Skeleton', done: 3, total: 3 }] } };
   const closed = renderReturn({ ...view, state: 'closed', moments: { ...moments, forecast: still } });
   assert.match(closed, /Ninguna fase del mapa del proyecto cambió/);
+  // With the map of now unread, nothing was measured: the page does not say no phase changed.
+  const unread = renderReturn({ ...view, state: 'closed', moments: { ...moments, forecast: { ...still, now: { unavailable: 'git show: fatal' } } } });
+  assert.doesNotMatch(unread, /Ninguna fase del mapa del proyecto cambió/);
+  assert.match(unread, /no pronosticaba que cambiara ninguna fase del mapa del proyecto/);
 });
 
 test('the open stretch reads as in course, goals not checked yet said so', () => {

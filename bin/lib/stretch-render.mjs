@@ -50,14 +50,22 @@ function advanceList(view, forecast) {
   const items = view.items.filter((item) => !item.waitsFor).map((item) => {
     const rows = read ? read.rows.filter((row) => row.items.includes(item.id)) : [];
     const closes = rows.length
-      ? `. Fila que cierra: ${rows.map((row) => `«${escapeHtml(row.text)}» en ${escapeHtml(row.in)}, ${WHEN_WORDS[row.when] ?? escapeHtml(row.when)}`).join('; ')}`
+      // A row's `when` is the soonest of the items that name it (`forecastOf`), so a shared row says it is the row's.
+      ? `. Fila que cierra: ${rows.map((row) => `«${escapeHtml(row.text)}» en ${escapeHtml(row.in)}, ${WHEN_WORDS[row.when] ?? escapeHtml(row.when)}${row.items.length > 1 ? ` (la cierra el primero de los ${row.items.length} trabajos que la nombran)` : ''}`).join('; ')}`
       : read && read.named > 0 ? '. <span class="soft">No dice qué fila cierra: ninguna fila de la hoja de ruta cambia por él.</span>' : '';
-    // A title that starts with its session (JH 196: ...) already names it.
-    const who = !item.session ? ' <span class="soft">(sin sesión aún)</span>' : item.title.startsWith(item.session) ? '' : ` <span class="soft">(${escapeHtml(item.session)})</span>`;
+    const who = !item.session ? ' <span class="soft">(sin sesión aún)</span>' : namesSession(item.title, item.session) ? '' : ` <span class="soft">(${escapeHtml(item.session)})</span>`;
     return `<li><strong>${escapeHtml(item.title)}</strong>${who}: ${hoursNote(item)}${closes}</li>`;
   }).join('');
   return `${quiet}${items ? `<ul>${items}</ul>` : '<p class="soft">Ningún trabajo puede correr mientras no estás.</p>'}`;
 }
+
+/** Whether a title already names its session: it starts with the label and the label ends there (JH 196: ... names
+ * JH 196, not JH 19). */
+function namesSession(title, session) {
+  return title.startsWith(session) && !/[\p{L}\p{N}]/u.test(title.charAt(session.length));
+}
+
+const hundredths = (n) => Math.round(n * 100) / 100;
 
 /** Whether the queued work fills the stretch, as a sentence with its arithmetic: the sessions times the hours against
  * the queue, and, when it does not fill, the idle session-hours, which `laneOut` counts by the low estimate. */
@@ -65,8 +73,11 @@ function coverSentence(view) {
   const sessions = view.lanes.length;
   const queue = `El trabajo en cola suma ${range(view.queued)}`;
   if (view.fills) return `<p>${queue} y llena tus ${view.hours} h: aunque todo vaya rápido, ninguna sesión se queda sin trabajo antes de tu vuelta.</p>`;
+  const run = sessions === 1 ? 'Corre 1 sesión' : `Corren ${sessions} sesiones a la vez`;
+  const left = `${view.idle.hours === 1 ? 'queda' : 'quedan'} ${view.idle.hours} h de sesión sin trabajo`;
   const from = view.idle.from === 0 ? 'desde el principio' : `${view.idle.from} h después de que salgas`;
-  return `<p>Corren ${sessions} sesiones a la vez durante tus ${view.hours} h: ${sessions * view.hours} h de sesión. ${queue}. Si todo va tan rápido como su estimado más bajo, quedan ${view.idle.hours} h de sesión sin trabajo antes de tu vuelta; la primera sesión se queda libre ${from}.</p>`;
+  const first = sessions === 1 ? 'la sesión' : 'la primera sesión';
+  return `<p>${run} durante tus ${view.hours} h: ${hundredths(sessions * view.hours)} h de sesión. ${queue}. Si todo va tan rápido como su estimado más bajo, ${left} antes de tu vuelta; ${first} se queda libre ${from}.</p>`;
 }
 
 function goalList(goals, checked) {
@@ -82,10 +93,10 @@ const counted = (done, total) => `${done}/${total} · ${share(done, total)}`;
 const meter = (done, total) => (total === 0 ? null : done / total);
 
 // When a row closes (`whenOf` of ./stretch-forecast.mjs) and where it is now (`forecastNow`), in the page's words.
-const WHEN_WORDS = { sure: 'cierra aunque se alargue', likely: 'cierra si va como se estimó', possible: 'cierra solo si va más rápido', beyond: 'después de tu vuelta', waits: 'espera por ti' };
+const WHEN_WORDS = { sure: 'cierra aunque se alargue', likely: 'cierra si va como se estimó', possible: 'cierra solo si va más rápido de lo estimado', beyond: 'después de tu vuelta', waits: 'espera por ti' };
 const NOW_WORDS = { done: 'hecha', open: 'abierta', gone: 'ya no está con ese texto' };
 
-const FORECAST_NOTE = 'Sobre el mapa de la apertura: una fila que se añada mientras no estás no cambia el pronóstico. "~" es si cada trabajo termina a la mitad de su estimado; el rango va de que todos se alarguen a que todos vayan rápido. Un plan se cuenta por pasos, que no pesan igual.';
+const FORECAST_NOTE = 'Sobre el mapa de la apertura: una fila que se añada mientras no estás no cambia el pronóstico. "~" es si cada trabajo termina en el punto medio de su estimado; el rango va de que todos se alarguen a que todos vayan rápido. Un plan se cuenta por pasos, que no pesan igual.';
 
 /** One scope of the forecast, a plan section by its steps or the map by its rows: a heading, then the share at the
  * opening, the forecast with its range beside it and, once measured, the share now. */
@@ -131,7 +142,8 @@ export function forecastSection(forecast, titles = new Map(), { closed = false, 
   const said = forecast.named === 0 && !saidAbove ? '<p class="note">Ningún trabajo del plan dice qué fila de la hoja de ruta cierra: el pronóstico es lo que ya hay.</p>' : '';
   const phases = phaseRows.length
     ? `<p class="note">Solo las fases que se mueven, como las nombra la hoja de ruta.</p>${table(['Fase', measured ? 'Al abrir' : 'Ahora', 'Al volver (aprox.)', 'Rango', ...(measured ? ['Ahora'] : [])], phaseRows)}`
-    : `<p>${closed ? 'Ninguna fase del mapa del proyecto cambió.' : 'Ninguna fase del mapa del proyecto cambia con este plan.'}</p>`;
+    // In the past only once measured: with the map of now unread, the page says what was forecast, not what happened.
+    : `<p>${closed && measured ? 'Ninguna fase del mapa del proyecto cambió.' : closed ? 'El plan no pronosticaba que cambiara ninguna fase del mapa del proyecto.' : 'Ninguna fase del mapa del proyecto cambia con este plan.'}</p>`;
   const gained = measured === null ? '' : measured.gained === 0 ? 'el mapa no ganó filas' : measured.gained > 0 ? `el mapa ganó ${measured.gained} filas` : `el mapa perdió ${-measured.gained} filas`;
   const against = measured === null ? '' : `<p>${measured.forecastDone.done} de ${measured.forecastDone.of} filas y pasos del pronóstico hechos; ${gained} desde la apertura, que el porcentaje de ahora cuenta y el pronóstico no.</p>`;
   const unread = forecast.now?.unavailable ? `<p class="note">El mapa de ahora no se pudo leer: ${escapeHtml(forecast.now.unavailable)}.</p>` : '';
@@ -176,9 +188,9 @@ function departureFragment(view, { advance }) {
   return `${STYLE}<div class="js-stretch"><h2>Antes de irte: ${view.hours} h, vuelves a las ${clock(view.returnAt)}</h2>
 ${advance ? `<h3>Lo que va a avanzar</h3>${advanceList(view, null)}` : ''}
 <h3>Cómo se reparte</h3>${coverSentence(view)}
-<h3>Sesiones (la línea marca tu vuelta; claro, lo que puede alargarse)</h3>${lanes}
+<h3>Sesiones (la línea marca tu vuelta; en tono más claro, lo que puede alargarse)</h3>${lanes}
 <h3>Metas: cada una es un comando que termina en 0</h3>${goalList(view.goals, false)}
-<h3>Espera por ti</h3>${waiting.length ? `<ul>${waiting.map((line) => `<li>${line}</li>`).join('')}</ul>` : '<p class="soft">nada</p>'}</div>`;
+<h3>Espera por ti: no corre hasta que respondas o hagas lo que dice</h3>${waiting.length ? `<ul>${waiting.map((line) => `<li>${line}</li>`).join('')}</ul>` : '<p class="soft">nada</p>'}</div>`;
 }
 
 const STATES = { finished: 'terminó', running: 'en curso', silent: 'en silencio', stopped: 'detenida', queued: 'sin empezar' };
