@@ -966,7 +966,7 @@ decision; `bin/advisor-gate.mjs` `record` appends it under the home. Nothing pru
 - `schema`: string, `js-harness.advisor-gate/v1`.
 - `at`: ISO time.
 - `session`: string or `null`, the host session; `agent`: string or `null`, the sub-agent's id.
-- `act`: string, `question`, `land`, `session`, `plan`, `done` or `end` (a sub-agent's end); `tool`: string or `null`; `cwd`: string.
+- `act`: string, `question`, `land`, `session`, `plan`, `done` or `end` (a sub-agent's end); `tool`: string or `null`; `toolUseId`: string or `null`, the tool call's id from the payload, which the report matches the act by; `cwd`: string.
 - `secondStop`: boolean, on an `end` only, whether the host had already turned that stop back.
 - `decision`: string, `covered`, `flagged`, `outage`, `unchecked`, `exempt-senior` or `exempt-same-model`; `mode`: string, `warn` or `refuse`, on a `flagged` one.
 - `transcript`: string, the transcript read; `model`, `calls`, `errors`, `toolCalls`, `broken`: what the stretch held, present once the transcript was read. `advisor-gate report` reads the transcript of each flagged decision again for the advisor calls that followed it.

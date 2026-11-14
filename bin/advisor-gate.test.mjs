@@ -115,12 +115,14 @@ test('an act with no call in its stretch is flagged with a notice and let throug
   const { home, project } = scratch();
   const t = path.join(home, 'projects', 'p', 'lead.jsonl');
   writeTranscript(t, [advisorCall(), his(), toolCall()]);
-  const r = run(['--hook'], { ...bash('js-harness merge-queue --land 7'), cwd: project, session_id: 's1', transcript_path: t }, home);
+  const r = run(['--hook'], { ...bash('js-harness merge-queue --land 7'), cwd: project, session_id: 's1', tool_use_id: 'tu-land', transcript_path: t }, home);
   assert.equal(r.answer.hookSpecificOutput.hookEventName, 'PreToolUse');
   assert.equal(r.answer.hookSpecificOutput.permissionDecision, undefined, 'the warning week never refuses');
   assert.match(r.answer.hookSpecificOutput.additionalContext, /advisor/);
   assert.match(r.answer.hookSpecificOutput.additionalContext, /alone, in a response of its own/);
   assert.equal(decisions(home)[0].decision, 'flagged');
+  assert.equal(decisions(home)[0].transcript, t, 'the report reads the flag\'s transcript again');
+  assert.equal(decisions(home)[0].toolUseId, 'tu-land', 'the report matches the act by its tool call');
 });
 
 test('a queued message of his breaks the stretch as a typed one does', () => {
@@ -276,24 +278,85 @@ test('without a home given, the record goes to JS_HARNESS_HOME, where the backgr
   assert.equal(decisions(home)[0].decision, 'flagged');
 });
 
-test('report: decisions by day, and the Fable input tokens of the calls that followed a flag in its stretch', () => {
-  const { home } = scratch();
-  const t = path.join(home, 'projects', 'p', 'r.jsonl');
-  const at = (m) => `2026-11-14T10:${String(m).padStart(2, '0')}:00.000Z`;
-  const call = (m, tokens, msg) => ({ ...advisorCall(), timestamp: at(m), message: { ...advisorCall().message, id: msg, usage: { iterations: [{ type: 'advisor_message', input_tokens: tokens }] } } });
-  writeTranscript(t, [call(1, 999, 'before'), call(5, 150000, 'm1'), { ...his(), timestamp: at(6) }, call(7, 70000, 'm2')]);
+const writeDecisions = (home, list) => {
   const file = path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl');
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const line = (o) => JSON.stringify({ schema: 'js-harness.advisor-gate/v1', ...o });
-  fs.writeFileSync(file, [line({ at: at(2), act: 'done', decision: 'flagged', transcript: t }), line({ at: at(3), act: 'plan', decision: 'covered', transcript: t }), line({ at: '2026-11-13T09:00:00.000Z', act: 'land', decision: 'flagged', transcript: path.join(home, 'gone.jsonl') })].join('\n') + '\n');
+  fs.writeFileSync(file, list.map((o) => JSON.stringify({ schema: 'js-harness.advisor-gate/v1', ...o })).join('\n') + '\n');
+};
+/** An advisor call written as the host writes one: its call block on one line with early usage, its result and the
+ * final usage on later lines of the same message id. */
+function splitCall(timestamp, msg, tokens, { result = true } = {}) {
+  const callId = id('srv');
+  const usage = (n) => ({ iterations: [{ type: 'message', input_tokens: 3 }, { type: 'advisor_message', input_tokens: n }] });
+  const entries = [{ type: 'assistant', timestamp, advisorModel: FABLE, message: { id: msg, model: OPUS, content: [{ type: 'server_tool_use', id: callId, name: 'advisor', input: {} }], usage: usage(10) } }];
+  if (result) entries.push({ type: 'assistant', timestamp, advisorModel: FABLE, message: { id: msg, model: OPUS, content: [{ type: 'advisor_tool_result', tool_use_id: callId, content: { type: 'advisor_redacted_result', encrypted_content: 'x' } }], usage: usage(tokens) } });
+  return entries;
+}
+
+test('report: decisions by day, and the Fable input tokens of the calls with a result that followed a flag in its stretch', () => {
+  const { home } = scratch();
+  const t = path.join(home, 'projects', 'p', 'r.jsonl');
+  const late = path.join(home, 'projects', 'p', 'late.jsonl');
+  const at = (m) => `2026-11-14T10:${String(m).padStart(2, '0')}:00.000Z`;
+  writeTranscript(t, [
+    ...splitCall(at(1), 'before', 999),
+    ...splitCall(at(4), 'nores', 777, { result: false }),
+    ...splitCall(at(5), 'm1', 150000),
+    { ...his(), timestamp: at(6) },
+    ...splitCall(at(7), 'm2', 70000),
+  ]);
+  writeTranscript(late, splitCall('2026-11-14T00:01:00.000Z', 'mid', 5000));
+  writeDecisions(home, [
+    { at: at(2), act: 'done', decision: 'flagged', transcript: t },
+    { at: at(3), act: 'plan', decision: 'covered', transcript: t },
+    { at: at(3), act: 'question', decision: 'flagged', transcript: t },
+    { at: '2026-11-13T23:59:00.000Z', act: 'question', decision: 'flagged', transcript: late },
+    { at: '2026-11-13T09:00:00.000Z', act: 'land', decision: 'flagged', transcript: path.join(home, 'gone.jsonl') },
+    { at: '2026-11-13T09:30:00.000Z', act: 'land', decision: 'flagged' },
+  ]);
   const r = advisorGateReport({ home });
   assert.deepEqual(r.days.map((d) => [d.day, d.decisions, d.flagged, d.followed, d.addedTokens]), [
-    ['2026-11-13', { flagged: 1 }, 1, 0, 0],
-    ['2026-11-14', { flagged: 1, covered: 1 }, 1, 1, 150000],
-  ]);
+    ['2026-11-13', { flagged: 3 }, 3, 1, 0],
+    ['2026-11-14', { flagged: 2, covered: 1 }, 2, 2, 155000],
+  ], 'm1 once though two flags reach it, its final usage, no call without a result, tokens on the day of the call');
   assert.equal(r.unread, 1, 'a transcript that cannot be read is counted, not guessed');
+  assert.equal(r.untraced, 1, 'a flag with no transcript recorded is counted, not read as unconsulted');
+  const since = advisorGateReport({ home, since: '2026-11-14' });
+  assert.deepEqual(since.days.map((d) => [d.day, d.addedTokens]), [['2026-11-14', 155000]], 'a call after midnight keeps its tokens under --since');
   const out = [];
   assert.equal(advisorGateMain(['report'], { stdout: (s) => out.push(s), stderr: () => {}, home }), 0);
   assert.match(out.join(''), /2,400,000/);
   assert.match(out.join(''), /calls the warnings prompted/);
+  assert.match(out.join(''), /1 flag\(s\) recorded no transcript/);
+});
+
+test('report: reconciles the decisions with the gated acts found in the transcripts', () => {
+  const { home, project } = scratch();
+  const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), 'advisor-gate-free-'));
+  const t = path.join(home, '.claude', 'projects', 'p', 's.jsonl');
+  const at = (m) => `2026-11-14T11:${String(m).padStart(2, '0')}:00.000Z`;
+  const use = (m, toolId, name, input, cwd = project) => ({ type: 'assistant', timestamp: at(m), cwd, message: { id: id('m'), model: OPUS, content: [{ type: 'tool_use', id: toolId, name, input }] } });
+  const wrote = (m, toolId, kind) => ({ type: 'user', timestamp: at(m), cwd: project, toolUseResult: { type: kind, filePath: 'x' }, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolId, content: 'ok' }] } });
+  writeTranscript(t, [
+    use(0, 'tOld', 'AskUserQuestion', {}),
+    use(1, 'tA', 'Bash', { command: 'js-harness merge-queue --land 3' }),
+    use(2, 'tB', 'AskUserQuestion', {}),
+    use(3, 'tR', 'Read', { file_path: 'a' }),
+    use(4, 'tC', 'Write', { file_path: path.join(project, 'odd', 'tasks', 'new.md') }), wrote(4, 'tC', 'create'),
+    use(5, 'tD', 'Write', { file_path: path.join(project, 'odd', 'tasks', 'old.md') }), wrote(5, 'tD', 'update'),
+    use(6, 'tE', 'ExitPlanMode', {}, elsewhere),
+  ]);
+  writeDecisions(home, [
+    { at: '2026-11-14T11:00:30.000Z', act: 'land', decision: 'covered', toolUseId: 'tX', transcript: path.join(home, 'other.jsonl') },
+    { at: '2026-11-14T11:01:02.000Z', act: 'land', decision: 'covered', toolUseId: 'tA', transcript: t },
+    { at: '2026-11-14T11:02:03.000Z', act: 'question', decision: 'unchecked', transcript: t },
+  ]);
+  const r = advisorGateReport({ home });
+  assert.deepEqual(r.acts, { found: 3, decided: 2, missing: [{ act: 'plan', tool: 'Write', at: at(4), transcript: t }] },
+    'acts before the first decision, outside a project, not gated or not a new task document are left out; one matched by id, one by time');
+  assert.equal(r.unchecked, 1);
+  const out = [];
+  advisorGateMain(['report'], { stdout: (s) => out.push(s), stderr: () => {}, home });
+  assert.match(out.join(''), /acts found in the transcripts: 3, with a decision: 2, with none: 1 \(33%\)/);
+  assert.match(out.join(''), /let through unchecked: 1 of 3 decisions \(33%\)/);
 });

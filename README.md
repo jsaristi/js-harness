@@ -981,8 +981,9 @@ user's last message or the last session event and within 60 tool calls. In the w
 through with a notice; every decision is appended to `~/.js-harness/advisor-gate/decisions.jsonl`. They act only
 in a project with a `harness.json` and let through, recorded unchecked, what they cannot read
 (odd/tasks/advisor-use.md). `advisor-gate report` prints the decisions by day, kind and act, how many flags
-an advisor call followed in their stretch, and the Fable input tokens of those calls, the ones the warnings prompted,
-against the estimate of 2,400,000 a day.
+an advisor call with a result followed in their stretch, and the Fable input tokens of those calls, the ones the
+warnings prompted, against the estimate of 2,400,000 a day; then it reconciles the decisions with the gated acts the
+transcripts show, so an act no hook decided is counted, and gives the share let through unchecked.
 
 ### js-harness failures
 

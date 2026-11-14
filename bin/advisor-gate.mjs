@@ -34,7 +34,9 @@ const USAGE = `Usage: js-harness advisor-gate --hook    (PreToolUse: the hook pa
   through. Every decision is appended to <home>/.js-harness/advisor-gate/decisions.jsonl. It prints {} outside a
   project with a harness.json, and fails open: what it cannot read lets the act through, recorded unchecked.
   report: the decisions by day, kind and act, and the Fable input tokens of the advisor calls that followed a flag in
-  its stretch (the calls the warnings prompted), against the estimate of ${ESTIMATED_DAILY_TOKENS} a day.
+  its stretch with a result (the calls the warnings prompted), against the estimate of ${ESTIMATED_DAILY_TOKENS} a day;
+  then the gated acts the transcripts under <home>/.claude/projects show since the first decision, with and without
+  a decision, and the share let through unchecked.
   Exit 2: a usage error.`;
 
 /** A command runs js-harness (installed or `node bin/js-harness.mjs`) with `verb` somewhere after it. */
@@ -51,6 +53,9 @@ const unquoted = (command) => command.replace(/(--kind\s+|\b(?:bash|sh|zsh|pwsh|
 /** The value of `--kind` in an unquoted command. */
 const kindOf = (command) => /--kind\s+(\w+)/.exec(command)?.[1] ?? null;
 
+/** A task document's path, whose creation is a plan. */
+const TASK_DOCUMENT = /[\\/]odd[\\/]tasks[\\/][^\\/]+\.md$/;
+
 /** The act a tool call is, or `null` when it is not gated: `question`, `land`, `session`, `plan` or `done`. */
 export function gatedAct(tool, input, cwd) {
   if (tool === 'AskUserQuestion') return 'question';
@@ -58,7 +63,7 @@ export function gatedAct(tool, input, cwd) {
   if (tool === 'ExitPlanMode') return 'plan';
   if (tool === 'Write') {
     const file = typeof input?.file_path === 'string' ? path.resolve(cwd, input.file_path) : '';
-    return /[\\/]odd[\\/]tasks[\\/][^\\/]+\.md$/.test(file) && !fs.existsSync(file) ? 'plan' : null;
+    return TASK_DOCUMENT.test(file) && !fs.existsSync(file) ? 'plan' : null;
   }
   if (tool !== 'Bash' || typeof input?.command !== 'string') return null;
   if (!/js-harness/.test(input.command)) return null;
@@ -222,7 +227,7 @@ function decide(mode, payload, seams) {
   if (act === null) return {};
   if (nearestHarness(cwd) === null) return {};
   const agent = typeof payload.agent_id === 'string' ? payload.agent_id : null;
-  const base = { at: new Date(seams.now).toISOString(), session: payload.session_id ?? null, agent, act, tool: payload.tool_name ?? null, cwd };
+  const base = { at: new Date(seams.now).toISOString(), session: payload.session_id ?? null, agent, act, tool: payload.tool_name ?? null, toolUseId: typeof payload.tool_use_id === 'string' ? payload.tool_use_id : null, cwd };
   if (mode === '--stop') base.secondStop = payload.stop_hook_active === true;
   const title = backgroundTitle(home, payload.session_id);
   if (agent === null && seniorTitle(title)) return record(home, { ...base, decision: 'exempt-senior', title }, stderr), {};
@@ -252,25 +257,6 @@ function decide(mode, payload, seams) {
   return { hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: NOTICE(act) } };
 }
 
-/** The advisor calls of `entries` that follow the moment `at` within its stretch (policy R: until his message, a
- * session event or STRETCH_TOOL_CALLS tool calls), as `[messageId, Fable input tokens]`. */
-function callsAfter(entries, at) {
-  const found = [];
-  let toolCalls = 0;
-  for (const entry of entries) {
-    if (typeof entry.timestamp !== 'string' || entry.timestamp <= at) continue;
-    if (breakOf(entry) !== null) break;
-    if (entry.type !== 'assistant' || !Array.isArray(entry.message?.content)) continue;
-    if (entry.message.content.some((b) => b?.type === 'server_tool_use' && b.name === 'advisor')) {
-      const tokens = (entry.message.usage?.iterations ?? []).filter((it) => it?.type === 'advisor_message').reduce((sum, it) => sum + (it.input_tokens ?? 0), 0);
-      found.push([entry.message.id ?? entry.timestamp, tokens]);
-    }
-    toolCalls += entry.message.content.filter((b) => b?.type === 'tool_use').length;
-    if (toolCalls >= STRETCH_TOOL_CALLS) break;
-  }
-  return found;
-}
-
 /** The entries of the transcript `file`, torn lines dropped. Throws when it cannot be read. */
 const entriesOf = (file) => fs.readFileSync(file, 'utf8').split('\n').flatMap((line) => {
   try {
@@ -280,70 +266,205 @@ const entriesOf = (file) => fs.readFileSync(file, 'utf8').split('\n').flatMap((l
   }
 });
 
-/** The report of the decisions under `home` since `since` (an ISO day, or null): `{ days, unread, estimate }`, each day
- * with its decisions by kind and by act, how many flags an advisor call followed in their stretch, and the Fable input
- * tokens of those calls (each call once). A transcript that cannot be read is counted in `unread`, not guessed. */
-export function advisorGateReport({ home, since = null } = {}) {
-  const file = path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl');
-  let text = '';
-  try {
-    text = fs.readFileSync(file, 'utf8');
-  } catch {
-    // No decisions yet: an empty report.
+/** What `entries` hold about advisor calls: the ids of the calls whose result is not an error, and each message's
+ * Fable input tokens, the largest any of its lines carries (the host writes a message over several lines, the final
+ * usage on a later one, as `usageOf` in bin/lib/subagent-count.mjs reads it). */
+function advisorFacts(entries) {
+  const answered = new Set();
+  const tokens = new Map();
+  for (const entry of entries) {
+    if (entry.type !== 'assistant' || !Array.isArray(entry.message?.content)) continue;
+    for (const block of entry.message.content) {
+      if (block?.type === 'advisor_tool_result' && !/error/.test(block.content?.type ?? 'error')) answered.add(block.tool_use_id);
+    }
+    const id = entry.message.id;
+    const n = (entry.message.usage?.iterations ?? []).filter((it) => it?.type === 'advisor_message').reduce((sum, it) => sum + (it.input_tokens ?? 0), 0);
+    if (typeof id === 'string' && n > (tokens.get(id) ?? 0)) tokens.set(id, n);
   }
-  const days = new Map();
-  const transcripts = new Map();
-  const counted = new Set();
-  let unread = 0;
-  for (const line of text.split('\n')) {
-    let d;
+  return { answered, tokens };
+}
+
+/** The advisor calls with a result in `entries` that follow the moment `at` within its stretch (policy R: until his
+ * message, a session event or STRETCH_TOOL_CALLS tool calls), as `{ message, at }`. */
+function callsAfter(entries, at, { answered }) {
+  const found = [];
+  let toolCalls = 0;
+  for (const entry of entries) {
+    if (typeof entry.timestamp !== 'string' || entry.timestamp <= at) continue;
+    if (breakOf(entry) !== null) break;
+    if (entry.type !== 'assistant' || !Array.isArray(entry.message?.content)) continue;
+    for (const block of entry.message.content) {
+      if (block?.type === 'server_tool_use' && block.name === 'advisor' && answered.has(block.id)) found.push({ message: entry.message.id ?? block.id, at: entry.timestamp });
+      if (block?.type === 'tool_use') toolCalls++;
+    }
+    if (toolCalls >= STRETCH_TOOL_CALLS) break;
+  }
+  return found;
+}
+
+/** The `.jsonl` files under `folder`, at any depth (sub-agents' transcripts sit below their session's), changed on
+ * `day` or later. */
+function transcriptsUnder(folder, day) {
+  const found = [];
+  let names;
+  try {
+    names = fs.readdirSync(folder, { withFileTypes: true });
+  } catch {
+    return found;
+  }
+  for (const name of names) {
+    const at = path.join(folder, name.name);
+    if (name.isDirectory()) found.push(...transcriptsUnder(at, day));
+    else if (name.name.endsWith('.jsonl')) {
+      try {
+        if (fs.statSync(at).mtime.toISOString().slice(0, 10) >= day) found.push(at);
+      } catch {
+        // A file gone between the listing and its stat holds no act.
+      }
+    }
+  }
+  return found;
+}
+
+/** The gated acts of the transcripts under `projects` from `from` on, each matched to a decision: by the tool call's
+ * id when the decision recorded one, else by transcript, act and a decision within 120 s after the call, each
+ * decision used once. A sub-agent's end is no tool call and is left out. */
+function reconcile(projects, from, decisions) {
+  const byToolUse = new Map(decisions.filter((d) => typeof d.toolUseId === 'string').map((d) => [d.toolUseId, d]));
+  const loose = decisions.filter((d) => typeof d.toolUseId !== 'string' && typeof d.transcript === 'string');
+  const used = new Set();
+  const harnessOf = new Map();
+  const inProject = (cwd) => {
+    if (!harnessOf.has(cwd)) harnessOf.set(cwd, nearestHarness(cwd) !== null);
+    return harnessOf.get(cwd);
+  };
+  const acts = { found: 0, decided: 0, missing: [] };
+  for (const file of transcriptsUnder(projects, from.slice(0, 10))) {
+    let entries;
     try {
-      d = JSON.parse(line);
+      entries = entriesOf(file);
     } catch {
       continue;
     }
-    if (d?.schema !== SCHEMA || typeof d.at !== 'string') continue;
-    const day = d.at.slice(0, 10);
-    if (since !== null && day < since) continue;
-    if (!days.has(day)) days.set(day, { day, decisions: {}, acts: {}, flagged: 0, followed: 0, addedTokens: 0 });
-    const row = days.get(day);
-    row.decisions[d.decision] = (row.decisions[d.decision] ?? 0) + 1;
-    row.acts[d.act] = (row.acts[d.act] ?? 0) + 1;
-    if (d.decision !== 'flagged') continue;
-    row.flagged++;
-    if (typeof d.transcript !== 'string') continue;
-    if (!transcripts.has(d.transcript)) {
-      try {
-        transcripts.set(d.transcript, entriesOf(d.transcript));
-      } catch {
-        transcripts.set(d.transcript, null);
-        unread++;
+    const created = new Set(entries.filter((e) => e.toolUseResult?.type === 'create').flatMap((e) => (Array.isArray(e.message?.content) ? e.message.content : []).map((b) => b?.tool_use_id)));
+    for (const entry of entries) {
+      if (entry.type !== 'assistant' || typeof entry.timestamp !== 'string' || entry.timestamp < from || !Array.isArray(entry.message?.content)) continue;
+      const cwd = typeof entry.cwd === 'string' ? entry.cwd : null;
+      if (cwd === null || !inProject(cwd)) continue;
+      for (const block of entry.message.content) {
+        if (block?.type !== 'tool_use') continue;
+        const act = block.name === 'Write'
+          ? (created.has(block.id) && typeof block.input?.file_path === 'string' && TASK_DOCUMENT.test(path.resolve(cwd, block.input.file_path)) ? 'plan' : null)
+          : gatedAct(block.name, block.input, cwd);
+        if (act === null) continue;
+        acts.found++;
+        const limit = new Date(Date.parse(entry.timestamp) + 120_000).toISOString();
+        const match = byToolUse.get(block.id) ?? loose.find((d) => !used.has(d) && d.transcript === file && d.act === act && d.at >= entry.timestamp && d.at <= limit);
+        if (match === undefined) {
+          acts.missing.push({ act, tool: block.name, at: entry.timestamp, transcript: file });
+          continue;
+        }
+        used.add(match);
+        acts.decided++;
       }
     }
-    const entries = transcripts.get(d.transcript);
-    if (entries === null) continue;
-    const calls = callsAfter(entries, d.at);
-    if (calls.length > 0) row.followed++;
-    for (const [messageId, tokens] of calls) {
-      if (counted.has(messageId)) continue;
-      counted.add(messageId);
-      row.addedTokens += tokens;
-    }
   }
-  return { days: [...days.values()].sort((a, b) => a.day.localeCompare(b.day)), unread, estimate: ESTIMATED_DAILY_TOKENS };
+  return acts;
 }
 
-/** The report as text, one line a day. */
-function formatReport({ days, unread, estimate }) {
-  const n = (x) => x.toLocaleString('en-US');
-  const counts = (o) => Object.entries(o).map(([k, v]) => k + ' ' + v).join(', ');
-  const lines = ['advisor-gate report: ' + days.length + ' day(s); added tokens are the Fable input tokens of the calls the warnings prompted, against the estimate of ' + n(estimate) + ' a day'];
-  for (const d of days) {
-    const share = Math.round((100 * d.addedTokens) / estimate);
-    lines.push(d.day + '  ' + counts(d.decisions) + '  (acts: ' + counts(d.acts) + ')  flagged then consulted: ' + d.followed + '/' + d.flagged + '  added tokens: ' + n(d.addedTokens) + ' (' + share + '% of the estimate)');
+/** The report of the decisions under `home` since `since` (an ISO day, or null): `{ days, acts, unchecked, decisions,
+ * unread, untraced, estimate }`. Each day holds its decisions by kind and by act, how many of its flags an advisor
+ * call with a result followed in their stretch, and the Fable input tokens of those calls on that day, each call once.
+ * `acts` reconciles the decisions with the gated acts the transcripts under `projects` show since the first decision.
+ * A transcript that cannot be read (`unread`) or a flag that recorded none (`untraced`) is counted, not guessed. */
+export function advisorGateReport({ home, since = null, projects = path.join(home, '.claude', 'projects') } = {}) {
+  let text = '';
+  try {
+    text = fs.readFileSync(path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl'), 'utf8');
+  } catch {
+    // No decisions yet: an empty report.
   }
-  if (unread > 0) lines.push(unread + ' transcript(s) could not be read; their flags count, their tokens do not.');
-  return lines.join('\n') + '\n';
+  const all = text.split('\n').flatMap((line) => {
+    try {
+      const d = JSON.parse(line);
+      return d?.schema === SCHEMA && typeof d.at === 'string' ? [d] : [];
+    } catch {
+      return [];
+    }
+  });
+  const inRange = (at) => since === null || at.slice(0, 10) >= since;
+  const days = new Map();
+  const dayOf = (at) => {
+    const day = at.slice(0, 10);
+    if (!days.has(day)) days.set(day, { day, decisions: {}, acts: {}, flagged: 0, followed: 0, addedTokens: 0 });
+    return days.get(day);
+  };
+  const shown = all.filter((d) => inRange(d.at));
+  for (const d of shown) {
+    const row = dayOf(d.at);
+    row.decisions[d.decision] = (row.decisions[d.decision] ?? 0) + 1;
+    row.acts[d.act] = (row.acts[d.act] ?? 0) + 1;
+    if (d.decision === 'flagged') row.flagged++;
+  }
+  // Every flag is read, in range or not: one before midnight can prompt a call after it, whose tokens are that day's.
+  const flagsByTranscript = new Map();
+  let untraced = 0;
+  for (const d of all.filter((x) => x.decision === 'flagged')) {
+    if (typeof d.transcript !== 'string') {
+      if (inRange(d.at)) untraced++;
+      continue;
+    }
+    if (!flagsByTranscript.has(d.transcript)) flagsByTranscript.set(d.transcript, []);
+    flagsByTranscript.get(d.transcript).push(d);
+  }
+  let unread = 0;
+  const counted = new Set();
+  for (const [file, flags] of flagsByTranscript) {
+    let entries;
+    try {
+      entries = entriesOf(file);
+    } catch {
+      if (flags.some((d) => inRange(d.at))) unread++;
+      continue;
+    }
+    const facts = advisorFacts(entries);
+    for (const flag of flags) {
+      const calls = callsAfter(entries, flag.at, facts);
+      if (calls.length > 0 && inRange(flag.at)) dayOf(flag.at).followed++;
+      for (const call of calls) {
+        const key = `${file}\n${call.message}`;
+        if (counted.has(key) || !inRange(call.at)) continue;
+        counted.add(key);
+        dayOf(call.at).addedTokens += facts.tokens.get(call.message) ?? 0;
+      }
+    }
+  }
+  const first = all.reduce((min, d) => (min === null || d.at < min ? d.at : min), null);
+  const from = first === null ? null : since !== null && since > first ? since : first;
+  const acts = from === null ? { found: 0, decided: 0, missing: [] } : reconcile(projects, from, all);
+  return {
+    days: [...days.values()].sort((a, b) => a.day.localeCompare(b.day)),
+    acts, unchecked: shown.filter((d) => d.decision === 'unchecked').length, decisions: shown.length,
+    unread, untraced, estimate: ESTIMATED_DAILY_TOKENS,
+  };
+}
+
+/** The report as text: one line a day, then the reconciliation with the transcripts. */
+function formatReport({ days, acts, unchecked, decisions, unread, untraced, estimate }) {
+  const n = (x) => x.toLocaleString('en-US');
+  const share = (part, whole) => (whole === 0 ? '0%' : `${Math.round((100 * part) / whole)}%`);
+  const counts = (o) => Object.entries(o).map(([k, v]) => `${k} ${v}`).join(', ');
+  const lines = [`advisor-gate report: ${days.length} day(s); added tokens are the Fable input tokens of the calls the warnings prompted, against the estimate of ${n(estimate)} a day`];
+  for (const d of days) {
+    lines.push(`${d.day}  ${counts(d.decisions) || 'no decisions'}  (acts: ${counts(d.acts) || 'none'})  flagged then consulted: ${d.followed}/${d.flagged}  added tokens: ${n(d.addedTokens)} (${share(d.addedTokens, estimate)} of the estimate)`);
+  }
+  const missing = acts.found - acts.decided;
+  lines.push(`acts found in the transcripts: ${acts.found}, with a decision: ${acts.decided}, with none: ${missing} (${share(missing, acts.found)})`);
+  for (const m of acts.missing.slice(0, 10)) lines.push(`  no decision: ${m.act} (${m.tool}) at ${m.at} in ${m.transcript}`);
+  lines.push(`let through unchecked: ${unchecked} of ${decisions} decisions (${share(unchecked, decisions)})`);
+  if (unread > 0) lines.push(`${unread} transcript(s) could not be read; their flags count, their calls and tokens do not.`);
+  if (untraced > 0) lines.push(`${untraced} flag(s) recorded no transcript (written before the report existed); their calls and tokens are not known.`);
+  return `${lines.join('\n')}\n`;
 }
 
 /** A usage error of the argv: its message names the token, the usage follows, exit 2. */
