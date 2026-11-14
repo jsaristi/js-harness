@@ -6,9 +6,9 @@ Locator: `odd/tasks/remote-control-lead-only.md` · Engram mirror: `odd/remote-c
 `node --test`
 
 ## State
-Done: the depth pass and this document. Next: the note to the lead (the line of his words, the surfaces outside the
-brief, the rule-file clearance), then slice 1's failing tests. Open: the lead's clearance for slice 2's rule files and
-for `bin/doctor.test.mjs` and `bin/lib/manifest.mjs`.
+Done: T1 (slice 1, 88c92216), reviewed by Codex, the three lenses and a verifier, none with a finding on the code.
+Next: slice 1's pull request, then T2 on a `rule/` branch from main 4187cb1 (cleared by the lead, L4). Open: the
+lead's word on `bin/lib/manifest.mjs:157` (L5).
 
 ## Goal
 A session the orchestrator starts with `js-harness sessions start` has no Remote Control unless asked for, and the
@@ -106,8 +106,8 @@ requests.
 4. The orchestrator skill's resume after a restart turns Remote Control back on in no paused work session.
 
 ## Tasks
-- [ ] T1 (kind: build) spec 1, 2: `parseStart` off by default, `--remote-control` opt-in, resume by the flag, the
-  printed line and usage; tests first; README and SPEC. Route: slice 1, `feat/remote-control-lead-only`.
+- [x] T1 (kind: build) spec 1, 2: `parseStart` off by default, `--remote-control` opt-in, resume by the flag, the
+  printed line and usage; tests first; README and SPEC. Route: slice 1, `feat/remote-control-lead-only`, 88c92216.
 - [ ] T2 (kind: build) spec 3, 4: `rules change remote-control-yes` with L1; `remoteControlStep`; host-update,
   doctor and manifest tests; the manifest line; README 648-652. Route: slice 2, `rule/remote-control-yes`, after the
   lead clears the rule files.
@@ -124,3 +124,12 @@ requests.
 - L3 (decision, this session): a lead started through `sessions start` gets no special default; it passes
   `--remote-control`. The rotation starts a lead with the host's session-start tool, so no lead path depends on the
   default, and a default by title would add the complexity his words ask to avoid.
+- L4 (the lead, 2026-11-14): line 7262 confirmed; L3, the ask branch and the resume agreed. Slice 2 cleared once
+  JH 198's T6 landed (main 4187cb1): the rule files, and in `bin/lib/manifest.mjs` only the line at :202 and its test,
+  the rest of that file staying JH 198's for its T7. JH 199's double-review rule change waits for slice 2.
+- L5 (evidence, slice 1's reviews): Codex (75,809 input tokens, confidence 0.97) and the risk, readability and
+  reliability lenses (about 33,000 input tokens) found nothing; the verifier ran `node --test
+  bin/sessions-background.test.mjs` (58 pass) and found `bin/lib/manifest.mjs:157` still saying `sessions start`
+  runs a session "with Remote Control on", a line the lead's clearance (L4) does not cover, and the reading of the rule
+  `sessions-open-in-sidebar` in `docs/rule-sources.json` saying Remote Control keeps him seeing every session. Both
+  go to the lead.
