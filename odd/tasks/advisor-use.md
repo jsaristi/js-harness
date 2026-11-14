@@ -240,6 +240,7 @@ What the three reads left that this proposal does not settle, for him to weigh:
 - The lead's 26 messages to sessions are neither gated nor sampled; P5's protocols line could land before the hook,
   his call.
 - The report finds escapes by shell from git, after the fact.
+- Every Bash and Write call on the machine starts the hook's Node process (about 60 ms measured with a transcript read, L11), beside the guard's own on Bash; folding it into the guard would save it, and `bin/guard.mjs` is JH 198's now.
 
 ## Tasks
 - [x] T1 (kind: verify) probes: a hook reads an advisor call; refuse, consult alone, retry; the sub-agent's payload (spec 2) — route: here — commit: this document, M6
@@ -287,3 +288,4 @@ What the three reads left that this proposal does not settle, for him to weigh:
   copied into `odd/tasks/advisor-use-evidence/`, Edit dropped from P1 (C10); escapes found from git (X3).
 - L9 (2026-11-13) His yes to question 282 ("Sí, avisos primero (Recomendada)"), relayed by the lead with two constraints: the report measures added Fable tokens a day against 2.4M, and the edit surface goes to the lead first. Advisor before the build: the choices in State.
 - L10 (2026-11-13) Probe 4 (`odd/tasks/advisor-use-evidence/probe4-notice-seen.md`): a PreToolUse `additionalContext` without a deny reaches the model, so the warning week speaks. The lead moved P4a (the texts saying the senior runs with no advisor: `bin/lib/guard.mjs:109,115`, `bin/guard.mjs:168`, `bin/lib/home-sessions.mjs:51`) to JH 198, which holds those files: out of this scope. Slice 1 built: `bin/advisor-gate.mjs` (--hook, --stop), its test (21 cases), the entries in `bin/lib/hook-entries.mjs` and their registration; slice 2 is the report.
+- L11 (2026-11-14) Reviews of slice 1. Codex (cc54678..13fba26, 3 parts): two P2, both fixed in b3043fb9 (the harness home through harnessHome; a quoted `--kind` value kept). The Claude lenses (risk 0, resilience 1, reliability 2): a gated command named only inside quotes was an act, fixed (the whole command read unquoted, tests); an advisor call sharing its response with a tool call counted, answered: M6 shows such a call gets no result, so a call with one was made alone; a Node process on every Bash and Write call machine-wide, answered: 61 ms measured on this session's transcript (covered, 31 tool calls), the guard already runs on every Bash, and folding the two waits on `bin/guard.mjs` (JH 198), so it is listed under Unguaranteed.

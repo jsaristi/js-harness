@@ -34,9 +34,11 @@ const USAGE = `Usage: js-harness advisor-gate --hook    (PreToolUse: the hook pa
 
 /** A command runs js-harness (installed or `node bin/js-harness.mjs`) with `verb` somewhere after it. */
 const runs = (command, verb) => new RegExp(`js-harness(?:\\.mjs)?\\b[^\\n]*?\\s${verb}\\b`).test(command);
-/** The value of `--kind`, read outside quoted text so a note that quotes `--kind question` is not one; a value that is
- * itself quoted (`--kind "ready"`) keeps its text, as the shell passes it. */
-const kindOf = (command) => /--kind\s+(\w+)/.exec(command.replace(/(--kind\s+)?("[^"]*"|'[^']*')/g, (quoted, option, text) => (option ? option + text.slice(1, -1) : '""')))?.[1] ?? null;
+/** The command with its quoted text blanked, so a message, a commit body or a grep pattern that names a gated command
+ * is not one; a value quoted right after `--kind` (`--kind "ready"`) keeps its text, as the shell passes it. */
+const unquoted = (command) => command.replace(/(--kind\s+)?("[^"]*"|'[^']*')/g, (quoted, option, text) => (option ? option + text.slice(1, -1) : '""'));
+/** The value of `--kind` in an unquoted command. */
+const kindOf = (command) => /--kind\s+(\w+)/.exec(command)?.[1] ?? null;
 
 /** The act a tool call is, or `null` when it is not gated: `question`, `land`, `session`, `plan` or `done`. */
 export function gatedAct(tool, input, cwd) {
@@ -48,8 +50,8 @@ export function gatedAct(tool, input, cwd) {
     return /[\\/]odd[\\/]tasks[\\/][^\\/]+\.md$/.test(file) && !fs.existsSync(file) ? 'plan' : null;
   }
   if (tool !== 'Bash' || typeof input?.command !== 'string') return null;
-  const command = input.command;
-  if (!/js-harness/.test(command)) return null;
+  if (!/js-harness/.test(input.command)) return null;
+  const command = unquoted(input.command);
   if (runs(command, 'notify')) {
     const kind = kindOf(command);
     if (kind === 'question') return 'question';
