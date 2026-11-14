@@ -222,3 +222,14 @@ jamas vuelva a suceder" (69918425:2679).
   git names that cannot be found refuses (a name git spells otherwise, Linux); left-out names apply only to untracked
   or ignored paths. Not covered, said in `keepUnkept`: a change a clean filter hides from git (refusing every clean
   filter would refuse every machine with git-lfs).
+- L10 2026-11-14 T4 round 2 on 1d982b38: Codex correct 0.88; lenses risk 0, resilience 0, reliability one warning
+  (a later resumed job's pid is not the lock's), answered: the chain holds only older jobs the entry resumed, which
+  stop refuses to act on alone, and claude's lock names the one live job. T5 design (cleared: template.mjs and its
+  test; asked: rules-coverage-data.mjs for two GATE_SAYS spans): `yours` is an array of strings, an item's identity
+  its text without the level prefix (`URGENTE · `, `docs/live-board.html` `yoursLevel`), trimmed. `--shown` keeps in
+  the summary line `yours`, the list after the call (`set` without `yours` gives `[]`; `update` without it keeps
+  the line's `yours` absent, so the last line with an array stands). `--hook` decides each board/summary write
+  before the call (`decideSummary`, pure): the items of the last recorded list missing from the new one (a batch in
+  order; a `delete` drops all) must each be named in the same write's `yoursDropped: [{ item, reason }]`, a reason
+  of 10 characters or more; else deny, naming each item and that exact field. No previous list, a `str_replace`, or
+  a record or file it cannot read: through, as the gate fails open, recorded unchecked.
