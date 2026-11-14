@@ -8,15 +8,17 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseRoadmap, parseFeature } from './lib/progress.mjs';
-import { PACE_DAYS, PACE_REF_ARGS, paceLines, paceLogArgs, paceOf, paceRef, parsePaceLog, WEEK_DAYS, windowStart } from './lib/progress-pace.mjs';
+import { baselineCommitArgs, baselineLines, baselineOf, EMPTY_TREE_ARGS, PACE_DAYS, PACE_REF_ARGS, paceLines, paceLogArgs, paceOf, paceRef, parsePaceLog, parseTree, treeArgs, WEEK_DAYS, windowStart } from './lib/progress-pace.mjs';
 import { projectListOf, ruleHere } from './lib/rules.mjs';
 
 export const USAGE = [
-  'Usage: js-harness progress [--cwd <path>] [--json] [--pace [--days <n>]]',
+  'Usage: js-harness progress [--cwd <path>] [--json] [--pace [--days <n>] | --baseline <YYYY-MM-DD>]',
   `  --pace  the tasks closed, reopened, added and removed on each of the last ${PACE_DAYS} days (or --days), read`,
   '          from the first-parent line of the default branch: origin/HEAD, else main, else HEAD. A task is',
   '          matched by its ID (T3); a task reworded without an ID, or in a moved file, counts as removed and added.',
   `          With ${WEEK_DAYS} whole days in the window, a last line says whether the week's open steps grew: red or green.`,
+  '  --baseline  how many of the steps open on that day, at the last commit of the same branch before it, are closed',
+  '          now, how many steps were added since, and how much the plan grew; matched as --pace matches them.',
 ].join('\n');
 
 // How long each git process of `--pace` may run, and how much it may print: the whole history of this
@@ -43,6 +45,7 @@ function parseArgs(argv) {
   let json = false;
   let pace = false;
   let days;
+  let baseline;
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === '--cwd') {
@@ -65,15 +68,25 @@ function parseArgs(argv) {
       i += 1;
       continue;
     }
+    if (token === '--baseline') {
+      const value = requireValue(argv, i, token);
+      const [year, month, day] = value.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || date.getMonth() !== month - 1 || date.getDate() !== day) throw new ProgressArgError(`--baseline takes a day as YYYY-MM-DD, not ${value}`);
+      baseline = { day: value, midnight: date };
+      i += 1;
+      continue;
+    }
     throw new ProgressArgError(`unknown argument: ${token}`);
   }
   if (days !== undefined && !pace) throw new ProgressArgError('--days counts the days of --pace, which was not given');
-  return { cwd, json, pace, days: days ?? PACE_DAYS };
+  if (baseline !== undefined && pace) throw new ProgressArgError('--baseline and --pace are two reports: give one');
+  return { cwd, json, pace, days: days ?? PACE_DAYS, baseline };
 }
 
 /** Runs one git process of `--pace` in `root`: `{ stdout }`, or `{ error }`, the one line that says why not. */
-function gitRead(spawn, root, args) {
-  const result = spawn('git', args, { cwd: root, encoding: 'utf8', timeout: GIT_TIMEOUT_MS, maxBuffer: GIT_MAX_BUFFER, windowsHide: true });
+function gitRead(spawn, root, args, input) {
+  const result = spawn('git', args, { cwd: root, encoding: 'utf8', timeout: GIT_TIMEOUT_MS, maxBuffer: GIT_MAX_BUFFER, windowsHide: true, ...(input === undefined ? {} : { input }) });
   const name = `git ${args.find((arg) => !arg.startsWith('-') && !arg.includes('='))}`;
   if (result.error) {
     if (result.error.code === 'ETIMEDOUT') return { error: `${name} took longer than ${GIT_TIMEOUT_MS / 1000} s` };
@@ -82,7 +95,7 @@ function gitRead(spawn, root, args) {
   }
   if (result.status !== 0) {
     const said = String(result.stderr ?? '').trim().split('\n')[0];
-    if (/not a git repository/.test(said)) return { error: `--pace reads the history of a git repository, and ${root} is in none` };
+    if (/not a git repository/.test(said)) return { error: `--pace and --baseline read the history of a git repository, and ${root} is in none` };
     return { error: `${name}: ${said || `exit ${result.status}`}` };
   }
   return { stdout: String(result.stdout) };
@@ -110,6 +123,39 @@ function paceMain(root, parsed, { stdout, stderr, spawn, now }) {
     return 0;
   }
   for (const line of paceLines({ branch: name, ...pace, limit: growthLimitOf(root) })) stdout(line);
+  return 0;
+}
+
+/** `progress --baseline`: five git processes, the branch, its last commit before the day, the empty tree, and the
+ * plan files of that commit and of the branch now, then the comparison printed. Exits 1 with one line when one
+ * cannot run, or when the branch holds no commit before the day. */
+function baselineMain(root, parsed, { stdout, stderr, spawn }) {
+  const fail = (line) => {
+    stderr(`js-harness progress: ${line}`);
+    return 1;
+  };
+  const named = gitRead(spawn, root, PACE_REF_ARGS);
+  if (named.error) return fail(named.error);
+  const { ref, name } = paceRef(named.stdout);
+  const before = parsed.baseline.midnight.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const commit = gitRead(spawn, root, baselineCommitArgs({ ref, before }));
+  if (commit.error) return fail(commit.error);
+  const base = commit.stdout.trim();
+  if (base === '') return fail(`${name} holds no commit before ${parsed.baseline.day}, so there is no plan of that day to compare`);
+  const empty = gitRead(spawn, root, EMPTY_TREE_ARGS, '');
+  if (empty.error) return fail(empty.error);
+  const from = empty.stdout.trim();
+  const then = gitRead(spawn, root, treeArgs({ from, to: base }));
+  if (then.error) return fail(then.error);
+  const now = gitRead(spawn, root, treeArgs({ from, to: ref }));
+  if (now.error) return fail(now.error);
+  const counts = baselineOf({ before: parseTree(then.stdout), after: parseTree(now.stdout) });
+  const data = { root, branch: name, ref, date: parsed.baseline.day, base, ...counts };
+  if (parsed.json) {
+    stdout(JSON.stringify(data, null, 2));
+    return 0;
+  }
+  for (const line of baselineLines(data)) stdout(line);
   return 0;
 }
 
@@ -289,7 +335,7 @@ export async function progressMain(
     readFile = (absolute) => fs.readFileSync(absolute, 'utf8'),
     stat = (absolute) => fs.statSync(absolute),
     readdir = (absolute) => fs.readdirSync(absolute, { withFileTypes: true }),
-    // `--pace` alone runs git, and cuts its days by the clock; both injectable for its tests.
+    // `--pace` and `--baseline` alone run git, and `--pace` cuts its days by the clock; both injectable for tests.
     spawn = spawnSync,
     now = () => new Date(),
   } = {},
@@ -304,6 +350,7 @@ export async function progressMain(
 
   const root = path.resolve(parsed.cwd ?? defaultCwd);
   if (parsed.pace) return paceMain(root, parsed, { stdout, stderr, spawn, now });
+  if (parsed.baseline !== undefined) return baselineMain(root, parsed, { stdout, stderr, spawn });
   // Tracks whether any real discovery/read error was reported (as opposed to a source that is
   // simply, silently absent), so the exit-1 message below never claims "no docs/ROADMAP.md or
   // odd/tasks/*.md" when one of them exists but failed to read.

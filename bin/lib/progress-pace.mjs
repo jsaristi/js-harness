@@ -2,7 +2,8 @@
 // read from the first-parent line of its default branch. `progress --pace` prints it (bin/progress.mjs); the
 // design is S5 and S6 of odd/tasks/read-from-records.md. Each commit's changes to docs/ROADMAP.md and
 // odd/tasks/*.md are compared before and after it, with the parsers `progress` counts with, so a task counts
-// here exactly as it counts on the map. Zero dependencies, no I/O: git's output comes in, data goes out.
+// here exactly as it counts on the map. `progress --baseline` compares the plan of a day with today's by the same
+// matching (spec 10 of odd/tasks/audit-cement.md). Zero dependencies, no I/O: git's output comes in, data goes out.
 import { parseFeature, parseRoadmap } from './progress.mjs';
 import { taskId } from './sessions.mjs';
 
@@ -129,7 +130,18 @@ const idOf = (text) => taskId(text.replace(BOLD_ID, '$1'))?.toUpperCase() ?? nul
  * text; so a task without an ID that is reworded is removed and added. Closed is open before and checked now, or
  * new and checked; reopened is checked before and open now. */
 export function compareSteps(before, after) {
-  const counts = { closed: 0, reopened: 0, added: 0, removed: 0 };
+  const { pairs, added, removed } = pairSteps(before, after);
+  const counts = { closed: added.filter((one) => one.done).length, reopened: 0, added: added.length, removed: removed.length };
+  for (const [was, now] of pairs) {
+    if (!was.done && now.done) counts.closed += 1;
+    else if (was.done && !now.done) counts.reopened += 1;
+  }
+  return counts;
+}
+
+// The steps of one file before and after, matched as `compareSteps` says: `{ pairs, added, removed }`, each pair
+// `[before, after]`, `added` the steps after with no twin and `removed` those before with none.
+function pairSteps(before, after) {
   const left = before.map((one) => ({ ...one, id: idOf(one.text), matched: false }));
   const right = after.map((one) => ({ ...one, id: idOf(one.text) }));
   const pairs = [];
@@ -142,22 +154,88 @@ export function compareSteps(before, after) {
       pairs.push([twin, one]);
     }
   }
+  const added = [];
   for (const one of unmatched) {
     const twin = left.find((other) => !other.matched && other.text === one.text);
-    if (twin === undefined) {
-      counts.added += 1;
-      if (one.done) counts.closed += 1;
-    } else {
+    if (twin === undefined) added.push(one);
+    else {
       twin.matched = true;
       pairs.push([twin, one]);
     }
   }
-  for (const [was, now] of pairs) {
-    if (!was.done && now.done) counts.closed += 1;
-    else if (was.done && !now.done) counts.reopened += 1;
+  return { pairs, added, removed: left.filter((one) => !one.matched) };
+}
+
+// --- `--baseline`: how much of the plan open on a day is done now, and how much the plan changed since (spec 10
+// of odd/tasks/audit-cement.md) ---
+
+/** The arguments of the git process that names the baseline: the last commit of `ref`'s first-parent line made
+ * before `before`, an ISO time. */
+export const baselineCommitArgs = ({ ref, before }) => ['rev-list', '-1', '--first-parent', `--before=${before}`, ref];
+
+/** The arguments of the git process that names the empty tree, in the hash of the repository's own format. */
+export const EMPTY_TREE_ARGS = ['hash-object', '-t', 'tree', '--stdin'];
+
+/** The arguments of the git process that gives every plan file of `to` whole: its diff from the empty tree
+ * `from`, with the prefixes, quoting and folder fixed as `paceLogArgs` fixes them. */
+export function treeArgs({ from, to }) {
+  return [
+    '-c', 'core.quotePath=false',
+    'diff', '--no-renames', '--no-ext-diff', '--no-textconv', '--no-color',
+    '-U100000', '--src-prefix=a/', '--dst-prefix=b/', '--relative',
+    from, to, '--', ...PACE_PATHS,
+  ];
+}
+
+/** The plan files of what `treeArgs` printed: a map of each path to its content. */
+export function parseTree(text) {
+  const [tree] = parsePaceLog(`${COMMIT_MARK}tree\n${text}`);
+  return new Map(tree.files.map((file) => [file.path, file.after ?? '']));
+}
+
+/** How the plan `after` (a map of path to content, `parseTree`) stands against the plan `before`: `{ openThen,
+ * closed, stillOpen, leftOpen, added, addedClosed, stepsThen, stepsNow, openNow }`. A step is matched in its own
+ * file as `compareSteps` matches it, so a step reworded without an ID, or in a file moved, left the plan open and
+ * came back as added. `closed` counts the steps open then and checked now; `leftOpen` those open then that are in
+ * the plan no more. */
+export function baselineOf({ before, after }) {
+  const counts = { openThen: 0, closed: 0, stillOpen: 0, leftOpen: 0, added: 0, addedClosed: 0, stepsThen: 0, stepsNow: 0, openNow: 0 };
+  for (const path of new Set([...before.keys(), ...after.keys()])) {
+    const then = stepsOf(path, before.get(path) ?? null);
+    const now = stepsOf(path, after.get(path) ?? null);
+    const { pairs, added, removed } = pairSteps(then, now);
+    counts.stepsThen += then.length;
+    counts.stepsNow += now.length;
+    counts.openThen += openOf(then);
+    counts.openNow += openOf(now);
+    for (const [was, is] of pairs) {
+      if (was.done) continue;
+      if (is.done) counts.closed += 1;
+      else counts.stillOpen += 1;
+    }
+    counts.leftOpen += openOf(removed);
+    counts.added += added.length;
+    counts.addedClosed += added.filter((one) => one.done).length;
   }
-  counts.removed = left.filter((one) => !one.matched).length;
   return counts;
+}
+
+/** `part` of `whole` as a whole percent, or `—` when there is no whole to be part of. */
+const percentOf = (part, whole) => (whole === 0 ? '—' : `${Math.round((part / whole) * 100)}%`);
+
+/** The baseline as `progress --baseline` prints it: what of the plan open on `date` (at the commit `base`) is done
+ * on `branch` now, and how much the plan changed since. */
+export function baselineLines({ branch, date, base, openThen, closed, stillOpen, leftOpen, added, addedClosed, stepsThen, stepsNow, openNow }) {
+  const label = (text) => text.padEnd(12);
+  const grew = stepsNow - stepsThen;
+  const moved = grew > 0 ? `grew by ${grew}` : grew < 0 ? `fell by ${-grew}` : 'did not grow';
+  return [
+    `Plan of ${branch} since ${date}, from ${base.slice(0, 8)} (its last commit before that day) to now:`,
+    `${label('Open then')}${openThen} steps`,
+    `${label('Done')}${closed} of them closed (${percentOf(closed, openThen)}), ${stillOpen} still open, ${leftOpen} left the plan open`,
+    `${label('Added')}${added} steps since (${percentOf(added, stepsThen)} of the plan then), ${addedClosed} of them closed`,
+    `${label('The plan')}${stepsThen} steps then, ${stepsNow} now: it ${moved}; open steps ${openThen} then, ${openNow} now`,
+  ];
 }
 
 const pad = (n) => String(n).padStart(2, '0');

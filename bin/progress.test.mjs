@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { progressMain } from './progress.mjs';
+import { dayKey } from './lib/progress-pace.mjs';
 import { ruleOf } from './lib/rules.mjs';
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -720,7 +721,7 @@ test('progress --pace outside a git repository exits 1 with one line, and git th
     const notRepo = () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository (or any of the parent directories): .git\n' });
     const outside = await runProgress(['--cwd', project, '--pace'], { now: () => NOW, spawn: notRepo });
     assert.deepEqual([outside.code, outside.stdout], [1, '']);
-    assert.equal(outside.stderr, `js-harness progress: --pace reads the history of a git repository, and ${project} is in none`);
+    assert.equal(outside.stderr, `js-harness progress: --pace and --baseline read the history of a git repository, and ${project} is in none`);
     const timedOut = () => ({ error: Object.assign(new Error('spawnSync git ETIMEDOUT'), { code: 'ETIMEDOUT' }) });
     const slow = await runProgress(['--cwd', project, '--pace'], { now: () => NOW, spawn: timedOut });
     assert.deepEqual([slow.code, slow.stderr], [1, 'js-harness progress: git for-each-ref took longer than 30 s']);
@@ -751,7 +752,53 @@ test('--days takes a whole number of at least 1, and only with --pace; the help 
   for (const argv of [['--pace', '--days', '0'], ['--pace', '--days', '2.5'], ['--pace', '--days', 'x'], ['--pace', '--days'], ['--days', '3']]) {
     const { code, stderr } = await runProgress(argv, { spawn: () => assert.fail('a usage error ran git') });
     assert.equal(code, 2, argv.join(' '));
-    assert.match(stderr, /Usage: js-harness progress \[--cwd <path>\] \[--json\] \[--pace \[--days <n>\]\]/);
+    assert.match(stderr, /Usage: js-harness progress \[--cwd <path>\] \[--json\] \[--pace \[--days <n>\] \| --baseline <YYYY-MM-DD>\]/);
     assert.match(stderr, /a task reworded without an ID, or in a moved file, counts as removed and added/);
+  }
+});
+
+// --- `--baseline`: spec 10 of odd/tasks/audit-cement.md ---
+
+test('progress --baseline says how many steps open at the last commit before the day are closed now, and how much the plan grew', async () => {
+  const { root, git, commit } = makeRepo();
+  try {
+    commit({ 'README.md': 'x' }, daysAgo(10));
+    // The plan of the baseline day: two open steps and one done, in a feature and the roadmap.
+    commit({ 'odd/tasks/f.md': doc('- [ ] T1 a', '- [x] T2 b'), 'docs/ROADMAP.md': '# R\n\n## Checklist\n\n### One\n- [ ] step\n' }, daysAgo(5));
+    // After the day: T1 closed, T3 added open, and a branch merged with T4 already checked.
+    commit({ 'odd/tasks/f.md': doc('- [x] T1 a', '- [x] T2 b', '- [ ] T3 c') }, daysAgo(2));
+    git(['switch', '-q', '-c', 'side']);
+    commit({ 'odd/tasks/g.md': doc('- [x] T4 d') }, daysAgo(1, 9));
+    git(['switch', '-q', 'main']);
+    git(['merge', '-q', '--no-ff', '-m', 'merge side', 'side'], daysAgo(1, 10));
+    const day = dayKey(daysAgo(3));
+    const { code, stdout, stderr } = await runProgress(['--cwd', root, '--baseline', day]);
+    assert.equal(code, 0, stderr);
+    const lines = stdout.split('\n');
+    assert.match(lines[0], new RegExp(`^Plan of main since ${day}, from [0-9a-f]{8} \\(its last commit before that day\\) to now:$`));
+    assert.deepEqual(lines.slice(1), [
+      'Open then   2 steps',
+      'Done        1 of them closed (50%), 1 still open, 0 left the plan open',
+      'Added       2 steps since (67% of the plan then), 1 of them closed',
+      'The plan    3 steps then, 5 now: it grew by 2; open steps 2 then, 2 now',
+    ]);
+    const json = JSON.parse((await runProgress(['--cwd', root, '--baseline', day, '--json'])).stdout);
+    assert.deepEqual(Object.keys(json), ['root', 'branch', 'ref', 'date', 'base', 'openThen', 'closed', 'stillOpen', 'leftOpen', 'added', 'addedClosed', 'stepsThen', 'stepsNow', 'openNow']);
+    assert.equal(json.base, git(['rev-parse', 'main~2']).trim());
+    // A day before the first commit has no plan to compare.
+    const earlyDay = dayKey(daysAgo(20));
+    const early = await runProgress(['--cwd', root, '--baseline', earlyDay]);
+    assert.deepEqual([early.code, early.stdout], [1, '']);
+    assert.equal(early.stderr, `js-harness progress: main holds no commit before ${earlyDay}, so there is no plan of that day to compare`);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('--baseline takes a real day as YYYY-MM-DD and is not given with --pace', async () => {
+  for (const argv of [['--baseline', '2026-13-01'], ['--baseline', '2026-02-30'], ['--baseline', '1/11/2026'], ['--baseline'], ['--pace', '--baseline', '2026-11-01']]) {
+    const { code, stderr } = await runProgress(argv, { spawn: () => assert.fail('a usage error ran git') });
+    assert.equal(code, 2, argv.join(' '));
+    assert.match(stderr, /--baseline {2}how many of the steps open on that day/);
   }
 });
