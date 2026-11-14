@@ -115,7 +115,6 @@ function noteLeft(tool, input, readNote) {
 /** The text of the project's rules file, or null when it has none. Any other failure throws. */
 const rulesTextOf = (root, readFile) => optionalText(path.join(root, 'bin', 'lib', 'rules-data.mjs'), readFile);
 
-/** Why the call of `payload` is refused, or null. */
 /** The lister `worktreeCdRefusal` asks: the linked worktrees of the repository at `cwd`, each git call bounded so a
  * hook never hangs on a lock; null where git cannot list them. */
 async function worktreeLister(cwd) {
@@ -126,6 +125,7 @@ async function worktreeLister(cwd) {
   };
 }
 
+/** Why the call of `payload` is refused, or null. */
 async function refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains, readApp, listWorktrees, env = {}, homedir = os.homedir }) {
   const tool = payload?.tool_name;
   const input = payload?.tool_input ?? {};

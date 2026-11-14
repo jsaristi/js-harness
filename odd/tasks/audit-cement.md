@@ -137,7 +137,9 @@ jamas vuelva a suceder" (69918425:2679).
    (A2b).
 8. `docs/FAILURES.md` `- Seen:` lines for 2026-11-13: the relief `printf` date as literal `%Y` three times; the
    lead's `cd` into another session's worktree twice; question 279 reaching him without double review; the senior's
-   nine audit sub-agents inheriting Fable.
+   nine audit sub-agents inheriting Fable; the app's auto-archive on a merged PR archiving JH 193 mid paid batch at
+   17:58 and the lead at 20:10 local, because PR 859 was bound to it (`Claude/logs/main.log`, AutoArchiveEngine; the
+   lead asks him whether to turn the setting off).
 9. After JH 196 lands: the orchestrator skill gets a senior section (A2b) and puts the closing steps before `ready`
    (A4).
 10. His words, 2026-11-13 (lead transcript 69918425 line 3312, typed): "dime si de la forma como planeamos las cosas
@@ -176,3 +178,12 @@ jamas vuelva a suceder" (69918425:2679).
   first aliased rule on a fixed past day); fixed in the same commit. Reviews: Codex correct 0.97; lenses risk and
   reliability 0 findings; verifier (Opus, inherited: the installed guard refuses `opus` until the copy refresh) held
   3 of 3, one medium finding, spec 11. PR 863, ready at 22:28Z.
+- L6 T2 commit 8bbbdbf3; its first try failed the suite: `bin/lib/guard.mjs` reached 1,050 lines (limit 1,000), so
+  the cd check moved to `bin/lib/worktrees.mjs`. Codex on 8bbbdbf3: incorrect, two P2 (`cd -- ../other`, and a cd in a
+  subshell, background job or before `||` moving the assumed folder); fixed by resolving each relative cd from every
+  folder the shell may stand in. Lenses: readability (the lister split `refusalOf` from its doc comment) and
+  reliability (own worktree only by git's `here`); both fixed, and the real lister checked by hand from this worktree
+  (own subfolder passes, `tui-gentle-level-a6afd3` refused, main checkout passes). The verifier ended on an API error
+  (subscription not allowed, 403) and is run again on the fix.
+- L7 2026-11-14: the machine rebooted at 05:56Z and this session was resumed; PR 863 landed (main 236f720). The lead
+  added the auto-archive item to spec 8.

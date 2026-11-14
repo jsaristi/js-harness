@@ -176,24 +176,31 @@ export function worktreeCdRefusal(command, { cwd, worktrees }) {
   const words = shellWords(command, { groups: true });
   const { operators } = words;
   const targets = [];
-  let place = cwd;
+  // Where the shell may stand at each cd. A cd in a subshell, a background job or before a || that fails leaves the
+  // parent where it was, and the words do not say which ran, so a relative cd is resolved from every folder the shell
+  // may be in by then (Codex on 8bbbdbf3): one that lands in another worktree is enough.
+  const places = new Set([folderOf(cwd, cwd)]);
   for (let i = 0; i < words.length; i += 1) {
     const atStart = i === 0 || operators.has(i - 1) || (!operators.has(i - 1) && COMMAND_KEYWORDS.has(words[i - 1]) && (i === 1 || operators.has(i - 2)));
     if (!atStart || operators.has(i) || !CD_COMMANDS.has(words[i])) continue;
     let at = i + 1;
     while (at < words.length && !operators.has(at) && CD_OPTIONS.test(words[at])) at += 1;
-    const target = at < words.length && !operators.has(at) ? folderOf(words[at], place) : null;
-    if (target === null) continue;
-    targets.push(target);
-    // A later relative cd starts where this one went.
-    place = target;
+    if (words[at] === '--' && !operators.has(at)) at += 1;
+    if (at >= words.length || operators.has(at)) continue;
+    const reached = [...places].map((place) => folderOf(words[at], place)).filter((target) => target !== null);
+    targets.push(...reached);
+    for (const target of reached) places.add(target);
   }
   if (targets.length === 0) return null;
   const listed = worktrees();
   if (listed === null || listed === undefined) return null;
+  // The session's own worktree is the one git says `cwd` is in, or, where git gives none or another, the one `cwd`
+  // stands inside (lenses on 8bbbdbf3): a cd within it is never refused.
   const here = listed.here ? folderOf(listed.here, cwd) : null;
+  const start = folderOf(cwd, cwd);
+  const own = (dir) => dir === here || within(start, dir);
   for (const target of targets) {
-    const tree = listed.linked.map((dir) => folderOf(dir, cwd)).find((dir) => dir !== null && within(target, dir) && dir !== here);
+    const tree = listed.linked.map((dir) => folderOf(dir, cwd)).find((dir) => dir !== null && within(target, dir) && !own(dir));
     if (tree === undefined) continue;
     return `js-harness guard: this command moves into ${tree}, another session's worktree: the commands after it would `
       + 'run on that session\'s branch, and its files are its own. Read it from where you are instead: '

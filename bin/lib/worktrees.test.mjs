@@ -113,6 +113,12 @@ test('a cd, pushd or Set-Location into another linked worktree is refused, namin
     'cd "D:\\repo\\.claude\\worktrees\\other\\bin" && git status',
     'cd /d/repo/.claude/worktrees/other',
     'git status; cd ../other',
+    // Codex on 8bbbdbf3: the end of options, and a cd in a subshell, a background job or before a || that leaves the
+    // parent where it was.
+    'cd -- ../other',
+    '(cd bin); cd ../other',
+    'cd bin & cd ../other',
+    'cd nowhere || cd ../other',
     'pushd D:/repo-worktrees/feat',
     'Set-Location -Path D:/REPO/.claude/worktrees/OTHER',
     'cd -P D:/repo-worktrees/feat/bin/lib',
@@ -133,6 +139,12 @@ test('a cd within the own worktree, to the main checkout or elsewhere passes, an
   assert.equal(asked, 0);
   for (const command of ['cd bin/lib', 'cd D:/repo/.claude/worktrees/mine/docs', 'cd D:/repo', 'cd ~', 'cd -', 'cd', 'cd D:/repo/.claude/worktrees/other-not']) {
     assert.equal(worktreeCdRefusal(command, { cwd, worktrees: trees }), null, command);
+  }
+  // A lister that gives no `here`, or another, still counts the worktree cwd stands in as the session's own.
+  for (const here of [null, 'D:/repo']) {
+    const noHere = () => ({ linked: ['D:/repo/.claude/worktrees/mine', 'D:/repo/.claude/worktrees/other'], here });
+    assert.equal(worktreeCdRefusal('cd bin', { cwd: 'D:/repo/.claude/worktrees/mine/docs', worktrees: noHere }), null, String(here));
+    assert.match(worktreeCdRefusal('cd ../../other', { cwd: 'D:/repo/.claude/worktrees/mine/docs', worktrees: noHere }) ?? '', /another session's worktree/, String(here));
   }
   // A git that cannot list the worktrees refuses nothing.
   assert.equal(worktreeCdRefusal('cd D:/repo/.claude/worktrees/other', { cwd, worktrees: () => null }), null);
