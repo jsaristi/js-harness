@@ -4,14 +4,10 @@ Branch: worktree-audit-cement (the document), then one branch per slice from ori
 Delivery: ask-on-risk. Tests: `node --test`. Opened 2026-11-13 by JH 198 (Opus 5.5, medium) from the lead's brief.
 
 ## State
-T1 landed (PR 863), T2 landed (PR 864, main 4a77d99), T3 ready as PR 865 (the lead lands it). T4 on
-`fix/audit-cement-close` (from T3's branch): f71380ea, then 1d982b38 after round 1 (L9). Round 2 running: Codex and
-lenses with base f71380ea, and the same verifier re-checking 1d982b38. When clean: merge origin/main in if 865 landed
-(never rebase), push, PR, `notify --kind ready --pr` (base must be main). Next T5: the lead cleared `bin/template.mjs`
-and its test besides template-gate.mjs and template-record.mjs; a pure `decideSummary` in template-gate.mjs, the
-`yours` items kept in the summary's shown line (template-record.mjs), runGate deciding a board/summary write before
-the call; the refusal names the exact field `yoursDropped: [{ item, reason }]`; it is a gate: verifier, Codex,
-lenses. Then T6, T8; T7 waits for the lead's word that JH 196 landed (and carries manifest.mjs:157).
+T1-T4 landed (PRs 863, 864, 865, 867; 867 is main b07c7b5). T5 on `fix/audit-cement-gate` (from main 96ce3c9, main
+b07c7b5 merged in): 7c4f91fd, then fixes 36bde347, b46b65ac and 86a1becb (L18-L19); Codex correct on each, the last
+lenses answered (L19). Next: push, PR against main, `notify --kind ready --pr`. Then a follow-up PR from main with the
+867 verifier's items (L17), T6 (with the lead's two FAILURES lines, L20), T7 (cleared; carries manifest.mjs:157), T8.
 
 ## Goal
 Every correction the audit and its two blind reviews found is fixed where a check can hold it, and each of the
@@ -162,8 +158,8 @@ jamas vuelva a suceder" (69918425:2679).
 - [x] T1 (kind: build) spec 1 — `js-harness rules change session-model` on `rule/opus-alias`, alias `opus`, quoting 2679 — commit 85fa628c, PR 863
 - [x] T2 (kind: build) specs 2, 7 (advisor texts), 11 — `bin/lib/guard.mjs`, `bin/guard.mjs`, `bin/lib/home-sessions.mjs`, `bin/lib/rules-change.mjs`, `bin/lib/worktrees.mjs` (the cd check: `guard.mjs` is at its 1,000-line limit) + tests — commit `fix(guard): refuse cd into another session's worktree`, PR 864 (landed)
 - [x] T3 (kind: build) specs 3, 4 — `bin/lib/stall.mjs`, `bin/wait.mjs` + tests — commits 8053d2d6, 16b63f65, 9cba7501, PR 865
-- [ ] T4 (kind: build) spec 5 — `bin/sessions-background.mjs`, `bin/lib/background-close.mjs`, `bin/lib/background.mjs` (L8) + tests — commit `fix(sessions): remove-worktree copies or refuses`
-- [ ] T5 (kind: build) spec 6 — template gate/record + tests, if cleared — commit `fix(template): yours drops only with a reason`
+- [x] T4 (kind: build) spec 5 — `bin/sessions-background.mjs`, `bin/lib/background-close.mjs`, `bin/lib/background.mjs` (L8) + tests — commit `fix(sessions): remove-worktree copies or refuses`
+- [x] T5 (kind: build) spec 6 — template gate/record + tests, if cleared — commit `fix(template): yours drops only with a reason`
 - [ ] T6 (kind: docs) specs 7 (texts), 8 — `CLAUDE.md`, `bin/lib/protocols-skill.mjs`, `docs/FAILURES.md` — commit `docs: throughput command, senior strongest, 2026-11-13 failures`
 - [ ] T7 (kind: build) spec 9 — `bin/lib/manifest.mjs` after JH 196 — commit `docs(skill): senior section; close before ready`
 - [ ] T8 (kind: build) spec 10 — `bin/progress.mjs`, `bin/lib/progress-pace.mjs` + tests, its own PR last — commit `feat(progress): share of the plan done since a baseline`
@@ -251,3 +247,29 @@ jamas vuelva a suceder" (69918425:2679).
 - L14 Codex over 6ba747e..4977072e: P1 (git unable to read an existing worktree: the whole-folder copy left .git out) and P2 (a copy inside the worktree it outlives), both fixed: the copy takes .git, and refuses a destination inside the worktree.
 - L15 Codex over 4977072e..62a71b56: P2 fixed; P1 open, since a linked worktree's .git is only a pointer and its index and own refs stay in its git folder. Fixed: the whole-folder copy runs only when git keeps nothing of the folder's own (no .git, or a .git file whose gitdir is gone); a worktree git cannot read while its git folder is there is refused. Lenses risk,resilience on 62a71b56: 0 findings. This is the last of Codex's three rechecks.
 - L16 Codex over 62a71b56..6e243065 (third recheck): P1 still open, since existsSync says false for a gitdir it may not reach (EACCES), so an unreachable git folder read as gone. Fixed: noGitFolder takes only a confirmed ENOENT from statSync as gone, any other error refuses; its unit test injects EACCES and EPERM. Lenses risk,resilience on 6e243065: 0 findings. Codex's three rechecks did not settle P1, so it goes to the lead as a problem (rule:session-model: this session already runs claude-opus-5-5); one more Codex run over 62a71b56..head covers the fix.
+- L17 2026-11-14 06:06 local: PR 867 (T4) landed as b07c7b5. The lead asked whether the independent verifier ran
+  after both P1 fixes: it had not (its three rounds ended at 9dfd7afc) and the ready notice did not say so. Run on
+  9dfd7afc..2e3b9f94: no data loss. Left for a follow-up PR from main: a worktree reached through a junction is refused
+  (git prints its real path, which sameFolder does not match; compare realpaths); within() reads a first segment like
+  `..foo` as outside; an unborn branch's refusal names git status where git worktree repair fits; and the medium one
+  of L12, a commit held only by the worktree's own HEAD reflog.
+- L18 T5 7c4f91fd: Codex P2 (a batch whose first write gives a reason the second, dropping, write lacks), the
+  reliability lens (a str_replace of yours leaves the next write's baseline unknown) and the verifier (no drop
+  admitted without a reason; another artifact's board/summary moved the same baseline; summary unchecked lines made
+  template shown and doctor say cannot tell). Fixed in 36bde347: each dropping write is held to its own yoursDropped,
+  the line keeps the reasons (`dropped`) and its `board`, lastYours reads per board, a str_replace of yours is
+  refused, and shownReport counts summary unchecked writes apart. Left as is: a delete of the summary with items is
+  always refused (it cannot carry reasons; not a routine write); two items whose text differs only by level are one.
+- L19 b46b65ac: a null yours is passed over for the last list known (a false refusal at worst), and
+  `summaryUnchecked` is reported. 86a1becb: a board whose only write left yours unknown reads null (unchecked), not
+  new; board-less lines count for a board with none of its own. Answered, not changed: a record the gate cannot read
+  lets a write through unchecked (the gate fails open on its own reads by design; summaryUnchecked counts it); the
+  "upgrade hole" of board-less lines rests on lines that never carried yours (both fields arrive in this branch); the
+  board-less fallback can only ask a reason too many (ArtifactData calls always carry url). Codex correct on 36bde347
+  (0.97), b46b65ac (0.91) and 86a1becb (0.94).
+- L20 The lead, for T6's FAILURES lines: the lead's stretch for his absence opened 2026-11-14 04:56 local for an
+  absence from 02:54 (the second time, after 11-13 17:07); and on 2026-11-14 the lead took two decide acts with no
+  advisor call in their stretch (the land of PR 867 at ~05:56, recording question 284 at 06:33), flagged by
+  advisor-gate in its warning week; fix now: an advisor call alone before each land, question and delete (3 covered
+  since); stops it: the hook's refusal after the week (P3), or earlier if he decides; proof: `js-harness advisor-gate
+  report` shows 0 flagged land/question acts for the lead a day.
