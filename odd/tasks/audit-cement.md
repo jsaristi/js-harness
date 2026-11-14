@@ -244,3 +244,8 @@ jamas vuelva a suceder" (69918425:2679).
   is pointed at only by the worktree's HEAD reflog, which goes with it. Git warned "leaving 1 commit behind" at the
   switch, `git fsck --lost-found` finds it until gc prunes it, and refusing on every reflog entry no shared ref holds
   would refuse every worktree after a rebase.
+- L13 2026-11-14 05:1x local: T4 reviews clean through 9dfd7afc; origin/main merged in (4977072e); the push asked one
+  Codex run over 6ba747e..4977072e (a commit whose only review said incorrect is not covered), running. The lead: PR
+  866 (JH 196) landed, main 96ce3c9, which clears bin/lib/manifest.mjs for T7. T5 starts on a new branch from main
+  (no rebase, no force-push), so its rules-coverage-data.mjs entries sit on 866's.
+- L14 Codex over 6ba747e..4977072e: P1 (git unable to read an existing worktree: the whole-folder copy left .git out) and P2 (a copy inside the worktree it outlives), both fixed: the copy takes .git, and refuses a destination inside the worktree.

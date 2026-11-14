@@ -423,7 +423,7 @@ const present = (worktree, item, io) => {
 
 /** Copies what no branch keeps of the worktree `worktree` of the recorded job `entry` (`unkeptPaths`) into
  * `keptDirOf(home, ...)`: the paths under `files/`, the index as `staged.patch`, and `kept.json`, what the copy is of. A
- * folder git does not read as a worktree is copied whole but its `.git`. It first waits for the process claude's lock on
+ * folder git does not read as a worktree is copied whole, its `.git` included. It first waits for the process claude's lock on
  * the worktree names, as claude rm does, since claude stop returns while it still ends. `{ dir, count, leftOut }` once it
  * is copied, `dir` null when there was nothing to copy; `{ why }` when something cannot be copied or told, and then the
  * worktree is not to be removed (odd/tasks/audit-cement.md, spec 5). Not seen: a change a clean filter hides from git. */
@@ -441,7 +441,7 @@ export function keepUnkept(entry, worktree, { home, gitIn, now = Date.now, alive
   if (found.why) return { why: found.why };
   if (found.why === null) {
     try {
-      found = { changed: [], others: io.readdirSync(worktree).filter((name) => name !== '.git'), staged: '', branch: null, head: null };
+      found = { changed: [], others: io.readdirSync(worktree), staged: '', branch: null, head: null };
     } catch (err) {
       return { why: `its worktree ${worktree} could not be read (${err.code ?? err.message})` };
     }
@@ -456,6 +456,7 @@ export function keepUnkept(entry, worktree, { home, gitIn, now = Date.now, alive
   const copied = [...found.changed.filter((item) => present(worktree, item, io)), ...others];
   if (copied.length === 0 && found.staged === '') return { dir: null, count: 0, leftOut };
   const dir = keptDirOf(home, entry.id, now());
+  if (within(dir, worktree)) return { why: `the copy would go to ${dir}, inside the worktree it is to outlive` };
   try {
     io.mkdirSync(dir, { recursive: true });
     for (const item of copied) {

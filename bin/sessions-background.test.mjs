@@ -565,10 +565,10 @@ test('sessions stop refuses a session whose worktree holds files, runs no claude
   assert.equal(removed.code, 0, removed.stderr);
   assert.deepEqual(actions(world).slice(acted), [['stop', '0db8bc5e'], ['rm', '0db8bc5e']]);
   assert.equal(fs.existsSync(worktree), false);
-  // A folder git does not read as a worktree is copied whole, but its .git.
+  // A folder git does not read as a worktree is copied whole, its .git included (Codex P1 on 4977072e).
   const [kept] = keptCopies(world);
   assert.equal(fs.readFileSync(path.join(kept, 'files', 'src', 'work.js'), 'utf8'), 'uncommitted\n');
-  assert.equal(fs.existsSync(path.join(kept, 'files', '.git')), false);
+  assert.ok(fs.existsSync(path.join(kept, 'files', '.git')), 'git could not read it, so its .git goes with the copy');
 }));
 
 test('sessions stop runs on a worktree that holds only .git, and takes --remove-worktree with --home in any order', withWorld((world) => {
