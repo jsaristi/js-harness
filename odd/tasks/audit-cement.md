@@ -4,7 +4,7 @@ Branch: worktree-audit-cement (the document), then one branch per slice from ori
 Delivery: ask-on-risk. Tests: `node --test`. Opened 2026-11-13 by JH 198 (Opus 5.5, medium) from the lead's brief.
 
 ## State
-T1-T6 landed (PRs 863-865, 867-869; main 4187cb1). NOW: the 867 follow-up on fix/audit-cement-followup from 4187cb1 (L25): within() reads ..foo as inside, sameFolder compares real paths, an unborn branch is named and the repair names git worktree repair; the reflog case dropped (L12: it would refuse every worktree after a rebase). Next: Codex, lenses, then the verifier last on the range ending at the head that ships, PR, advisor, ready. Then T7 (manifest.mjs is mine but :157 and :202, JH 200 slice 2: merge main before its commit), T8, closed. Codex habit: no edit or merge while a review runs; one commit per round.
+T1-T6 landed (PRs 863-865, 867-869; main 4187cb1). NOW: the 867 follow-up is PR 873 (fix/audit-cement-followup, head after 5f0146e6), ready sent; verifier 4187cb1..45143a4a nothing blocking (L29); the head adds docs-only commits. Probe: git prints the real path from a junction cwd. Next: T7 only after 873 lands, from main merged in (manifest.mjs:157 and :202 are JH 200s), then T8, then closed. Wait: one js-harness wait --notice-to 198 armed after the ready.
 
 ## Goal
 Every correction the audit and its two blind reviews found is fixed where a check can hold it, and each of the
