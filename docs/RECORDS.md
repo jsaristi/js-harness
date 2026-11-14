@@ -365,7 +365,7 @@ The keys and blocks js-harness puts into Claude Code's own files, each recorded 
 
 ### `~/.claude/settings.json`
 
-- `hooks.<event>`: one entry appended to each list, `{ matcher?, hooks: [{ type: "command", command, timeout }] }` (the values in `bin/lib/hook-entries.mjs`): `SessionStart` (`js-harness doctor --hook`, `js-harness resume --hook`, `js-harness rules --hook`, `js-harness backup --session-start`), `PostToolUse` (`js-harness resume --pause`, `js-harness template gate --shown`), `PostToolUseFailure` (`js-harness resume --pause`, matcher `WebFetch`), `PreToolUse` (`js-harness guard --hook`, `js-harness template gate --hook`), `PermissionRequest` (`js-harness permit --hook`), `Stop` (`js-harness guard --stop`, `js-harness reply --hook`, `js-harness backup --hook`), `UserPromptSubmit` and `SubagentStart` (`js-harness rules --hook`).
+- `hooks.<event>`: one entry appended to each list, `{ matcher?, hooks: [{ type: "command", command, timeout }] }` (the values in `bin/lib/hook-entries.mjs`): `SessionStart` (`js-harness doctor --hook`, `js-harness resume --hook`, `js-harness rules --hook`, `js-harness backup --session-start`), `PostToolUse` (`js-harness resume --pause`, `js-harness template gate --shown`), `PostToolUseFailure` (`js-harness resume --pause`, matcher `WebFetch`), `PreToolUse` (`js-harness guard --hook`, `js-harness template gate --hook`, `js-harness advisor-gate --hook`), `SubagentStop` (`js-harness advisor-gate --stop`), `PermissionRequest` (`js-harness permit --hook`), `Stop` (`js-harness guard --stop`, `js-harness reply --hook`, `js-harness backup --hook`), `UserPromptSubmit` and `SubagentStart` (`js-harness rules --hook`).
 - `permissions.allow` and `permissions.deny`: the strings of `PERMISSIONS_ALLOW` and `PERMISSIONS_DENY` (`bin/lib/deny-paths.mjs`) the lists lack, appended.
 - `permissions.defaultMode`: written back only when a mode install adopted earlier has gone missing; never invented.
 - `crossSessionInbound`: `"accept"`, only with `install --accept-session-messages`.
@@ -955,6 +955,22 @@ Copies taken before `merge-queue --land --refresh-copy` installs main over the i
 
 - `settings-<stamp>.json`: a byte copy of the Claude settings (`<home>/.claude/settings.json`); the newest 5 are kept.
 - `package.json.<stamp>`: a byte copy of pnpm's global `package.json` that the js-harness shim names, which `pnpm add -g` rewrites; the newest 5 are kept.
+
+## The advisor gate's decisions
+
+What `advisor-gate --hook` and `--stop` decided for each act that decides (odd/tasks/advisor-use.md, P1, P2), one line a
+decision; `bin/advisor-gate.mjs` `record` appends it under the home. Nothing prunes it yet; the report reads it.
+
+### `advisor-gate/decisions.jsonl`
+
+- `schema`: string, `js-harness.advisor-gate/v1`.
+- `at`: ISO time.
+- `session`: string or `null`, the host session; `agent`: string or `null`, the sub-agent's id.
+- `act`: string, `question`, `land`, `session`, `plan`, `done` or `end` (a sub-agent's end); `tool`: string or `null`; `toolUseId`: string or `null`, the tool call's id from the payload, which the report matches the act by; `cwd`: string.
+- `secondStop`: boolean, on an `end` only, whether the host had already turned that stop back.
+- `decision`: string, `covered`, `flagged`, `outage`, `unchecked`, `exempt-senior` or `exempt-same-model`; `mode`: string, `warn` or `refuse`, on a `flagged` one.
+- `transcript`: string, the transcript read; `model`, `calls`, `errors`, `toolCalls`, `broken`: what the stretch held, present once the transcript was read. `advisor-gate report` reads the transcript of each flagged decision again for the advisor calls that followed it.
+- `reason`: string, on an `unchecked` one; `title`: string, on an `exempt-senior` one.
 
 ## Session env trims
 

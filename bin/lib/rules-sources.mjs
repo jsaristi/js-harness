@@ -12,6 +12,7 @@ import { FAILURES_TEMPLATE, agentsTemplate, claudeTemplate } from './project.mjs
 import { LEAD_OPENING_PROMPT } from './lead-prompt.mjs';
 import { GATE_MESSAGES } from './template-gate.mjs';
 import { READER_PROMPT } from './double-review-prompt.mjs';
+import { ADVISOR_MESSAGES } from './advisor-gate.mjs';
 
 /** The files of this repository that are sources, read where `rules coverage` runs. */
 export const REPOSITORY_FILES = ['AGENTS.md', 'CLAUDE.md'];
@@ -42,6 +43,7 @@ export const MESSAGE_SOURCES = [
 export const CUT_MESSAGE_SOURCES = Object.freeze({
   'bin/template.mjs': 'template-gate',
   'bin/lib/double-review-prompt.mjs': 'double-review-prompt',
+  'bin/advisor-gate.mjs': 'advisor-gate',
 });
 
 // The folder name a project's AGENTS.md is titled with; its title is a heading, and no span.
@@ -72,6 +74,7 @@ export function textSources(version, readFile) {
     { id: 'lead-prompt', from: 'sessions', text: LEAD_OPENING_PROMPT },
     { id: 'template-gate', from: 'hook', text: GATE_MESSAGES },
     { id: 'double-review-prompt', from: 'double-review', text: READER_PROMPT },
+    { id: 'advisor-gate', from: 'hook', text: ADVISOR_MESSAGES },
   );
   for (const file of REPOSITORY_FILES) {
     const text = readFile(file);

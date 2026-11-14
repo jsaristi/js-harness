@@ -13,9 +13,11 @@ import { claudeHookEntries } from './payload.mjs';
 import { isHarnessRepository } from './spec.mjs';
 import { commandStep, firstStep } from './next-step.mjs';
 
-/** The entries `install` writes today (15, measured in a scratch home on 2026-11-04). A cut that removes one lowers
- * this in its own pull request; a change that adds one raises it there, where its review sees why. */
-export const HOOK_ENTRY_LIMIT = 15;
+/** The entries `install` writes today (17: 15 measured in a scratch home on 2026-11-04, then the advisor gate's two,
+ * his yes to question 282, odd/tasks/advisor-use.md: a PreToolUse entry for the acts that decide and a SubagentStop entry
+ * for a sub-agent's end, which no PreToolUse sees). A cut that removes one lowers this in its own pull request; a change
+ * that adds one raises it there, where its review sees why. */
+export const HOOK_ENTRY_LIMIT = 17;
 
 /** The ceilings of the hook count, `owner -> event -> entries`, counted on this machine on 2026-11-06 (the S4a
  * document's L3): codegraph's prompt hook and the hooks of the two plugins the stack installs. js-harness is not here:
