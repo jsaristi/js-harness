@@ -211,6 +211,16 @@ const gitIn = (cwd, spawn, args) => {
   }
 };
 
+/** What git prints in `cwd`, trimmed, or `null` when it fails. */
+const gitOut = (cwd, spawn, args) => {
+  try {
+    const result = spawn('git', args, { cwd, encoding: 'utf8' });
+    return result && !result.error && result.status === 0 ? String(result.stdout).trim() : null;
+  } catch {
+    return null;
+  }
+};
+
 const samePath = (one, other) => (process.platform === 'win32' ? one.toLowerCase() === other.toLowerCase() : one === other);
 
 /** Why `place` may not be deleted, or `null` when it may: it is named as a turn worktree or a snapshot is,
@@ -218,6 +228,8 @@ const samePath = (one, other) => (process.platform === 'win32' ? one.toLowerCase
  * `commonGitDir` resolved, so that neither it nor the area leads anywhere else (spec 1). */
 function notDeletable(place, commonGitDir) {
   if (typeof commonGitDir !== 'string' || commonGitDir === '') return 'the git directory it may be deleted in was not given';
+  // git resolves a path against the folder it runs in and fs against this process's: only an absolute one is the same.
+  if (!path.isAbsolute(place) || !path.isAbsolute(commonGitDir)) return `${place} and ${commonGitDir} are not both absolute paths`;
   const name = path.basename(place);
   if (!TURN_WORKTREE.test(name)) return `${name} is not named as a turn worktree or a snapshot`;
   try {
@@ -265,6 +277,7 @@ function unlinkLinksUnder(dir) {
  * folder is gone, else why it is left, for the caller to warn of; a folder it could not remove is left to the
  * next run's sweep. */
 export function removeTurnWorktree(cwd, place, { commonGitDir, spawn = spawnSync, rm = fs.rmSync } = {}) {
+  if (typeof place !== 'string' || !path.isAbsolute(place)) return `${place} is not an absolute path, and git and this process would resolve it against two folders`;
   if (!fs.existsSync(place) && !isLink(place)) return null;
   const refused = notDeletable(place, commonGitDir);
   if (refused !== null) return refused;
@@ -276,7 +289,11 @@ export function removeTurnWorktree(cwd, place, { commonGitDir, spawn = spawnSync
   }
   gitIn(cwd, spawn, ['worktree', 'remove', '--force', place]);
   try {
-    if (fs.existsSync(place)) rm(place, { recursive: true, force: true });
+    if (fs.existsSync(place)) {
+      // Again just before the delete: a link made since the first pass, by a process the kill missed, is not followed.
+      unlinkLinksUnder(place);
+      rm(place, { recursive: true, force: true });
+    }
   } catch (err) {
     // Left for `sweepTurnWorktrees`, which removes it once this run is gone.
     failure = err;
@@ -300,7 +317,8 @@ export function inTurnWorktree(root, commonGitDir) {
 /** Removes every turn worktree under `commonGitDir` whose run is gone, killed before it removed its own, or
  * that is older than a turn can last (`TURN_WORKTREE_MAX_AGE_MS`, by the time in its name against `now`), and
  * then has git forget the worktrees whose folder is gone. One of a run still going is left to it. A snapshot is
- * one, by its name. Each goes through `removeTurnWorktree`, which deletes nothing out of the area. */
+ * one, by its name. Each goes through `removeTurnWorktree`, which deletes nothing out of the area. It returns why
+ * each folder it meant to remove is left, for the caller to warn of; an empty list when none is. */
 export function sweepTurnWorktrees(cwd, { commonGitDir, spawn = spawnSync, running = processRunning, now = Date.now }) {
   const dir = path.join(commonGitDir, AREA);
   let names;
@@ -309,13 +327,16 @@ export function sweepTurnWorktrees(cwd, { commonGitDir, spawn = spawnSync, runni
   } catch {
     names = [];
   }
+  const left = [];
   for (const name of names) {
     const match = TURN_WORKTREE.exec(name);
     if (match === null) continue;
     const old = now() - Number(match[2]) > TURN_WORKTREE_MAX_AGE_MS;
-    if (old || !running(Number(match[1]))) removeTurnWorktree(cwd, path.join(dir, name), { commonGitDir, spawn });
+    const why = old || !running(Number(match[1])) ? removeTurnWorktree(cwd, path.join(dir, name), { commonGitDir, spawn }) : null;
+    if (why !== null) left.push(why);
   }
   gitIn(cwd, spawn, ['worktree', 'prune']);
+  return left;
 }
 
 /** Adds a detached worktree at `commit` for a turn, or with `kind: 'head'` for the snapshot of the head a run
@@ -354,17 +375,28 @@ function dependenciesInstalled(root) {
  * already, `inTurn` or by where it is, which makes no snapshot in it; and, in a turn of the gate lock
  * (`gateHeld`), where Codex runs the tests, a project whose declared dependencies are installed in its
  * `node_modules`, which a snapshot would not hold: `said` is then the line that says so. The area is swept
- * first, but by a run in a turn worktree (`sweepTurnWorktrees`). `null` when the snapshot could not be made. */
-export function snapshotOfHead(root, head, { commonGitDir, spawn = spawnSync, now = Date.now, inTurn = false, gateHeld = false }) {
+ * first, but by a run in a turn worktree, whose parent run swept it (`sweepTurnWorktrees`); what the sweep leaves
+ * is a warning, `warn`. `null` when the snapshot could not be made; `{ refused }` when it was made and is not
+ * the head clean, its tracked files changed as checked out (a filter, an end-of-line rule), which would refuse
+ * the record after Codex had read it all: it is removed and nothing starts. */
+export function snapshotOfHead(root, head, { commonGitDir, spawn = spawnSync, now = Date.now, inTurn = false, gateHeld = false, warn = () => {} }) {
   if (inTurn || inTurnWorktree(root, commonGitDir)) return { place: root, snapshot: false, said: null };
   // What killed runs left in the area is swept first, on the real clock, also by a run that reads the live folder.
-  if (commonGitDir) sweepTurnWorktrees(root, { commonGitDir, spawn });
+  if (commonGitDir) {
+    for (const why of sweepTurnWorktrees(root, { commonGitDir, spawn })) warn(`Warning: the sweep of the review worktrees left one: ${why}.`);
+  }
   if (gateHeld && dependenciesInstalled(root)) {
     return { place: root, snapshot: false, said: `In this turn of the gate lock Codex reads the live folder, not a snapshot of ${head.slice(0, 7)}: the project's package.json declares dependencies installed in its node_modules, which a snapshot would not hold, and a turn runs the tests.` };
   }
   if (!commonGitDir) return null;
   const place = addTurnWorktree(root, head, { commonGitDir, spawn, now, kind: 'head' });
-  return place === null ? null : { place, snapshot: true, said: null };
+  if (place === null) return null;
+  // Its HEAD is `head`, which git just checked it out at; its tracked files are asked, the one question it adds.
+  const why = snapshotChanged({ headNow: head, tree: gitOut(place, spawn, ['status', '--porcelain', '--untracked-files=no']) }, head);
+  if (why === null) return { place, snapshot: true, said: null };
+  const left = removeTurnWorktree(root, place, { commonGitDir, spawn });
+  if (left !== null) warn(`Warning: the snapshot of the head was not removed, and the next run's sweep removes it: ${left}.`);
+  return { refused: `The snapshot of ${head.slice(0, 7)} that Codex would read is not the head clean as soon as it is made (${why.replace(/^the review's own snapshot changed: /, '')}), so its record would be refused after Codex had read it all: nothing was started or recorded. A checkout filter or an end-of-line rule that changes tracked files is the usual cause` };
 }
 
 /** Why the snapshot of `head` a part was read in is not as it was made, from `headNow` and `tree`, its HEAD and

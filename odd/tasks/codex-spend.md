@@ -278,3 +278,10 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   go in `bin/lib`. Directory symlinks skip on this machine (EPERM); junctions are tested.
 - L15 2026-11-14T21:45Z, the lead: PR 874 landed (main dfcb70f), so `docs/rule-sources.json`, the rules data and
   `bin/lib/protocols-skill.mjs` are free for T4, after T1 to T3 as planned.
+- L16 2026-11-14T22:30Z, T1's verifier (opus, read-only) on 6edc7fca: deletion and the record guards hold on every
+  path traced; six findings, all taken in one fix commit. F1 proof 2 had no test: a gate turn's `node --test` now
+  runs in the live folder and in the snapshot with the same result. F2 a snapshot dirty as soon as it is made (a
+  checkout filter, an end-of-line rule) cost a whole review before its record was refused: it is now checked when
+  made, removed, and the run refused before Codex starts. F3 a run in a turn worktree or a comparison run does not
+  sweep (its parent run swept), a second departure beside L14's, kept. F4 removal refuses a path that is not
+  absolute. F5 links are removed again just before the delete. F6 what the sweep leaves is a warning.

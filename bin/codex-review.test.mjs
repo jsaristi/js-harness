@@ -1392,6 +1392,20 @@ test('reads a snapshot of the head: out of a turn, or with nothing installed, or
   }
 });
 
+test('reads a snapshot of the head: a snapshot that is not the head clean as soon as it is made refuses the run before Codex starts, and is removed', async () => {
+  const { root, base } = makeRepoWith({ 'f.txt': 'one' }, { 'f.txt': 'two' });
+  const fake = inSession(fakeCodex(reviewed(root, base)));
+  // As a checkout filter or an end-of-line rule leaves a fresh checkout: a tracked file reads as changed there.
+  const gitOf = fake.spawn;
+  fake.spawn = (command, args, opts) => (command === 'git' && args[0] === 'status' && /review-head-/.test(String(opts?.cwd)) ? { status: 0, stdout: ' M f.txt\n', stderr: '' } : gitOf(command, args, opts));
+  const result = await run(['--base', 'HEAD~1', '--cwd', root], fake);
+  assert.equal(result.code, 1, result.err);
+  assert.match(result.err, /^The snapshot of [0-9a-f]{7} that Codex would read is not the head clean as soon as it is made \(its tracked files differ from its HEAD\)/m);
+  assert.deepEqual(fake.cwds, [], 'no Codex session started');
+  assert.equal(wrote(root), false);
+  assert.deepEqual(fs.readdirSync(areaOf(root)).filter((name) => name.startsWith('review-')), []);
+});
+
 test('reads a snapshot of the head: a range in parts reads one snapshot for all its parts, and a commit and an edit in the live folder between them leave the record written', async () => {
   const { root, base, head } = makeThreeFileRepo();
   const fake = threePassingParts(root, base, head);
@@ -6573,10 +6587,11 @@ test('a review asks git where the git folder is once, whatever it reads and writ
   assert.deepEqual(asked.filter(({ args }) => args[0] === 'check-attr').map(({ args, cwd, input }) => [args[2], cwd, input]), [[three, topOf(root), 'c.txt\0b.txt\0a.txt\0']]);
   // The two ends of the range come with the git folder, in one process, and neither is asked for alone. HEAD
   // and the tree are read again before the record is written, as one `git status` in another form than the
-  // one asked before the review, so no question is put to git twice.
+  // one asked before the review, so no question is put to git twice. The snapshot of the head is asked once, as
+  // soon as it is made, whether its tracked files are those of its HEAD (spec 1, codex-spend L16 F2).
   assert.deepEqual(asked.filter(({ args }) => args.includes('--git-common-dir')).map(({ args, cwd }) => [args, path.resolve(cwd)]), [[['rev-parse', '--git-dir', '--git-common-dir', 'HEAD^{commit}', 'HEAD~3^{commit}'], topOf(root)]]);
   assert.equal(timesAsked(asked, 'rev-parse', '--verify'), 0);
-  assert.deepEqual(asked.filter(({ args }) => args[0] === 'status').map(({ args }) => args.slice(1)), [['--porcelain', '--untracked-files=no'], ['--porcelain=v2', '--branch', '--no-ahead-behind', '--untracked-files=no']]);
+  assert.deepEqual(asked.filter(({ args }) => args[0] === 'status').map(({ args, cwd }) => [args.slice(1), /review-head-/.test(cwd)]), [[['--porcelain', '--untracked-files=no'], false], [['--porcelain', '--untracked-files=no'], true], [['--porcelain=v2', '--branch', '--no-ahead-behind', '--untracked-files=no'], true]]);
   assert.deepEqual(askedTwice(asked), []);
 });
 
@@ -6734,9 +6749,10 @@ test('HEAD and the tree are read as two questions after a review when the one qu
     assert.equal(result.code, 0, `${which}: ${result.err}`);
     assert.deepEqual(readCodexReviews(root), [reviewedRecord(base, head)], which);
     assert.equal(tried.times, 1, which);
+    // Before the review, the live folder and then the snapshot of the head as soon as it is made (codex-spend L16 F2).
     assert.deepEqual(
       counted.asked.map(({ args }) => args).filter((args) => (args[1] === '--verify' && args[2] !== '--quiet') || args[0] === 'status'),
-      [['status', '--porcelain', '--untracked-files=no'], ['rev-parse', '--verify', 'HEAD^{commit}'], ['status', '--porcelain', '--untracked-files=no']],
+      [['status', '--porcelain', '--untracked-files=no'], ['status', '--porcelain', '--untracked-files=no'], ['rev-parse', '--verify', 'HEAD^{commit}'], ['status', '--porcelain', '--untracked-files=no']],
       which,
     );
   }
@@ -6752,9 +6768,10 @@ test('a git that does not know the one question for HEAD and the tree is asked i
   assert.equal(fake.calls.length, 3);
   assert.deepEqual(readCodexReviews(root).length, 1);
   assert.equal(tried.times, 1);
-  // Three parts and the review: four times HEAD alone, and the tree alone after the once before the review.
+  // Three parts and the review: four times HEAD alone, and the tree alone after the once before the review and
+  // the once the snapshot of the head is asked as soon as it is made (codex-spend L16 F2).
   assert.equal(timesAsked(counted.asked, 'rev-parse', '--verify', 'HEAD^{commit}'), 4);
-  assert.equal(timesAsked(counted.asked, 'status', '--porcelain'), 5);
+  assert.equal(timesAsked(counted.asked, 'status', '--porcelain'), 6);
 });
 
 // --- what the comparison of the configurations varies: by injection alone, never by a flag ---

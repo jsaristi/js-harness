@@ -1226,12 +1226,12 @@ async function reviewRun(argv, env, deps, snapshot) {
   // and one that measures (`onResult`, the comparison, which reviews in a clone of its own at the head), read here.
   let readFrom = null;
   const readingPlace = () => {
-    if (readFrom !== null) return readFrom;
-    readFrom = snapshotOfHead(root, head, { commonGitDir: where.commonGitDir, spawn, inTurn: mergeTurnOnly || onResult !== null, gateHeld: !outOfTurn });
-    if (readFrom === null) error(`Could not make the snapshot of ${head.slice(0, 7)} that Codex reads, a worktree in the git folder, so nothing was started or recorded.\n${nextLine(reviewNext())}`);
+    if (readFrom !== null) return readFrom.refused ? null : readFrom;
+    readFrom = snapshotOfHead(root, head, { commonGitDir: where.commonGitDir, spawn, inTurn: mergeTurnOnly || onResult !== null, gateHeld: !outOfTurn, warn: error });
+    if (readFrom === null || readFrom.refused) error(`${readFrom?.refused ?? `Could not make the snapshot of ${head.slice(0, 7)} that Codex reads, a worktree in the git folder, so nothing was started or recorded`}.\n${nextLine(reviewNext())}`);
     else if (readFrom.snapshot) Object.assign(snapshot, { place: readFrom.place, root, commonGitDir: where.commonGitDir });
     else if (readFrom.said) log(readFrom.said);
-    return readFrom;
+    return readFrom?.refused ? null : readFrom;
   };
 
   /** The plan of the review of this range in `groups`, with what it leaves out, `leftOut` (`rangeGroups`),
