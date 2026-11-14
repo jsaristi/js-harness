@@ -753,11 +753,18 @@ test('sessions stop --remove-worktree does not read a deleted branch ref as a br
   fs.writeFileSync(path.join(worktree, 'lone.txt'), 'only the reflog holds this\n');
   git('add', 'lone.txt');
   git('commit', '-q', '-m', 'lone');
+  git('commit', '-q', '--amend', '-m', 'lone, amended');
+  const tip = git('rev-parse', 'HEAD').trim();
   git('update-ref', '-d', 'refs/heads/worktree-thing');
   const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
   assert.equal(result.code, 1, result.stdout);
   assert.doesNotMatch(result.stderr, /has no commit yet/);
-  assert.match(result.stderr, /its HEAD reflog holds [0-9a-f]{12}, which no branch holds: git -C \S+ branch <name> [0-9a-f]{12}/);
+  assert.match(result.stderr, new RegExp(`its HEAD reflog holds ${tip.slice(0, 12)}, which no branch holds: git -C \\S+ branch <name> ${tip.slice(0, 12)}`));
+  // The resilience lens on 58492d90: once the tip is kept, the commit the amend left behind is not asked for.
+  git('branch', 'keep', tip);
+  const again = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
+  assert.equal(again.code, 1, again.stdout);
+  assert.match(again.stderr, /its branch worktree-thing has no commit yet/);
   assert.equal(actions(world).some((call) => call[0] === 'rm'), false, 'no claude rm');
   assert.ok(fs.existsSync(path.join(worktree, 'lone.txt')));
 }));

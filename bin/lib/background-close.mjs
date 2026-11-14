@@ -405,8 +405,9 @@ function unkeptPaths(worktree, gitIn) {
     if (unborn.ok) {
       const name = unborn.out.trim();
       // A branch whose ref was deleted has no HEAD commit either, and its commits may live only in the HEAD reflog, which
-      // goes with the removal; "commit it" would hide them (the verifier on 4187cb1..edbc9df1, L1). Only this path reads
-      // the reflog, so a rebase, which leaves commits only the reflog holds, never reaches it.
+      // goes with the removal; "commit it" would hide them (the verifier on 4187cb1..edbc9df1, L1). Only the last entry
+      // is read: the tip HEAD last had, which holds its history; the commits an amend or a rebase left behind are older
+      // entries and stay unread (the resilience lens on 58492d90).
       const gitDir = gitIn(worktree, 'rev-parse', '--absolute-git-dir');
       if (!gitDir.ok) return { why: `git could not name its git folder (${gitDir.err})` };
       let log = '';
@@ -415,7 +416,7 @@ function unkeptPaths(worktree, gitIn) {
       } catch (err) {
         if (err.code !== 'ENOENT') return { why: `its HEAD reflog could not be read (${err.code ?? err.message})` };
       }
-      const remembered = [...new Set(log.split(/\r?\n/).map((line) => line.split(' ')[1]).filter((hash) => /^[0-9a-f]{40,64}$/.test(hash ?? '') && !/^0+$/.test(hash)))];
+      const remembered = log.split(/\r?\n/).map((line) => line.split(' ')[1]).filter((hash) => /^[0-9a-f]{40,64}$/.test(hash ?? '') && !/^0+$/.test(hash)).slice(-1);
       for (const commit of remembered) {
         const shared = sharedHolds(commit);
         if (shared?.err !== undefined) return { why: `git could not say whether a branch holds ${commit.slice(0, 12)} (${shared.err})` };

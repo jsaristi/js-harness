@@ -219,6 +219,11 @@ test('within reads a folder reached through a junction or a link by its real pat
     assert.equal(within(path.join(real, 'sub'), link), true);
     assert.equal(within(path.join(link, 'sub'), real), true);
     assert.equal(within(dir, link), false);
+    // Codex and the lenses on 58492d90: a child not there yet keeps its parent's form, as a copy's destination does.
+    assert.equal(within(path.join(link, 'missing', 'deeper'), link), true);
+    assert.equal(within(path.join(link, 'missing'), real), true);
+    assert.equal(within(path.join(real, 'missing'), link), true);
+    assert.equal(within(path.join(dir, 'missing'), link), false);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

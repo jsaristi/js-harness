@@ -535,14 +535,21 @@ export function undoBackground(home, { run, now = Date.now } = {}) {
 /** Whether `child` is `parent` or inside it, as Windows compares paths when `platform` is win32. */
 export function within(child, parent, platform = process.platform) {
   const paths = platform === 'win32' ? path.win32 : path;
-  // A folder that is there is read by its real path, as git prints it and as `sameFolder` matches it, so a junction's
-  // spelling and the real one are one folder (the verifier on 4187cb1..edbc9df1, M1); one that is not, by its spelling.
+  // A path is read by the real path of its nearest folder that is there, with the rest appended, as git prints it and as
+  // `sameFolder` matches it, so a junction's spelling and the real one are one folder (the verifier on
+  // 4187cb1..edbc9df1, M1), and a child not there yet, such as a copy's destination, keeps its parent's form (Codex and
+  // the lenses on 58492d90).
   const real = (text) => {
-    if (platform !== process.platform) return paths.resolve(text);
-    try {
-      return fs.realpathSync.native(text);
-    } catch {
-      return paths.resolve(text);
+    const whole = paths.resolve(text);
+    if (platform !== process.platform) return whole;
+    const rest = [];
+    for (let at = whole; ; at = paths.dirname(at)) {
+      try {
+        return paths.join(fs.realpathSync.native(at), ...rest.reverse());
+      } catch {
+        if (paths.dirname(at) === at) return whole;
+        rest.push(paths.basename(at));
+      }
     }
   };
   const fold = (text) => (platform === 'win32' ? real(text).toLowerCase() : real(text));
