@@ -145,7 +145,7 @@ function reasonOf(program, result) {
 /** The condition as the wait says it (`phrase`), and `check`: one look, which gives `{ state: 'waiting' }`,
  * `{ state: 'failed', reason }` (a check that cannot run, retried), `{ state: 'holds', lines }` or
  * `{ state: 'ended', line }` (the wait ends without its condition: a pull request closed without merging). */
-function conditionOf(condition, { cwd, home, run, readFile, now, started }) {
+function conditionOf(condition, { cwd, home, run, readFile, now, started, self = null }) {
   const hour = () => hourOf(now());
   // `git fetch origin` before a look at origin/main; its failure is a check that cannot run.
   const fetchOrigin = () => {
@@ -203,7 +203,7 @@ function conditionOf(condition, { cwd, home, run, readFile, now, started }) {
   return {
     phrase,
     check: () => {
-      const looked = noticeTo(condition.role, { cwd, home, run, readFile, started });
+      const looked = noticeTo(condition.role, { cwd, home, run, readFile, started, self });
       if (looked.reason !== undefined) return failed(looked.reason);
       if (looked.line === undefined) return WAITING;
       return { state: 'holds', lines: [`js-harness wait: ${phrase} holds (${hour()})`, looked.line] };
@@ -215,13 +215,16 @@ function conditionOf(condition, { cwd, home, run, readFile, now, started }) {
 const roleLabel = (role) => (role.role === 'orchestrator' ? 'orchestrator' : String(role.number));
 
 /** One look in the channel record for a notice to `role` written since `started`: `{ line }`, its kind, sender and
- * text as the wait prints them; `{}` when there is none; `{ reason }` when the record exists and cannot be read. */
-function noticeTo(role, { cwd, home, run, readFile, started }) {
+ * text as the wait prints them; `{}` when there is none; `{ reason }` when the record exists and cannot be read. A
+ * notice the waiting session `self` (its session id) sent is not one: the lead records its own questions and notes to
+ * the orchestrator, and on 2026-11-13 each ended its own wait (odd/tasks/audit-cement.md, spec 4). */
+function noticeTo(role, { cwd, home, run, readFile, started, self = null }) {
   // The record of the project the folder is in, as `notify` names it: the same slug and home.
   const record = readNotices(home, projectSlug(mainCheckout(run, cwd)), { readFile });
   if (record.unavailable !== undefined) return { reason: `the channel's record ${record.path} could not be read (${record.unavailable})` };
   const found = record.notices.find(
-    (notice) => notice.to.role === role.role && (notice.to.number ?? null) === role.number && Date.parse(notice.at) >= started,
+    (notice) => notice.to.role === role.role && (notice.to.number ?? null) === role.number && Date.parse(notice.at) >= started
+      && (self === null || notice.from?.id !== self),
   );
   if (found === undefined) return {};
   return { line: `${found.kind} from ${found.from?.title || 'a session with no title'}: ${found.text}` };
@@ -295,7 +298,7 @@ export async function waitMain(
   // A hung gh or git must not hold the wait past its deadline: each check gets the time left, at least a second.
   const bounded = (command, args, options = {}) =>
     run(command, args, { ...options, timeout: Math.max(1000, Math.min(CHECK_MS, deadline - now())) });
-  const { phrase, check } = conditionOf(parsed.condition, { cwd, home, run: bounded, readFile, now, started });
+  const { phrase, check } = conditionOf(parsed.condition, { cwd, home, run: bounded, readFile, now, started, self: env.CLAUDE_CODE_SESSION_ID || null });
   // The notices to the session's own number end every wait, but one that already waits for them.
   const number = ownNumber({ env, cwd, run: bounded, readdir, readFile, homedir, defaultCwd });
   const own = number === null ? null : { role: 'work', number };

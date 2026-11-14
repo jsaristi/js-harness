@@ -218,6 +218,27 @@ test('--notice-to: a notice written before the wait, or to another role, does no
   assert.equal(state.out.length, 3);
 });
 
+test('--notice-to: a notice the waiting session sent itself does not end its wait (odd/tasks/audit-cement.md, spec 4)', async () => {
+  // The lead records its own questions and notes to the orchestrator; on 2026-11-13 each one ended its own wait.
+  const { dir, home } = leaseHome();
+  try {
+    const { state, deps } = world({
+      home,
+      record: noticeLine({ at: T0 - 60000, to: ORQ, text: 'una vieja' }),
+      onSleep: (now) => {
+        if (now.sleeps.length === 1) now.record += noticeLine({ at: now.clock, to: ORQ, kind: 'note', text: 'la mía', title: 'JH ORQ · orquestador', id: SELF_ID });
+        if (now.sleeps.length === 2) now.record += noticeLine({ at: now.clock, to: ORQ, kind: 'note', text: 'PR listo' });
+      },
+    });
+    const code = await waitMain(ORQ_ARGS(home), SELF_ENV, deps);
+    assert.equal(code, 0, JSON.stringify({ out: state.out, err: state.err, sleeps: state.sleeps.length }));
+    assert.deepEqual(state.sleeps, [WAIT_EVERY_SECONDS * 1000, WAIT_EVERY_SECONDS * 1000]);
+    assert.equal(state.out.at(-1), 'note from JH 5 · canal entre sesiones: PR listo');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('--notice-to: ORQ names the orchestrator, and a number names a work session', async () => {
   const record = noticeLine({ at: T0 + 1000, to: ORQ, text: 'hola' }) + noticeLine({ at: T0 + 1000, to: WORK(3), text: 'tres' });
   const toOrchestrator = world({ record });

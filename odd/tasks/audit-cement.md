@@ -4,8 +4,12 @@ Branch: worktree-audit-cement (the document), then one branch per slice from ori
 Delivery: ask-on-risk. Tests: `node --test`. Opened 2026-11-13 by JH 198 (Opus 5.5, medium) from the lead's brief.
 
 ## State
-The lead's OK is in (L3). T1 done: PR 863, ready, waiting for the land and the copy refresh. T2 in progress on
-`fix/audit-cement-guard`. Next: T3 to T6, then T8; T7 waits for the lead's word that JH 196 landed.
+The lead's OK is in (L3). T1 landed (PR 863, main 236f720); the installed copy still refuses `opus` until a
+`--refresh-copy`. T2 ready: PR 864 (`fix/audit-cement-guard`). T3 in progress on `fix/audit-cement-stall`, stacked
+on T2 so the document never conflicts: spec 3 in `bin/lib/stall.mjs` (match a batch mark's cwd to the session's
+notice `worktree`; an open question the session recorded counts as waiting), spec 4 in `bin/wait.mjs` `noticeTo`
+(skip a notice whose `from.id` is the waiting session's own id). Next: T4 to T6, then T8; T7 waits for the lead's word
+that JH 196 landed. Spec 8's FAILURES lines go in T6, with the `stretch-not-opened` line.
 
 ## Goal
 Every correction the audit and its two blind reviews found is fixed where a check can hold it, and each of the
