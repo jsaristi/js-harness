@@ -233,3 +233,9 @@ jamas vuelva a suceder" (69918425:2679).
   order; a `delete` drops all) must each be named in the same write's `yoursDropped: [{ item, reason }]`, a reason
   of 10 characters or more; else deny, naming each item and that exact field. No previous list, a `str_replace`, or
   a record or file it cannot read: through, as the gate fails open, recorded unchecked.
+- L11 2026-11-14 T4 verifier round 2 on 1d982b38: the six earlier findings held fixed; three new, all fixed: a
+  submodule taken out of the index (refused when the worktree's git folder holds `modules/`), commits held only by
+  the worktree's own refs (`refs/worktree`, `refs/bisect`, `refs/rewritten` no longer count as holding, and such a
+  ref whose commit no shared ref holds refuses), and `staged.patch` following `diff.external`, textconv or color
+  (now `--no-ext-diff --no-textconv --no-color`). `uninstall everything` removes `kept/` with all of
+  `~/.js-harness`: an explicit request, left as it is.

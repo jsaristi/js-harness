@@ -661,10 +661,14 @@ test('sessions stop --remove-worktree keeps the index, skip-worktree files and t
   fs.writeFileSync(path.join(worktree, 'vendor', 'node_modules', 'kept.js'), 'v2\n');
   git('update-index', '--skip-worktree', 'local.cfg');
   fs.writeFileSync(path.join(worktree, 'local.cfg'), 'mine\n');
+  // The patch is git's own, whatever color the user's config asks a diff for (the verifier on 1d982b38).
+  git('config', 'color.diff', 'always');
   const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
   assert.equal(result.code, 0, result.stderr);
   const [kept] = keptCopies(world);
-  assert.match(fs.readFileSync(path.join(kept, 'staged.patch'), 'utf8'), /\+staged/);
+  const patch = fs.readFileSync(path.join(kept, 'staged.patch'), 'utf8');
+  assert.match(patch, /\n\+staged\n/);
+  assert.equal(patch.includes('\u001b'), false, 'no color codes');
   assert.equal(fs.readFileSync(path.join(kept, 'files', 'local.cfg'), 'utf8'), 'mine\n');
   assert.equal(fs.readFileSync(path.join(kept, 'files', 'vendor', 'node_modules', 'kept.js'), 'utf8'), 'v2\n');
 }));
@@ -677,6 +681,29 @@ test('sessions stop --remove-worktree refuses a worktree with submodules, and re
   const result = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
   assert.equal(result.code, 1, result.stdout);
   assert.match(result.stderr, /submodules \(sm\)/);
+  assert.equal(actions(world).some((call) => call[0] === 'rm'), false, 'no claude rm');
+  assert.ok(fs.existsSync(worktree));
+}));
+
+// The verifier on 1d982b38: a submodule out of the index keeps its repository in the worktree's git folder, and a ref
+// of the worktree's own lives there too; both go with the removal.
+test('sessions stop --remove-worktree refuses submodules left in its git folder and commits only its own refs hold', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing']).code, 0);
+  const { worktree, git } = realWorktree(world, 'thing');
+  fs.writeFileSync(path.join(worktree, 'lone.txt'), 'held by a ref of its own\n');
+  git('add', 'lone.txt');
+  git('commit', '-q', '-m', 'lone');
+  const lone = git('rev-parse', 'HEAD').trim();
+  git('update-ref', 'refs/worktree/keep', lone);
+  git('reset', '-q', '--hard', 'HEAD~1');
+  const owned = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
+  assert.equal(owned.code, 1, owned.stdout);
+  assert.match(owned.stderr, /a ref of its own points at .*no branch holds/);
+  git('update-ref', '-d', 'refs/worktree/keep');
+  fs.mkdirSync(path.join(git('rev-parse', '--absolute-git-dir').trim(), 'modules', 'sm'), { recursive: true });
+  const modules = js(world, ['sessions', 'stop', '0db8bc5e', '--remove-worktree']);
+  assert.equal(modules.code, 1, modules.stdout);
+  assert.match(modules.stderr, /its git folder holds submodules/);
   assert.equal(actions(world).some((call) => call[0] === 'rm'), false, 'no claude rm');
   assert.ok(fs.existsSync(worktree));
 }));

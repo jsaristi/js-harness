@@ -355,6 +355,9 @@ export const KEEP_LEFT_OUT = new Map([
  * beside the record's folder, not in it, since the uninstall deletes that one once no session is left. */
 export const keptDirOf = (home, id, at) => path.join(home, '.js-harness', 'kept', `${id}-${new Date(at).toISOString().replace(/[:.]/g, '-')}`);
 
+/** The refs a worktree keeps in its own git folder, which go with it. */
+const OWN_REFS = /^refs\/(worktree|bisect|rewritten)\//;
+
 const listOf = (out) => out.split('\0').filter((item) => item !== '');
 
 /** What no branch keeps of the worktree `worktree`, as paths relative to it with `/`: `changed`, tracked files changed
@@ -368,19 +371,34 @@ function unkeptPaths(worktree, gitIn) {
   const head = gitIn(worktree, 'rev-parse', '--verify', '--quiet', 'HEAD');
   const top = gitIn(worktree, 'rev-parse', '--show-toplevel');
   if (!head.ok || !top.ok || !sameFolder(top.out.trim(), worktree)) return { why: null };
+  // A ref of the worktree's own (refs/worktree, refs/bisect, refs/rewritten) lives in its git folder, which the removal
+  // deletes: only a shared ref holds a commit (the verifier on 1d982b38).
+  const sharedHolds = (commit) => {
+    const held = gitIn(worktree, 'for-each-ref', '--contains', commit, '--format=%(refname)');
+    return held.ok ? held.out.split(/\r?\n/).some((ref) => ref !== '' && !OWN_REFS.test(ref)) : null;
+  };
   const branch = gitIn(worktree, 'symbolic-ref', '--quiet', '--short', 'HEAD');
-  if (!branch.ok) {
-    const held = gitIn(worktree, 'for-each-ref', '--count=1', '--contains', 'HEAD', '--format=%(refname)');
-    if (!held.ok) return { why: `git could not say whether a ref holds its detached head (${held.err})` };
-    if (held.out.trim() === '') return { why: `its head ${head.out.trim().slice(0, 12)} is detached on commits no branch holds: git -C ${worktree} branch <name> keeps them, then run this again` };
+  const tips = [...(branch.ok ? [] : ['HEAD'])];
+  const own = gitIn(worktree, 'for-each-ref', '--format=%(objectname) %(refname)', 'refs/worktree', 'refs/bisect', 'refs/rewritten');
+  if (!own.ok) return { why: `git could not list the refs of its own (${own.err})` };
+  tips.push(...own.out.split(/\r?\n/).filter((line) => line !== '').map((line) => line.split(' ')[0]));
+  for (const tip of tips) {
+    const shared = sharedHolds(tip);
+    if (shared === null) return { why: `git could not say whether a branch holds ${tip}` };
+    if (!shared) return { why: `${tip === 'HEAD' ? `its head ${head.out.trim().slice(0, 12)} is detached` : `a ref of its own points at ${tip.slice(0, 12)}`}, on commits no branch holds: git -C ${worktree} branch <name> ${tip === 'HEAD' ? '' : `${tip.slice(0, 12)} `}keeps them, then run this again` };
   }
+  // A submodule's repository lives in the worktree's git folder even once the index no longer names it.
+  const gitDir = gitIn(worktree, 'rev-parse', '--absolute-git-dir');
+  if (!gitDir.ok) return { why: `git could not name its git folder (${gitDir.err})` };
+  if (fs.existsSync(path.join(gitDir.out.trim(), 'modules'))) return { why: `its git folder holds submodules (${path.join(gitDir.out.trim(), 'modules')}), whose commits no copy here takes: keep them by hand, then run this again` };
   const asked = {
     diff: gitIn(worktree, 'diff', '--name-only', '-z', '--no-renames', 'HEAD'),
     flagged: gitIn(worktree, 'ls-files', '-z', '-v'),
     untracked: gitIn(worktree, 'ls-files', '-z', '--others', '--exclude-standard'),
     ignored: gitIn(worktree, 'ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory'),
     stage: gitIn(worktree, 'ls-files', '-z', '--stage'),
-    staged: gitIn(worktree, 'diff', '--cached', '--binary', '--no-renames', 'HEAD'),
+    // A backup is git's own patch: no external diff, text conversion or color the user's config asks for.
+    staged: gitIn(worktree, 'diff', '--cached', '--binary', '--no-renames', '--no-ext-diff', '--no-textconv', '--no-color', 'HEAD'),
   };
   const failed = Object.values(asked).find((answer) => !answer.ok);
   if (failed !== undefined) return { why: `git could not list what it holds (${failed.err})` };
