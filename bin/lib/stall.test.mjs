@@ -194,3 +194,19 @@ test('the session that read its opening is known by that reading: its gates coun
   const readings = [{ reader: { id: reader, title: null }, title: 'JH 23 · nueva', at: ago(85) }];
   assert.deepEqual(stalled({ openings, gates, readings }), []);
 });
+
+// ---- a batch and an open question (odd/tasks/audit-cement.md, spec 3) ---------------------------------------------
+
+test('a session running a batch in its worktree, or waiting on a question it recorded, is not stalled', () => {
+  const notices = [handed(150), said(140)];
+  assert.equal(stalled({ notices }).length, 1);
+  // A batch mark whose cwd is the session's worktree, or a folder in it.
+  assert.deepEqual(stalled({ notices, batches: [{ cwd: `${TREE}\\evals` }] }), []);
+  assert.equal(stalled({ notices, batches: [{ cwd: 'D:\\js-harness-worktrees\\other' }] }).length, 1);
+  // A question the session recorded and nobody answered or withdrew.
+  const asked = { ...said(130, 'question', 'Which branch?') };
+  const questions = [{ number: 7, notice: asked }];
+  assert.deepEqual(stalled({ notices: [...notices, asked], questions }), []);
+  const answered = { at: ago(120), from: LEAD, to: { role: 'work', number: 19 }, kind: 'answer', text: 'main', question: 7 };
+  assert.equal(stalled({ notices: [...notices, asked, answered], questions }).length, 1);
+});

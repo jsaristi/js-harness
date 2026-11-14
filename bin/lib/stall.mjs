@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { OPENING_SCHEMA, openingsDir, readNotices } from './channel.mjs';
+import { readBatch } from './batch-mark.mjs';
 import { readGateLog } from './gate-log.mjs';
 import { roleOfTitle } from './sessions.mjs';
 
@@ -76,7 +77,13 @@ const newest = (items) => items.reduce((best, item) => (best === null || item.at
  *
  * `holding` is what was handed last: `{ what: 'notice' | 'opening', at, from, kind, text }`.
  */
-export function stalledSessions({ notices = [], openings = [], readings = [], gates = [], commitAt = () => null, now, limitMs, windowMs = Infinity }) {
+export function stalledSessions({ notices = [], openings = [], readings = [], gates = [], batches = [], questions = [], commitAt = () => null, now, limitMs, windowMs = Infinity }) {
+  // A session running a batch in its worktree, or waiting on a question it recorded that nobody answered or withdrew, is
+  // at work, not quiet (odd/tasks/audit-cement.md, spec 3; the false STALLED lines of 2026-11-13).
+  const closedQuestions = new Set(notices.filter((notice) => (notice.kind === 'answer' || notice.kind === 'withdrawn') && Number.isSafeInteger(notice.question)).map((notice) => notice.question));
+  const asking = new Set(questions.filter(({ number, notice }) => !closedQuestions.has(number)).map(({ notice }) => workNumber(notice?.from?.title)).filter((number) => number !== null));
+  const plain = (dir) => String(dir).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  const batchIn = (worktree) => worktree !== null && batches.some(({ cwd }) => typeof cwd === 'string' && (plain(cwd) === plain(worktree) || plain(cwd).startsWith(`${plain(worktree)}/`)));
   const sessions = new Map();
   const of = (number) => {
     if (!sessions.has(number)) sessions.set(number, { number, title: null, titledAt: null, ids: new Set(), own: [], handed: [] });
@@ -124,6 +131,7 @@ export function stalledSessions({ notices = [], openings = [], readings = [], ga
     const placed = newest(session.own.filter(({ notice }) => typeof notice.worktree === 'string'));
     const worktree = placed?.notice.worktree ?? null;
     const branch = typeof placed?.notice.branch === 'string' ? placed.notice.branch : null;
+    if (asking.has(session.number) || batchIn(worktree)) continue;
     const ran = acts.filter((act) => session.ids.has(act.session));
     let since = Math.max(handed.at, ownNewest?.at ?? -Infinity, newest(ran)?.at ?? -Infinity);
     if (now - since < limitMs) continue;
@@ -197,6 +205,6 @@ export function readStalled({ home, slug, now, limitMs, windowMs, run = runGit, 
   if (noOpenings) unavailable.push(noOpenings);
   const log = readGateLog(home, { fileSystem: io });
   if (log.unavailable) unavailable.push(`the gate log (${log.dir}): ${log.unavailable.join(', ')}`);
-  const stalled = stalledSessions({ notices: record.notices, openings, readings: record.readings, gates: log.events, commitAt: (worktree) => branchCommitAt(worktree, { run }), now, limitMs, windowMs });
+  const stalled = stalledSessions({ notices: record.notices, openings, readings: record.readings, gates: log.events, questions: record.questions ?? [], batches: [readBatch(home, { fileSystem: io })].filter(Boolean), commitAt: (worktree) => branchCommitAt(worktree, { run }), now, limitMs, windowMs });
   return { stalled, unavailable };
 }
