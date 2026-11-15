@@ -1,7 +1,6 @@
-# codex-T2 at d1c152a6, the chain fix at 74256214, 457bb1c9 and a5d528dc (local, not pushed; worktree locked "JH 199 live" at
-the lead's ask). The third verifier pass (opus, background) is on a5d528dc (L27). Clean: Codex and the lenses on
-d1c152a6 and on the fix commits as their own slices, push, PR (body: B1-1/B1-2 per L25), advisor, ready --pr with
-`git worktree list`. Another major: to the lead as a problem, no fourth round.
+# codex-T2 at d1c152a6, the chain fix at 74256214, 457bb1c9 and a5d528dc (local, not pushed; worktree locked "JH 199 live").
+The third verifier pass found a major, X1 (L28), put to the lead as a problem, as L26 said: waiting on the lead's
+choice between a one-line fix with a fourth pass on it alone, and landing with X1 as an owed control. Nothing runs.
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
@@ -386,3 +385,16 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   passing with no three-reviews warning for the debt below after shape (3)'s recheck, the wider
   `againPastThreeReviews`, the removal of `owed`. The lead (2026-11-15) asked to lock the worktree before ready,
   since a land skips a locked one: locked, "JH 199 live".
+- L28 2026-11-15T11:20Z, the third verifier pass (opus) on a5d528dc: W1 (both shapes), W3, W5 and W6 closed by probe; its
+  own run of the five codex-review test files passes (29, 26, 112, 216, 164). Not clean: X1 major, introduced by
+  a5d528dc: in `walk`, `capped` is asked only while nothing is owed (codex-review-recheck.mjs:261), so with a
+  merge's debt in hand a second-recheck state below joins at :263 uncapped; a second merge of main above a joined
+  third review, whose own turn finds something, makes the default run review the gap's finding a fourth time
+  (probe X-c(true); a third such merge, by reading, a fifth). Nothing goes unreviewed or unrechecked; the three-review
+  limit is what breaks. Likely fix: at :263 a state `capped` refuses is refused, and the merge's recheck runs alone.
+  Minor: X2 after the cap only `--unavailable` gets a push through and the row then shows nothing (B1-2's class);
+  X3 `againPastThreeReviews` refuses an `--again` after a clean merge that works without one, and the wording
+  names the merge's findings (`merge` is set past any merge); X4 shape (3)'s three-reviews warning disappears after
+  the merge's recheck; X5 the row after shape (3)'s fix drops "owes a correction" (rows.mjs:326 needs `at`), still
+  refusing; X6 two printed routes are dead ends. W2 and N6d unchanged; W7 has no live instance (0 of 1,425 records).
+  Third pass with another major: to the lead as a problem (L26).
