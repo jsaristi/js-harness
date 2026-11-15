@@ -274,6 +274,32 @@ test('Y1: a commit and its revert above a review that owed nothing pass, as they
   void base;
 });
 
+test('B1-2: a skip over a later code commit pays no correction: the push row still refuses the review that owes it', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const later = commit(root, 'c.js', 'three', 'feat: three');
+  record(root, head, later, { outcome: 'unavailable', reason: 'codex was down' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('B1-2: check --push itself refuses that push', async () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  record(root, head, commit(root, 'c.js', 'three', 'feat: three'), { outcome: 'unavailable', reason: 'codex was down' });
+  const { code, output } = await runCheck(['--push', '--cwd', root, '--home', tmp('js-harness-check-push-home-')]);
+  assert.equal(code, 1, output);
+  assert.match(output, new RegExp(`FAIL {2}codex-review {2}the Codex review that ended at ${short(root, head)} owes a correction`), output);
+});
+
+test('B1-2: a skip after a review that owed nothing passes, listed as a skip', () => {
+  const { root, head } = reviewedWith({ verdict: 'correct', findings: [] });
+  const later = commit(root, 'c.js', 'three', 'feat: three');
+  record(root, head, later, { outcome: 'unavailable', reason: 'codex was down' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  assert.ok(row.lines.some((line) => line.startsWith('unavailable ')), row.lines.join('\n'));
+});
+
 test('a correction its recheck found fixed passes', () => {
   const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
   const fix = commit(root, 'b.js', 'two, fixed', 'fix: read the right field');

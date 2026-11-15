@@ -1,7 +1,7 @@
 # review-gate: one honest review gate
 
 ## State
-JH 207, branch feat/review-gate on 08653f93. Blocked (L6): the contracts row refuses any code commit on this stacked branch; S1 staged and S2 unstaged, saved as jh207-s1.patch and jh207-s2.patch in the lead's notes folder. Next, on the owner's word (~10:58 local): if 883 lands, rebase on main, commit S1 then S2, review each (codex-review, lens-review), then S3 (B1-1), S4 (B2-1), S6 (B2-2), S7 (G-2); S5 waits for the owner.
+JH 207, branch feat/review-gate, based on main once 883 landed (Q288). Done: ce9eb0a6 (this document), c07285b1 S1/Y1 (Codex correct 0.86, lenses 0), S2/B1-2 committed with this state (L7 fixed). Next: S2 reviews (codex-review --base c07285b1, lens-review risk,reliability), then S3 B1-1 (marks re-asked at rec.head), S4 B2-1, S6 B2-2, S7 G-2, push, draft PR to main, verifier; S5 waits for the owner. Keep js-harness wait --notice-to 207 running.
 C:\Users\Oficina\.js-harness\background\briefs\2026-11-15T12-20-39-311Z-c126f3fd.md. Orientation done; plan draft and
 advisor answer taken (see Log L2). Next: read verify5 (Temp scratchpad path on line 4 of the lead's
 jh199-verify5-883.md), `git show worktree-full-audit:odd/tasks/full-audit.md`, his words (`js-harness sessions --quote`
@@ -81,8 +81,8 @@ Refusing existing records (S5's 78); anything that changes who decides a waiver.
 
 ## Tasks
 - [x] T1 (kind: design) depth pass, specs and the slice plan, written here
-- [ ] T2 (kind: build) S1 (staged, uncommitted), spec 1: correctionOwed reads `recheckAt(tip)` when only no-review records cover the newest code commit; afterTurn and the plain run fail on a nothing-to-review record over a debt
-- [ ] T3 (kind: build) S2, spec 2: the debt read through a skip over code (recheckAnchor walks no-review records; written, uncommitted)
+- [x] T2 (kind: build) S1, c07285b1, spec 1: correctionOwed reads `recheckAt(tip)` when only no-review records cover the newest code commit; afterTurn and the plain run fail on a nothing-to-review record over a debt
+- [ ] T3 (kind: build) S2, spec 2: the debt read through a skip over code (recheckAnchor walks no-review records)
 - [ ] T4 (kind: build) S3, spec 3: marks asked again at the record's head
 - [ ] T5 (kind: build) S4, spec 4: Codex asked at each commit's own switch when the tip has it off
 - [ ] T6 (kind: build) S5, spec 5: waits for the owner
@@ -126,3 +126,8 @@ Refusing existing records (S5's 78); anything that changes who decides a waiver.
   git question when no record that is no review lies on the line, and start the walk past the check
   `recheckAnchor` already made. JH 199's V1/V2/W1/X1 pass. On S1 alone the run had 1 fail, the file-split self-check,
   from S2's test added mid-run (rerun alone: 2 of 2 pass).
+- L8 2026-11-15, 883 landed (Q288, 10:22 local); this branch now measures from main. S1 committed as c07285b1 after
+  a first gate refusal: codex-review.mjs may not grow past its 2258 lines (conventions), so the run's check moved to
+  `nothingPaidExit` in codex-review-turns.mjs. Codex on ce9eb0a..c07285b: correct, 0.86, 180,394 input tokens; lenses
+  risk and reliability: 0 findings each. S2 committed with L7's fix: codex-review-recheck.test.mjs 30 of 30, the Y1
+  and B1-2 tests 11 of 11.

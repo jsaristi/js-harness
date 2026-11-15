@@ -4488,6 +4488,33 @@ test('Y1, afterTurn: the valid record of nothing to review of a gap over a revie
   }
 });
 
+test('B1-2: after a skip over a code commit above a review that owes a correction, the review of the fix is the recheck of those findings, and the push row passes once it fixed them', async () => {
+  const { root, base } = makeRepoWith({ 'a.txt': 'a1\n', 'm.txt': 'm1\n' }, { 'a.txt': 'A1 changed\n' });
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', base);
+  fs.writeFileSync(path.join(root, 'm.txt'), 'M1 mine\n', 'utf8');
+  git(root, 'commit', '-qam', 'mine');
+  const mine = git(root, 'rev-parse', 'HEAD');
+  appendCodexReview(root, reviewedRecord(base, mine));
+  mineOwesRun({ root });
+  fs.writeFileSync(path.join(root, 'g.txt'), 'G1\n', 'utf8');
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'skipped');
+  const skipped = git(root, 'rev-parse', 'HEAD');
+  appendCodexReview(root, skippedRecord(mine, skipped, 'codex was down'));
+  assert.equal(checkCodexReviews(root).pass, false, 'the skip pays nothing');
+  fs.writeFileSync(path.join(root, 'm.txt'), 'M1 mine, fixed\n', 'utf8');
+  git(root, 'commit', '-qam', 'fix mine');
+  const fixed = git(root, 'rev-parse', 'HEAD');
+  const fake = fakeCodexInParts(recheckAbove({ root, head: skipped }, fixed));
+  const result = await run(['--base', base, '--cwd', root], { ...fake, randomUUID: runIds() });
+  assert.deepEqual([result.code, fake.calls.length], [0, 1], result.err);
+  const asked = fake.calls[0].child.received.text;
+  assert.ok(asked.includes('## A recheck of earlier findings') && asked.includes('Mine drops a line'), asked);
+  assert.deepEqual(readCodexReviews(root).slice(-1).map((record) => [record.base, record.head, record.recheckOf]), [[skipped, fixed, mine]]);
+  assert.equal(checkCodexReviews(root).pass, true);
+});
+
 test('Y1, no merge (C1f): a commit and its revert over a review that owes a correction: the run records nothing to review, exits 1 saying the correction is still owed, and the push row refuses', async () => {
   const { root, base } = makeRepoWith({ 'a.txt': 'a1\n', 'm.txt': 'm1\n' }, { 'a.txt': 'A1 changed\n' });
   git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
