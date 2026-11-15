@@ -224,6 +224,9 @@ test('B2-1: a push that turns the review off still asks a record of the code com
   assert.equal(row.pass, false, row.detail);
   assert.match(row.detail, /^1 code commit since origin\/main made with the Codex review on has no Codex review record/);
   assert.ok(row.lines[0].startsWith(before), row.lines.join('\n'));
+  // Codex on S4: `codex-review` records nothing at a head with the review off, so the step is bound to the newest
+  // commit made with it on, never to the tip.
+  assert.match(JSON.stringify(row.next), new RegExp(`check out ${before}`), JSON.stringify(row.next));
 });
 
 test('a switch that cannot be read at the pushed tip is read as on, and said', async (t) => {

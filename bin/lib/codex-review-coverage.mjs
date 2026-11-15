@@ -11,7 +11,7 @@
 import { spawnSync } from 'node:child_process';
 import { isValidCodexReview, leftMarkedFilesOut, NOTHING_TO_REVIEW, readCodexReviews } from './codex-reviews.mjs';
 import { NO_RENAMES, RENAMES } from './codex-review-parts.mjs';
-import { leftOutOf } from './codex-review-scope.mjs';
+import { leftOutOf, rangeFiles, reviewScope } from './codex-review-scope.mjs';
 import { lensCandidate } from './lens-candidate.mjs';
 
 /** Trimmed stdout of a successful `git <args>` run in `cwd`, else `null`. `input`, when given, is what
@@ -268,11 +268,14 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read 
   // be the one that adds them, so at a tip short of that head a file it left out can be code.
   // And the marks a review left out are those of its head, which a later commit can take off: a file code at the tip
   // but marked at the record's head was read by nobody, so its commit is not covered by that record (B1-1, the full
-  // audit of 2026-11-14). Marks that cannot be read at that head cover none of the code commits it reaches.
+  // audit of 2026-11-14). What it left out is read from its range as the review read it (`rangeFiles`), so a file of
+  // code moved into a marked path, which a review reads whole, stays read (Codex on S3). A range that cannot be read
+  // that way covers none of the code commits it reaches.
   const readAtHead = (rec, covered) => {
     const reached = codeCommits.filter((commit) => covered.has(commit.id));
-    const atHead = reached.length === 0 ? new Map() : leftOutOf(reached.flatMap((commit) => commit.files), { cwd, source: rec.head, spawn, where });
-    const unread = (commit) => atHead === null || commit.files.some((file) => !leftOut.has(file) && atHead.has(file));
+    if (reached.length === 0) return covered;
+    const left = leftByReview(cwd, rec, { spawn, where });
+    const unread = (commit) => left === null || commit.files.some((file) => !leftOut.has(file) && left.has(file));
     const drop = new Set(reached.filter(unread).map((commit) => commit.id));
     return drop.size === 0 ? covered : new Set([...covered].filter((id) => !drop.has(id)));
   };
@@ -296,6 +299,19 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read 
   }
   const uncovered = codeCommits.filter((commit) => !covers.some(({ covered }) => covered.has(commit.id)));
   return { codeCommits, covers, uncovered, invalid: records.length - valid.length, ignored, stale, ...(beyondTip ? {} : { beyond }) };
+}
+
+/** The paths the review of `rec` left out, read from its range with the marks of its head as `js-harness codex-review`
+ * reads them (`rangeFiles`, renames on unless one brings a file left out into one read), or `null` when git cannot
+ * say. */
+function leftByReview(cwd, rec, { spawn, where }) {
+  try {
+    const numstatOf = (renames) => gitOut(spawn, cwd, ['diff', '--numstat', '-z', renames, '--no-relative', rec.base, rec.head]);
+    const scope = rangeFiles(numstatOf, (names) => leftOutOf(names, { cwd, source: rec.head, spawn, where }));
+    return scope.failed ? null : new Set(reviewScope(scope.files, scope.why).left);
+  } catch {
+    return null;
+  }
 }
 
 /** The line of each `uncovered` commit that a record of `beyond` (`reviewCoverage` with `beyondTip: false`) covers

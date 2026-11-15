@@ -238,7 +238,8 @@ function madeWithReviewOn(cwd, git, head, { spawn, remote }) {
     pass: false,
     detail: `${asked.length} code commit${one ? '' : 's'} since ${state.base} made with the Codex review on ${one ? 'has' : 'have'} no Codex review record: the review is off at the pushed commit, not at ${one ? 'its' : 'theirs'}`,
     lines: uncoveredNames(asked),
-    next: reviewStep(cwd, { spawn, ...review, tip: state.tip }),
+    // Bound to the newest of them, where the review is on: `codex-review` records nothing at a head with it off (Codex on S4).
+    next: reviewStep(cwd, { spawn, ...review, tip: asked[0].id }),
     review,
   };
 }

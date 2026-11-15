@@ -997,6 +997,24 @@ test('B1-1: a mark taken off after the review that left the file out leaves that
   assert.equal(checkCodexReviews(root, still).pass, true, 'the mark still on at the tip');
 });
 
+test('B1-1: a file of code moved into a marked path was read by its review, so taking that mark off later leaves its commit covered', () => {
+  // Codex on S3: a rename whose old name the review reads is read whole (`leftOutOfFiles`), mark or no mark on the
+  // new name, so what the record left out is read from its range as the review read it, never from the marks alone.
+  const { root, base } = makeRepo();
+  feature(root);
+  commit(root, '.gitattributes', 'lib/** -codex-review\ndata/** -codex-review\n', 'chore: mark lib and data');
+  const app = commit(root, 'src/app.js', Array.from({ length: 20 }, (_, n) => `export const line${n} = ${n};\n`).join(''), 'feat: the application');
+  record(root, base, app);
+  fs.mkdirSync(path.join(root, 'lib'), { recursive: true });
+  fs.renameSync(path.join(root, 'src', 'app.js'), path.join(root, 'lib', 'app.js'));
+  const move = commit(root, 'data/x.json', '{}\n', 'refactor: move the application into lib, with some data');
+  record(root, app, move, { leftOut: leftOutOf(0, 1) });
+  const unmark = commit(root, '.gitattributes', 'data/** -codex-review\n', 'chore: take the mark off lib');
+  record(root, move, unmark);
+  const row = checkCodexReviews(root, unmark);
+  assert.equal(row.pass, true, `${row.detail}\n${(row.lines ?? []).join('\n')}`);
+});
+
 test('a review that left out documents alone still covers an earlier tip where a record past the tip counts: no commit can make a Markdown file code', () => {
   // The push row counts no record past the tip (`beyondTip: false`); the reading that plans a review still does.
   const { root, base } = makeRepo();
