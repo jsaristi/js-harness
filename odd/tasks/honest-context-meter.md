@@ -5,6 +5,9 @@ Design only, stopped by the brief: the cause is found and reproduced, the fix is
 main with the real shape (163131 counted, 82430 sent) and leave the gate green. Next: the lead and the owner read
 this design (question 292: no block builds before its design returns to him); then T2 builds it and drops the todos.
 Open: the one non-advisor reply with several passes, and 8 replies whose passes do not sum to the top (Depth pass 4).
+Resume (JH 209, branch feat/honest-context-meter, worktree D:\js-harness\.claude\worktrees\owner-rules-meter): the
+test commit 366481f has Codex (0.98) and reliability-lens (0 findings) records; push, PR, Spanish page, then the
+owner's rule changes (his typed line 18679 of lead transcript 69918425: cap 6, retire growth-limit).
 
 ## Goal
 The share of the context window the harness reads from a transcript is what the model was given for the last reply,
@@ -18,6 +21,7 @@ cannot call `get_usage`, so the transcript must be read right.
 
 ## Done when
 - `node --test bin/lib/pause.test.mjs bin/lib/sessions.test.mjs` exits 0 with both advisor tests run, not todo
+- `node -e "process.exit(/todo: 'block 0/.test(require('fs').readFileSync('bin/lib/pause.test.mjs','utf8')+require('fs').readFileSync('bin/lib/sessions.test.mjs','utf8'))?1:0)"` exits 0
 - `npm run check` exits 0
 - the lead and the owner approved the design before T2 starts (question 292)
 - Codex and the Claude lenses reviewed the code slice
@@ -31,8 +35,8 @@ cannot call `get_usage`, so the transcript must be read right.
 ## Constraints
 - Both readers change in one commit with one rule — because `tokensOf` says it is "the rule of `contextOf`", and two
   readers that disagree would put the pause and the board at different shares.
-- A usage with no `iterations` reads as today — because 25,209 of 25,239 replies list it, and older transcripts and
-  other hosts do not.
+- A usage with no `iterations` reads as today — because older transcripts and other hosts do not list it (the scan
+  read only lines holding `iterations`, so it gives no share of all replies).
 
 ## Ask me before
 - The fix itself (T2): the brief stops here, and the design returns to the lead and the owner first.
@@ -44,8 +48,9 @@ cannot call `get_usage`, so the transcript must be read right.
   smallest change that meets it: where `usage.iterations` lists the passes of one reply, count the last pass of type
   `message` instead of the top-level sum; nothing else moves.
 - 2. Raw material:
-  - this session's transcript, `22f77ae8-4387-440e-a647-7dae6e283b28.jsonl` line 240 (2026-11-15T19:3x), the reply
-    that called the advisor: top level `input_tokens` 4, `cache_read_input_tokens` 158729,
+  - this session's transcript, `22f77ae8-4387-440e-a647-7dae6e283b28.jsonl` lines 240-243 (2026-11-15T19:3x), the
+    reply that called the advisor (240 thinking, 241 the advisor call, 242 its result, 243 a tool call, each with the
+    same usage): top level `input_tokens` 4, `cache_read_input_tokens` 158729,
     `cache_creation_input_tokens` 4398, sum 163131; `iterations` = message (2, 78030, 2669), advisor_message
     (81094 input, model claude-fable-5-2), message (2, 80699, 1729). The top is the sum of the two `message` passes;
     the advisor's pass is listed and not summed. The reply was sent with 82430; the next reply, line 262, reads
