@@ -99,6 +99,19 @@ test('open checks the plan, records it and prints the departure: lanes, whether 
   assert.equal(open.corrections.build.from, 'none');
 });
 
+test('open shows the pre-decided forks and that they grant no spend and no publishing (his yes to question 290)', async () => {
+  const place = scratch();
+  const forks = [{ if: 'el verificador encuentra un fallo que ya está en main', then: 'aterrizo' }, { if: 'Codex llega a su piso semanal', then: 'registro el salto' }];
+  const opened = await stretch(place, ['open', '--plan', planFile(place, { ...PLAN, forks })]);
+  assert.equal(opened.code, 0, opened.err);
+  assert.match(opened.out, /fork 1: if el verificador encuentra un fallo que ya está en main, then aterrizo/);
+  assert.match(opened.out, /fork 2: if Codex llega a su piso semanal, then registro el salto/);
+  assert.match(opened.out, /nothing outside these forks, no spend and no publishing/);
+  const json = await stretch(scratch(), ['open', '--plan', planFile(place, { ...PLAN, forks }), '--json']);
+  assert.deepEqual(JSON.parse(json.out).forks, forks);
+  assert.doesNotMatch((await stretch(scratch(), ['open', '--plan', planFile(place, PLAN)])).out, /fork/, 'no forks, no fork lines');
+});
+
 test('open refuses while a stretch is open (exit 1), a plan it does not accept (exit 2) and an unknown argument (exit 2)', async () => {
   const place = scratch();
   assert.equal((await stretch(place, ['open', '--plan', planFile(place, PLAN)])).code, 0);

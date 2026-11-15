@@ -175,7 +175,7 @@ answering a block, while a session waits) were missed with nothing to say so; on
 - [ ] T2 (kind: design) S2, spec 2: replan on a blocked-state signal that survives a later `note` (the waiting, note, idle case first), with liveness and resolution rules, without changing readStalled's contract; define the idle close; the lead approves before a build
 - [ ] T3 (kind: build) S3, spec 3: left out, folded into S1 (Depth pass item 3)
 - [ ] T4 (kind: design) S4, spec 4: the lead asks him; build nothing until then
-- [ ] T5 (kind: build) S5, spec 5: `forks` in the stretch plan, shown at open; rule via `rules change` on a `rule/` branch; route inline; commit `feat(stretch): pre-decided forks in the departure plan`
+- [x] T5 (kind: build) S5, spec 5 (code built, two tests failed on main, 67 of 67 pass; the rule's `rule/` branch next): `forks` in the stretch plan, shown at open; rule via `rules change` on a `rule/` branch; route inline; commit `feat(stretch): pre-decided forks in the departure plan`
 - [ ] T7 (kind: design) S6, spec 6: amend `rule:reports-spanish-visual` with his quote (`rules change` on a `rule/` branch) and design the check that acts on it (a candidate: the reply hook turns back a report close with no Artifact published in the turn); the lead approves before a build
 - [ ] T6 (kind: verify) one independent verifier (opus) over T1 and T5
 - [ ] F1 follow-up, owner: the lead — JH 199's ready without its verifier: a ready notice could require a verifier record (not built here)
