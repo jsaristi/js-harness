@@ -164,3 +164,5 @@ other than a listed session, or a session that enters after the listing, can sti
   by project folder, and every transcript entry carries its `cwd` (the lead's transcript does): the last entry's cwd
   is the candidate for "a session whose listed cwd is elsewhere", not built. The whole test file ran on GitHub's
   Linux only (gate runs 43695331848 green, 43694712942 the size refusal), not on this machine.
+- L10: reviews of 25646d56 (range 08d9665..f4a210d): Codex "the patch is correct", confidence 0.97, 62,848 input
+  tokens (38,144 cached) in 28 s; the four lenses 0 findings each, about 6,700 input tokens each.
