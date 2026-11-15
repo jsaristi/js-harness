@@ -1,6 +1,6 @@
-# codex-T2 at d1c152a6, the chain fix at 74256214, 457bb1c9 and a5d528dc (local, not pushed; worktree locked "JH 199 live").
-The third verifier pass found a major, X1 (L28), put to the lead as a problem, as L26 said: waiting on the lead's
-choice between a one-line fix with a fourth pass on it alone, and landing with X1 as an owed control. Nothing runs.
+# codex-T2 at d1c152a6, the chain fix at 74256214, 457bb1c9 and a5d528dc (local; worktree locked "JH 199 live"). The lead
+chose B (L29): Codex and the lenses on the unreviewed code commits as one range, push, PR, advisor, ready --pr with
+the lock line. Follow-up X1 (L29) goes to JH 205's brief. Then T3, T5, T4 last, T6.
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
@@ -398,3 +398,13 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   the merge's recheck; X5 the row after shape (3)'s fix drops "owes a correction" (rows.mjs:326 needs `at`), still
   refusing; X6 two printed routes are dead ends. W2 and N6d unchanged; W7 has no live instance (0 of 1,425 records).
   Third pass with another major: to the lead as a problem (L26).
+- L29 2026-11-15T09:50Z, the lead's answer to L28 (cross-session, JH ORQ): "B. Open the PR now. X1 errs toward a review
+  too many, not a review skipped, and it needs a rare shape. Each round so far has brought a new regression, so a
+  fourth round costs more than X1 does." X1 is not a FAILURES entry, since it has not happened. Follow-up X1, for
+  JH 205 (the honest review gate, after T2 lands): in `recheckThrough`'s `walk`, `capped` is asked only while
+  nothing is owed (bin/lib/codex-review-recheck.mjs:261), so a second-recheck state below joins at :263 uncapped; a
+  second merge of main above a joined third review, whose own turn finds something, buys a fourth review of the
+  gap's finding. Proof: probe X-c(true) in the JH 199 scratchpad verify4probes7.part.mjs (out7-X-c.txt). Likely
+  fix: at :263 a state `capped` refuses is refused, and the merge's recheck runs alone; a test of X-c first. The
+  minor X2 to X6, W2, W4 and W7 ride with it as candidates. Codex and the lenses: the code commits not yet reviewed
+  (d1c152a6, 74256214, 457bb1c9, a5d528dc) as one range from c472dcb, no rerun of what is reviewed.
