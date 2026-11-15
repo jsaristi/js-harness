@@ -62,8 +62,13 @@ cannot call `get_usage`, so the transcript must be read right.
     replies called the advisor; each counts 1.99 to 2.00 times its last pass (median 1.994). The worst is the lead's
     transcript `69918425`: 605,944 counted for 303,340 sent, which on the owner's window of about 350k (his line
     11078 of that transcript) reads 173 % for 87 %.
-  - the brief's figures (99–120 % against 65 %, a 129 % reading): not checked here; a doubling of 60–65 % gives
-    them, so they fit, assumed.
+  - every channel notice stamped at 99 % or more (`~/.js-harness/channel/D--js-harness.jsonl`, 4 on 2026-11-15),
+    against its sender's last own reply before it: all 4 called the advisor, and the last pass gives 79 % (lead,
+    157 % stamped), 89 % (lead, 177 %), 72 % (JH 208, 143 %) and 62 % (JH 209, 124 %). No high stamp sits on a
+    one-pass reply, so no second cause shows. The pause hook told this session 92 % right after an advisor reply
+    (about 46 % real) the same way.
+  - the brief's 99–120 % against 65 %: a doubling of 60–65 % gives them, assumed. The 129 % reading is not among
+    the channel's stamps; where it was read is not known.
 - 3. The bar:
   spec 1: `node --test --test-name-pattern=advisor bin/lib/pause.test.mjs`: todo, fails with 163131 for 82430.
   spec 2: `node --test --test-name-pattern=advisor bin/lib/sessions.test.mjs`: todo, fails with 163131 for 82430.
