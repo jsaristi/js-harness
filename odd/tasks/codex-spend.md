@@ -124,7 +124,8 @@ utilizando optimizadamente o estamos utilizandolo a lo bestia y desproporcionada
 se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead's list at 6359.
 1. Each Codex session of `codex-review` runs in a detached worktree made from the resolved `head` id under
    `<common>/js-harness/`, named so `sweepTurnWorktrees` finds it, once per run, removed however the run ends; the
-   sweep runs at every run's start. Removal and the sweep delete only inside `<common>/js-harness/`, refuse a path
+   sweep runs before a run's first Codex session, by a run that is neither a turn's nor a measure's (L17). Removal
+   and the sweep delete only inside `<common>/js-harness/`, refuse a path
    whose resolved form leaves it, and never follow a symlink or junction. The three checks that compared the live
    folder with `head` (after a part, after a merge turn, after the review) compare the snapshot instead; their
    refusals say that the review's own snapshot changed. The dirty-tree refusal at the start stays on the live folder.
@@ -285,3 +286,10 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   made, removed, and the run refused before Codex starts. F3 a run in a turn worktree or a comparison run does not
   sweep (its parent run swept), a second departure beside L14's, kept. F4 removal refuses a path that is not
   absolute. F5 links are removed again just before the delete. F6 what the sweep leaves is a warning.
+- L17 2026-11-14T23:55Z, T1's reviews on bc87ce6..ec97168: Codex passed all 4 parts (536,572 input tokens, 377,728
+  cached; the first real run read its own snapshot). Lenses: risk 0; resilience, reliability and readability each
+  warned that the sweep runs before the first Codex session, not at every run's start. Answered by spec 1's wording,
+  changed here: sweeping in a run that starts nothing (`--plan`, a covered range, a refusal) adds a git process to
+  each of them to clear what only a killed run leaves, which the next run that starts Codex clears anyway. Taken:
+  `measuring` is its own option, no longer folded into `inTurn`; the refusal of a snapshot dirty when made builds
+  its own text instead of stripping `snapshotChanged`'s by a regex.

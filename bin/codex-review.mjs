@@ -1227,7 +1227,7 @@ async function reviewRun(argv, env, deps, snapshot) {
   let readFrom = null;
   const readingPlace = () => {
     if (readFrom !== null) return readFrom.refused ? null : readFrom;
-    readFrom = snapshotOfHead(root, head, { commonGitDir: where.commonGitDir, spawn, inTurn: mergeTurnOnly || onResult !== null, gateHeld: !outOfTurn, warn: error });
+    readFrom = snapshotOfHead(root, head, { commonGitDir: where.commonGitDir, spawn, inTurn: mergeTurnOnly, measuring: onResult !== null, gateHeld: !outOfTurn, warn: error });
     if (readFrom === null || readFrom.refused) error(`${readFrom?.refused ?? `Could not make the snapshot of ${head.slice(0, 7)} that Codex reads, a worktree in the git folder, so nothing was started or recorded`}.\n${nextLine(reviewNext())}`);
     else if (readFrom.snapshot) Object.assign(snapshot, { place: readFrom.place, root, commonGitDir: where.commonGitDir });
     else if (readFrom.said) log(readFrom.said);

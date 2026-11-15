@@ -371,16 +371,17 @@ function dependenciesInstalled(root) {
 /** The folder a run at `root` has its Codex sessions read, and the checks after a part, a turn and the review
  * compare with `head` (spec 1): `{ place, snapshot, said }`. The snapshot of the head, a detached worktree made
  * from `head` by its full id in the area of `commonGitDir` (`addTurnWorktree`, kind `head`), which the caller
- * removes however the run ends. `root` itself, with `snapshot` false, in two cases: a run in a turn worktree
- * already, `inTurn` or by where it is, which makes no snapshot in it; and, in a turn of the gate lock
- * (`gateHeld`), where Codex runs the tests, a project whose declared dependencies are installed in its
+ * removes however the run ends. `root` itself, with `snapshot` false, in three cases: a run in a turn worktree
+ * already, `inTurn` or by where it is, which makes no snapshot in it; a run that measures (`measuring`, the
+ * comparison of configurations), which reviews in a clone of its own at the head already; and, in a turn of the
+ * gate lock (`gateHeld`), where Codex runs the tests, a project whose declared dependencies are installed in its
  * `node_modules`, which a snapshot would not hold: `said` is then the line that says so. The area is swept
- * first, but by a run in a turn worktree, whose parent run swept it (`sweepTurnWorktrees`); what the sweep leaves
- * is a warning, `warn`. `null` when the snapshot could not be made; `{ refused }` when it was made and is not
- * the head clean, its tracked files changed as checked out (a filter, an end-of-line rule), which would refuse
- * the record after Codex had read it all: it is removed and nothing starts. */
-export function snapshotOfHead(root, head, { commonGitDir, spawn = spawnSync, now = Date.now, inTurn = false, gateHeld = false, warn = () => {} }) {
-  if (inTurn || inTurnWorktree(root, commonGitDir)) return { place: root, snapshot: false, said: null };
+ * first, but by a run of the first two, whose parent run or clone is its own (`sweepTurnWorktrees`); what the
+ * sweep leaves is a warning, `warn`. `null` when the snapshot could not be made; `{ refused }` when it was made
+ * and is not the head clean, its tracked files changed as checked out (a filter, an end-of-line rule), which
+ * would refuse the record after Codex had read it all: it is removed and nothing starts. */
+export function snapshotOfHead(root, head, { commonGitDir, spawn = spawnSync, now = Date.now, inTurn = false, measuring = false, gateHeld = false, warn = () => {} }) {
+  if (inTurn || measuring || inTurnWorktree(root, commonGitDir)) return { place: root, snapshot: false, said: null };
   // What killed runs left in the area is swept first, on the real clock, also by a run that reads the live folder.
   if (commonGitDir) {
     for (const why of sweepTurnWorktrees(root, { commonGitDir, spawn })) warn(`Warning: the sweep of the review worktrees left one: ${why}.`);
@@ -392,11 +393,12 @@ export function snapshotOfHead(root, head, { commonGitDir, spawn = spawnSync, no
   const place = addTurnWorktree(root, head, { commonGitDir, spawn, now, kind: 'head' });
   if (place === null) return null;
   // Its HEAD is `head`, which git just checked it out at; its tracked files are asked, the one question it adds.
-  const why = snapshotChanged({ headNow: head, tree: gitOut(place, spawn, ['status', '--porcelain', '--untracked-files=no']) }, head);
-  if (why === null) return { place, snapshot: true, said: null };
+  const tree = gitOut(place, spawn, ['status', '--porcelain', '--untracked-files=no']);
+  if (tree === '') return { place, snapshot: true, said: null };
+  const why = tree === null ? 'its tracked files could not be read' : 'its tracked files differ from its HEAD';
   const left = removeTurnWorktree(root, place, { commonGitDir, spawn });
   if (left !== null) warn(`Warning: the snapshot of the head was not removed, and the next run's sweep removes it: ${left}.`);
-  return { refused: `The snapshot of ${head.slice(0, 7)} that Codex would read is not the head clean as soon as it is made (${why.replace(/^the review's own snapshot changed: /, '')}), so its record would be refused after Codex had read it all: nothing was started or recorded. A checkout filter or an end-of-line rule that changes tracked files is the usual cause` };
+  return { refused: `The snapshot of ${head.slice(0, 7)} that Codex would read is not the head clean as soon as it is made (${why}), so its record would be refused after Codex had read it all: nothing was started or recorded. A checkout filter or an end-of-line rule that changes tracked files is the usual cause` };
 }
 
 /** Why the snapshot of `head` a part was read in is not as it was made, from `headNow` and `tree`, its HEAD and
