@@ -209,6 +209,8 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
   const tip = git(['rev-parse', '--verify', '--quiet', `${head}^{commit}`])?.trim();
   const atTip = tip ? codexSwitchAt(git, tip) : null;
   if (atTip?.value === 'off') {
+    const madeOn = madeWithReviewOn(cwd, git, head, { spawn, remote });
+    if (madeOn) return madeOn;
     const row = { name: 'codex-review', pass: true, detail: `the Codex review is off at the pushed commit (${atTip.because}), so no record is asked for` };
     const turned = turnsReviewOff(cwd, git, spawn, remote, tip);
     return turned ? { ...row, lines: [turned] } : row;
@@ -216,6 +218,29 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
   const row = codexCoverageRow(cwd, head, { spawn, remote });
   if (!atTip?.errors.length) return row;
   return { ...row, lines: [...atTip.errors.map((error) => `read as on: ${error}`), ...(row.lines ?? [])] };
+}
+
+/** The failing push row for the code commits no record covers that were made with the Codex review on, read from each
+ * commit's own tree as the lens door reads its switch, where the pushed commit has it off; `null` when there are none,
+ * or the range cannot be read (no remote, no default branch), where the off row passes as it did. Without it, a push
+ * that turns the review off let every commit before it go unread (B2-1, the full audit of 2026-11-14). */
+function madeWithReviewOn(cwd, git, head, { spawn, remote }) {
+  const state = codexReviewCoverage(cwd, head, { spawn, remote });
+  if (state.unknown) return null;
+  const asked = state.uncovered.filter((commit) => codexSwitchAt(git, commit.id).value !== 'off');
+  if (asked.length === 0) return null;
+  const oldest = asked[asked.length - 1];
+  const base = oldest.isRoot ? git(['rev-parse', '--verify', '--quiet', `${state.baseRef}^{commit}`])?.trim() : `${oldest.shortId}^`;
+  const review = { tool: 'codex-review', base };
+  const one = asked.length === 1;
+  return {
+    name: 'codex-review',
+    pass: false,
+    detail: `${asked.length} code commit${one ? '' : 's'} since ${state.base} made with the Codex review on ${one ? 'has' : 'have'} no Codex review record: the review is off at the pushed commit, not at ${one ? 'its' : 'theirs'}`,
+    lines: uncoveredNames(asked),
+    next: reviewStep(cwd, { spawn, ...review, tip: state.tip }),
+    review,
+  };
 }
 
 /** Whether the Codex review is off at the commit `head` of the repository `cwd` is in, read as `checkCodexReviews`

@@ -213,6 +213,19 @@ test('a push that turns the review off says so in a line of its own, and passes'
   assert.deepEqual(row.lines, [`this push turns the Codex review off: it is on at origin/main and off at ${tip}`]);
 });
 
+test('B2-1: a push that turns the review off still asks a record of the code commits made with it on', async (t) => {
+  // The full audit's B2-1: a commit is asked by the switch its own tree holds, as the lens door asks (L9 of
+  // odd/tasks/f8-s1-reviews.md), so turning the review off at the tip does not let the code before it go unread.
+  const { checkCodexReviews } = await import('./check.mjs');
+  const root = pushed(t);
+  const before = commit(root, { 'bin/b.mjs': 'y\n' });
+  commit(root, { 'harness.json': '{ "functions": { "codexReview": "off" } }\n' });
+  const row = checkCodexReviews(root, 'HEAD', { remote: 'origin' });
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /^1 code commit since origin\/main made with the Codex review on has no Codex review record/);
+  assert.ok(row.lines[0].startsWith(before), row.lines.join('\n'));
+});
+
 test('a switch that cannot be read at the pushed tip is read as on, and said', async (t) => {
   const { checkCodexReviews } = await import('./check.mjs');
   const root = pushed(t);
