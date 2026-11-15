@@ -1,6 +1,6 @@
 // Tests of `advisor-gate` (bin/advisor-gate.mjs): which acts it gates, how it reads policy R's stretch from a
-// transcript, what it records, and that an uncovered act is refused while a sub-agent's end is not (odd/tasks/advisor-use.md, P1, P2, T3,
-// his answer to question 285).
+// transcript, what it records, and that an uncovered act is refused and an uncovered sub-agent end turned back once
+// (odd/tasks/advisor-use.md, P1, P2, T3, his answer to question 285; odd/tasks/consistent-orders.md S4, question 294).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -308,6 +308,27 @@ test('report: an end recorded before afterTurnBack existed, at a second stop, st
     { at: '2026-11-15T10:02:00.000Z', act: 'end', agent: 'a1', decision: 'flagged', secondStop: true },
   ]);
   assert.deepEqual(advisorGateReport({ home }).days.map((d) => d.flagged), [1]);
+});
+
+test('a decision log the gate cannot write or read lets the end through: no record, no turn-back, never a loop', () => {
+  const { home, project } = scratch();
+  const t = path.join(home, 'projects', 'p', 'agent.jsonl');
+  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
+  fs.mkdirSync(path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl'), { recursive: true });
+  const stop = () => run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a7', agent_transcript_path: t }, home).answer;
+  assert.deepEqual(stop(), {});
+  assert.deepEqual(stop(), {});
+});
+
+test('a line of the log that is no object is skipped, and the end is still decided and recorded', () => {
+  const { home, project } = scratch();
+  const t = path.join(home, 'projects', 'p', 'agent.jsonl');
+  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
+  fs.mkdirSync(path.join(home, '.js-harness', 'advisor-gate'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl'), 'null\n42\n');
+  const answer = run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a8', agent_transcript_path: t }, home).answer;
+  assert.equal(answer?.decision, 'block');
+  assert.equal(decisions(home).filter((d) => d?.agent === 'a8').length, 1);
 });
 
 test('a sub-agent of the senior session consults too (his answer to question 295); a Fable sub-agent stays exempt', () => {

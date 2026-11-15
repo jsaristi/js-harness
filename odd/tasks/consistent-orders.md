@@ -301,3 +301,9 @@ answering a block, while a session waits) were missed with nothing to say so; on
   (`git log worktree-consistent-orders`), and JH 207 from 15:32Z after its 14:53:30Z one (`git log feat/review-gate`),
   so 16:35Z, 16:37Z and 16:50Z drop: S2 turns back 6 of the lead's 70 idle closes, 13:08:52Z among them, 3 of them
   from a blocked session's later notes.
+- L20 (2026-11-15) the independent verifier (opus) on 9fce032c, the head after L19: PASS, 32 of 32, with probes of
+  14 stop sequences; no loop or wrong block in normal operation. Fixed with tests that failed first: (1) a decision
+  log the gate cannot write (or, not missing, cannot read) blocked every stop of one end when the host omits the flag,
+  so the end now goes through, his words for a record that cannot be read; (2) a log line that is no object threw
+  before any record, so it is skipped; (4) the test file's header. Left, a stated limit: (3) an end a second hook
+  turns back after the gate's repeat can count one extra flag in `report` (another hook's block, then a third stop).

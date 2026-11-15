@@ -224,8 +224,10 @@ function record(home, decision, stderr) {
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.appendFileSync(file, `${JSON.stringify({ schema: SCHEMA, ...decision })}\n`);
+    return true;
   } catch (err) {
     stderr(`js-harness advisor-gate: cannot append to ${file}: ${err.message}; the decision stands`);
+    return false;
   }
 }
 
@@ -242,8 +244,8 @@ const END_NOTICE = [
 ].join(' ');
 
 /** Whether the newest end the log under `home` holds of the sub-agent `agent` of `session` is a turn-back, so this
- * stop is that end's repeat: its tail, which a turn-back and its next stop sit close in. A log that cannot be read
- * holds none. */
+ * stop is that end's repeat: its tail, which a turn-back and its next stop sit close in. No log holds none (`false`);
+ * one there that cannot be read gives `null`. */
 function turnedBackBefore(home, session, agent) {
   let text;
   try {
@@ -258,8 +260,9 @@ function turnedBackBefore(home, session, agent) {
     } finally {
       fs.closeSync(fd);
     }
-  } catch {
-    return false;
+  } catch (err) {
+    // No log yet holds no turn-back; one there and unreadable cannot say, and the caller lets the end through.
+    return err.code === 'ENOENT' ? false : null;
   }
   // Once is per end (his words, "ese final"): only when this sub-agent's newest end is the turn-back is this stop its
   // repeat; a later end of the same sub-agent, resumed say, is its own.
@@ -271,7 +274,7 @@ function turnedBackBefore(home, session, agent) {
     } catch {
       continue;
     }
-    if (entry.act === 'end' && entry.agent === agent && entry.session === session) return entry.turnedBack === true;
+    if (entry?.act === 'end' && entry.agent === agent && entry.session === session) return entry.turnedBack === true;
   }
   return false;
 }
@@ -326,10 +329,13 @@ function decide(mode, payload, seams) {
   // never loops.
   // An end the log shows turned back is its repeat (afterTurnBack), which the report counts once with it; one let
   // through by the host's flag alone (another hook may have turned it back) stays a flag of its own.
-  const afterTurnBack = mode === '--stop' && turnedBackBefore(home, base.session, agent);
-  const turnBack = mode === '--stop' && !base.secondStop && !afterTurnBack;
-  record(home, { ...base, ...facts, decision: 'flagged', mode: MODE, ...(turnBack ? { turnedBack: true } : {}), ...(mode === '--stop' ? { afterTurnBack } : {}) }, stderr);
-  if (mode === '--stop') return turnBack ? { decision: 'block', reason: END_NOTICE } : {};
+  // A log it cannot read (null) or write leaves once unheld, so the end goes through, as his answer asks of a record
+  // that cannot be read.
+  const prior = mode === '--stop' ? turnedBackBefore(home, base.session, agent) : false;
+  const afterTurnBack = prior === true;
+  const turnBack = mode === '--stop' && !base.secondStop && prior === false;
+  const written = record(home, { ...base, ...facts, decision: 'flagged', mode: MODE, ...(turnBack ? { turnedBack: true } : {}), ...(mode === '--stop' ? { afterTurnBack } : {}) }, stderr);
+  if (mode === '--stop') return turnBack && written ? { decision: 'block', reason: END_NOTICE } : {};
   return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: NOTICE(act) } };
 }
 
