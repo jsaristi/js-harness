@@ -71,6 +71,13 @@ and his words already decide the feature.
    (forecast on the departure, measured on the return). Done when a cold reader given only the page text of each
    page can say those three things and they match the roadmap; the step count holds every step the roadmap gives a
    state; the stretch record's format, the measures and the learned estimates do not change.
+8. Show the stretch's tasks beside the plan's advance, for a stretch and for a longer horizon such as a day: "Excelente
+   se ve mucho mejor, osea una cosa es lo que se va a hacer en este tramo y otra cuando te diga por ejemplo que vamos a
+   hacer todo el dia y la idea es que me muestre lo de las tareas del tramo como lo que se va a avanzar en el plan"
+   (session 69918425-3b43-430f-9f50-62b6422422ce, line 10936, 2026-11-14). "Se ve mucho mejor" is the lead's
+   hand-made page https://claude.ai/artifact/EUJsxQcNpLEoqgut5sqmpz: each item's feature tasks as a bar (done before,
+   done in the stretch, open). Its own slice and PR, after spec 7's lands; how an item names its feature document
+   (an optional plan field, proposed `doc: "odd/tasks/<feature>.md"`) is designed there.
 ## Design
 
 ### The command
@@ -308,11 +315,34 @@ itself is not limited to an absence: the skill text names it for any stretch.
   suggestions: the mark's fallback left unescaped (answered: on purpose, `stepsByState` escapes every mark, so
   escaping it here would escape it twice; a comment now says so) and a stale test title (renamed), in 728daf57.
   Codex over 2b2d539..728daf5 correct (0.99), 32,818 input tokens; readability over it 0 findings, 2 of 2 fixed.
+- L14. 2026-11-14, JH 201, the advisor before the ready. (1) The claim that `progress` under-counted was unproven:
+  `progress` does not read `planOf` (grep), so the FAILURES entry and the PR body name only the report's share and the
+  forecast; 4222ff27's message keeps the wider claim. (2) Codex's P2 was half fixed: the return and status still said
+  "El tramo pronosticaba cerrar ... ahora: abierta"; now "El tramo nombraba" with each step's when and a step's words,
+  test first, seen on `stretch status --home <job tmp>/home4` (the S8 stretch open, no goals run). That render also
+  showed a phase item "5. ..." with no period summarised as "5.": fixed, test first. (3) "Nothing bound": this session
+  ran no `stretch bind` and no merge-queue command; a grep of `bin/` for a PR's bound state found none to check. (4) The
+  cold-read pages of L12 were rendered from a6906471; two departure lines were reworded after. The orchestrator relayed
+  spec 8 (his words, line 10936); it is its own slice after this PR.
 
 ## Next step
 NOW (2026-11-14, JH 201, worktree `D:\js-harness\.claude\worktrees\f8-plan-block`, branch `feat/stretch-plan-block`):
-T9 built (L10 to L12). Left: Codex and the lenses over the last fix commit, nothing edited while they run; push; PR
-with nothing bound; `js-harness notify --to orchestrator --kind ready --pr <n>` after the advisor. Older state below.
+UPDATE (L14): items 1, 2 and 4 below are done in commit 066e3895 and the docs commit after it; left: Codex and the
+lenses over the last fix commit (no edits while they run), push, re-render the real pages from HEAD and read the
+block, `gh pr edit 879` (drop the progress claim), `gh pr checks 879`, the advisor gate, notify ready naming spec 8
+(an optional `doc` plan field) as the next slice. Then spec 8 (T10) on a new branch from main once 879 lands.
+T9 built and reviewed (L10 to L13), pushed, PR 879 open. The advisor's last consult left, in order: (1) the claim
+that `progress` under-counted is unproven (progress does not read `planOf`): fix the PR body (`gh pr edit 879`) and
+the FAILURES entry plan-state-dated-dropped; (2) the return/status line "El tramo pronosticaba cerrar: S8 (después
+de tu vuelta; ahora: abierta)" keeps the over-promise and map-row words for a step: fix test first in `movedSentence`
+(measured branch), render with `stretch status --home <job tmp>/home4 --html <file>` (S8 stretch open there, no
+--goals), one small review round, no edits while it runs; (3) check what "bound" means for a PR (grep `unbound` in
+bin/check.mjs, bin/merge-queue*) and that 879 is not bound; (4) the control date of codex-review-edited-during-run
+from `git log -S "an edit of a tracked file made while Codex reviews"`; L12 to say the cold-read pages came from
+a6906471; re-render both real pages from HEAD and read the block; (5) `gh pr checks 879`, then the advisor gate:
+advisor alone, one other call, then `js-harness notify --to orchestrator --kind ready --pr 879` alone, leading with
+the count correction (13/19 → 16/22) and the open item: S4a's State says done yet counts "sin estado claro".
+Keep `js-harness wait --notice-to 201` running in the background. Older state below.
 Earlier (2026-11-14, JH 196, worktree `D:\js-harness\.claude\worktrees\advisor-refuse`, branch `feat/stretch-departure-clear`, head pushed): T8 built and
 reviewed (L9); PR 875 open and bound (872 unbound). Before ready, the advisor asked: (1) correct the PR body and L9:
 the cold reader said only JH 196 says what he gets back, so defect 6 (no item says what he will have) and the English

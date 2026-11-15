@@ -325,7 +325,7 @@ the committed range and wrote no record: its tokens were spent on a finding with
   0c35bde..a690647, 173,920 input tokens, "Tracked files changed while Codex was reviewing ... no record was written";
   the session wrote `docs/FAILURES.md` and the feature document while the review ran in the background
 - Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews leaves no record" —
-  since 2026-11-14
+  since 2026-10-12
 
 ### codex-review-incomplete
 A Codex review followed the delegation rules of its home instead of reading the patch, read a tenth
@@ -1312,8 +1312,8 @@ to it were delivered only after the prompt was answered.
 
 ### plan-state-dated-dropped
 The roadmap reader took a plan step's state only from a literal `**State:**` bullet; the roadmap writes some as
-`**State (2026-11-11):**`, so those steps were no steps, and every count of the F8 plan (progress, the report's
-migration share, the stretch forecast) left them out.
+`**State (2026-11-11):**`, so those steps were no steps, and every count of the F8 plan read through `planOf` (the
+report's migration share, the stretch forecast) left them out.
 - Class: wrong-information
 - Seen: 2026-11-14 — the return of stretch 2026-11-14T23:16:33.945Z, re-rendered from main 0c6c245f — "F8 plan
   13 de 19 pasos"; S5, S6 and S7 were missing, so the plan held 22 steps with a state, 16 of them done
