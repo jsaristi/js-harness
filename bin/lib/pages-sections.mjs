@@ -77,14 +77,16 @@ export const stepState = (reported) => STEP_STATE[reported] ?? 'other';
 // Each class of `stepState` in the page's words, a group's heading and one step's state, in the order a page lists them.
 export const STATE_WORDS = { done: ['Hechos', 'hecho'], moving: ['En curso', 'en curso'], todo: ['Por hacer', 'por hacer'], other: ['Sin estado claro', 'sin estado claro'] };
 
-/** A plan's steps (`{ title, reported }`) grouped by their state, each group its count and its steps by title as the
- * roadmap writes them, and what "sin estado claro" means when a step has it (spec 7 of odd/tasks/stretch-protocol.md). */
-export function stepsByState(steps) {
+/** A plan's steps (`{ id, title, reported }`) grouped by their state, each group its count and its steps by title as
+ * the roadmap writes them, a step of `marks` (id to words) with its words beside it, and what "sin estado claro" means
+ * when a step has it (spec 7 of odd/tasks/stretch-protocol.md). */
+export function stepsByState(steps, marks = new Map()) {
   const groups = Object.entries(STATE_WORDS).map(([state, [heading]]) => [heading, steps.filter((one) => stepState(one.reported) === state)]).filter(([, list]) => list.length > 0);
   const unclear = steps.some((one) => stepState(one.reported) === 'other')
-    ? '<p class="note">Sin estado claro: el estado que la hoja de ruta le escribe no empieza por una palabra que el conteo conozca (done, built, in progress, to do...), así que no cuenta como hecho.</p>'
+    ? '<p class="note">Sin estado claro: la hoja de ruta les escribe un estado que no empieza por una palabra de estado conocida (done, built, in progress, to do...). Cuentan en el total, no como hechos.</p>'
     : '';
-  return `<ul>${groups.map(([heading, list]) => `<li><strong>${heading} (${list.length})</strong>: ${list.map((one) => escapeHtml(one.title ?? one.id)).join(' · ')}</li>`).join('')}</ul>${unclear}`;
+  const named = (one) => `${escapeHtml(one.title ?? one.id)}${marks.has(one.id) ? ` <em>(${escapeHtml(marks.get(one.id))})</em>` : ''}`;
+  return `<ul>${groups.map(([heading, list]) => `<li><strong>${heading} (${list.length})</strong>: ${list.map(named).join(' · ')}</li>`).join('')}</ul>${unclear}`;
 }
 
 // The changes a step-by-step table leaves out, each said in one line of the steps' titles.

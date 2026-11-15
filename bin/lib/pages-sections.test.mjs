@@ -106,7 +106,7 @@ test('a plan\'s steps grouped by the state the roadmap reports, each group its c
     { id: 'S4a', title: 'S4a Hook', reported: 'other' },
   ]);
   assert.match(html, /Hechos \(2\)[\s\S]*S0 Baseline · S3 &lt;Split&gt;[\s\S]*En curso \(1\)[\s\S]*S9 Host watch[\s\S]*Por hacer \(1\)[\s\S]*S8 Certification[\s\S]*Sin estado claro \(1\)[\s\S]*S4a Hook/);
-  assert.match(html, /no empieza por una palabra que el conteo conozca/);
+  assert.match(html, /no empieza por una palabra de estado conocida[\s\S]*Cuentan en el total, no como hechos/);
   assert.doesNotMatch(stepsByState([{ id: 'S0', title: 'S0', reported: 'done' }]), /Sin estado claro|no empieza/);
 });
 
