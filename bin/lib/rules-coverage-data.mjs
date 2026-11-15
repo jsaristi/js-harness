@@ -28,7 +28,6 @@ export const COVERAGE = {
     "gate-log-size": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/lib/gate-log.mjs","find":"('gate-log-size', 'KiB')","replace":"('gate-log-size', 'KiB') + 1"}},
     "gate-max": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/gate.mjs","find":"('gate-max', 'minutes')","replace":"('gate-max', 'minutes') + 1"}},
     "gate-wait": {"level":"check","test":"bin/lib/rules-bindings.test.mjs","break":{"path":"bin/lib/gate-lock.mjs","find":"('gate-wait', 'minutes')","replace":"('gate-wait', 'minutes') + 1"}},
-    "growth-limit": [{"of":"the week is red when its open steps grew","level":"check","test":"bin/lib/progress-pace.test.mjs","break":{"path":"bin/lib/progress-pace.mjs","find":"red: grew > 0 };","replace":"red: grew < 0 };"}},{"of":"the lead opens no new work but what it names while the week is red","level":"protocol","path":"bin/lib/manifest.mjs","phrase":"while it says red, open only what it names, and write anything else in the roadmap's Later list"}],
     "lead-charter": {"level":"protocol","path":"bin/lib/manifest.mjs","phrase":"merge pull requests by the rules below"},
     "lead-effort": [{"of":"a lead's session is started at it (the guard's start_session, and sessions start)","level":"check","test":"bin/lib/guard.test.mjs","break":{"path":"bin/lib/guard.mjs","find":"const ofLead = !ofLevel && lead && home.lead !== null;","replace":"const ofLead = false;"}}],
     "lens-effort": [{"of":"a lens is launched at it","level":"check","test":"bin/lens-review.test.mjs","break":{"path":"bin/lens-review.mjs","find":"export const LENS_EFFORT = claudeHome().lenses;","replace":"export const LENS_EFFORT = claudeHome().model;"}},{"of":"the double review's Claude reader is launched at it","level":"check","test":"bin/double-review.test.mjs","break":{"path":"bin/double-review.mjs","find":"'--effort', LENS_EFFORT, '--settings'","replace":"'--effort', model, '--settings'"}}],
@@ -486,7 +485,11 @@ export const COVERAGE = {
       "fa7469f92751",
       "0947d5b8b82d",
       "ddcf7db81c92",
-      "d77576d7b195"
+      "d77576d7b195",
+      {
+        "hash": "b859f8a8ed87",
+        "context": "where new work goes: a routing step of the lead with no rule of its own, since the growth limit that held it was retired on 2026-11-15"
+      }
     ],
     "output-style": [
       "753c849de149",

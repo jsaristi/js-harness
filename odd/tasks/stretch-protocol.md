@@ -64,6 +64,20 @@ and his words already decide the feature.
    69918425-3b43-430f-9f50-62b6422422ce, line 7461, 2026-11-14). Done when a cold reader given only the page can say
    what will advance, and that matches the plan; the departure, status and return pages stay consistent; the stretch
    record's format, the measures and the learned estimates do not change.
+7. Make a plan section's block (the F8 plan) readable on the return and the departure: "El regreso del tramo donde
+   dice F8 plan no lo entiendo bien tiene que organizarlo mejor para que lo pueda entender" (session
+   69918425-3b43-430f-9f50-62b6422422ce, line 9989, 2026-11-14). In plain Spanish the block says what the plan is
+   (and how its count relates to its phase's in the map), what its steps are, and which steps moved in the stretch
+   (forecast on the departure, measured on the return). Done when a cold reader given only the page text of each
+   page can say those three things and they match the roadmap; the step count holds every step the roadmap gives a
+   state; the stretch record's format, the measures and the learned estimates do not change.
+8. Show the stretch's tasks beside the plan's advance, for a stretch and for a longer horizon such as a day: "Excelente
+   se ve mucho mejor, osea una cosa es lo que se va a hacer en este tramo y otra cuando te diga por ejemplo que vamos a
+   hacer todo el dia y la idea es que me muestre lo de las tareas del tramo como lo que se va a avanzar en el plan"
+   (session 69918425-3b43-430f-9f50-62b6422422ce, line 10936, 2026-11-14). "Se ve mucho mejor" is the lead's
+   hand-made page https://claude.ai/artifact/EUJsxQcNpLEoqgut5sqmpz: each item's feature tasks as a bar (done before,
+   done in the stretch, open). Its own slice and PR, after spec 7's lands; how an item names its feature document
+   (an optional plan field, proposed `doc: "odd/tasks/<feature>.md"`) is designed there.
 ## Design
 
 ### The command
@@ -165,6 +179,7 @@ itself is not limited to an absence: the skill text names it for any stretch.
 - [x] T6 (kind: build) the rule change, on `rule/away-autonomy-stretch`, in 865ec2e7 (PR 634, stacked on PR 633). Spec 1, 3. Route: inline.
 - [ ] T7 (kind: verify) a real stretch opened, checked and closed on this machine; reviews (Codex and the Claude lenses) on each slice. Route: inline.
 - [x] T8 (kind: build) the departure, status and return pages made plain (spec 6), on `feat/stretch-departure-clear` from main a20aa337, JH 196. Route: inline. Commits 7550f4ad, 2c29560c (L9).
+- [x] T9 (kind: build) the plan block made readable (spec 7), on `feat/stretch-plan-block` from main 0c6c245f, JH 201, test first: the roadmap reader counts a step whose state is dated (`**State (2026-11-11):**`); a phase's left item numbered "2." is summarised by its first sentence, not "2."; the forecast section says what a plan is, its steps grouped by state, and which moved; the step-by-step section shows the steps that changed and groups the rest. Route: inline. Commits 4222ff27, 0c35bded, a6906471, 9348f419, 728daf57, 066e3895 (L11 to L15).
 
 ## Log
 - L1. 2026-10-28, the lead's brief for JH 71: his decision in question 103 ("Próximo cupo", line 8326), his words
@@ -243,9 +258,95 @@ itself is not limited to an absence: the skill text names it for any stretch.
   stay too (above). The titles also use internal names (T1, pregunta 285). On HEAD: 137 convention and stretch tests
   pass (`js-harness gate --`); the departure from HEAD and the real closed stretch's return (a copy of the throughput
   folder in a scratch home) read consistently. Not fixed, minor: a kind's factor of exactly 1 prints "ajustado ×1".
+- L10. 2026-11-14, JH 201, spec 7, the lead's brief (his words read with `js-harness sessions --quote
+  69918425-3b43-430f-9f50-62b6422422ce 9989`). The return of stretch 2026-11-14T23:16:33.945Z re-rendered from main
+  0c6c245f and read as text, and a departure from a scratch plan closing S8 in a scratch home. What he read: the
+  forecast's "F8 plan 68 % al abrir: 13 de 19 pasos / ~68 % al volver, aunque el trabajo se alargue / 68 % ahora",
+  three equal numbers that do not say what the plan is or why it is 68 % while the phase table says "F8 Harness
+  reorganization 3/7 · 43 %"; then "F8 plan, paso por paso": a chain of 19 ids, a table of 19 rows of "igual", each
+  with its whole State paragraph in English (S5c-a's runs about 2,000 characters). Found: (1) the roadmap reader
+  (`planOf`, `bin/lib/report-pages.mjs`) takes only `**State:**`, so S5, S6 and S7, written `**State (2026-11-11):**`,
+  are no steps: the plan has 22 steps with a state, not 19, and S5 and S6 are done, S7 built (checked by running
+  `planOf` over `docs/ROADMAP.md`: 19 ids, no S5, S6, S7); (2) a phase's left item that starts "2. " is summarised as
+  "2." (the first-sentence match stops at the number), so the F8 row shows "2.", "4.", "5.", "6." with the whole
+  text folded under each (the "repeated rows" of the brief are that fold read as text); (3) S4a, the desktop plan and
+  the outside feature open their State with no known word ("the hook done", "PRs 708 ...", "waits for"), so they
+  count as not done; that is the roadmap's wording, shown as it is, not rewritten here.
+- L11. 2026-11-14, JH 201, T9 built. The advisor, before code: confirm the dropped steps by running `planOf` (done:
+  19 ids, no S5, S6, S7), fix the reader in its own commit test first, keep the block generic (no "F8" literal: the
+  plan is tied to the one phase that shares its first word), add the steps to the forecast as a field (the record
+  stores no forecast: `forecastMoment` computes it when read, `bin/stretch.mjs`), and cold-read both pages with a
+  reader who has only the page text. Built: 4222ff27 (the dated State, test first, red then green); 0c35bded (test
+  first: the plan block says what the plan is and its count, how it differs from its phase's 3/7, which steps the
+  stretch closes or which changed state, the tiles only when something moves, its steps grouped by state; the
+  step-by-step section shows only the steps that changed, each State folded; a left item "2. " summarised by its
+  first sentence). `planSections` is shared with `report` (status and phase pages), whose tests were updated to the
+  new shape on purpose. Reviews of a036fd0..0c35bde: Codex correct (0.88), no findings, 179,607 input tokens; the
+  lenses (readability, reliability) 0 + 2 suggestions, 44,931 input tokens: a phase matched by first word alone
+  (now only when exactly one phase shares it) and the "moves" test written twice (now `movesOf`). Cold read 1 (Opus,
+  read-only, only `return3.txt`, `departure3.txt` and a departure whose item closes S8): it said what the plan is,
+  16 done, 1 in progress, 2 to do, 3 unclear of 22, and what moved (nothing; S8 on the variant), all matching the
+  roadmap; it could tell the two shares count different things. Its unclear phrases, fixed in a6906471 with tests
+  written after the change (not first): "Fila que cierra" for a plan step (now "Paso que cierra" by its title),
+  "por él" and "con este plan" for the stretch, S8 still under "por hacer" with no mark (now "este tramo lo cierra"),
+  closing S8 leaving row 5 untouched with no word why (now said: a step closing marks no phase row, the roadmap marks
+  it apart), the forecast tile in the future once back ("pronosticado al volver"), "0 de 0 filas" (dropped), and a
+  step-by-step section that repeated "ningún paso cambió" (left out on the return when the forecast was read and no
+  step changed). Not fixed, outside spec 7: step titles in English with "step 5" inside them (the roadmap's words,
+  L9's standing call); the F8 phase row 4 text still lists S2, S4a and S5 as to come while the plan says them done
+  (the roadmap's row text); the three steps with no known state word (L10). Pages rendered from a copy of the
+  throughput, channel, background and gate-log folders in scratch homes, never his real record.
+- L12. 2026-11-14, JH 201, the second round. Codex over 0c35bde..a690647 (173,920 input tokens) found one P2: the
+  mark "este tramo lo cierra" promised every named step, even one that ends after the return or waits for him. It
+  recorded nothing, because this session edited `docs/FAILURES.md` and this document while the review ran (my
+  mistake, `docs/FAILURES.md` codex-review-edited-during-run; from here no edit while a review runs). The lenses over
+  the same range: readability 0, its 2 earlier findings rechecked fixed; reliability 1 warning: a plan the roadmap of
+  now no longer holds got tiles whose captions read the opening's numbers as now's. A second cold read (Opus, only
+  `return5.txt`, `departure5.txt`, `departure-s8b.txt`) again said what the plan is, its 22 steps by state and what
+  moved, all matching; of its unclear phrases, "el pronóstico no lo mueve" was reworded; "cierra si va como se
+  estimó" said four times for one step (the item, the sentence, the mark, the table) stays, each where a reader may
+  start. Both findings fixed test first
+  (red, then green) in the next commit: a named step keeps its own when in the mark and the sentence ("Pasos que nombra
+  este tramo"), and a plan gone from now says so with no tiles. Not taken, with the reason: "igual que al abrir" beside
+  "ningún paso cambió de estado" (one says the count, the other the states); "parte de la fase" without which part
+  (the code cannot know which rows a plan details); the English step titles and plan name (the roadmap's words).
+- L13. 2026-11-14, JH 201, the third round. Codex over 0c35bde..2b2d539 correct (0.87), no findings, 90,298 input
+  tokens; the lenses over a690647..2b2d539: reliability 0, its earlier warning rechecked fixed; readability 2
+  suggestions: the mark's fallback left unescaped (answered: on purpose, `stepsByState` escapes every mark, so
+  escaping it here would escape it twice; a comment now says so) and a stale test title (renamed), in 728daf57.
+  Codex over 2b2d539..728daf5 correct (0.99), 32,818 input tokens; readability over it 0 findings, 2 of 2 fixed.
+- L14. 2026-11-14, JH 201, the advisor before the ready. (1) The claim that `progress` under-counted was unproven:
+  `progress` does not read `planOf` (grep), so the FAILURES entry and the PR body name only the report's share and the
+  forecast; 4222ff27's message keeps the wider claim. (2) Codex's P2 was half fixed: the return and status still said
+  "El tramo pronosticaba cerrar ... ahora: abierta"; now "El tramo nombraba" with each step's when and a step's words,
+  test first, seen on `stretch status --home <job tmp>/home4` (the S8 stretch open, no goals run). That render also
+  showed a phase item "5. ..." with no period summarised as "5.": fixed, test first. (3) "Nothing bound": this session
+  ran no `stretch bind` and no merge-queue command; a grep of `bin/` for a PR's bound state found none to check. (4) The
+  cold-read pages of L12 were rendered from a6906471; two departure lines were reworded after. The orchestrator relayed
+  spec 8 (his words, line 10936); it is its own slice after this PR.
+- L15. 2026-11-14, JH 201. Last round over 066e3895: Codex correct (0.96), the lenses 0 findings. The real return and the
+  real departure rendered from HEAD (scratch homes; the departure's copy cut before the stretch the lead opened at
+  01:23Z) read right: the plan block, and the F8 row's "5. Final certification (S8): ...…" summary. Not verified: what
+  binds a PR (grep of bin/merge-queue.test.mjs shows heads bound to commands, not PRs); this session bound nothing.
+  Left open: on a return naming a step, the rows table says "abierta" where the block says "sin hacer".
 
 ## Next step
-NOW (2026-11-14, JH 196, worktree `D:\js-harness\.claude\worktrees\advisor-refuse`, branch `feat/stretch-departure-clear`, head pushed): T8 built and
+NOW (2026-11-14, JH 201, worktree `D:\js-harness\.claude\worktrees\f8-plan-block`, branch `feat/stretch-plan-block`):
+NOW (L15): PR 879 reviewed whole and pushed; left: the advisor gate and `notify --kind ready --pr 879`; then spec 8
+(T10) on a new branch from main once 879 lands, an optional `doc` field per plan item.
+T9 built and reviewed (L10 to L13), pushed, PR 879 open. The advisor's last consult left, in order: (1) the claim
+that `progress` under-counted is unproven (progress does not read `planOf`): fix the PR body (`gh pr edit 879`) and
+the FAILURES entry plan-state-dated-dropped; (2) the return/status line "El tramo pronosticaba cerrar: S8 (después
+de tu vuelta; ahora: abierta)" keeps the over-promise and map-row words for a step: fix test first in `movedSentence`
+(measured branch), render with `stretch status --home <job tmp>/home4 --html <file>` (S8 stretch open there, no
+--goals), one small review round, no edits while it runs; (3) check what "bound" means for a PR (grep `unbound` in
+bin/check.mjs, bin/merge-queue*) and that 879 is not bound; (4) the control date of codex-review-edited-during-run
+from `git log -S "an edit of a tracked file made while Codex reviews"`; L12 to say the cold-read pages came from
+a6906471; re-render both real pages from HEAD and read the block; (5) `gh pr checks 879`, then the advisor gate:
+advisor alone, one other call, then `js-harness notify --to orchestrator --kind ready --pr 879` alone, leading with
+the count correction (13/19 → 16/22) and the open item: S4a's State says done yet counts "sin estado claro".
+Keep `js-harness wait --notice-to 201` running in the background. Older state below.
+Earlier (2026-11-14, JH 196, worktree `D:\js-harness\.claude\worktrees\advisor-refuse`, branch `feat/stretch-departure-clear`, head pushed): T8 built and
 reviewed (L9); PR 875 open and bound (872 unbound). Before ready, the advisor asked: (1) correct the PR body and L9:
 the cold reader said only JH 196 says what he gets back, so defect 6 (no item says what he will have) and the English
 phase names stay open, the lead's call (titles as outcomes, or a plan field out of scope); put both first in the

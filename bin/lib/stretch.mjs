@@ -91,6 +91,14 @@ export function parsePlan(value) {
   if (!Array.isArray(value.goals) || value.goals.length === 0) return { error: 'the plan needs at least one goal' };
   if (!Array.isArray(value.items)) return { error: 'the plan needs items, a list' };
   if (value.waits !== undefined && !(Array.isArray(value.waits) && value.waits.every(isText))) return { error: 'waits is a list of texts' };
+  // The forks the lead pre-decides before he leaves (his yes to question 290, odd/tasks/consistent-orders.md, S5):
+  // 2 to 4 cases, each with the answer the lead proposes; none at all opens as a plan did before.
+  // An empty list is no forks: the record keeps `forks: []` for a plan that had none, and a plan copied back opens.
+  if (value.forks !== undefined && !(Array.isArray(value.forks) && value.forks.length === 0)) {
+    if (!(Array.isArray(value.forks) && value.forks.length >= 2 && value.forks.length <= 4)) return { error: 'forks is a list of 2 to 4 cases the lead pre-decides' };
+    const bad = value.forks.findIndex((fork) => !isObject(fork) || !isText(fork.if) || !isText(fork.then));
+    if (bad >= 0) return { error: `fork ${bad + 1} needs if, the case, and then, the answer proposed, each a text` };
+  }
   const problem = idProblem(value.goals, 'goal') ?? value.goals.map(goalProblem).find(Boolean)
     ?? idProblem(value.items, 'item') ?? value.items.map(itemProblem).find(Boolean) ?? sessionProblem(value.items);
   if (problem) return { error: problem };
@@ -103,6 +111,7 @@ export function parsePlan(value) {
         id, title, kind, hours: [...hours], session: session ?? null, ...(waitsFor ? { waitsFor } : {}), ...(closes ? { closes: closes.map((one) => ({ in: one.in, step: one.step })) } : {}),
       })),
       waits: value.waits ?? [],
+      forks: (value.forks ?? []).map((fork) => ({ if: fork.if, then: fork.then })),
     },
   };
 }

@@ -107,7 +107,7 @@ and each of its removals; any reading of the limit wider than what the lead aske
 
 ## The rule, as recorded
 
-`rule:growth-limit`, his (`owner: sebastian`), of scope `repository`, review day 2026-11-15; read it whole with
+the growth limit (retired 2026-11-15), his (`owner: sebastian`), of scope `repository`, review day 2026-11-15; read it whole with
 `js-harness rules growth-limit`. Its value is the exemption in the lead's words, "a fix or a step of F8" ("salvo
 arreglos y pasos de F8"); its subject says the rest: while the week is red the lead opens no new work here but that,
 writes the rest in the roadmap's Later list with its source, and his own word that something goes now opens it.
@@ -127,7 +127,7 @@ His words, its reading and where he accepted it are in `docs/rule-sources.json`.
 
 Today's line (`node bin/js-harness.mjs progress --pace`, 2026-11-01): "Last 7 days 2026-10-25 to 2026-10-31: closed
 315  reopened 0  added 352  removed 19; the open steps grew by 19: red, new work waits but a fix or a step of F8
-(rule:growth-limit)".
+(the growth limit, retired 2026-11-15)".
 
 ## Log
 - L1 2026-11-01 13:44 local — his answer, typed (the lead's transcript `0f71b2c6`, line 48080, read with
@@ -177,7 +177,7 @@ Today's line (`node bin/js-harness.mjs progress --pace`, 2026-11-01): "Last 7 da
 - L7 2026-11-01 — "reactives todo para hacer le plan" read as: start the sessions again to carry out the plan; the
   lead started this session from it. It opens nothing the limit holds, since carrying out F8 and its adjustment is
   the exemption.
-- L8 2026-11-01 — one pull request instead of a docs PR first: the record cites `rule:growth-limit`, and `rules
+- L8 2026-11-01 — one pull request instead of a docs PR first: the record cites the growth limit (retired 2026-11-15), and `rules
   check` refuses a text naming an undeclared rule (its first commit did, and was fixed), so the record and the rule
   land together; the branch became `rule/growth-limit`, which `rules change` requires.
 - L9 2026-11-01 — result against the depth pass: item 4 predicted the words suffice and the week is red; measured,

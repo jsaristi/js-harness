@@ -459,16 +459,16 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "Listo entonces continuemos y reactives todo para hacer le plan",
-        "date": "2026-11-01",
-        "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
-        "line": 48080
+        "quote": "Retira la regla del límite de crecimiento.",
+        "date": "2026-11-15",
+        "session": "69918425-3b43-430f-9f50-62b6422422ce",
+        "line": 18679
       }
     ],
-    "reading": "His answer names no limit: it confirms the lead's question in the entry before it (same session, line 48066, an assistant entry read by this session): \"¿adoptas el ajuste, es decir, seguir con F8 y poner el límite al crecimiento?\", whose message described the limit as \"Mientras la semana esté en rojo, no entraría trabajo nuevo, salvo arreglos y pasos de F8\", after the page he read (https://claude.ai/artifact/1EPj6FTbsB6C6n9aAT5iyJ, step 1: \"que el líder detenga lo nuevo mientras la semana esté en rojo. No frena arreglos de lo que ya funciona ni los pasos de F8\"). The value is the lead's exemption in English, \"arreglos y pasos de F8\". The week is red when the open steps grew over the last seven whole days: added and reopened more than closed and removed. The page said \"más agregados que cerrados\"; removals are counted because the double review found that a reworded roadmap step counts as one removed and one added (odd/tasks/replan-execute.md, L6), so without them a rewording would read as new work. That precision is this session's, and his to correct.",
-    "accepted": "A message he typed to the lead, answering that question after reading the page; the count's precision was not put to him.",
+    "reading": "His growth limit is retired with no successor: while the week is red the lead no longer holds back new work by this rule. The plan he approved in question 292 is not a rule and does not change. He chose the same in question 297 (lead transcript 69918425, line 17576, tapped \"Retirarlo\"), which rules change refuses as a quotation, and then typed it at line 18679. progress --pace still says whether the week is red or green, and no longer names a limit.",
+    "accepted": "Typed by him in the lead's session (line 18679, 2026-11-15T19:50Z) after the lead asked for his own words, since question 297 was a tap (lead transcript line 18632).",
     "checked": {
-      "date": "2026-11-01",
+      "date": "2026-11-15",
       "by": "command"
     }
   },
@@ -1164,12 +1164,24 @@
         "date": "2026-10-28",
         "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
         "line": 15262
+      },
+      {
+        "quote": "Recuerda que todo lo que estamos haciendo es dogfooding y la idea es que todo esto quede aplicado y cementado en el arnes que estamos construyendo",
+        "date": "2026-11-14",
+        "session": "69918425-3b43-430f-9f50-62b6422422ce",
+        "line": 10967
+      },
+      {
+        "quote": "Cementalo en alguna parte y documentalo para que no se nos quede en memoria y se pierda",
+        "date": "2026-11-14",
+        "session": "69918425-3b43-430f-9f50-62b6422422ce",
+        "line": 11014
       }
     ],
-    "reading": "Everything built here is for the harness, used on itself: every rule he gives is cemented in the harness, in its documents and in the files that make it act, here and in every project that installs it, because what stays in memory is forgotten. Each proposal is judged both as this project's development and as the harness in production in other projects; a gap is solved by building it, ourselves or on another solution; problems seen in any session are measured and analysed as findings to improve the harness. Since the models are Anthropic's and Codex is only an outside reviewer of what is done and of a project's code, Claude works from a root CLAUDE.md that imports AGENTS.md, and AGENTS.md keeps what a reviewer needs (diet D3, F8's S3): a rule's prose home is a line of either file, no longer AGENTS.md alone. The guard's refusal of a feedback note without a home (rule:memory-feedback-home) is its sensor. An output he sees again and again is cemented the same way, so a model's taste cannot reach him: a template of five parts (the sample he approved, the command that renders it from the records, a golden test, a gate on the path to him, and a test that the gate refuses a hand-made one), asked for in one line, \"Plantilla: qué quiero ver · cuándo aparece · cómo se ve (la muestra que apruebo) · dónde me llega\", a missing field asked alone, and every escape a FAILURES sighting and a new refusal test (odd/tasks/templates.md).",
-    "accepted": "He accepted the split in his own typed words at line 1733 of e41d1e8d (\"Excelente me parece excelente eso asi\"), after asking at line 1665 whether only CLAUDE.md would be used and saying at line 1697 that Codex is only an outside reviewer. The templates: after the recipe the lead gave him at line 15080 of 0f71b2c6, he asked for it in his own typed words at line 15262 (\"ok listo entonces hagamos una plantilla de esto ...\"), and approved the first template's sample, question 108, at line 17978.",
+    "reading": "Everything built here is for the harness, used on itself: every rule he gives is cemented in the harness, in its documents and in the files that make it act, here and in every project that installs it, because what stays in memory is forgotten. Each proposal is judged both as this project's development and as the harness in production in other projects; a gap is solved by building it, ourselves or on another solution; problems seen in any session are measured and analysed as findings to improve the harness. Since the models are Anthropic's and Codex is only an outside reviewer of what is done and of a project's code, Claude works from a root CLAUDE.md that imports AGENTS.md, and AGENTS.md keeps what a reviewer needs (diet D3, F8's S3): a rule's prose home is a line of either file, no longer AGENTS.md alone. The guard's refusal of a feedback note without a home (rule:memory-feedback-home) is its sensor. An output he sees again and again is cemented the same way, so a model's taste cannot reach him: a template of five parts (the sample he approved, the command that renders it from the records, a golden test, a gate on the path to him, and a test that the gate refuses a hand-made one), asked for in one line, \"Plantilla: qué quiero ver · cuándo aparece · cómo se ve (la muestra que apruebo) · dónde me llega\", a missing field asked alone, and every escape a FAILURES sighting and a new refusal test (odd/tasks/templates.md). A manual workaround is cemented too (his words of 2026-11-14, the orchestrator's transcript 69918425, lines 10967 and 11014): a step the lead or a session does by hand to get past a gap gets a follow-up that builds it into bin/, a template or a check, and a session or a roadmap entry owns it, named in the same reply that tells of the workaround, so it does not stay in memory and get lost (odd/tasks/cement-workarounds.md).",
+    "accepted": "He accepted the split in his own typed words at line 1733 of e41d1e8d (\"Excelente me parece excelente eso asi\"), after asking at line 1665 whether only CLAUDE.md would be used and saying at line 1697 that Codex is only an outside reviewer. The templates: after the recipe the lead gave him at line 15080 of 0f71b2c6, he asked for it in his own typed words at line 15262 (\"ok listo entonces hagamos una plantilla de esto ...\"), and approved the first template's sample, question 108, at line 17978. The workaround clause: his own typed words of 2026-11-14 at lines 10967 and 11014 of 69918425 ask that what is done be cemented in the harness and documented so it is not lost in memory; that the follow-up's owner is a session or a roadmap entry named in the same reply is the lead's precision in the brief of JH 202, not put to him, and his to correct.",
     "checked": {
-      "date": "2026-10-29",
+      "date": "2026-11-15",
       "by": "command"
     }
   },

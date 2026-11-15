@@ -20,6 +20,16 @@ test('a plan of hours, slots, goals with commands and items of the contract kind
   assert.deepEqual(read.plan.waits, ['the spend of S5c-a']);
 });
 
+test('a plan carries 2 to 4 forks the lead pre-decides, each a case and its proposed answer (his yes to question 290)', () => {
+  const forks = [{ if: 'the verifier finds a defect already on main', then: 'land it' }, { if: 'Codex is at its weekly floor', then: 'record the skip' }];
+  assert.deepEqual(parsePlan(plan({ forks })).plan.forks, forks);
+  assert.deepEqual(parsePlan(plan()).plan.forks, [], 'a plan with no forks opens as today');
+  assert.deepEqual(parsePlan(plan({ forks: [] })).plan.forks, [], 'an empty list, as the record keeps it, is no forks');
+  assert.match(parsePlan(plan({ forks: forks.slice(0, 1) })).error, /forks.*2 to 4/);
+  assert.match(parsePlan(plan({ forks: [...forks, ...forks, forks[0]] })).error, /forks.*2 to 4/);
+  assert.match(parsePlan(plan({ forks: [forks[0], { if: 'x' }] })).error, /fork 2.*if.*then/);
+});
+
 test('a goal without a command is refused: no goal is graded by the session that ran it', () => {
   assert.match(parsePlan(plan({ goals: [{ id: 'G1', text: 'done' }] })).error, /G1.*command/);
 });

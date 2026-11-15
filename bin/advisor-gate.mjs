@@ -1,12 +1,13 @@
 // `advisor-gate`: the hook that holds the acts that decide (a question to him, a land, a session opened, a plan or a
-// task document begun, a piece said ready or closed, a sub-agent's end) to a consultation of the Fable advisor in the
+// task document begun, a piece said ready or closed, a block said with a `waiting` notice (odd/tasks/consistent-orders.md,
+// S1), a sub-agent's end) to a consultation of the Fable advisor in the
 // same stretch of work (odd/tasks/advisor-use.md, P1 and P2, his yes to question 282). Why a hook: with the tool on
 // for every role since 2026-11-12, the lead consulted it before 6 of its 20 questions, and the host's own prompt
 // already asks (M2, Depth pass 1). Policy R: one advisor call with a result covers every gated act after it until his
 // next message (typed or queued), the next session event, or STRETCH_TOOL_CALLS tool calls.
 // It refuses an uncovered act (his answer to question 285, which moved refusal ahead of the warning week of P3): the
-// reason says how to consult and retry, and the decision is recorded either way. A sub-agent's end is recorded and never
-// blocked, which his yes left apart. It fails open: an unreadable transcript or payload lets the act through, recorded
+// reason says how to consult and retry, and the decision is recorded either way. A sub-agent's uncovered end is turned
+// back once and its next stop let through (his answer to question 294, odd/tasks/consistent-orders.md S4). It fails open: an unreadable transcript or payload lets the act through, recorded
 // unchecked. It acts only in a js-harness project
 // (a `harness.json` at or above the cwd), since the entry is in the user's settings and runs everywhere.
 import fs from 'node:fs';
@@ -24,6 +25,8 @@ export const ESTIMATED_DAILY_TOKENS = 2_400_000;
 export const MODE = 'refuse';
 /** How much of a transcript's end is read: R needs at most STRETCH_TOOL_CALLS tool calls back, and the hook has 5 s. */
 const TAIL_BYTES = 4 * 1024 * 1024;
+/** How much of the decision log's end is read for an earlier turn-back: 357 ends took 235 kB in four days. */
+const DECISIONS_TAIL_BYTES = 1024 * 1024;
 const SCHEMA = 'js-harness.advisor-gate/v1';
 const ADVISOR_TOOL_TYPE = 'advisor_20260301';
 
@@ -32,7 +35,8 @@ const USAGE = `Usage: js-harness advisor-gate --hook    (PreToolUse: the hook pa
        js-harness advisor-gate report [--since <YYYY-MM-DD>]
   Holds the acts that decide to an advisor call with a result in the caller's stretch (policy R): since his last
   message or the last session event, within ${STRETCH_TOOL_CALLS} tool calls. Mode ${MODE}: an uncovered act is refused, its reason
-  saying how to consult and retry; a sub-agent's end (--stop) is recorded, never blocked. Every decision is appended to <home>/.js-harness/advisor-gate/decisions.jsonl. It prints {} outside a
+  saying how to consult and retry; a sub-agent's uncovered end (--stop) is turned back once, its next stop let through, and one whose transcript does not exist is recorded
+  no-transcript with its agent type. Every decision is appended to <home>/.js-harness/advisor-gate/decisions.jsonl. It prints {} outside a
   project with a harness.json, and fails open: what it cannot read lets the act through, recorded unchecked.
   report: the decisions by day, kind and act, and the Fable input tokens of the advisor calls that followed a flag in
   its stretch with a result (the calls the flags prompted), against the estimate of ${ESTIMATED_DAILY_TOKENS} a day;
@@ -52,12 +56,15 @@ const unquoted = (command) => command.replace(/(--kind\s+|\b(?:bash|sh|zsh|pwsh|
   return '""';
 });
 /** The value of `--kind` in an unquoted command. */
-const kindOf = (command) => /--kind\s+(\w+)/.exec(command)?.[1] ?? null;
+/** Every value of `--kind` in an unquoted command: a chain may send two notices, and notify keeps the last of a repeated
+ * flag, so the first alone could hide a gated one (the verifier's finding, odd/tasks/consistent-orders.md). */
+const kindsOf = (command) => [...command.matchAll(/--kind\s+(\w+)/g)].map((match) => match[1]);
 
 /** A task document's path, whose creation is a plan. */
 const TASK_DOCUMENT = /[\\/]odd[\\/]tasks[\\/][^\\/]+\.md$/;
 
-/** The act a tool call is, or `null` when it is not gated: `question`, `land`, `session`, `plan` or `done`. */
+/** The act a tool call is, or `null` when it is not gated: `question`, `land`, `session`, `plan`, `done` or
+ * `waiting`. */
 export function gatedAct(tool, input, cwd) {
   if (tool === 'AskUserQuestion') return 'question';
   if (tool === 'mcp__ccd_session__start_session') return 'session';
@@ -70,9 +77,12 @@ export function gatedAct(tool, input, cwd) {
   if (!/js-harness/.test(input.command)) return null;
   const command = unquoted(input.command);
   if (runs(command, 'notify')) {
-    const kind = kindOf(command);
-    if (kind === 'question') return 'question';
-    if (kind === 'ready' || kind === 'closed') return 'done';
+    const kinds = kindsOf(command);
+    if (kinds.includes('question')) return 'question';
+    if (kinds.includes('ready') || kinds.includes('closed')) return 'done';
+    // A block is consulted before it is said (odd/tasks/consistent-orders.md, S1): on 2026-11-15 two unconsulted
+    // `waiting` notices preceded a session's 2 h 40 min wait.
+    if (kinds.includes('waiting')) return 'waiting';
   }
   if (runs(command, 'merge-queue') && /--land\b/.test(command) && !/--dry-run\b/.test(command)) return 'land';
   if (runs(command, 'sessions\\s+start') && !/--help\b/.test(command)) return 'session';
@@ -104,6 +114,9 @@ function tailLines(file, tailBytes) {
 
 /** What breaks a stretch, or `null`: his message (typed, or queued while the session worked) or a session event. */
 function breakOf(entry) {
+  // A compaction's summary ends the stretch by its own mark, not only by reading as his message, so a host that someday
+  // marks it `isMeta` does not let a consult made before the compaction cover acts after it (odd/tasks/consistent-orders.md, L8).
+  if (entry.isCompactSummary === true) return 'compaction';
   if (entry.type === 'attachment' && entry.attachment?.type === 'queued_command' && entry.attachment?.origin?.kind === 'human') return 'his message';
   if (entry.type !== 'user' || entry.isMeta || entry.toolUseResult) return null;
   const content = entry.message?.content;
@@ -117,7 +130,7 @@ function breakOf(entry) {
 
 /** Policy R's stretch at the end of the transcript `file`: `{ calls, errors, broken, toolCalls, model, hadAdvisor }`.
  * `calls` counts advisor calls with a result that is not an error, `errors` those whose result is one; `broken` says
- * what ended the stretch (his message, a session event, the tool-call bound, or the start of what was read);
+ * what ended the stretch (his message, a session event, a compaction, the tool-call bound, or the start of what was read);
  * `hadAdvisor` is true, false or null (not known), from the last assistant entry's `advisorModel` when it differs from
  * its model, else from a request-shape line naming the advisor tool (M1). Throws when the file cannot be read. */
 export function readStretch(file, { tailBytes = TAIL_BYTES } = {}) {
@@ -206,20 +219,79 @@ function backgroundTitle(home, sessionId) {
   return title;
 }
 
-function record(home, decision, stderr) {
+function record(home, decision, stderr, failed = 'the decision stands') {
   const file = path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl');
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.appendFileSync(file, `${JSON.stringify({ schema: SCHEMA, ...decision })}\n`);
+    return true;
   } catch (err) {
-    stderr(`js-harness advisor-gate: cannot append to ${file}: ${err.message}; the decision stands`);
+    stderr(`js-harness advisor-gate: cannot append to ${file}: ${err.message}; ${failed}`);
+    return false;
   }
 }
 
-/** The reason a refused PreToolUse act is given; a sub-agent's end is never refused, so it has none. */
+/** The reason a refused PreToolUse act is given; a sub-agent's end is turned back with its own, END_NOTICE. */
 const NOTICE = (act) => [
   advisorSay('missed', { act: `act (${act})`, calls: STRETCH_TOOL_CALLS }), advisorSay('how'), advisorSay('refused'),
 ].join(' ');
+
+/** What a sub-agent hears when its end is turned back: consult, then end with its whole result, since its caller reads
+ * only its last message; it is turned back once. */
+const END_NOTICE = [
+  advisorSay('missed', { act: 'act (end)', calls: STRETCH_TOOL_CALLS }), advisorSay('how'),
+  'Your end is turned back once: consult the advisor, then end by giving your whole result again, as your caller reads only your last message; the next stop goes through.',
+].join(' ');
+
+/** The last DECISIONS_TAIL_BYTES of the log `file`, as text. Throws when it cannot be read. */
+function readLogTail(file) {
+  const size = fs.statSync(file).size;
+  const fd = fs.openSync(file, 'r');
+  try {
+    const length = Math.min(size, DECISIONS_TAIL_BYTES);
+    const buffer = Buffer.alloc(length);
+    fs.readSync(fd, buffer, 0, length, size - length);
+    return buffer.toString('utf8');
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** Whether the newest end the log under `home` holds of the sub-agent `agent` of `session` is a turn-back, so this
+ * stop is that end's repeat: its tail, which a turn-back and its next stop sit close in. No log holds none (`false`);
+ * one there that cannot be read gives `null`. */
+function turnedBackBefore(home, session, agent, readTail = readLogTail) {
+  let text;
+  try {
+    text = readTail(path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl'));
+  } catch (err) {
+    // No log yet holds no turn-back; one there and unreadable cannot say, and the caller lets the end through.
+    return err.code === 'ENOENT' ? false : null;
+  }
+  // Once is per end (his words, "ese final"): only when this sub-agent's newest end is the turn-back is this stop its
+  // repeat; a later end of the same sub-agent, resumed say, is its own.
+  const lines = text.split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    let entry;
+    try {
+      entry = JSON.parse(lines[i]);
+    } catch {
+      continue;
+    }
+    if (entry?.act === 'end' && entry.agent === agent && entry.session === session) return entry.turnedBack === true;
+  }
+  return false;
+}
+
+/** Whether `file` does not exist: only ENOENT, so a transcript there but unreadable stays unchecked. */
+function missing(file) {
+  try {
+    fs.statSync(file);
+    return false;
+  } catch (err) {
+    return err.code === 'ENOENT';
+  }
+}
 
 /** Decides one act of `payload` and records it; returns the hook's answer object. */
 function decide(mode, payload, seams) {
@@ -229,7 +301,7 @@ function decide(mode, payload, seams) {
   if (act === null) return {};
   if (nearestHarness(cwd) === null) return {};
   const agent = typeof payload.agent_id === 'string' ? payload.agent_id : null;
-  const base = { at: new Date(seams.now).toISOString(), session: payload.session_id ?? null, agent, act, tool: payload.tool_name ?? null, toolUseId: typeof payload.tool_use_id === 'string' ? payload.tool_use_id : null, cwd };
+  const base = { at: new Date(seams.now).toISOString(), session: payload.session_id ?? null, agent, act, tool: payload.tool_name ?? null, toolUseId: typeof payload.tool_use_id === 'string' ? payload.tool_use_id : null, agentType: typeof payload.agent_type === 'string' ? payload.agent_type : null, cwd };
   if (mode === '--stop') base.secondStop = payload.stop_hook_active === true;
   const title = backgroundTitle(home, payload.session_id);
   if (agent === null && seniorTitle(title)) return record(home, { ...base, decision: 'exempt-senior', title }, stderr), {};
@@ -237,6 +309,9 @@ function decide(mode, payload, seams) {
   if (mode !== '--stop' && agent !== null && typeof payload.transcript_path === 'string') {
     file = path.join(path.dirname(payload.transcript_path), String(payload.session_id), 'subagents', `agent-${agent}.jsonl`);
   }
+  // An end whose transcript does not exist is no sub-agent the gate can read: the host's own agents after a turn write
+  // none (L24). It is recorded apart, by its agent type, so the unchecked share counts only acts a read failed for.
+  if (mode === '--stop' && typeof file === 'string' && missing(file)) return record(home, { ...base, transcript: file, decision: 'no-transcript' }, stderr), {};
   let stretch;
   try {
     if (typeof file !== 'string') throw new Error('no transcript path in the payload');
@@ -253,8 +328,18 @@ function decide(mode, payload, seams) {
   }
   if (stretch.calls > 0) return record(home, { ...base, ...facts, decision: 'covered' }, stderr), {};
   if (stretch.errors >= 2) return record(home, { ...base, ...facts, decision: 'outage' }, stderr), {};
-  record(home, { ...base, ...facts, decision: 'flagged', mode: MODE }, stderr);
-  if (mode === '--stop') return {};
+  // A sub-agent's end is turned back once (his answer to question 294): the second stop goes through, as the reply
+  // hook's. Once rests on the host's flag and on this log's own record of the turn-back, so a payload without the flag
+  // never loops.
+  // An end the log shows turned back is its repeat (afterTurnBack), which the report counts once with it; one let
+  // through by the host's flag alone (another hook may have turned it back) stays a flag of its own.
+  // A log it cannot read (null) or write leaves once unheld, so the end goes through, as his answer asks of a record
+  // that cannot be read.
+  const prior = mode === '--stop' ? turnedBackBefore(home, base.session, agent, seams.readLogTail) : false;
+  const afterTurnBack = prior === true;
+  const turnBack = mode === '--stop' && !base.secondStop && prior === false;
+  const written = record(home, { ...base, ...facts, decision: 'flagged', mode: MODE, ...(turnBack ? { turnedBack: true } : {}), ...(mode === '--stop' ? { afterTurnBack } : {}) }, stderr, turnBack ? 'the end goes through, since its turn-back could not be recorded and once could not be held' : undefined);
+  if (mode === '--stop') return turnBack && written ? { decision: 'block', reason: END_NOTICE } : {};
   return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: NOTICE(act) } };
 }
 
@@ -379,7 +464,8 @@ function reconcile(projects, from, decisions) {
 }
 
 /** The report of the decisions under `home` since `since` (an ISO day, or null): `{ days, acts, unchecked, decisions,
- * unread, untraced, estimate }`. Each day holds its decisions by kind and by act, how many of its flags an advisor
+ * noTranscript, unread, untraced, estimate }`; `decisions` leaves out the ends with no transcript, which `noTranscript`
+ * counts by agent type. Each day holds its decisions by kind and by act, how many of its flags an advisor
  * call with a result followed in their stretch, and the Fable input tokens of those calls on that day, each call once.
  * `acts` reconciles the decisions with the gated acts the transcripts under `projects` show since the first decision.
  * A transcript that cannot be read (`unread`) or a flag that recorded none (`untraced`) is counted, not guessed. */
@@ -405,17 +491,21 @@ export function advisorGateReport({ home, since = null, projects = path.join(hom
     if (!days.has(day)) days.set(day, { day, decisions: {}, acts: {}, flagged: 0, followed: 0, addedTokens: 0 });
     return days.get(day);
   };
+  // A turned-back end flagged again at its next stop is the same end (afterTurnBack): one flag, one per act. An end
+  // recorded before the field existed says nothing of it, and its second stop stays the repeat it was counted as.
+  const repeat = (d) => d.afterTurnBack === true || (d.act === 'end' && d.afterTurnBack === undefined && d.secondStop === true);
+  const isFlag = (d) => d.decision === 'flagged' && !repeat(d);
   const shown = all.filter((d) => inRange(d.at));
   for (const d of shown) {
     const row = dayOf(d.at);
     row.decisions[d.decision] = (row.decisions[d.decision] ?? 0) + 1;
     row.acts[d.act] = (row.acts[d.act] ?? 0) + 1;
-    if (d.decision === 'flagged') row.flagged++;
+    if (isFlag(d)) row.flagged++;
   }
   // Every flag is read, in range or not: one before midnight can prompt a call after it, whose tokens are that day's.
   const flagsByTranscript = new Map();
   let untraced = 0;
-  for (const d of all.filter((x) => x.decision === 'flagged')) {
+  for (const d of all.filter(isFlag)) {
     if (typeof d.transcript !== 'string') {
       if (inRange(d.at)) untraced++;
       continue;
@@ -449,15 +539,21 @@ export function advisorGateReport({ home, since = null, projects = path.join(hom
   const first = all.filter((d) => 'toolUseId' in d).reduce((min, d) => (min === null || d.at < min ? d.at : min), null);
   const from = first === null ? null : since !== null && since > first ? since : first;
   const acts = from === null ? { found: 0, decided: 0, missing: [], unread: 0 } : reconcile(projects, from, all);
+  // An end recorded before T7 as unchecked because its transcript did not exist (ENOENT) is read as one with no
+  // transcript, so the share covers the past too; decisions.jsonl itself is not rewritten.
+  const noTranscriptEnd = (d) => d.decision === 'no-transcript' || (d.act === 'end' && d.decision === 'unchecked' && /: ENOENT;/.test(d.reason ?? ''));
+  const noTranscript = {};
+  for (const d of shown.filter(noTranscriptEnd)) noTranscript[d.agentType ?? 'unknown'] = (noTranscript[d.agentType ?? 'unknown'] ?? 0) + 1;
+  const decided = shown.filter((d) => !noTranscriptEnd(d));
   return {
     days: [...days.values()].sort((a, b) => a.day.localeCompare(b.day)),
-    acts, unchecked: shown.filter((d) => d.decision === 'unchecked').length, decisions: shown.length,
+    acts, unchecked: decided.filter((d) => d.decision === 'unchecked').length, decisions: decided.length, noTranscript,
     unread, untraced, estimate: ESTIMATED_DAILY_TOKENS,
   };
 }
 
 /** The report as text: one line a day, then the reconciliation with the transcripts. */
-function formatReport({ days, acts, unchecked, decisions, unread, untraced, estimate }) {
+function formatReport({ days, acts, unchecked, decisions, noTranscript, unread, untraced, estimate }) {
   const n = (x) => x.toLocaleString('en-US');
   const share = (part, whole) => (whole === 0 ? '0%' : `${Math.round((100 * part) / whole)}%`);
   const counts = (o) => Object.entries(o).map(([k, v]) => `${k} ${v}`).join(', ');
@@ -470,6 +566,8 @@ function formatReport({ days, acts, unchecked, decisions, unread, untraced, esti
   if (acts.unread > 0) lines.push(`  ${acts.unread} transcript(s) could not be read; their acts are in neither count.`);
   for (const m of acts.missing.slice(0, 10)) lines.push(`  no decision: ${m.act} (${m.tool}) at ${m.at} in ${m.transcript}`);
   lines.push(`let through unchecked: ${unchecked} of ${decisions} decisions (${share(unchecked, decisions)})`);
+  const ends = Object.values(noTranscript).reduce((sum, v) => sum + v, 0);
+  if (ends > 0) lines.push(`sub-agent ends with no transcript: ${ends} (${counts(noTranscript)}), apart from the decisions above, by agent type: most come right after a turn, agents the host runs itself (odd/tasks/advisor-use.md, L24)`);
   if (unread > 0) lines.push(`${unread} transcript(s) could not be read; their flags count, their calls and tokens do not.`);
   if (untraced > 0) lines.push(`${untraced} flag(s) recorded no transcript (written before the report existed); their calls and tokens are not known.`);
   return `${lines.join('\n')}\n`;
@@ -478,10 +576,10 @@ function formatReport({ days, acts, unchecked, decisions, unread, untraced, esti
 /** A usage error of the argv: its message names the token, the usage follows, exit 2. */
 class AdvisorGateArgError extends Error {}
 
-/** `js-harness advisor-gate --hook | --stop | report`. Seams for the tests: `readStdin`, `home`, `cwd`, `now`. */
+/** `js-harness advisor-gate --hook | --stop | report`. Seams for the tests: `readStdin`, `home`, `cwd`, `now`, `readLogTail`. */
 export function advisorGateMain(argv, {
   stdout = (s) => process.stdout.write(s), stderr = console.error, readStdin = () => fs.readFileSync(0, 'utf8'),
-  home, env = process.env, cwd = process.cwd(), now = Date.now(),
+  home, env = process.env, cwd = process.cwd(), now = Date.now(), readLogTail: readTail,
 } = {}) {
   if (argv.length === 1 && (argv[0] === '--help' || argv[0] === '-h')) {
     stdout(`${USAGE}\n`);
@@ -521,7 +619,7 @@ export function advisorGateMain(argv, {
     return 0;
   }
   try {
-    stdout(JSON.stringify(decide(argv[0], payload ?? {}, { home: harnessHome({ given: home, env, cwd }), cwd, now, stderr })));
+    stdout(JSON.stringify(decide(argv[0], payload ?? {}, { home: harnessHome({ given: home, env, cwd }), cwd, now, stderr, readLogTail: readTail })));
   } catch (err) {
     stderr(`js-harness advisor-gate: ${err.message}; the act goes through unchecked`);
     stdout('{}');

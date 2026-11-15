@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mapNowSection, mapSection, planSections, sharesTiles, timelineSection } from './pages-sections.mjs';
+import { mapNowSection, mapSection, planSections, sharesTiles, stepsByState, timelineSection } from './pages-sections.mjs';
 
 test('the shares are tiles that say their denominator, an unknown share "sin medir" and the work outside the plan a count', () => {
   const html = sharesTiles({
@@ -55,6 +55,18 @@ test('what is left in a phase shows each item\'s first sentence, cut short, the 
   assert.match(now, /<details><summary>Visual pages: the harness shows its moments as pages\.<\/summary>/);
 });
 
+// odd/tasks/stretch-protocol.md, spec 7: the F8 phase's items open "2. ", and the summary stopped at the number.
+test('a left item numbered "2. " is summarised by its first sentence, number included, not by the number alone', () => {
+  const item = '2. His decisions from [the register](proposals/harness-diet.md#1-what-is-his), split by kind. Blocking, asked one at a time.';
+  const html = mapNowSection({ done: 0, total: 1, phases: [{ title: 'F8', done: 0, total: 1, open: [item] }] });
+  assert.match(html, /<summary>2\. His decisions from \[the register\]\(proposals\/harness-diet\.md#1-what-is-his\), split by kind\.<\/summary>/);
+  assert.doesNotMatch(html, /<summary>2\.<\/summary>/);
+  // An item with no sentence end after its number is summarised by its start, cut, never by the number.
+  const open = `5. Final certification (S8): the S0 and S8 measures of section 7, ${'graded side by side '.repeat(10)}and the closing count of each failure class`;
+  const five = mapNowSection({ done: 0, total: 1, phases: [{ title: 'F8', done: 0, total: 1, open: [open] }] });
+  assert.match(five, /<summary>5\. Final certification \(S8\): the S0 and S8 measures[^<]*…<\/summary>/);
+});
+
 test('a map with no before says it has none and still shows now', () => {
   const html = mapSection({ total: { before: null, after: { done: 1, total: 2 } }, phases: [{ title: 'A', before: null, after: { done: 1, total: 2 }, open: ['b'], change: 'same' }] });
   assert.match(html, /Sin antes/);
@@ -73,6 +85,33 @@ test('each plan is a chain of its steps by the state the roadmap reports, and a 
   assert.match(section.html, /avanzó/);
   assert.match(section.html, /texto cambiado/);
   assert.match(section.note, /dice la hoja de ruta/);
+  // Spec 7: only the steps that changed are rows; the rest are one line of their titles.
+  assert.doesNotMatch(section.html, /<td[^>]*>S0<\/td>/);
+  assert.match(section.html, /Sin cambio \(1\): S0 Baseline/);
+});
+
+test('a step\'s long State is folded under its first sentence, and a plan with no step changed says so', () => {
+  const long = `done 2026-10-29 (PRs 622, 638). ${'More of the record here. '.repeat(30)}`;
+  const [section] = planSections([{ name: 'F8 plan', steps: [
+    { id: 'S5c-a', title: 'S5c-a Coverage', before: { said: 'in progress', reported: 'in progress' }, after: { said: long, reported: 'done' }, change: 'advanced', documents: [] },
+  ] }]);
+  assert.match(section.html, /<details><summary>done 2026-10-29 \(PRs 622, 638\)\.<\/summary>/);
+  const [still] = planSections([{ name: 'F8 plan', steps: [{ id: 'S0', title: 'S0 Baseline', before: { said: 'done', reported: 'done' }, after: { said: 'done', reported: 'done' }, change: 'same', documents: [] }] }]);
+  assert.match(still.html, /Ningún paso cambió/);
+  assert.doesNotMatch(still.html, /<table>/);
+  const [unmeasured] = planSections([{ name: 'F8 plan', steps: [{ id: 'S0', title: 'S0 Baseline', before: null, after: { said: 'done', reported: 'done' }, change: 'unmeasured', documents: [] }] }]);
+  assert.match(unmeasured.html, /Sin medir \(1\): S0 Baseline/);
+});
+
+test('a plan\'s steps grouped by the state the roadmap reports, each group its count and its steps by title', () => {
+  const html = stepsByState([
+    { id: 'S0', title: 'S0 Baseline', reported: 'done' }, { id: 'S3', title: 'S3 <Split>', reported: 'built' },
+    { id: 'S9', title: 'S9 Host watch', reported: 'in progress' }, { id: 'S8', title: 'S8 Certification', reported: 'to do' },
+    { id: 'S4a', title: 'S4a Hook', reported: 'other' },
+  ]);
+  assert.match(html, /Hechos \(2\)[\s\S]*S0 Baseline · S3 &lt;Split&gt;[\s\S]*En curso \(1\)[\s\S]*S9 Host watch[\s\S]*Por hacer \(1\)[\s\S]*S8 Certification[\s\S]*Sin estado claro \(1\)[\s\S]*S4a Hook/);
+  assert.match(html, /no empieza por una palabra de estado conocida[\s\S]*Cuentan en el total, no como hechos/);
+  assert.doesNotMatch(stepsByState([{ id: 'S0', title: 'S0', reported: 'done' }]), /Sin estado claro|no empieza/);
 });
 
 test('the timeline words each row in Spanish, the record\'s own texts as written', () => {

@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `86f92c535e02`. In force: 74 (46 of Sebastián, 28 of the project). Retired: 8.
+Hash `c5b6a8ded1f8`. In force: 73 (45 of Sebastián, 28 of the project). Retired: 9.
 
 ## Sebastián's
 
@@ -71,13 +71,6 @@ Everything that proposes something passes a blind Claude and Codex read, code pa
 The fixed load of a session at its first turn, the median of its latest sessions, above which the fixed-load row warns: 100,000 tokens.
 - Read by: `bin/lib/fixed-load.mjs`.
 - Since 2026-10-24. Row: reports. Source: his words of 2026-10-15, checked by the command on 2026-10-24.
-
-### growth-limit
-His growth limit: while js-harness progress --pace says the last seven days are red, the plan's open steps grown, the lead opens no new work in this repository but what this rule's value names, and writes the rest in the roadmap's Later list with its source; his own word that something goes now opens it all the same: a fix or a step of F8.
-- Of this repository only: not in force in a project that installs the harness.
-- Looked at again on 2026-11-15.
-- Read by: `bin/progress.mjs`.
-- Since 2026-11-01. Row: reports. Source: his words of 2026-11-01, checked by the command on 2026-11-01.
 
 ### lead-charter
 What the lead does alone and tells him after, and what stays his, asked one at a time: "Within it you open the next feature's work session, send plan steps and notices to work sessions (\`js-harness notify\`), merge pull requests by the rules below, remove the worktrees of merged features and update the installed command."
@@ -180,9 +173,9 @@ About how many changed lines a commit that will be reviewed stays under, a file 
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by the command on 2026-11-05.
 
 ### rules-live-in-the-harness
-A rule he gives is cemented in the harness where something acts on it, never only in memory; an output he sees again and again, as a template of five parts: "- A rule is recorded only where something acts on it, in this order of preference: a check a command runs, a line of \`CLAUDE.md\` or \`AGENTS.md\`, a protocol."
+A rule he gives is cemented in the harness where something acts on it, never only in memory; an output he sees again and again, as a template of five parts; a manual workaround made while working, as a follow-up that builds it into bin/, a template or a check, owned by a session or a roadmap entry named in the same reply: "- A rule is recorded only where something acts on it, in this order of preference: a check a command runs, a line of \`CLAUDE.md\` or \`AGENTS.md\`, a protocol."
 - Home: `bin/lib/protocols-skill.mjs`.
-- Since 2026-10-29. Row: reports. Source: his words of 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-15, 2026-10-26, 2026-10-26, 2026-10-26, 2026-10-28, 2026-10-28, checked by the command on 2026-10-29.
+- Since 2026-11-15. Row: reports. Source: his words of 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-15, 2026-10-26, 2026-10-26, 2026-10-26, 2026-10-28, 2026-10-28, 2026-11-14, 2026-11-14, checked by the command on 2026-11-15.
 
 ### senior-effort
 The effort a senior session runs at, titled <code> SR · <purpose>; its model is rule:senior-model: high.
@@ -418,6 +411,11 @@ Before he leaves, the lead asks for everything the stretch needs, and while he i
 The strongest model a change passes to when three reviews of it did not settle it. Retired on 2026-11-11: read `session-model` instead.
 - Was: claude-fable-5-2 until 2026-11-11; claude-fable-5-1 until 2026-11-10.
 - Source: his words of 2026-11-10, 2026-11-10, 2026-11-11, 2026-11-11, checked by the command on 2026-11-11.
+
+### growth-limit
+His growth limit: while js-harness progress --pace says the last seven days are red, the plan's open steps grown, the lead opens no new work in this repository but what this rule's value names, and writes the rest in the roadmap's Later list with its source; his own word that something goes now opens it all the same. Retired on 2026-11-15: no rule replaces it.
+- Was: a fix or a step of F8 until 2026-11-15.
+- Source: his words of 2026-11-15, checked by the command on 2026-11-15.
 
 ### reply-four-states
 A reply ends in one of five states, and a question is his decision alone, explained before it is asked. Retired on 2026-10-24: read `reply-five-states` instead.

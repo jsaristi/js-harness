@@ -30,6 +30,15 @@ test('the departure says the hours, each lane on the hour scale, the goals and w
   assert.match(html, /gasto.*su sí/s);
 });
 
+test('the departure page shows the pre-decided forks and their bound, or says none was pre-decided (question 290)', () => {
+  const forks = [{ if: 'el verificador encuentra un fallo <ya> en main', then: 'aterrizo' }, { if: 'Codex llega al piso', then: 'registro el salto' }];
+  const html = renderDeparture({ ...departure, forks });
+  assert.match(html, /Decidido por adelantado/);
+  assert.match(html, /el verificador encuentra un fallo &lt;ya&gt; en main[\s\S]*aterrizo/);
+  assert.match(html, /nada fuera de estos casos, ni gasto, ni publicar/);
+  assert.match(renderDeparture(departure), /Decidido por adelantado[\s\S]*ningún caso: lo que es tuyo espera tu vuelta/);
+});
+
 // --- the departure made plain (spec 6) ---
 
 test('the departure opens with what will advance: each item that can run, as its title says, its session and hours', () => {
@@ -196,12 +205,12 @@ test('on the page, what will advance leads, each item with the rows it closes an
   const advance = html.indexOf('Lo que va a avanzar');
   assert.ok(advance > 0 && advance < html.indexOf('Cuánto avanzaremos'), 'what will advance is the first section');
   const section = html.slice(advance, html.indexOf('Cuánto avanzaremos'));
-  assert.match(section, /registros &lt;b&gt;[\s\S]*Fila que cierra: «S13 &lt;x&gt;» en F8 plan, cierra si va como se estimó/);
+  assert.match(section, /registros &lt;b&gt;[\s\S]*Paso que cierra: «S13 &lt;x&gt;» del F8 plan, cierra si va como se estimó/);
   assert.match(section, /plantillas[\s\S]*no dice qué fila cierra/i);
   // A row two items name closes with the first to end: the row's when is said as the row's, not each item's.
   const shared = { ...forecast, rows: [{ ...forecast.rows[0], items: ['W1', 'W3'] }] };
   const both = renderDeparture({ ...departure, items: [...departure.items, extra], map: MAP, forecast: shared });
-  assert.match(both, /cierra si va como se estimó \(la cierra el primero de los 2 trabajos que la nombran\)/);
+  assert.match(both, /cierra si va como se estimó \(lo cierra el primero de los 2 trabajos que lo nombran\)/);
   // The plan's items are listed once on the page, under what will advance; the plan keeps only their lanes.
   assert.doesNotMatch(html, /<h3>Lo que va a avanzar<\/h3>|<h3>Trabajo<\/h3>/);
 });
@@ -214,7 +223,7 @@ test('the phase table keeps only the phases that move, with their names as the r
   assert.match(section, /como las nombra la hoja de ruta/);
   const still = { ...FORECAST, phases: [FORECAST.phases[0]] };
   const quiet = renderDeparture({ ...departure, map: MAP, forecast: still });
-  assert.match(quiet.slice(quiet.indexOf('Cuánto avanzaremos'), quiet.indexOf('El plan')), /Ninguna fase del mapa del proyecto cambia con este plan/);
+  assert.match(quiet.slice(quiet.indexOf('Cuánto avanzaremos'), quiet.indexOf('El plan')), /Ninguna fase del mapa del proyecto cambia con este tramo/);
 });
 
 test('the status measures the stretch against its forecast: at the opening, the forecast, now, the named rows done and the rows added', () => {
@@ -260,6 +269,91 @@ test('the status measures the stretch against its forecast: at the opening, the 
   const unread = renderReturn({ ...view, state: 'closed', moments: { ...moments, forecast: { ...still, now: { unavailable: 'git show: fatal' } } } });
   assert.doesNotMatch(unread, /Ninguna fase del mapa del proyecto cambió/);
   assert.match(unread, /no pronosticaba que cambiara ninguna fase del mapa del proyecto/);
+});
+
+// odd/tasks/stretch-protocol.md, spec 7: the plan's block says what the plan is, how it differs from its phase in the
+// map, its steps by state, and which steps move: forecast on the departure, measured on the return.
+const STEPS = [
+  { id: 'S0', title: 'S0 Baseline', reported: 'done' }, { id: 'S6', title: 'S6 The read surface', reported: 'to do' },
+  { id: 'S9', title: 'S9 The host watch', reported: 'in progress' }, { id: 'S8', title: 'S8 Certification', reported: 'to do' },
+];
+const PLAN_FORECAST = {
+  ...FORECAST,
+  named: 1,
+  phases: [...FORECAST.phases, { title: 'F8 Harness reorganization', done: 3, total: 7, forecast: 3, low: 3, high: 3 }],
+  plans: [{ name: 'F8 plan', done: 1, total: 4, forecast: 2, low: 1, high: 2, steps: STEPS }],
+  rows: [{ in: 'F8 plan', step: 'S8', plan: true, text: 'S8', items: ['s8'], when: 'likely' }],
+};
+const planBlock = (html) => html.slice(html.indexOf('<strong>F8 plan</strong>'), html.indexOf('Mapa del proyecto'));
+
+test('the departure\'s plan block says what the plan is, its steps by state and the step the stretch closes', () => {
+  const html = renderDeparture({ ...departure, items: [...departure.items, { id: 's8', title: 'la certificación', kind: 'verify', hours: [1, 2], corrected: [1, 2], correction: { factor: 1, samples: 0, from: 'none' }, session: null }], map: MAP, forecast: PLAN_FORECAST });
+  const block = planBlock(html);
+  assert.match(block, /sección de la hoja de ruta[\s\S]*1 de 4 pasos hechos \(25 %\)/);
+  assert.match(block, /fase «F8 Harness reorganization»[\s\S]*3 de 7 filas \(43 %\)/);
+  assert.match(block, /Hechos \(1\)[\s\S]*S0 Baseline[\s\S]*En curso \(1\)[\s\S]*Por hacer \(2\)[\s\S]*S6 The read surface · S8 Certification/);
+  assert.match(block, /Pasos que nombra este tramo: S8 Certification \(cierra si va como se estimó\)/);
+  assert.match(block, /~50 %/, 'a plan that moves keeps its tiles');
+});
+
+test('a plan the stretch does not touch says so in one line, with no tiles of three equal numbers', () => {
+  const still = { ...PLAN_FORECAST, named: 0, rows: [], plans: [{ ...PLAN_FORECAST.plans[0], forecast: 1, high: 1 }] };
+  const block = planBlock(renderDeparture({ ...departure, map: MAP, forecast: still }));
+  assert.match(block, /Ningún trabajo de este tramo dice que cierre un paso de este plan/);
+  assert.doesNotMatch(block, /~25 %|al volver/);
+  // With no phase of the same name in the map, the block does not invent one; nor with two that share its first word.
+  const alone = planBlock(renderDeparture({ ...departure, map: MAP, forecast: { ...still, phases: FORECAST.phases } }));
+  assert.doesNotMatch(alone, /fase «/);
+  const two = [...FORECAST.phases, { title: 'F8 One', done: 1, total: 2, forecast: 1, low: 1, high: 1 }, { title: 'F8 Two', done: 0, total: 1, forecast: 0, low: 0, high: 0 }];
+  assert.doesNotMatch(planBlock(renderDeparture({ ...departure, map: MAP, forecast: { ...still, phases: two } })), /fase «/);
+});
+
+test('the departure marks where it is listed each step the stretch names, with its own when, and says closing a step marks no phase row', () => {
+  const block = planBlock(renderDeparture({ ...departure, map: MAP, forecast: PLAN_FORECAST }));
+  assert.match(block, /Por hacer \(2\)[\s\S]*S8 Certification <em>\(este tramo: cierra si va como se estimó\)<\/em>/);
+  // Codex, P2: the mark keeps the row's when, so a step that ends after the return is not promised in the stretch.
+  const late = { ...PLAN_FORECAST, rows: [{ ...PLAN_FORECAST.rows[0], when: 'beyond' }] };
+  const lateBlock = planBlock(renderDeparture({ ...departure, map: MAP, forecast: late }));
+  assert.match(lateBlock, /S8 Certification <em>\(este tramo: después de tu vuelta\)<\/em>/);
+  assert.doesNotMatch(lateBlock, /lo cierra|Este tramo cierra/);
+  assert.match(block, /cerrar un paso no marca por sí solo una fila de la fase/);
+  assert.doesNotMatch(block, /S6 The read surface <em>/);
+});
+
+test('the return\'s plan block names the steps whose state moved in the stretch, from what to what', () => {
+  const nowSteps = STEPS.map((one) => (one.id === 'S6' ? { ...one, reported: 'done' } : one));
+  const now = { total: { done: 99, total: 109 }, phases: [], plans: [{ name: 'F8 plan', done: 2, total: 4, steps: nowSteps }], rows: [{ ...PLAN_FORECAST.rows[0], now: 'open' }], forecastDone: { done: 0, of: 1 }, gained: 0 };
+  const moments = { head: { open: 'c0', now: 'c1', reconstructed: false }, goals: { met: { met: 1, of: 2, unknown: 0 }, inTime: { met: 1, of: 1, unknown: 0 } }, work: { met: 1, of: 2, unknown: 0, others: {}, waiting: [] }, outside: { sessions: [], untitled: 0 }, map: null, plans: [], forecast: { ...PLAN_FORECAST, now }, timeline: [], why: [], unavailable: {} };
+  const block = planBlock(renderReturn({ ...view, state: 'closed', moments }));
+  assert.match(block, /al abrir[\s\S]*1 de 4[\s\S]*ahora[\s\S]*2 de 4/);
+  assert.match(block, /Cambiaron de estado en el tramo: S6 The read surface \(por hacer → hecho\)/);
+  assert.match(block, /Hechos \(2\)[\s\S]*S0 Baseline · S6 The read surface/, 'the steps by their state now');
+  const same = { ...now, plans: [{ name: 'F8 plan', done: 1, total: 4, steps: STEPS }] };
+  const quiet = planBlock(renderReturn({ ...view, state: 'closed', moments: { ...moments, forecast: { ...PLAN_FORECAST, now: same } } }));
+  assert.match(quiet, /Ningún paso cambió de estado en el tramo/);
+  // A step the stretch named is said as named, with its own when and a step's words for where it is now.
+  assert.match(block, /El tramo nombraba: S8 Certification \(cierra si va como se estimó; ahora: sin hacer\)/);
+  assert.doesNotMatch(block, /pronosticaba cerrar|ahora: abierta/);
+  // The reliability lens: a plan the roadmap of now no longer holds says so, with no tiles of the opening's numbers.
+  const gone = planBlock(renderReturn({ ...view, state: 'closed', moments: { ...moments, forecast: { ...PLAN_FORECAST, named: 0, rows: [], plans: [{ ...PLAN_FORECAST.plans[0], forecast: 1, high: 1 }], now: { ...now, plans: [] } } } }));
+  assert.match(gone, /ya no está en la hoja de ruta de ahora/);
+  assert.doesNotMatch(gone, /al volver|ahora: 1 de 4/);
+});
+
+test('the return says the forecast in the past, drops "0 de 0", and leaves out a step-by-step section with no step changed', () => {
+  const sameSteps = STEPS.map((one) => ({ id: one.id, title: one.title, before: { said: 's', reported: one.reported }, after: { said: 's', reported: one.reported }, change: 'same', documents: [] }));
+  const now = { total: { done: 99, total: 109 }, phases: [], plans: [{ name: 'F8 plan', done: 1, total: 4, steps: STEPS }], rows: [], forecastDone: { done: 0, of: 0 }, gained: 0 };
+  const forecast = { ...PLAN_FORECAST, named: 0, rows: [], now };
+  const moments = { head: { open: 'c0', now: 'c1', reconstructed: false }, goals: { met: { met: 1, of: 2, unknown: 0 }, inTime: { met: 1, of: 1, unknown: 0 } }, work: { met: 1, of: 2, unknown: 0, others: {}, waiting: [] }, outside: { sessions: [], untitled: 0 }, map: null, plans: [{ name: 'F8 plan', steps: sameSteps }], forecast, timeline: [], why: [], unavailable: {} };
+  const html = renderReturn({ ...view, state: 'closed', moments });
+  assert.match(html, /pronosticado al volver/);
+  assert.doesNotMatch(html, /0 de 0 filas/);
+  assert.match(html, /El mapa no ganó filas desde la apertura/);
+  assert.doesNotMatch(html, /paso por paso/);
+  // A step that changed keeps the section; so does a forecast that could not be read.
+  const changed = [{ ...sameSteps[0], change: 'text changed' }, ...sameSteps.slice(1)];
+  assert.match(renderReturn({ ...view, state: 'closed', moments: { ...moments, plans: [{ name: 'F8 plan', steps: changed }] } }), /paso por paso/);
+  assert.match(renderReturn({ ...view, state: 'closed', moments: { ...moments, forecast: { unavailable: 'git show: fatal' } } }), /paso por paso/);
 });
 
 test('the open stretch reads as in course, goals not checked yet said so', () => {

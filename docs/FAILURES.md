@@ -317,6 +317,16 @@ the input tokens it had read were spent.
   `859a797..6a721cc`, part 1 of 7, 49,568 input tokens; run again in a turn of the gate lock, on
   the same model, and not recorded as a skip
 
+### codex-review-edited-during-run
+A session edited tracked files in its worktree while its own Codex review ran, so the review read a tree that was not
+the committed range and wrote no record: its tokens were spent on a finding with no record to carry it.
+- Class: tool
+- Seen: 2026-11-14 — odd/tasks/stretch-protocol.md, L12 (JH 201) — `codex-review --base 0c6c245f` over
+  0c35bde..a690647, 173,920 input tokens, "Tracked files changed while Codex was reviewing ... no record was written";
+  the session wrote `docs/FAILURES.md` and the feature document while the review ran in the background
+- Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews leaves no record" —
+  since 2026-10-12
+
 ### codex-review-incomplete
 A Codex review followed the delegation rules of its home instead of reading the patch, read a tenth
 of it and recorded nothing.
@@ -1081,6 +1091,27 @@ dearest part finding it again.
 - Class: delivery
 - Seen: 2026-10-08 — odd/tasks/codex-review-cost.md:234-239 — "the parent's error, to not repeat"
 
+### land-removed-live-worktree
+`merge-queue --land` ran `git worktree remove` on the worktree of the pull request it landed while a session still
+worked there; on Windows git deleted the files and the registration, failed on the folder the session stood in, and
+the land said the worktree stayed.
+- Class: tool
+- Seen: 2026-11-14 — the lead's transcript `69918425-3b43-430f-9f50-62b6422422ce`, lines 10630 and 10632 (read by
+  path and line: `sessions --quote` reads only the user's lines); the land's record in `lands.jsonl` of the main
+  checkout's git directory; its output `land-878.out` in the lead's scratchpad — the land of PR 878 said "Could not
+  remove the worktree of PR 878 at D:/js-harness-worktrees/codex-spend (error: failed to delete
+  'D:/js-harness-worktrees/codex-spend': Permission denied): it stays." and recorded `"removed":[]`; JH 199, listed
+  there by `claude agents` idle with a live pid, found the folder empty and its `.git/worktrees` entry gone, and its
+  notice went to `~/.js-harness/channel/D--js-harness-worktrees-codex-spend.jsonl`, which no lead reads (the full
+  audit, A2-2); the lead re-added it by hand, line 10630: `git worktree add -b feat/codex-spend-t2
+  D:/js-harness-worktrees/codex-spend c472dcb`, line 10632: "HEAD is now at c472dcbe"; nothing committed was lost;
+  the mechanism was run again in a scratch repository (odd/tasks/land-live-worktree.md, L3)
+- Control: check — bin/merge-queue.test.mjs — "a land never asks git to remove a landed worktree a listed session
+  stands in, idle with a live pid; one nobody stands in goes" — since 2026-11-15
+- Proof: after the merge, no session `claude agents --json --all` lists has a cwd in a folder that `git worktree list`
+  no longer names (the incident is one: JH 199's cwd in `D:\js-harness-worktrees\codex-spend` after the land), and no
+  land prints "no longer lists it"; `node --test --test-name-pattern="listed session" bin/merge-queue.test.mjs` passes
+
 ### land-took-pending-pr
 `merge-queue --land` took a pull request that was open as ready while a step only he could do, a walk through
 the console, was still pending.
@@ -1314,6 +1345,19 @@ to it were delivered only after the prompt was answered.
   (odd/tasks/session-channel.md, Progress of 2026-10-15), and the board has marked a session the
   user refused or stopped since 2026-10-14 (commit cb09dc0, which names this case)
 
+### plan-state-dated-dropped
+The roadmap reader took a plan step's state only from a literal `**State:**` bullet; the roadmap writes some as
+`**State (2026-11-11):**`, so those steps were no steps, and every count of the F8 plan read through `planOf` (the
+report's migration share, the stretch forecast) left them out.
+- Class: wrong-information
+- Seen: 2026-11-14 — the return of stretch 2026-11-14T23:16:33.945Z, re-rendered from main 0c6c245f — "F8 plan
+  13 de 19 pasos"; S5, S6 and S7 were missing, so the plan held 22 steps with a state, 16 of them done
+  (odd/tasks/stretch-protocol.md, L10)
+- Control: check — bin/lib/report-pages.test.mjs — "a State bullet that carries its date is a State: the step
+  counts, and a later State bullet of the step wins" — since 2026-11-14
+- Proof: `planOf` over `docs/ROADMAP.md` gives S5, S6 and S7 among its steps, and a stretch page's F8 plan block
+  counts every step the roadmap gives a state (16 de 22 on 2026-11-14)
+
 ### pnpm-cleanup-deleted-link-targets
 A cleanup of pnpm's old install folders deleted folders that live installs still pointed to: in
 `pnpm/global/v11` some hashed names are links to such folders, and nothing resolved the links
@@ -1475,6 +1519,15 @@ skipped no duty.
 - Was: owed — odd/tasks/session-channel.md — "T17 Questions to him go through the question tool and
   through the orchestrator" — replaced on 2026-10-16: T17 was found delivered and checked off
   (odd/tasks/session-channel.md, Progress of 2026-10-15)
+
+### ready-head-not-pushed
+A session said a pull request ready while the work it had verified sat on a local branch never
+pushed to that pull request's branch, so the land would have taken an older head.
+- Class: delivery
+- Seen: 2026-11-15 — odd/tasks/consistent-orders.md, L15 — JH 208 sent `ready --pr 886` with the PR's
+  head at 039902d9 while the verified 2d9d8f0d sat on the local `worktree-consistent-orders`; the lead
+  caught it (13:31 local) and the branch was fast-forwarded to 8402785b
+- Control: owed — odd/tasks/consistent-orders.md — "F11 follow-up, owner: the lead — `notify --kind ready --pr` refuses while the pull request's head is not the sender's HEAD"
 
 ### record-order-over-time
 The board read a session's state and place by the order of the channel record, and `sessions start`

@@ -1,9 +1,9 @@
 # codex-spend: no Codex waste, no review weakened
 
 ## State
-T2 and the chain fix reviewed whole: c472dcb..3ddfd3e (L30), then the fix of its three P2 at 13367429, Codex 3 of 3
-fixed and lenses 0 findings (L31). Next: push, PR to main (B1-1/B1-2 per L25), advisor, ready --pr with the worktree
-lock line; unbind the PR on land; then T3, T5, T4 last, T6. Worktree locked "JH 199 live".
+T1 (PR 878) and T2 (PR 883, main c7afe0be) landed; JH 199 closed (L33, docs/sessions/2026-11-15-jh-199-sin-desperdicio-de-codex.md).
+Y1 is JH 207's. Next, for the session the lead assigns: T3, T5, T4 last, T6, and the follow-ups X2-X6, W2, W4, W7,
+V3/B1-2, V4.
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
@@ -180,8 +180,8 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
    fixture reproducing the baseline. `codex-meter --per-pr` prints it.
 
 ## Tasks
-- [ ] T1 (kind: build) spec 1 — `bin/codex-review.mjs`, `bin/lib/codex-review-turns.mjs` + tests — commit `fix(codex-review): read a snapshot of the head, not the live folder`
-- [ ] T2 (kind: build) spec 2 — `bin/lib/codex-review-turns.mjs`, `bin/codex-review.mjs` + tests — commit `fix(codex-review): review the gap below a merge of main alone`
+- [x] T1 (kind: build) spec 1 — PR 878 — `bin/codex-review.mjs`, `bin/lib/codex-review-turns.mjs` + tests — commit `fix(codex-review): read a snapshot of the head, not the live folder`
+- [x] T2 (kind: build) spec 2 — PR 883, main c7afe0be — `bin/lib/codex-review-turns.mjs`, `bin/codex-review.mjs` + tests — commit `fix(codex-review): review the gap below a merge of main alone`
 - [ ] T3 (kind: build) spec 3 — `bin/merge-queue.mjs`, `bin/lib/pull-request.mjs` (clearance asked) + tests — commit `fix(merge-queue): a conflict with main names its fix`
 - [ ] T4 (kind: build) specs 4, 5 — `rules change double-review` on `rule/double-review-sequence`, `bin/double-review.mjs`, `bin/js-harness.mjs` usage + tests — commits `chore(rules): a question's double review reads Claude first` and `feat(double-review): Codex reads what Claude passed`
 - [ ] T5 (kind: build) spec 6 — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
@@ -427,3 +427,21 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   does. Codex's recheck of 6e6adbf..1336742: 3 of 3 fixed, correct at 0.95, 126,887 input tokens; lenses risk and
   reliability: 0 findings. Not covered: a third merge only by a unit test. The title and `## State` header, lost
   to a state script at d1c152a6, are restored. Follow-ups that stay: X2 to X6, W2, W4, W7, V3/B1-2, V4.
+- L32 2026-11-15T12:15Z, PR 883 opened at 08653f93 and sent ready (06:36 local); the lead held its land for one
+  narrow verifier pass (opus) on 6e6adbf..1336742, with the outcome fixed beforehand: clean lands, fail-safe lands
+  with JH 205 owning it, fail-open does not land and is held for the owner. Verdict: fails open, Y1. Y1: a review
+  owes a correction, a commit and its revert follow, the default run records nothing-to-review over them (the range
+  changes no file), and the push row passes while `recheckAt(HEAD)` still says the finding is owed. The class is
+  older than 13367429: it holds with no merge at all (C1f) and on the same records at 6e6adbf. 13367429's part: in
+  a one-turn merge that writes nothing above such a gap (C1e) the run exited 1 and printed a refused rerun; now
+  `afterTurn`'s nothing-to-review branch returns owing nothing without asking whether the gap starts at a record
+  that owes, so it exits 0 silently. Two turns still refuse the merge (C1d); the debt returns at the next code
+  commit. Evidence: scratchpad verify5, out-C1d.txt:20-30 (read by JH 199), out-C1g.txt, out-C1g-pre.txt; the
+  lead's folder, jh199-verify5-883.md. The three fixes hold (V1, V2, W1 shape 3, X-c, a third merge, Codex's
+  cases 1 and 3 clean). Fail-safe and older: X6, X-b, and the three-reviews refusal's `--base <start> --again`
+  route to a fourth review (since 2026-10-19). Not covered: the real check --push, hook and merge door; real
+  Codex; W2, W4, W7, --unavailable. The lead set 883 to draft and holds it for the owner (07:12 local).
+- L33 2026-11-15T15:40Z, PR 883 landed at 10:31 local (main c7afe0be) on the owner's yes to Q288, as the lead relayed
+  it; Y1 goes to JH 207. The lead also asked whether Y1 is on main: yes, C1f (no merge) on main 7de0b95's own bin
+  passes the push row after a nothing-to-review record over an owed review (JH 199 scratchpad verify5,
+  out-C1f-main.txt). JH 199 closes with its summary, docs/sessions/2026-11-15-jh-199-sin-desperdicio-de-codex.md.

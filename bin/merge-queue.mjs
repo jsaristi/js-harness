@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { removableWorktrees } from './lib/worktrees.mjs';
+import { removableWorktrees, removeUnlived } from './lib/worktrees.mjs';
 import { allDocuments, discoverDocuments, DOCUMENT_DIFF } from './check.mjs';
 import { GATE_NOT_RUN } from './gate.mjs';
 import { CI_WORKFLOW } from './lib/ci-gate.mjs';
@@ -101,14 +101,16 @@ After it lands, each open pull request based on a branch that land landed is ret
 After it lands, a land removes the worktree of each pull request it landed (git worktree remove, never --force)
 when its head is in the main it pushed, git status shows nothing, ignored files included, its index has not
 changed for 10 minutes, and it is not under .claude/worktrees or orca/workspaces (other apps' own), the main
-one, locked, or the one the land runs from. The branch stays; the record names each one removed (removed). A removal that fails is said and changes
-no exit.
+one, locked, or the one the land runs from. Nor is one removed that a session claude agents lists stands in (its cwd
+there, and at work, blocked or its pid alive); when that listing cannot be read, none is removed. The branch
+stays; the record names each one removed (removed). A removal that fails is said, with whether git still lists the
+worktree, and changes no exit.
 Then it closes the project's finished background sessions, as js-harness sessions stop --finished does (its help says
 the rule): those whose work it landed and any an earlier land left; the record names each one closed (closed), each
 kept is said with why, and nothing of it changes the exit.
 --prune fetches origin and removes, by the same rule, every worktree on a branch origin's default branch holds, whatever
 landed it; it asks about no pull request, moves nothing, writes no record and exits 0 unless git cannot fetch or
-list the worktrees.`;
+list the worktrees, or claude agents cannot be read when one could be removed.`;
 
 const TIMEOUT_MS = 60_000;
 // The open pull requests one landed branch has based on it that a land retargets; gh pages up to this many itself.
@@ -705,28 +707,22 @@ async function landCandidate({ run, gitIn, place, main, defaultBranch, door, mer
 /** After a land, removes the worktree of each landed pull request that can go with nothing lost (`removableWorktrees`:
  * on its branch, clean, idle, its head in the main the land pushed) with `git worktree remove`, never `--force`; the
  * branch stays. Each one removed is named in the land's record (odd/tasks/land-unattended.md, T9). */
-function removeLandedWorktrees({ cwd, run, now, log, stdout }) {
+function removeLandedWorktrees({ cwd, run, now, log, list, stdout }) {
   const gitIn = (dir, ...gitArgs) => answer(run, 'git', gitArgs, dir);
   const found = removableWorktrees({ cwd, base: log.record.candidate, branches: new Set(log.landedBranches.keys()), gitIn, now });
   if (found === null) {
     stdout('Could not list the worktrees: no worktree of a landed pull request was removed.');
     return;
   }
-  for (const tree of found) {
-    const pr = log.landedBranches.get(tree.branch);
-    const removed = gitIn(cwd, 'worktree', 'remove', tree.path);
-    if (!removed.ok) {
-      stdout(`Could not remove the worktree of PR ${pr} at ${tree.path} (${removed.err.split('\n')[0] || 'git gave no reason'}): it stays.`);
-      continue;
-    }
-    log.record.removed.push({ pr, path: tree.path });
-    stdout(`Removed the worktree of PR ${pr} at ${tree.path}: its branch ${tree.branch} is in main, and the worktree was clean and idle. The branch stays.`);
-  }
+  removeUnlived(found, { cwd, gitIn, list, stdout, unlisted: (why) => stdout(`Could not remove the worktrees: ${why}, so no worktree of a landed pull request was removed.`), what: (tree) => `the worktree of PR ${log.landedBranches.get(tree.branch)}`, done: (tree) => {
+    log.record.removed.push({ pr: log.landedBranches.get(tree.branch), path: tree.path });
+    stdout(`Removed the worktree of PR ${log.landedBranches.get(tree.branch)} at ${tree.path}: its branch ${tree.branch} is in main, and the worktree was clean and idle. The branch stays.`);
+  } });
 }
 
 /** `--prune`: removes every worktree `removableWorktrees` gives against origin's default branch once fetched, whatever landed its
  * branch (odd/tasks/land-unattended.md, T10), as a land removes those of its own pull requests. No land record. */
-function pruneRun(args, { run = spawnSync, now = Date.now, stdout, stderr }) {
+function pruneRun(args, { run = spawnSync, now = Date.now, env = process.env, listAgents: list = () => listAgents(claudeRunner({ env, timeout: 15000 })), stdout, stderr }) {
   const gitIn = (dir, ...gitArgs) => answer(run, 'git', gitArgs, dir);
   if (!gitIn(args.cwd, 'fetch', '-q', 'origin').ok) {
     stderr('merge-queue: could not fetch origin.');
@@ -743,16 +739,10 @@ function pruneRun(args, { run = spawnSync, now = Date.now, stdout, stderr }) {
     stderr(`merge-queue: could not ${base ? 'list the worktrees' : `read origin/${named.name}`}: none was removed.`);
     return 1;
   }
-  let removed = 0;
-  for (const tree of found) {
-    const done = gitIn(args.cwd, 'worktree', 'remove', tree.path);
-    if (!done.ok) {
-      stdout(`Could not remove the worktree at ${tree.path} (${done.err.split('\n')[0] || 'git gave no reason'}): it stays.`);
-      continue;
-    }
-    removed += 1;
+  const removed = removeUnlived(found, { cwd: args.cwd, gitIn, list, stdout, unlisted: (why) => stderr(`merge-queue: ${why}: none was removed.`), what: () => 'the worktree', done: (tree) => {
     stdout(`Removed the worktree at ${tree.path}: its branch ${tree.branch} is in origin/${named.name}, and the worktree was clean and idle. The branch stays.`);
-  }
+  } });
+  if (removed === null) return 1;
   stdout(`${removed} worktree${removed === 1 ? '' : 's'} removed.`);
   return 0;
 }
@@ -785,10 +775,12 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
   };
   const code = await queueRun(args, { ...deps, stdout, stderr, log });
   if (code === 0 && log.landedBranches?.size > 0) {
+    // claude's listing of sessions, asked by the removal (a worktree a session stands in stays) and by the close.
+    const list = deps.listAgents ?? (() => listAgents(claudeRunner({ env, timeout: 15000 })));
     // Outside the record's `said`, as telling is: what the land did ended with main moved. A removal that fails
     // changes no exit.
     try {
-      removeLandedWorktrees({ cwd: args.cwd, run: deps.run ?? spawnSync, now, log, stdout: printOut });
+      removeLandedWorktrees({ cwd: args.cwd, run: deps.run ?? spawnSync, now, log, list, stdout: printOut });
     } catch (err) {
       printOut(`Could not remove the worktrees of the landed pull requests (${err.message}): the land's exit stands.`);
     }
@@ -797,7 +789,6 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
     try {
       const run = deps.run ?? spawnSync;
       const claude = deps.claude === undefined ? claudeRunner({ env }) : deps.claude;
-      const list = deps.listAgents ?? (() => listAgents(claudeRunner({ env, timeout: 15000 })));
       const root = mainCheckout((command, gitArgs, options) => run(command, gitArgs, { ...options, encoding: 'utf8' }), args.cwd);
       log.record.closed.push(...closeAfterLand({ home: harnessHomeOf(env), root, cwd: args.cwd, base: log.record.candidate, run, claude, list, now, say: printOut }));
     } catch (err) {

@@ -101,7 +101,7 @@ const STEPS = [{ name: 'F8 plan', steps: [
 test('section 4 draws each plan step by step, before and now, after the migration\'s share and before the stretch', () => {
   const html = renderStatus({ ...FACTS, map: { ...MAP, plans: [{ name: 'F8 plan', done: 1, total: 2 }] }, steps: STEPS, stretch: STRETCH, notes: null });
   const four = sectionFour(html);
-  assert.match(four, /<h3>F8 plan, paso por paso<\/h3>[\s\S]*S1[\s\S]*all of it[\s\S]*odd\/tasks\/one\.md: 1\/3 → 3\/3[\s\S]*avanzó[\s\S]*S2[\s\S]*igual/);
+  assert.match(four, /<h3>F8 plan, paso por paso<\/h3>[\s\S]*S1[\s\S]*all of it[\s\S]*odd\/tasks\/one\.md: 1\/3 → 3\/3[\s\S]*avanzó[\s\S]*Sin cambio \(1\): Two/);
   assert.ok(four.indexOf('La migración') < four.indexOf('paso por paso') && four.indexOf('paso por paso') < four.indexOf('El último tramo'), 'the share, then the steps, then the stretch');
   const unread = sectionFour(renderStatus({ ...FACTS, map: { ...MAP, plans: [] }, steps: { unavailable: 'git show: bad' }, notes: null }));
   assert.match(unread, /Los pasos del plan no se pudieron leer: git show: bad/);

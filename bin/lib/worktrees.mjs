@@ -4,6 +4,7 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { standingIn } from './background.mjs';
 import { COMMAND_KEYWORDS, shellWords } from './guard.mjs';
 
 /** The minutes a worktree's index must have stood still before the worktree is removed: a session that staged
@@ -151,6 +152,47 @@ export function worktreesInMain({ cwd, run = spawnSync, now = Date.now }) {
   const base = gitIn(cwd, 'rev-parse', '--verify', '--quiet', 'origin/main').out.trim();
   return base ? removableWorktrees({ cwd, base, gitIn, now }) : null;
 }
+
+/** Runs `git worktree remove` on each of `found` (`removableWorktrees`) that no session of claude's listing (`list()`)
+ * stands in (`standingIn`), and calls `done(tree)` for each removed: what the land and `--prune` share. A session in the
+ * folder is what makes git fail on Windows after it deleted the files and the registration (the land of PR 878,
+ * odd/tasks/land-live-worktree.md), so it is not left to git's refusal. A listing that cannot be read removes none, a
+ * failed listing never being "none"; it is read once, so a session that enters after it is not seen. A removal that
+ * fails is told by what git still lists, not as a worktree that stays. `what(tree)` names the worktree in a line, and
+ * `unlisted(why)` tells, as its caller tells a refusal, that the listing failed and nothing was removed. Returns how
+ * many were removed, or null when the listing could not be read. */
+export function removeUnlived(found, { cwd, gitIn, list, stdout, unlisted, what, done }) {
+  if (found.length === 0) return 0;
+  let agents;
+  try {
+    agents = list();
+  } catch (err) {
+    unlisted(`whether a session stands in the worktrees cannot be told (${err.message})`);
+    return null;
+  }
+  let removed = 0;
+  for (const tree of found) {
+    const agent = standingIn(agents, tree.path);
+    if (agent !== undefined) {
+      stdout(`Kept ${what(tree)} at ${tree.path}: the session ${agent.name || agent.id || agent.sessionId || 'with no name'} stands in it (claude agents). The branch ${tree.branch} stays.`);
+      continue;
+    }
+    const gone = gitIn(cwd, 'worktree', 'remove', tree.path);
+    if (gone.ok) {
+      removed += 1;
+      done(tree);
+      continue;
+    }
+    const why = gone.err.split('\n')[0] || 'git gave no reason';
+    const listed = linkedWorktrees(cwd, gitIn);
+    const still = listed === null ? null : listed.linked.some((item) => item.path && sameFolder(item.path, tree.path));
+    if (still === true) stdout(`Could not remove ${what(tree)} at ${tree.path} (${why}): it stays.`);
+    else if (still === false) stdout(`Could not remove ${what(tree)} at ${tree.path} whole (${why}): git no longer lists it, and what is left of its folder is to look at by hand. The branch ${tree.branch} stays.`);
+    else stdout(`Could not remove ${what(tree)} at ${tree.path} (${why}), and git could not list the worktrees after it: whether it stays cannot be told.`);
+  }
+  return removed;
+}
+
 // The commands that move the shell to another folder, and the options they take before it.
 // Compared in lower case, as PowerShell takes them in any case; `builtin` and `command` may stand before one.
 const CD_COMMANDS = new Set(['cd', 'pushd', 'chdir', 'set-location', 'sl']);
