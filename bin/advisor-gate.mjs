@@ -1,5 +1,6 @@
 // `advisor-gate`: the hook that holds the acts that decide (a question to him, a land, a session opened, a plan or a
-// task document begun, a piece said ready or closed, a sub-agent's end) to a consultation of the Fable advisor in the
+// task document begun, a piece said ready or closed, a block said with a `waiting` notice (odd/tasks/consistent-orders.md,
+// S1), a sub-agent's end) to a consultation of the Fable advisor in the
 // same stretch of work (odd/tasks/advisor-use.md, P1 and P2, his yes to question 282). Why a hook: with the tool on
 // for every role since 2026-11-12, the lead consulted it before 6 of its 20 questions, and the host's own prompt
 // already asks (M2, Depth pass 1). Policy R: one advisor call with a result covers every gated act after it until his
@@ -58,7 +59,8 @@ const kindOf = (command) => /--kind\s+(\w+)/.exec(command)?.[1] ?? null;
 /** A task document's path, whose creation is a plan. */
 const TASK_DOCUMENT = /[\\/]odd[\\/]tasks[\\/][^\\/]+\.md$/;
 
-/** The act a tool call is, or `null` when it is not gated: `question`, `land`, `session`, `plan` or `done`. */
+/** The act a tool call is, or `null` when it is not gated: `question`, `land`, `session`, `plan`, `done` or
+ * `waiting`. */
 export function gatedAct(tool, input, cwd) {
   if (tool === 'AskUserQuestion') return 'question';
   if (tool === 'mcp__ccd_session__start_session') return 'session';
@@ -74,6 +76,9 @@ export function gatedAct(tool, input, cwd) {
     const kind = kindOf(command);
     if (kind === 'question') return 'question';
     if (kind === 'ready' || kind === 'closed') return 'done';
+    // A block is consulted before it is said (odd/tasks/consistent-orders.md, S1): on 2026-11-15 two unconsulted
+    // `waiting` notices preceded a session's 2 h 40 min wait.
+    if (kind === 'waiting') return 'waiting';
   }
   if (runs(command, 'merge-queue') && /--land\b/.test(command) && !/--dry-run\b/.test(command)) return 'land';
   if (runs(command, 'sessions\\s+start') && !/--help\b/.test(command)) return 'session';

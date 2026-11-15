@@ -166,7 +166,7 @@ brief was skipped at least once with nothing to say so.
 5. "al abrir un tramo, el plan lleva 2 a 4 casos con mi respuesta propuesta ... los apruebas o corriges de una vez y durante tu ausencia actúo según ellos" (question 290, yes).
 
 ## Tasks
-- [ ] T1 (kind: build) S1, spec 1: `waiting` a gated act in `gatedAct`; tests first in bin/advisor-gate.test.mjs; route inline; commit `feat(advisor-gate): hold a waiting notice to a consult`
+- [x] T1 (kind: build) S1, spec 1 (two cases failed on main, 26 of 26 pass after): `waiting` a gated act in `gatedAct`; tests first in bin/advisor-gate.test.mjs; route inline; commit `feat(advisor-gate): hold a waiting notice to a consult`
 - [ ] T2 (kind: build) S2, spec 2: bin/lib/stop-consult.mjs, the lead's case, wired in bin/reply.mjs as stop-wake is; route inline; commit `feat(reply): turn back the lead's idle close while a session waits unconsulted`
 - [ ] T3 (kind: build) S3, spec 3: left out, folded into S1 (Depth pass item 3)
 - [ ] T4 (kind: design) S4, spec 4: the lead asks him; build nothing until then
