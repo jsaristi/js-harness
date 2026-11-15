@@ -1920,7 +1920,7 @@ test('a land never asks git to remove a landed worktree a listed session stands 
   assert.ok(out.some((line) => line.startsWith('Kept the worktree of PR 1 at ') && line.includes('JH 199 · in it')), out.join('\n'));
 });
 
-test('a land counts a session at work, or a background job not done, as standing in a worktree; a finished one is not', async () => {
+test('a land counts a session at work, or a blocked background job, as standing in a worktree; a finished one is not', async () => {
   // A pid no process has: above Linux's largest (2^22) and Windows's in use; the pid of a child that just ended could
   // be given again to one of the git processes the land starts.
   const ended = 2_147_483_644;

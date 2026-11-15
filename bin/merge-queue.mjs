@@ -102,7 +102,7 @@ After it lands, a land removes the worktree of each pull request it landed (git 
 when its head is in the main it pushed, git status shows nothing, ignored files included, its index has not
 changed for 10 minutes, and it is not under .claude/worktrees or orca/workspaces (other apps' own), the main
 one, locked, or the one the land runs from. Nor is one removed that a session claude agents lists stands in (its cwd
-there, and at work, its pid alive or a job not done); when that listing cannot be read, none is removed. The branch
+there, and at work, blocked or its pid alive); when that listing cannot be read, none is removed. The branch
 stays; the record names each one removed (removed). A removal that fails is said, with whether git still lists the
 worktree, and changes no exit.
 Then it closes the project's finished background sessions, as js-harness sessions stop --finished does (its help says
