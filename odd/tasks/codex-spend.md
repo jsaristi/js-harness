@@ -1,6 +1,6 @@
-# codex-T2 at d1c152a6, the chain fix at 74256214, 457bb1c9 and a5d528dc (local; worktree locked "JH 199 live"). The lead
-chose B (L29): Codex and the lenses on the unreviewed code commits as one range, push, PR, advisor, ready --pr with
-the lock line. Follow-up X1 (L29) goes to JH 205's brief. Then T3, T5, T4 last, T6.
+# codex-T2 and the chain fix reviewed as c472dcb..3ddfd3e: lenses 0 findings, Codex 3 P2 (L30). A writer (opus, background,
+uncommitted) fixes all three, tests first. Then commit, Codex's recheck and the lenses on the fix, push, PR (B1-1/B1-2
+per L25), advisor, ready --pr with the worktree lock line. Worktree locked "JH 199 live".
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
@@ -408,3 +408,12 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   fix: at :263 a state `capped` refuses is refused, and the merge's recheck runs alone; a test of X-c first. The
   minor X2 to X6, W2, W4 and W7 ride with it as candidates. Codex and the lenses: the code commits not yet reviewed
   (d1c152a6, 74256214, 457bb1c9, a5d528dc) as one range from c472dcb, no rerun of what is reviewed.
+- L30 2026-11-15T10:00Z, the reviews of c472dcb..3ddfd3e (d1c152a6, 74256214, 457bb1c9, a5d528dc as one range, the
+  lead's ask): lenses risk and reliability complete, 0 findings; Codex, 5 parts, 1,016,226 input tokens, three P2:
+  an empty gap (a change and its revert) writes a nothing-to-review record that `afterTurn` rejects, exit 1 with the
+  merge unreviewed (codex-review.mjs:1503); X1 itself (codex-review-recheck.mjs:261-263); `recheckAt`'s
+  `writesNothing` (codex-review-turns.mjs:90-93) counts a conflict resolved by one side's version as code where
+  coverage does not, so the walk stops and a debt is lost. The push refuses an owed correction, so the lead's B
+  (PR now, X1 a follow-up) cannot ship without them: all three fixed in one commit, tests first, then Codex's
+  recheck and the lenses on it, no fourth verifier pass; the lead told so (notify 04:58 local). X1 leaves the
+  follow-up list of L29 once the fix lands; X2 to X6, W2, W4 and W7 stay on it.
