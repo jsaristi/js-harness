@@ -11,6 +11,7 @@ import {
   recheckAnchor,
   recheckPrompt,
   recheckState,
+  recheckThrough,
   runAnswerFindings,
   runsLogged,
   secondRecheckRefused,
@@ -152,6 +153,64 @@ test('commits that change only documents between a reviewed head and the start o
   // The nearest reviewed head wins over an older one.
   const two = [record(A, B, { run: 'r1' }), record(B, C, { run: 'r2' })];
   assert.equal(recheckAnchor({ from: D, records: two, back: [D, C, B, A], changedBetween: () => ['a.md'] }), C);
+});
+
+// The line of `recheckThrough` (codex-spend L21): A, then G, whose review owes a correction, then M, a merge of S.
+const [G, M, S, N] = ['1', '2', '3', '4'].map((digit) => digit.repeat(40));
+const ROWS = [[M, G, S], [S, A], [G, A], [A]];
+const owing = [finding('[P2] Drops a record')];
+const owingRuns = [runLine('r1', { answer: { findings: owing, verdict: 'incorrect' } }), runLine('r2', { answer: { findings: [], verdict: 'correct' } })];
+const never = (what) => () => assert.fail(`${what} was asked`);
+
+test('a correction owed below a merge: a merge that writes no line, or whose own lines a record found clean, does not clear what the review at its first parent owes', () => {
+  const records = [record(A, G, { run: 'r1' })];
+  const written = [];
+  const writesNothing = (answer) => (merge) => {
+    written.push(merge);
+    return answer;
+  };
+  // One turn: no record of the merge, which writes no line a review reads.
+  assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records, runs: owingRuns, changedBetween: () => ['s.js'], writesNothing: writesNothing(true) }), { kind: 'recheck', of: G, findings: owing, at: G });
+  // A merge that writes lines no record covers is no merge the debt is read past: what reads it is a review.
+  assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records, runs: owingRuns, changedBetween: () => ['s.js'], writesNothing: writesNothing(false) }), { kind: 'review' });
+  assert.deepEqual(written, [M, M]);
+  // Two turns: the record of what was written in the merge found nothing, and git is not asked what it writes.
+  const remerge = [...records, record(G, M, { run: 'r2', diff: 'remerge' })];
+  assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records: remerge, runs: owingRuns, changedBetween: () => ['s.js'], writesNothing: never('what the merge writes') }), { kind: 'recheck', of: G, findings: owing, at: G });
+  // A merge's own review that found something is the debt at the merge itself.
+  const found = [...records, record(G, M, { run: 'r1', diff: 'remerge' })];
+  assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records: found, runs: owingRuns, changedBetween: never('a diff'), writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: owing });
+  // A review of the whole range across the merge read it as any range: nothing is read past it.
+  const across = [...records, record(G, M, { run: 'r2' })];
+  assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records: across, runs: owingRuns, changedBetween: () => [], writesNothing: never('what the merge writes') }), { kind: 'review' });
+});
+
+test('a correction owed below a merge: documents between the merge and the range, or between the review and the merge, are read past as anywhere; code is not', () => {
+  const records = [record(A, G, { run: 'r1' }), record(G, M, { run: 'r2', diff: 'remerge' })];
+  const rows = [[N, M], ...ROWS];
+  const changed = (names) => (older, newer) => (older === M && newer === N ? names : ['s.js']);
+  assert.deepEqual(recheckThrough({ from: N, rows, records, runs: owingRuns, changedBetween: changed(['odd/tasks/x.md']), writesNothing: never('what the merge writes') }), { kind: 'recheck', of: G, findings: owing, at: G });
+  assert.deepEqual(recheckThrough({ from: N, rows, records, runs: owingRuns, changedBetween: changed(['bin/x.mjs']), writesNothing: never('what the merge writes') }), { kind: 'review' });
+  // A document commit between the review and the merge (the merge's first parent is N, above G).
+  const below = [[M, N, S], [N, G], [S, A], [G, A], [A]];
+  const docs = [record(A, G, { run: 'r1' })];
+  const between = (names) => (older, newer) => (older === G && newer === N ? names : ['s.js']);
+  assert.deepEqual(recheckThrough({ from: M, rows: below, records: docs, runs: owingRuns, changedBetween: between(['notes.md']), writesNothing: () => true }), { kind: 'recheck', of: G, findings: owing, at: G });
+  assert.deepEqual(recheckThrough({ from: M, rows: below, records: docs, runs: owingRuns, changedBetween: between(['n.js']), writesNothing: () => true }), { kind: 'review' });
+});
+
+test('a correction owed below a merge: git is asked nothing more where no review that owes something lies below a merge on the first-parent line', () => {
+  const clean = [record(A, G, { run: 'r2' })];
+  const asked = [];
+  const changedBetween = (older, newer) => {
+    asked.push([older, newer]);
+    return ['s.js'];
+  };
+  assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records: clean, runs: owingRuns, changedBetween, writesNothing: never('what the merge writes') }), { kind: 'review' });
+  // Only `recheckAnchor`'s own question, as before: whether G..M changed documents alone.
+  assert.deepEqual(asked, [[G, M]]);
+  // A review that owes something with no merge between: `recheckAnchor` decided, as it did.
+  assert.deepEqual(recheckThrough({ from: G, rows: ROWS.slice(2), records: [record(A, G, { run: 'r1' })], runs: owingRuns, changedBetween: never('a diff'), writesNothing: never('what the merge writes') }), { kind: 'recheck', of: G, findings: owing });
 });
 
 test('the recheck prompt keeps the review prompt and lists each earlier finding with how it is answered', () => {

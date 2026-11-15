@@ -142,7 +142,7 @@ export function loggedCommits(log) {
  * names, which is what git writes for a merge of more than two parents, a warning that it merges none of
  * them again. `--no-relative` and `--no-renames` for the reasons the log has them (`reviewCoverage`): the
  * names are compared with its names. */
-function writtenInMerge(spawn, cwd, id) {
+export function writtenInMerge(spawn, cwd, id) {
   const shown = gitOut(spawn, cwd, ['show', '-z', '--remerge-diff', '--no-show-signature', '--no-relative', '--no-renames', '--no-ext-diff', '--name-only', '--format=%H', id]);
   const fields = shown?.split('\0') ?? [];
   if (fields.pop() !== '' || fields.shift() !== id) return null;

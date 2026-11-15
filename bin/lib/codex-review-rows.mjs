@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { reviewParts } from './codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './codex-review-plan.mjs';
 import { beyondLines, defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, remoteHoldsNoBranch, reviewCoverage, reviewStart } from './codex-review-coverage.mjs';
-import { mergeTurn, turnsCheaper } from './codex-review-turns.mjs';
+import { mergeTurn, recheckAt, turnsCheaper } from './codex-review-turns.mjs';
 import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './codex-reviews.mjs';
 import { readCodexReviewRuns } from './codex-review-runs.mjs';
 import { classifyRecheck, ESCALATION_SAID, priorLine, recheckState, runAnswerFindings } from './codex-review-recheck.mjs';
@@ -99,15 +99,24 @@ function coveredDetail({ codeCommits, base }) {
  * run (at most three reviews, `recheckState`): whether a disputed finding is waived is the user's call
  * (decided 2026-10-15: no waiver, the warning is enough). Coverage is still read from the records alone (./codex-review-runs.mjs says why);
  * the run log, where the findings are kept, only adds this refusal, and a log that cannot be read proves
- * nothing owed. Documents committed after that head change nothing here: they are no code commit. */
-function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {
-  const newest = codeCommits[0];
-  if (newest === undefined) return null;
-  // Only a review of Codex's says what the code owes: a skip or a range that held nothing records no
-  // review, so one written later, as to a document commit after the head, must not hide the debt.
-  const last = covers.filter(({ rec, covered }) => rec.outcome === 'reviewed' && covered.has(newest.id)).at(-1);
-  if (last === undefined) return null;
-  const from = last.rec.head;
+ * nothing owed. Documents committed after that head change nothing here: they are no code commit.
+ *
+ * A merge does not clear what the review below it owes (`recheckThrough`, codex-spend L21): where that last record is
+ * the clean one of what was written in a merge, what is owed is read from the merge's first parent, as `codex-review`
+ * reads it. `below`, a commit, asks it of the review that ended at or behind that commit instead: the first parent of
+ * a merge at the tip that no record covers, which `codex-review` does not review while that correction is owed. */
+function correctionOwed(cwd, { codeCommits, covers, tip }, { spawn, below = null }) {
+  let from = below;
+  if (below === null) {
+    const newest = codeCommits[0];
+    if (newest === undefined) return null;
+    // Only a review of Codex's says what the code owes: a skip or a range that held nothing records no
+    // review, so one written later, as to a document commit after the head, must not hide the debt.
+    const last = covers.filter(({ rec, covered }) => rec.outcome === 'reviewed' && covered.has(newest.id)).at(-1);
+    if (last === undefined) return null;
+    from = last.rec.head;
+    below = last.rec.diff === 'remerge' ? from : null;
+  }
   let records;
   let runs;
   try {
@@ -116,7 +125,11 @@ function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {
   } catch {
     return null;
   }
-  const state = recheckState({ from, records, runs });
+  // Git is asked more only past a merge: most pushes end on a record of no merge, and pay nothing for this.
+  let state = recheckState({ from, records, runs });
+  if (state.kind === 'review' && below !== null) state = recheckAt(cwd, { from, tip, records, runs, spawn }) ?? state;
+  // The head whose review owes it: found past a merge (`at`), or past documents, where a recheck names it (`of`).
+  if (state.at !== undefined || state.kind === 'recheck') from = state.at ?? state.of;
   if (state.kind === 'review' || (state.kind === 'refused' && state.open === 0)) return null;
   const shortOf = (id) => gitOut(spawn, cwd, ['rev-parse', '--short', id]) ?? id.slice(0, 7);
   const findings = (n) => `${n} finding${n === 1 ? '' : 's'}`;
@@ -136,6 +149,8 @@ function correctionOwed(cwd, { codeCommits, covers }, { spawn }) {
   const reviewed = records.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed');
   const atFrom = reviewed.filter((rec) => rec.head === from).at(-1);
   const recheck = typeof atFrom?.recheckOf === 'string' ? atFrom : reviewed.filter((rec) => rec.recheckOf === from).at(-1);
+  // Asked below a merge no record covers, the state may be read past documents from a head that is none of them.
+  if (recheck === undefined) return null;
   const id = Array.isArray(recheck.runs) ? recheck.runs.at(-1) : recheck.run;
   const line = runs.findLast((one) => one?.id === id);
   const answered = runAnswerFindings(line);
@@ -268,6 +283,10 @@ function codexCoverageRow(cwd, head, { spawn, remote }) {
   if (uncovered.length) {
     // `git log` lists newest first, so the oldest uncovered commit is the last one.
     const oldest = uncovered[uncovered.length - 1];
+    // A merge at the tip alone uncovered, below which a review owes a correction: the fix comes first, since
+    // `codex-review` reviews no such merge before the recheck, which only commits after it can be (codex-spend L21).
+    const owedBelow = uncovered.length === 1 && oldest.id === tip && oldest.parentCount === 2 ? correctionOwed(cwd, state, { spawn, below: oldest.parent }) : null;
+    if (owedBelow?.refuse) return fail(`${owedBelow.detail}${note}`, owedBelow.lines, owedBelow.next);
     // A root commit has no `<id>^` to use as a base; a range from the unrelated default branch does
     // reach it, and `--unavailable` records a skip instead of a review. The command "makes the record",
     // not "the review": over a range with nothing to review it records that, and starts no review.
@@ -389,7 +408,8 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
   // A merge that has the review off cannot be a turn of its own, as the command says of it (`cutInTurns`).
   const turnable = turn !== null && codexSwitchAt(gitIn(cwd, spawn), turn.merge).value !== 'off';
   const turnSizes = turnable ? [reviewSize(spawn, cwd, turn.from, turn.merge, turn), reviewSize(spawn, cwd, turn.merge, tip)] : null;
-  const inTurns = turnSizes !== null && turnSizes.every((each) => each !== null) && turnsCheaper(one, turnSizes);
+  // A merge below a review that owes a correction is cut whatever it costs, as the command cuts it (`mergeTurn`).
+  const inTurns = turnSizes !== null && turnSizes.every((each) => each !== null) && (turn.owes !== undefined || turnsCheaper(one, turnSizes));
   const both = (key) => turnSizes[0][key] + turnSizes[1][key];
   const size = inTurns ? { parts: both('parts'), changedLines: both('changedLines'), files: both('files'), leftOut: both('leftOut') } : one;
   // More parts than a run starts by itself: the review is already one that has to be asked for by its count.

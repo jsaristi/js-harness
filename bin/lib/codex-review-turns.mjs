@@ -11,9 +11,9 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { normalizeAnswer } from './codex-review-answer.mjs';
-import { defaultBranch, gitAnswer, mergeStart } from './codex-review-coverage.mjs';
+import { defaultBranch, gitAnswer, mergeStart, writtenInMerge } from './codex-review-coverage.mjs';
 import { counted, planLines, thousands } from './codex-review-plan.mjs';
-import { RECHECK_LOOK_BACK, recheckAnchor, recheckState, runsLogged } from './codex-review-recheck.mjs';
+import { RECHECK_LOOK_BACK, recheckState, recheckThrough, runsLogged } from './codex-review-recheck.mjs';
 import { readCodexReviewRuns } from './codex-review-runs.mjs';
 import { readCodexReviews } from './codex-reviews.mjs';
 import { leftOutOf } from './codex-review-scope.mjs';
@@ -24,10 +24,12 @@ import { leftOutOf } from './codex-review-scope.mjs';
  *
  * It is cut only where nothing is lost by the cut (S1): the oldest uncovered commit is a merge below `tip`
  * that `mergeStart` reads as a merge at HEAD when asked of it (so every code commit before it has a record);
- * the review that ended at its first parent owes no correction, since a recheck of it would otherwise be
- * taken by the review of the merge, which is never one; and the files written in it are left out alike by
- * the marks at the merge and at `tip`, since the merge's turn reads its marks and the push reads those of
- * `tip`. `null` too wherever git or the records cannot say. */
+ * the review that ended at its first parent, read past documents and merges as a run reads it (`recheckAt`), is
+ * not refused a recheck; and the files written in it are left out alike by the marks at the merge and at `tip`,
+ * since the merge's turn reads its marks and the push reads those of `tip`. `null` too wherever git or the
+ * records cannot say. Where that review owes a correction, `owes` names its head: the review of the merge is never
+ * its recheck, and does not clear it (`recheckThrough`), so the commits after the merge, which hold the correction,
+ * are that recheck; read in one range with the merge they would read main's code, or not be one (codex-spend L21). */
 export function mergeTurn(cwd, { given, tip, uncovered, spawn = spawnSync, where, remote = 'origin' }) {
   const oldest = uncovered.at(-1);
   if (oldest === undefined || oldest.id === tip || oldest.parentCount !== 2) return null;
@@ -39,29 +41,52 @@ export function mergeTurn(cwd, { given, tip, uncovered, spawn = spawnSync, where
   if (atMergeMarks === null || atTipMarks === null) return null;
   if (oldest.files.some((file) => atMergeMarks.has(file) !== atTipMarks.has(file))) return null;
   // The review the first parent's findings would be rechecked from is found as a run finds it, past commits
-  // that changed documents alone (`recheckAnchor`): asked at the first parent itself, a document commit
-  // between a review that owes a correction and the merge would let the cut drop that recheck (verifier B1).
-  const lines = (args) => {
-    try {
-      const result = spawn('git', args, { cwd, encoding: 'utf8' });
-      return result && !result.error && result.status === 0 ? String(result.stdout ?? '') : null;
-    } catch {
-      return null;
-    }
-  };
-  const back = lines(['rev-list', `--max-count=${RECHECK_LOOK_BACK}`, atMerge.from]);
-  if (back === null) return null;
-  const changedBetween = (older, newer) => lines(['diff', '--no-renames', '--name-only', '-z', older, newer])?.split('\0').filter(Boolean) ?? null;
+  // that changed documents alone: asked at the first parent itself, a document commit between a review that owes
+  // a correction and the merge would let the cut drop that recheck (verifier B1).
   let state;
   try {
-    const records = readCodexReviews(cwd, { spawn, where });
-    const from = recheckAnchor({ from: atMerge.from, records, back: back.split('\n').filter(Boolean), changedBetween });
-    state = recheckState({ from, records, runs: readCodexReviewRuns(cwd, { spawn, where }) });
+    state = recheckAt(cwd, { from: atMerge.from, tip, records: readCodexReviews(cwd, { spawn, where }), runs: readCodexReviewRuns(cwd, { spawn, where }), spawn, where });
   } catch {
     return null;
   }
-  if (state.kind !== 'review') return null;
-  return { merge: oldest.id, ...atMerge };
+  if (state === null || state.kind === 'refused') return null;
+  return { merge: oldest.id, ...atMerge, ...(state.kind === 'recheck' ? { owes: state.of } : {}) };
+}
+
+/** What git prints in `cwd` as it prints it, or `null` when it fails: for output whose spaces may be a name's. */
+const gitText = (cwd, spawn, args) => {
+  try {
+    const result = spawn('git', args, { cwd, encoding: 'utf8' });
+    return result && !result.error && result.status === 0 ? String(result.stdout ?? '') : null;
+  } catch {
+    return null;
+  }
+};
+
+/** What a range from `from` up to `tip` is (`recheckThrough`), read against `records` and `runs` (`holds` as
+ * `recheckState` takes it), with git asked in `cwd`: the commits behind `from` with their parents, in the one
+ * `rev-list` a run asked before; the files two commits differ by; and whether a merge writes a line a review reads
+ * (`writtenInMerge`, by the marks at `tip`, as the push counts it). The records are read here when not given.
+ * `null` when they cannot be read, or git cannot list the commits behind `from`. The one rule a run, the cut at a
+ * merge below HEAD and the push row read a correction owed by (L21). */
+export function recheckAt(cwd, { from, tip, records: given, runs, holds, spawn = spawnSync, where }) {
+  let records;
+  try {
+    records = given ?? readCodexReviews(cwd, { spawn, where });
+  } catch {
+    return null;
+  }
+  const listed = gitText(cwd, spawn, ['rev-list', '--parents', `--max-count=${RECHECK_LOOK_BACK}`, from]);
+  if (listed === null) return null;
+  const rows = listed.split('\n').map((row) => row.trim()).filter(Boolean).map((row) => row.split(' '));
+  const changedBetween = (older, newer) => gitText(cwd, spawn, ['diff', '--no-renames', '--name-only', '-z', older, newer])?.split('\0').filter(Boolean) ?? null;
+  const writesNothing = (merge) => {
+    const written = writtenInMerge(spawn, cwd, merge);
+    if (written === null || written.length === 0) return written !== null;
+    const leftOut = leftOutOf(written, { cwd, source: tip, spawn, where });
+    return leftOut !== null && written.every((file) => leftOut.has(file));
+  };
+  return recheckThrough({ from, rows, records, runs, holds, changedBetween, writesNothing });
 }
 
 /** The turns of the review of `given..tip` when HEAD, `tip`, is a merge of the default branch and every other code
@@ -113,10 +138,12 @@ export function gapBelowMerge(cwd, { given, tip, uncovered, spawn = spawnSync, w
 /** The turns the review of `given..tip` is cut in, from `options` as `mergeTurn` takes them: at a merge of the
  * default branch below HEAD (`mergeTurn`), else at the gap below a merge at HEAD (`gapBelowMerge`). Each has `at`,
  * the commit its first turn's worktree is made at, and `ranges`, the turns as `{ from, to, read }`, `read` what a
- * turn that reads a merge by what was written in it reads it with; `null` for a range reviewed as one. */
+ * turn that reads a merge by what was written in it reads it with; `null` for a range reviewed as one. No gap is cut
+ * in a turn of the gate lock (`options.gateHeld`) whose project has its declared dependencies installed: Codex reads
+ * the live folder there, since it runs the tests (`snapshotOfHead`), and the gap's worktree holds no node_modules. */
 export function turnsAt(cwd, options) {
   const atMerge = mergeTurn(cwd, options);
-  if (atMerge === null) return gapBelowMerge(cwd, options);
+  if (atMerge === null) return options.gateHeld && dependenciesInstalled(cwd) ? null : gapBelowMerge(cwd, options);
   const read = { side: atMerge.side, branch: atMerge.branch, auto: atMerge.auto };
   return { ...atMerge, at: atMerge.merge, ranges: [{ from: atMerge.from, to: atMerge.merge, read }, { from: atMerge.merge, to: options.tip, read: null }] };
 }
@@ -189,15 +216,41 @@ export function turnSaid(index, { merge, head, gap = false, from, at, ranges = [
 }
 
 /** What a run says when the first turn of a cut range owes a correction, and it stops there: the turn at the
- * merge, or that of the gap below the merge at HEAD, after which the merge is not reviewed. */
+ * merge, or that of the gap below the merge at HEAD, after which the merge is not reviewed. The gap's correction can
+ * only be committed above the merge, and its review is the recheck, after the merge where it writes lines
+ * (`recheckThrough`, `owedBelowMergeSaid`). */
 export function turnStopped({ merge, head, gap = false, from, at: gapAt, ranges = [] }) {
   if (gap) {
-    const [start, at] = [from.slice(0, 7), gapAt.slice(0, 7)];
-    const rest = ranges.length > 1 ? ', so the merge was not reviewed' : '';
-    return `The review of ${start}..${at}, below the merge ${head.slice(0, 7)}, found what owes a correction${rest}: once the correction is committed, the review from ${at} is a recheck of those findings.`;
+    const [start, at, tip] = [from.slice(0, 7), gapAt.slice(0, 7), head.slice(0, 7)];
+    const [rest, after] = ranges.length > 1 ? [', so the merge was not reviewed', `, after the merge read by what was written in it`] : ['', ''];
+    return `The review of ${start}..${at}, below the merge ${tip}, found what owes a correction${rest}: once the correction is committed above the merge, its review is a recheck of those findings${after}.`;
   }
   const [at, tip] = [merge.slice(0, 7), head.slice(0, 7)];
   return `The review of the merge ${at} found what owes a correction, so the commits after it (${at}..${tip}) were not reviewed: once the correction is committed, the review from ${at} is a recheck of those findings.`;
+}
+
+/** Why a run does not review the merge of the default branch `merge` while the review that ended below it, at `of`,
+ * owes a correction (`recheckThrough`): the review of the merge is no recheck of those findings, and the correction,
+ * which can only be committed above the merge, is (codex-spend L21). At HEAD the merge waits for that correction;
+ * below HEAD (`cut`) it is reviewed in a turn of its own or not at all, since in one range with the commits after it
+ * the review would read all the merge brought in, or not be the recheck. */
+export function owedBelowMergeSaid({ merge, of, cut = false }) {
+  const [at, owed] = [merge.slice(0, 7), `The review that ended at ${of.slice(0, 7)} owes a correction`];
+  return cut
+    ? `${owed}, below the merge ${at}, which cannot be reviewed here in a turn of its own: read in one range with the commits after it, it would not be the recheck of those findings. Nothing was started or recorded.`
+    : `${owed}, and ${at} is a merge of the default branch above it: its review is no recheck of those findings, so it was not started and nothing was recorded. Commit the correction above the merge; its review then reads the merge by what was written in it, and rechecks the findings in the commits after it.`;
+}
+
+/** `{ refused }`, the refusal of a range whose oldest code commit no record covers, of `uncovered` (newest first), is
+ * a merge below `head` that is no turn (`turnsAt` gave none: its marks differ, or it is no longer read by what was
+ * written in it), while the review that ended at its first parent owes a correction (`stateOf`, a run's
+ * `recheckThrough`) and the range does not `start` there: from that start the range would be a review as any other,
+ * and the findings never rechecked (codex-spend L21). `null` otherwise, and the range is taken as it is. */
+export function owedBelowUncut({ uncovered, start, head, stateOf }) {
+  const oldest = uncovered.at(-1);
+  if (oldest === undefined || oldest.parentCount !== 2 || oldest.id === head || start === oldest.parent) return null;
+  const state = stateOf(oldest.parent);
+  return state.kind === 'recheck' ? { refused: owedBelowMergeSaid({ merge: oldest.id, of: state.of, cut: true }) } : null;
 }
 
 /** How a run names the first turn of the cut range `turns` and what is not reviewed when it stops there:
@@ -471,13 +524,15 @@ function dependenciesInstalled(root) {
  * first, but by a run of the first two, whose parent run or clone is its own (`sweepTurnWorktrees`); what the
  * sweep leaves is a warning, `warn`. `null` when the snapshot could not be made; `{ refused }` when it was made
  * and is not the head clean, its tracked files changed as checked out (a filter, an end-of-line rule), which
- * would refuse the record after Codex had read it all: it is removed and nothing starts. */
-export function snapshotOfHead(root, head, { commonGitDir, spawn = spawnSync, now = Date.now, inTurn = false, measuring = false, gateHeld = false, warn = () => {} }) {
+ * would refuse the record after Codex had read it all: it is removed and nothing starts. With `sweepOnly` the area
+ * is swept and `root` given back, for a run whose one session is a turn's, in a worktree of its own (L21, F3). */
+export function snapshotOfHead(root, head, { commonGitDir, spawn = spawnSync, now = Date.now, inTurn = false, measuring = false, gateHeld = false, sweepOnly = false, warn = () => {} }) {
   if (inTurn || measuring || inTurnWorktree(root, commonGitDir)) return { place: root, snapshot: false, said: null };
   // What killed runs left in the area is swept first, on the real clock, also by a run that reads the live folder.
   if (commonGitDir) {
     for (const why of sweepTurnWorktrees(root, { commonGitDir, spawn })) warn(`Warning: the sweep of the review worktrees left one: ${why}.`);
   }
+  if (sweepOnly) return { place: root, snapshot: false, said: null };
   if (gateHeld && dependenciesInstalled(root)) {
     return { place: root, snapshot: false, said: `In this turn of the gate lock Codex reads the live folder, not a snapshot of ${head.slice(0, 7)}: the project's package.json declares dependencies installed in its node_modules, which a snapshot would not hold, and a turn runs the tests.` };
   }

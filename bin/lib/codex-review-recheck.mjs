@@ -179,6 +179,59 @@ export function recheckState({ from, records, runs, holds = () => null }) {
   return { kind: 'recheck', of: from, findings };
 }
 
+/** What a range from `from` is, as `recheckState` says from where `recheckAnchor` puts its findings, and read past a
+ * merge on the first-parent line as well: what a review owes is owed until a recheck names it, and a merge above it
+ * does not clear it (odd/tasks/codex-spend.md, L21).
+ *
+ * Why. A correction owed was enforced only at the head of the last record that covered the newest code commit. A
+ * merge of the default branch above a review that found something got a record of its own, by what was written in
+ * it, which found nothing; from then on the push read that clean record, and the correction, which can only be
+ * committed above the merge, was reviewed as any range, so the findings were never rechecked (docs/FAILURES.md,
+ * open-findings-escape-merge). So a merge passes the debt below it on: one whose last reviewed record is that of
+ * what was written in it (`diff: 'remerge'`, from its first parent) and owes nothing, or one that writes no line a
+ * review reads (`writesNothing(merge)`, no record needed). The range is then what a range from the head below it
+ * would be, with commits that change only documents read past between them as `recheckAnchor` reads them
+ * (`changedBetween(older, newer)`). Any other record on the way, a merge that writes lines with no record of its
+ * own, or a commit of more than two parents, stops it, and the range is what `recheckState` said.
+ *
+ * `rows` are the commits behind `from` as `git rev-list --parents` gives them, `from` first, each `[id, ...parents]`;
+ * `records`, `runs` and `holds` as `recheckState` takes them. The line is walked in `rows` alone, and git is asked
+ * (`changedBetween`, `writesNothing`) only once a review that owes something is found below a merge, so a range with
+ * none pays nothing for this. The state found below a merge carries `at`, the head it is that of. */
+export function recheckThrough({ from, rows, records, runs, holds = () => null, changedBetween, writesNothing }) {
+  const today = recheckState({ from: recheckAnchor({ from, records, back: rows.map(([id]) => id), changedBetween }), records, runs, holds });
+  if (today.kind !== 'review') return today;
+  const parentsOf = new Map(rows.map(([id, ...parents]) => [id, parents]));
+  const reviewed = records.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed');
+  // The merges passed, `{ id, own }` (`own`: by its clean record), and the stretches `[older, newer]` between them,
+  // which must change only documents.
+  const merges = [];
+  const stretches = [];
+  let newer = from;
+  for (let at = from, steps = 0; parentsOf.has(at) && steps < rows.length; steps += 1) {
+    const parents = parentsOf.get(at);
+    const rec = reviewed.filter((one) => one.head === at).at(-1);
+    if (rec !== undefined) {
+      const state = recheckState({ from: at, records, runs, holds });
+      if (state.kind !== 'review') {
+        if (merges.length === 0) return today;
+        stretches.push([at, newer]);
+        const documentsOnly = ([older, upTo]) => older === upTo || (changedBetween(older, upTo)?.every(isDocument) ?? false);
+        return stretches.every(documentsOnly) && merges.every((merge) => merge.own || writesNothing(merge.id)) ? { ...state, at } : today;
+      }
+      if (parents.length !== 2 || rec.diff !== 'remerge' || rec.base !== parents[0]) return today;
+    } else if (parents.length !== 2) {
+      if (parents.length !== 1) return today;
+      at = parents[0];
+      continue;
+    }
+    merges.push({ id: at, own: rec !== undefined });
+    stretches.push([at, newer]);
+    [at, newer] = [parents[0], parents[0]];
+  }
+  return today;
+}
+
 /** Whether a run with `--again` reviews a fourth time a change that three reviews did not settle (spec 8 of
  * odd/tasks/double-review-alignment.md; M12 of the Fable 5.2 audit). `--again` takes its range as it was given, so
  * `recheckState` reads its base alone, and a base behind such a change bought a whole new review of it.

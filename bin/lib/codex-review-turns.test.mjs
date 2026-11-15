@@ -111,26 +111,32 @@ test('a merge with a commit before it that no record covers is no cut: that comm
   assert.equal(turnOf(root, side, c2), null);
 });
 
-test('a merge whose first parent ends a review that owes a correction is no cut: the next review is its recheck', () => {
-  const { root, first, c1, side, c2 } = branchWithMerge();
+test('a correction owed below a merge: a merge whose first parent ends a review that owes a correction is cut, and says so: the commits after it are the recheck, which the merge\'s review never is (codex-spend L21)', () => {
+  const { root, first, c1, side, merge, c2 } = branchWithMerge();
   record(root, first, c1, { run: 'r1' });
   const finding = { file: 'm.js', start: 1, end: 1, severity: 'P1', title: 'The line is lost.', body: 'It is.', confidence: 0.9 };
   appendCodexReviewRun(root, { schema: CODEX_REVIEW_RUN_SCHEMA, id: 'r1', outcome: 'reviewed', answer: { findings: [finding], verdict: 'incorrect' } });
-  assert.equal(turnOf(root, side, c2), null);
-  // The same review, correct and with nothing found, owes nothing: the merge is cut again.
+  const owed = turnOf(root, side, c2);
+  assert.deepEqual(owed && [owed.merge, owed.from, owed.owes], [merge, c1, c1]);
+  // The same review, correct and with nothing found, owes nothing: the merge is cut, and owes nothing.
   const clean = branchWithMerge();
   record(clean.root, clean.first, clean.c1, { run: 'r1' });
   appendCodexReviewRun(clean.root, { schema: CODEX_REVIEW_RUN_SCHEMA, id: 'r1', outcome: 'reviewed', answer: { findings: [], verdict: 'correct' } });
-  assert.equal(turnOf(clean.root, clean.side, clean.c2)?.merge, clean.merge);
+  const cut = turnOf(clean.root, clean.side, clean.c2);
+  assert.deepEqual(cut && [cut.merge, cut.owes], [clean.merge, undefined]);
+  // Rechecked already, from a head that holds the recheck: refused, so no cut, and the range is taken as it is.
+  record(root, c1, c2, { run: 'r2', recheckOf: c1 });
+  appendCodexReviewRun(root, { schema: CODEX_REVIEW_RUN_SCHEMA, id: 'r2', outcome: 'reviewed', recheck: { of: c1, findings: 1, fixed: 1, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } });
+  assert.equal(mergeTurn(root, { given: side, tip: c2, uncovered: [{ ...reviewCoverage(root, { from: side, tip: merge }).uncovered[0] }] }), null);
 });
 
-test('a merge after a document commit that follows a review owing a correction is no cut: the recheck reads past documents, as a run does (verifier B1)', () => {
+test('a correction owed below a merge: a merge after a document commit that follows a review owing a correction names that review: the recheck reads past documents, as a run does (verifier B1)', () => {
   const docs = (root) => commit(root, 'notes.md', 'a note\n', 'docs: a note');
   const { root, first, c1, side, c2 } = branchWithMerge({ afterMine: docs });
   record(root, first, c1, { run: 'r1' });
   const finding = { file: 'm.js', start: 1, end: 1, severity: 'P1', title: 'The line is lost.', body: 'It is.', confidence: 0.9 };
   appendCodexReviewRun(root, { schema: CODEX_REVIEW_RUN_SCHEMA, id: 'r1', outcome: 'reviewed', answer: { findings: [finding], verdict: 'incorrect' } });
-  assert.equal(turnOf(root, side, c2), null);
+  assert.equal(turnOf(root, side, c2)?.owes, c1);
 });
 
 test('a merge whose written file is marked at the merge and not at HEAD is no cut: its lines would be in neither turn', () => {
@@ -249,6 +255,37 @@ test('gap below a merge: no gap where an uncovered commit lies off the first-par
   record(between.root, between.first, between.c1);
   assert.deepEqual(reviewCoverage(between.root, { from: between.side, tip: between.merge }).uncovered.map((one) => one.id).sort(), [between.merge, ...between.gaps].sort(), 'the merge of the note is no code commit');
   assert.equal(gapOf(between.root, between.side, between.merge), null);
+});
+
+test('gap below a merge: a HEAD of three parents that writes no line is no merge of the default branch to cut a gap below, though its second parent is a commit of it (codex-spend L21, F7)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-turns-'));
+  made.push(root);
+  git(root, 'init', '-q');
+  git(root, 'symbolic-ref', 'HEAD', 'refs/heads/trunk');
+  git(root, 'config', 'user.email', 'js-harness-test@example.invalid');
+  git(root, 'config', 'user.name', 'js-harness test');
+  const first = commit(root, 'm.js', 'base\n', 'init');
+  // Main merged two branches, each with a commit of its own.
+  const own = ['p', 'q'].map((name) => {
+    git(root, 'checkout', '-q', '-b', name, first);
+    return commit(root, `${name}.js`, `${name}\n`, `feat: ${name}`);
+  });
+  git(root, 'checkout', '-q', 'trunk');
+  git(root, 'merge', '-q', '--no-ff', '-m', 'merge p and q', 'p', 'q');
+  const main = git(root, 'rev-parse', 'HEAD');
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', main);
+  git(root, 'checkout', '-q', '-b', 'feat', first);
+  const c1 = commit(root, 'm.js', 'mine\n', 'feat: mine');
+  commit(root, 'g.js', 'gap\n', 'feat: gap');
+  git(root, 'merge', '-q', '--no-ff', '-m', 'merge p and q', 'p', 'q');
+  const octopus = git(root, 'rev-parse', 'HEAD');
+  assert.equal(git(root, 'rev-list', '--parents', '-n', '1', octopus).split(' ').length, 4);
+  assert.ok(own.every((id) => git(root, 'rev-list', '--parents', '-n', '1', octopus).includes(id)));
+  record(root, first, c1);
+  // From main: the gap alone is uncovered, the HEAD is no code commit, and its second parent is a commit of main.
+  assert.deepEqual(reviewCoverage(root, { from: main, tip: octopus }).uncovered.map((one) => one.subject), ['feat: gap']);
+  assert.equal(gapOf(root, main, octopus), null);
 });
 
 test('gap below a merge: a file of the gap marked at its newest commit and not at HEAD is no gap, since the turn would leave it out and the push reads it', () => {
