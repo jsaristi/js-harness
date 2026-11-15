@@ -1,7 +1,7 @@
 # review-gate: one honest review gate
 
 ## State
-JH 207, branch feat/review-gate, based on main once 883 landed (Q288). Done: ce9eb0a6 (this document), c07285b1 S1/Y1 (Codex correct 0.86, lenses 0), S2/B1-2 committed with this state (L7 fixed). Next: S2 reviews (codex-review --base c07285b1, lens-review risk,reliability), then S3 B1-1 (marks re-asked at rec.head), S4 B2-1, S6 B2-2, S7 G-2, push, draft PR to main, verifier; S5 waits for the owner. Keep js-harness wait --notice-to 207 running.
+JH 207, branch feat/review-gate, based on main once 883 landed (Q288). Done: ce9eb0a6 (this document), c07285b1 S1/Y1 (Codex correct 0.86, lenses 0), ffe89f69 S2/B1-2 (Codex correct 0.86, 69,655 input tokens; lens reliability WARNING: no test of throughNoReview past one skip, L9). Next: unit tests of recheckAnchor in codex-review-recheck.test.mjs for a chain of two no-review records, a skip then nothing-to-review, documents between them, and a record whose base is older than the nearest review; commit; then S3 B1-1, S4 B2-1, S6 B2-2, S7 G-2, push, draft PR to main, verifier; S5 waits for the owner. Keep js-harness wait --notice-to 207 running.
 C:\Users\Oficina\.js-harness\background\briefs\2026-11-15T12-20-39-311Z-c126f3fd.md. Orientation done; plan draft and
 advisor answer taken (see Log L2). Next: read verify5 (Temp scratchpad path on line 4 of the lead's
 jh199-verify5-883.md), `git show worktree-full-audit:odd/tasks/full-audit.md`, his words (`js-harness sessions --quote`
@@ -131,3 +131,4 @@ Refusing existing records (S5's 78); anything that changes who decides a waiver.
   `nothingPaidExit` in codex-review-turns.mjs. Codex on ce9eb0a..c07285b: correct, 0.86, 180,394 input tokens; lenses
   risk and reliability: 0 findings each. S2 committed with L7's fix: codex-review-recheck.test.mjs 30 of 30, the Y1
   and B1-2 tests 11 of 11.
+- L9 2026-11-15, S2's reviews: Codex on c07285b..ffe89f6: correct, 0.86, 69,655 input tokens; lenses: risk 0, reliability 1 WARNING (codex-review-recheck.mjs:125-142, the multi-step walk, the greedy oldest base and the limit filter have no test past one skip on the reviewed head). Taken: tests of those shapes come next.
