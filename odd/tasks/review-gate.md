@@ -1,7 +1,7 @@
 # review-gate: one honest review gate
 
 ## State
-JH 207, branch feat/review-gate, based on main once 883 landed (Q288). Done: ce9eb0a6 (this document), c07285b1 S1/Y1 (Codex correct 0.86, lenses 0), ffe89f69 S2/B1-2 (Codex correct 0.86, 69,655 input tokens; lens reliability WARNING: no test of throughNoReview past one skip, L9). Next: unit tests of recheckAnchor in codex-review-recheck.test.mjs for a chain of two no-review records, a skip then nothing-to-review, documents between them, and a record whose base is older than the nearest review; commit; then S3 B1-1, S4 B2-1, S6 B2-2, S7 G-2, push, draft PR to main, verifier; S5 waits for the owner. Keep js-harness wait --notice-to 207 running.
+JH 207, branch feat/review-gate, based on main once 883 landed (Q288). Done: ce9eb0a6 (this document), c07285b1 S1/Y1 (Codex correct 0.86, lenses 0), ffe89f69 S2/B1-2 (Codex correct 0.86, 69,655 input tokens; lens reliability WARNING: no test of throughNoReview past one skip, L9). Next: unit tests of recheckAnchor in codex-review-recheck.test.mjs for a chain of two no-review records, a skip then nothing-to-review, documents between them, and a record whose base is older than the nearest review; commit; then S3 B1-1, S4 B2-1, S5 (go, L10: first the old-vs-new push row on every open branch), S6 B2-2, S7 G-2, push, draft PR to main, verifier. Keep js-harness wait --notice-to 207 running.
 C:\Users\Oficina\.js-harness\background\briefs\2026-11-15T12-20-39-311Z-c126f3fd.md. Orientation done; plan draft and
 advisor answer taken (see Log L2). Next: read verify5 (Temp scratchpad path on line 4 of the lead's
 jh199-verify5-883.md), `git show worktree-full-audit:odd/tasks/full-audit.md`, his words (`js-harness sessions --quote`
@@ -85,7 +85,7 @@ Refusing existing records (S5's 78); anything that changes who decides a waiver.
 - [ ] T3 (kind: build) S2, spec 2: the debt read through a skip over code (recheckAnchor walks no-review records)
 - [ ] T4 (kind: build) S3, spec 3: marks asked again at the record's head
 - [ ] T5 (kind: build) S4, spec 4: Codex asked at each commit's own switch when the tip has it off
-- [ ] T6 (kind: build) S5, spec 5: waits for the owner
+- [ ] T6 (kind: build) S5, spec 5: go (L10); old-vs-new push row per open branch first
 - [ ] T7 (kind: build) S6, spec 6: lens BLOCKER/CRITICAL owed until a lens recheck, admitted records only
 - [ ] T8 (kind: build) S7, spec 7: the quiet line shows both debts
 - [ ] T9 (kind: verify) one opus verifier on the whole
@@ -132,3 +132,4 @@ Refusing existing records (S5's 78); anything that changes who decides a waiver.
   risk and reliability: 0 findings each. S2 committed with L7's fix: codex-review-recheck.test.mjs 30 of 30, the Y1
   and B1-2 tests 11 of 11.
 - L9 2026-11-15, S2's reviews: Codex on c07285b..ffe89f6: correct, 0.86, 69,655 input tokens; lenses: risk 0, reliability 1 WARNING (codex-review-recheck.mjs:125-142, the multi-step walk, the greedy oldest base and the limit filter have no test past one skip on the reviewed head). Taken: tests of those shapes come next.
+- L10 2026-11-15T17:40Z, his answer to question 293 (lead transcript 69918425-3b43-430f-9f50-62b6422422ce line 17348, read with sessions --quote): "Exigirla a todos (Recomendada)". S5 is a go: every Codex record must name its run line, the 78 included. The lead's condition: before building, run the old-vs-new push row branch by branch, and stop if an open branch loses its review.
