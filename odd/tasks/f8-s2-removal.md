@@ -65,7 +65,7 @@ lost, which he accepted once the project's documentation and its memory were on 
   yes covers and that the undo for Orca and herdr is not exercised; a no stops there — his brief.
 - Quiescing writers and restarting sessions are planned with the lead and never done by surprise: PP 1 works in
   `D:\plataforma-preproyecto` on this machine — his brief.
-- The week is red on `rule:growth-limit`: nothing beyond this step and fixes.
+- The week is red on the growth limit (retired 2026-11-15): nothing beyond this step and fixes.
 
 ## Ask me before
 - The sitting: closing every session, the lead's included, for the backup (dropped by question 179, L20).

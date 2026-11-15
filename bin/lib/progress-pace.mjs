@@ -10,7 +10,7 @@ import { taskId } from './sessions.mjs';
 /** How many days `--pace` reads when it is not told. */
 export const PACE_DAYS = 14;
 
-/** The days of the week the growth limit reads (rule:growth-limit): a week, the last whole days before today. */
+/** The days of the week `progress --pace` says red or green: a week, the last whole days before today. */
 export const WEEK_DAYS = 7;
 
 /** What git reads: the roadmap and every feature document, the same files `progress` reads. */
@@ -258,7 +258,7 @@ const openOf = (steps) => steps.filter((one) => !one.done).length;
  * counts nothing. The mean a day is to one decimal. `week` is the last `WEEK_DAYS` whole days, today left out so
  * that a morning's merges do not turn it, or `null` when the window holds fewer: its counts, how many open steps
  * it `grew` by, the open steps of each file after each commit less those before, so a step reworded or a document
- * moved or landed finished grows nothing, and `red` when that is more than none (rule:growth-limit). */
+ * moved or landed finished grows nothing, and `red` when that is more than none. */
 export function paceOf({ commits, now, days }) {
   const start = windowStart(now, days);
   const keys = Array.from({ length: days }, (_, at) => dayKey(new Date(start.getFullYear(), start.getMonth(), start.getDate() + at)));
@@ -301,23 +301,22 @@ export function paceOf({ commits, now, days }) {
 
 const countsSaid = (counts) => KINDS.map((kind) => `${kind} ${counts[kind]}`).join('  ');
 
-/** The week as its line says it: its counts, how its open steps moved, and red or green; `limit` is the value of
- * rule:growth-limit where it holds, what may still open while the week is red. */
-function weekSaid(week, limit) {
+/** The week as its line says it: its counts, how its open steps moved, and red or green. */
+function weekSaid(week) {
   const moved = week.grew > 0 ? `grew by ${week.grew}` : week.grew < 0 ? `fell by ${-week.grew}` : 'did not grow';
-  const state = !week.red ? 'green' : limit === undefined ? 'red' : `red, new work waits but ${limit} (rule:growth-limit)`;
+  const state = week.red ? 'red' : 'green';
   return `Last 7 days ${week.from} to ${week.to}: ${countsSaid(week)}; the open steps ${moved}: ${state}`;
 }
 
 /** The pace as `progress --pace` prints it: the branch read, a line a day, the totals, the mean a day and, when the
  * window holds a whole week, the week's line. */
-export function paceLines({ branch, days, perDay, total, meanPerDay, week = null, limit }) {
+export function paceLines({ branch, days, perDay, total, meanPerDay, week = null }) {
   const label = (text) => text.padEnd(12);
   return [
     `Pace of ${branch}, its first-parent line, by committer day over the last ${days === 1 ? 'day' : `${days} days`}:`,
     ...perDay.map((day) => `  ${day.date}  ${countsSaid(day)}${day.partial ? '  (today, so far)' : ''}`),
     `${label('Total')}${countsSaid(total)}`,
     `${label('A day')}${countsSaid(meanPerDay)}`,
-    ...(week === null ? [] : [weekSaid(week, limit)]),
+    ...(week === null ? [] : [weekSaid(week)]),
   ];
 }

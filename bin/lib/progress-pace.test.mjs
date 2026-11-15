@@ -201,7 +201,7 @@ test('the pace is said as a line a day under the branch it read, then the totals
   ]);
 });
 
-// The week of the growth limit (rule:growth-limit, odd/tasks/replan-execute.md): the last seven whole days.
+// The week `progress --pace` says red or green (odd/tasks/replan-execute.md): the last seven whole days.
 const weekOf = (commits) => paceOf({ commits, now: NOW, days: PACE_DAYS }).week;
 
 test('the week is the last seven whole days of the window, today left out, and none when the window holds fewer', () => {
@@ -233,13 +233,12 @@ test('the week is red when its open steps grew, and a step reworded or a documen
   assert.deepEqual(weekOf([opened, closedMore]), { from: '2026-10-09', to: '2026-10-15', closed: 3, reopened: 0, added: 2, removed: 0, grew: -1, red: false });
 });
 
-test('the week is said after the mean a day, with what waits while it is red where the limit holds', () => {
+test('the week is said after the mean a day, red or green and nothing more', () => {
   const opened = commit('open', daysAgo(1), [{ path: 'odd/tasks/g.md', before: null, after: feature('- [ ] T1 a') }]);
   const pace = paceOf({ commits: [opened], now: NOW, days: PACE_DAYS });
-  assert.equal(paceLines({ ...pace, branch: 'main', limit: 'a fix or a step of F8' }).at(-1), 'Last 7 days 2026-10-09 to 2026-10-15: closed 0  reopened 0  added 1  removed 0; the open steps grew by 1: red, new work waits but a fix or a step of F8 (rule:growth-limit)');
   assert.equal(paceLines({ ...pace, branch: 'main' }).at(-1), 'Last 7 days 2026-10-09 to 2026-10-15: closed 0  reopened 0  added 1  removed 0; the open steps grew by 1: red');
   const quiet = paceOf({ commits: [], now: NOW, days: PACE_DAYS });
-  assert.equal(paceLines({ ...quiet, branch: 'main', limit: 'a fix or a step of F8' }).at(-1), 'Last 7 days 2026-10-09 to 2026-10-15: closed 0  reopened 0  added 0  removed 0; the open steps did not grow: green');
+  assert.equal(paceLines({ ...quiet, branch: 'main' }).at(-1), 'Last 7 days 2026-10-09 to 2026-10-15: closed 0  reopened 0  added 0  removed 0; the open steps did not grow: green');
   // A window of two days holds no whole week: the heading, two days, the totals and the mean, and no week line.
   assert.equal(paceLines({ ...paceOf({ commits: [], now: NOW, days: 2 }), branch: 'main' }).length, 5);
 });
