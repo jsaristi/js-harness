@@ -115,7 +115,10 @@ No words of the owner's on block 0 were found: searched his lines in the lead's 
 ## Tasks
 - [x] T1 (kind: design) specs 1-4: cause found, real-shape todo tests, this document. Route: inline. Commit: this one.
 - [ ] T2 (kind: build) specs 1-3: the last `message` pass in `tokensOf` and `contextOf`, the todos removed, the 8
-  mismatched replies read first. Route: inline. Waits for the design's approval.
+  mismatched replies and the one two-pass reply read first: rerun the scan from
+  `~/.js-harness/research/jh-209/scan.mjs` (and `stamps.mjs` for the channel's stamps), which name them. Fix the
+  test comments too: they cite line 240 as the `advisor_tool_result`, which is line 242. Route: inline. Waits for
+  the design's approval.
 
 ## Log
 - L1 The lead's brief (2026-11-15, `~/.js-harness/background/briefs/2026-11-15T19-32-46-858Z-ef692e00.md`), Part 2:

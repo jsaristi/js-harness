@@ -34,14 +34,24 @@ the context share runs high. Brief: `~/.js-harness/background/briefs/2026-11-15T
   notice for about 46 %): block 0's own defect, measured in the feature document's depth pass.
 - The first retirement commit failed the gate on GitHub: the coverage register was stale after the manifest
   sentence went; fixed with `rules coverage --refresh` and a context entry, `rules coverage --strict` PASS.
+- Two commits went through the gate a second time only to read a row the first run's `tail`/`grep` had cut: block
+  0's contracts row, and the retirement's tests row (a 291 s run on GitHub's machines). The same shape as
+  `diagnostic-whole-gate` in `docs/FAILURES.md`: its `- Seen:` line is owed (Left).
+- The retirement's last commit is a message-only amend made with `--no-verify`, on the tree the gate had passed.
 
 ## Left
 - The cap commit (held by the open `rule/away-autonomy`, JH 208): JSON and steps in the feature document's State.
 - PR 888's ROADMAP move and PR 890's prose fixes: the feature document's State.
 - Block 0's T2 (the fix): waits for the lead and the owner.
+- A `- Seen:` line on `diagnostic-whole-gate` in `docs/FAILURES.md` (outside this session's surface): the lead.
+- The scripts behind the depth pass's figures, kept at `~/.js-harness/research/jh-209/` (scan.mjs, stamps.mjs,
+  usage-dump.mjs; outside the repo, undone by deleting that folder).
+- The `memory:` line `rules change growth-limit` printed (a memory note stating the limit would point to a retired
+  rule): no engram search was run.
 
 ## Cost
 - First notice 2026-11-15 19:32Z (opened), last 21:0xZ before this close.
-- Codex reviews: 3 (39,577; 81,541 input tokens, and one plan-only pass). Claude lenses: 2 runs, 3 lenses, about
-  34,000 input tokens. Commit gates: about 8 runs, one failed on GitHub's machines (coverage).
+- Codex reviews: 2 (39,577 and 81,541 input tokens); two `--plan` reads started nothing. Claude lenses: 2 runs, 3
+  lenses, 34,260 input tokens. Gate runs: 11 commit runs and one `contract run`, 4 of them refused (contracts row
+  twice, a tests row on GitHub, a gate stopped before its sensors).
 - Context at the end: not known exactly; the stamps read double after advisor calls (block 0).
