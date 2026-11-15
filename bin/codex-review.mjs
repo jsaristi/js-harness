@@ -1285,7 +1285,7 @@ async function reviewRun(argv, env, deps, snapshot) {
    * three reviews of a change it holds after `from`, where `recheckFor` reads `from` alone (`againPastThreeReviews`). */
   const recheckOrAgain = (from) => {
     const state = recheckFor(from);
-    if (!args.again || state.kind !== 'review' || onResult !== null || everyFile) return state;
+    if (!args.again || state.kind === 'refused' || onResult !== null || everyFile) return state;
     // Records that cannot be read leave the range a review, as they do `recheckFor`.
     const records = (() => { try { return readCodexReviews(root, { spawn, where }); } catch { return []; } })();
     const held = new Set((git(spawn, root, ['rev-list', `${from}..${head}`]) ?? '').split('\n').filter(Boolean));
@@ -1381,7 +1381,7 @@ async function reviewRun(argv, env, deps, snapshot) {
     if (left.covered !== undefined) {
       // Covered whole, above a merge whose review, or none, did not clear what is owed below it: refused as above (V5).
       const owed = mergeTurnOnly || args.unavailable !== undefined ? null : recheckFor(head);
-      if (owed?.kind === 'recheck' && owed.at !== undefined) return refusedAt(owedBelowMergeSaid({ merge: head, of: owed.of }), firstStep('fix the open findings in code and commit the fix above the merge'));
+      if (owed?.kind === 'recheck' && owed.at !== undefined) return refusedAt(owedBelowMergeSaid({ merge: owed.merge ?? head, of: owed.of }), firstStep('fix the open findings in code and commit the fix above the merge'));
       log(left.covered);
       return null;
     }
@@ -1599,7 +1599,7 @@ async function reviewRun(argv, env, deps, snapshot) {
       error(`${secondRecheckSaid(from, state)}\n${nextLine(firstStep('record the follow-up task the line above names, for what is still open'))}`);
       return 1;
     }
-    if (state.kind === 'recheck') recheck = { of: state.of, findings: state.findings, second: state.second === true };
+    if (state.kind === 'recheck') recheck = { of: state.of, findings: state.findings, second: state.second === true || state.thirdBelow === true };
     // The patch Codex has to have seen; the buffer holds a large diff, far above Node's 1 MiB default.
     // With renames asked for (`RENAMES`), as the range was counted and its prompt asks; a merge has its own diff.
     const patchArgs = merge === null ? ['diff', '--no-color', '--no-ext-diff', RENAMES, from, head] : rangeDiff({ from, head, merge }, ['--no-color', '--no-ext-diff']);

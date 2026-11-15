@@ -199,18 +199,28 @@ export function recheckState({ from, records, runs, holds = () => null }) {
  * below the merge was never rechecked, and the push, which reads only that last recheck, passed. So the walk goes on
  * below such a merge as below a clean one, and a debt found below joins it: the state is the recheck of the merge's own
  * record (`of` names its head, as it did, so its record keeps its shape), and its findings are the merge's, then those
- * owed below. The run is refused where the debt below is refused (three reviews spent), and where it is a second
- * recheck: joined, the recheck would be the third review of the findings below, and its record, which names the merge,
- * would let a fourth follow it. A debt below that is settled (a refusal with nothing open) adds nothing. No clean
- * record is written above the merge while either is owed: the one record after it is the recheck of both. A refusal
- * met so carries `owed`, the merges' debt, which is still owed: the push row refuses on it, as it did before the walk
- * went below the merge. It is in this state alone, never in a record.
+ * owed below. A debt below that is settled (a refusal with nothing open) adds nothing. No clean record is written above
+ * the merge while either is owed: the one record after it is the recheck of both.
+ *
+ * Where the debt below has had its three reviews (a refusal that left something open), the recheck after the merge is
+ * of the merge's own findings alone, as it was before the walk went below the merge (codex-spend L26, W1). Refused
+ * instead, as 457bb1c9 had it, the run printed a review from far behind the merge, which read main's code again and
+ * whose record cleared the merge's finding unrechecked. Nothing more is reviewed of the change below; the push row reads that last recheck alone, and no
+ * longer says the three reviews below were spent.
+ *
+ * Where the debt below waits for its second recheck, it joins too, and that recheck is the third review of the findings
+ * below (`thirdBelow`). Its record names the merge, as any recheck of the merge's findings does, so the records alone
+ * must tell the next run that a fourth review is not due: from the head of a recheck that left findings open, whose
+ * `recheckOf` is a merge's own record and below which the walk joins a second recheck still due (nothing names that
+ * debt's head since), the range is refused as past three reviews, with what that recheck left open and `merge`, the
+ * merge, which `secondRecheckRefused` names. That refuses the merge's own findings at their second review as well.
  *
  * `rows` are the commits behind `from` as `git rev-list --first-parent --parents` gives them, `from` first, each
  * `[id, ...parents]`; `records`, `runs` and `holds` as `recheckState` takes them. The line is walked in `rows` alone,
  * and git is asked (`changedBetween`, `writesNothing`) only once a review that owes something is found below a merge,
  * so a range with none pays nothing for this. The state found below a merge, or joined there, carries `at`, the head
- * of the newest record that owes it. */
+ * of the newest record that owes it; a state read past a merge or at one carries `merge`, the newest merge on the way,
+ * which a refusal names. Neither is ever in a record. */
 export function recheckThrough({ from, rows, records, runs, holds = () => null, changedBetween, writesNothing }) {
   const today = recheckState({ from: recheckAnchor({ from, records, back: rows.map(([id]) => id), changedBetween }), records, runs, holds });
   const parentsOf = new Map(rows.map(([id, ...parents]) => [id, parents]));
@@ -222,47 +232,62 @@ export function recheckThrough({ from, rows, records, runs, holds = () => null, 
     return rec !== undefined && parents.length === 2 && rec.diff === 'remerge' && rec.base === parents[0] && typeof rec.recheckOf !== 'string';
   };
   const firstOfMerge = (state) => state.kind === 'recheck' && state.second !== true && mergeOwn(state.of);
-  if (today.kind !== 'review' && !firstOfMerge(today)) return today;
-  // `owed`, what the merges' own records met so far owe, joined; `merges` and `stretches`, those passed since the last
-  // record met, not yet read: each merge `{ id, own }` (`own`: by its clean record), each stretch `[older, newer]`
-  // between them, which must change only documents. `passed`: a merge lies between `from` and where the walk is.
-  let owed = today.kind === 'recheck' ? today : null;
-  let passed = owed !== null;
-  let [merges, stretches] = [[], []];
-  let at = owed === null ? from : parentsOf.get(owed.of)[0];
-  let newer = at;
-  const join = (state) => ({ ...owed, findings: [...owed.findings, ...state.findings], at: owed.at ?? owed.of });
-  const reached = () => stretches.every(([older, upTo]) => older === upTo || (changedBetween(older, upTo)?.every(isDocument) ?? false)) && merges.every((merge) => merge.own || writesNothing(merge.id));
-  for (let steps = 0; parentsOf.has(at) && steps < rows.length; steps += 1) {
-    const parents = parentsOf.get(at);
-    const rec = lastAt(at);
-    if (rec !== undefined) {
-      const state = recheckState({ from: at, records, runs, holds });
-      if (state.kind !== 'review') {
-        if (!passed) return today;
-        stretches.push([at, newer]);
-        if (!reached()) return owed ?? today;
-        if (firstOfMerge(state)) {
-          owed = owed === null ? { ...state, at } : join(state);
-          [merges, stretches, at, newer] = [[], [], parents[0], parents[0]];
-          continue;
+  // The state read down the first-parent line from `start`, with `debt`, what the merges' own records met so far owe,
+  // joined (`null`: none yet, and nothing is read but past a merge). `null` where the walk ends with no debt.
+  const walk = (start, debt) => {
+    // `merges` and `stretches`, those passed since the last record met, not yet read: each merge `{ id, own }` (`own`:
+    // by its clean record), each stretch `[older, newer]` between them, which must change only documents. `passed`: a
+    // merge lies between `from` and where the walk is; `newest`, the first of them.
+    let owed = debt;
+    let passed = owed !== null;
+    let newest = owed?.merge ?? null;
+    let [merges, stretches, at, newer] = [[], [], start, start];
+    const join = (state) => ({ ...owed, findings: [...owed.findings, ...state.findings], at: owed.at ?? owed.of, ...(state.second === true ? { thirdBelow: true } : {}) });
+    const reached = () => stretches.every(([older, upTo]) => older === upTo || (changedBetween(older, upTo)?.every(isDocument) ?? false)) && merges.every((merge) => merge.own || writesNothing(merge.id));
+    for (let steps = 0; parentsOf.has(at) && steps < rows.length; steps += 1) {
+      const parents = parentsOf.get(at);
+      const rec = lastAt(at);
+      if (rec !== undefined) {
+        const state = recheckState({ from: at, records, runs, holds });
+        if (state.kind !== 'review') {
+          if (!passed) return owed;
+          stretches.push([at, newer]);
+          if (!reached()) return owed;
+          if (firstOfMerge(state)) {
+            owed = owed === null ? { ...state, at, merge: newest } : join(state);
+            [merges, stretches, at, newer] = [[], [], parents[0], parents[0]];
+            continue;
+          }
+          if (owed === null) return capped(state, at) ?? { ...state, at, merge: newest };
+          // Three reviews spent below, or a recheck there refused: the merge's own recheck runs alone (W1).
+          return state.kind === 'refused' ? owed : join(state);
         }
-        if (owed === null) return { ...state, at };
-        if (state.kind === 'refused') return state.open === 0 ? owed : { ...state, at, owed };
-        return state.second === true ? { kind: 'refused', of: rec.recheckOf, open: state.findings.length, at, owed } : join(state);
+        if (parents.length !== 2 || rec.diff !== 'remerge' || rec.base !== parents[0]) return owed;
+      } else if (parents.length !== 2) {
+        if (parents.length !== 1) return owed;
+        at = parents[0];
+        continue;
       }
-      if (parents.length !== 2 || rec.diff !== 'remerge' || rec.base !== parents[0]) return owed ?? today;
-    } else if (parents.length !== 2) {
-      if (parents.length !== 1) return owed ?? today;
-      at = parents[0];
-      continue;
+      merges.push({ id: at, own: rec !== undefined });
+      stretches.push([at, newer]);
+      [passed, newest] = [true, newest ?? at];
+      [at, newer] = [parents[0], parents[0]];
     }
-    merges.push({ id: at, own: rec !== undefined });
-    stretches.push([at, newer]);
-    passed = true;
-    [at, newer] = [parents[0], parents[0]];
+    return owed;
+  };
+  // The cap, where `state`, the range's own or one the walk met, is a second recheck: the recheck that ended at
+  // `state.of` was of a merge's own findings, and joined there a second recheck still due below, so it was the third
+  // review of those findings. `null` where it is not; the refusal, naming that merge (and `at` where given), where it is.
+  function capped(state, at) {
+    if (state.kind !== 'recheck' || state.second !== true) return null;
+    const merge = lastAt(state.of)?.recheckOf;
+    const below = typeof merge === 'string' && mergeOwn(merge) ? walk(parentsOf.get(merge)[0], { kind: 'recheck', of: merge, findings: [], merge }) : null;
+    return below?.thirdBelow === true ? { kind: 'refused', of: state.of, open: state.findings.length, reviews: 3, findings: state.findings, merge, ...(at === undefined ? {} : { at }) } : null;
   }
-  return owed ?? today;
+  if (today.kind === 'recheck' && today.second === true) return capped(today) ?? today;
+  if (today.kind !== 'review' && !firstOfMerge(today)) return today;
+  const owed = today.kind === 'recheck' ? { ...today, merge: today.of } : null;
+  return walk(owed === null ? from : parentsOf.get(owed.of)[0], owed) ?? today;
 }
 
 /** Whether a run with `--again` reviews a fourth time a change that three reviews did not settle (spec 8 of
@@ -283,7 +308,8 @@ export function againPastThreeReviews({ heads, stateOf, uncovered, reviewFromOf,
   for (const head of heads) {
     const state = stateOf(head);
     if (state.kind !== 'refused' || state.reviews !== 3) continue;
-    const reviewFrom = newCode ? reviewFromOf(head) : null;
+    // Past three reviews of a recheck that carried a merge's findings, the refusal names no review (`secondRecheckRefused`).
+    const reviewFrom = newCode && state.merge === undefined ? reviewFromOf(head) : null;
     if (reviewFrom !== null && startsAtOrAfter(reviewFrom) === true) continue;
     return { head, state };
   }
@@ -396,14 +422,20 @@ export function classifyRecheck(review, prior) {
  * Only a range whose every code commit has a record is offered the skip. One that holds code no review read
  * is offered the review that reads it: a skip is for when Codex cannot run (AGENTS.md), and on 2026-10-19 a
  * session that followed the skip this refusal offered left a new commit no review had read. `again`, the head a
- * run with `--again` from `base` would review past (`againPastThreeReviews`), says so. */
-export function secondRecheckRefused({ of, open, base, uncovered = [], reviewFrom = null, reviews, findings = [], again = null }) {
+ * run with `--again` from `base` would review past (`againPastThreeReviews`), says so.
+ *
+ * `merge`, where the third review was the recheck of the findings of that merge of the default branch and of those owed
+ * below it (`recheckThrough`, codex-spend L26): no review is named. The nearest commit behind it that starts a review
+ * lies behind the merge, and a review from there reads main's code again, and its record clears what is open, the
+ * merge's findings among them, with no recheck. The way out is the one three reviews always have, the user. */
+export function secondRecheckRefused({ of, open, base, uncovered = [], reviewFrom = null, reviews, findings = [], again = null, merge = null }) {
   const left = open === null ? 'findings whose counts were not kept, taken as open' : `${open === 1 ? '1 finding' : `${open} findings`} not fixed or blocking`;
   const first = open === 0 ? 'the first found every one fixed' : open === null ? 'the counts of the first were not kept' : `the first left ${left}`;
   const fourth = again === null ? '' : `; \`--again\` from ${base.slice(0, 7)} would review it a fourth time`;
+  const third = merge === null ? `a second recheck that ended at ${of.slice(0, 7)}` : `the recheck that ended at ${of.slice(0, 7)} of the findings of the merge ${merge.slice(0, 7)} of the default branch and of those owed below it`;
   // Past three reviews the change is not settled: it is raised and passed on, not reviewed again (`recheckState`).
   const refused = reviews === 3
-    ? `Three reviews of this change did not settle it: the third, a second recheck that ended at ${of.slice(0, 7)}, left ${left}${fourth}. Nothing more is reviewed, and nothing was started or recorded.\n${findings.map((finding, at) => `  ${at + 1}. ${priorLine(finding)}\n`).join('')}`
+    ? `Three reviews of this change did not settle it: the third, ${third}, left ${left}${fourth}. Nothing more is reviewed, and nothing was started or recorded.\n${findings.map((finding, at) => `  ${at + 1}. ${priorLine(finding)}\n`).join('')}`
     : `A second recheck of the findings of the review that ended at ${of.slice(0, 7)} is not run: ${first}. Nothing was started or recorded.\n`;
   const task = reviews === 3 ? ESCALATION_SAID : 'Record a follow-up task for what is still open in the feature document';
   // Every code commit has a record: there is nothing to review and no skip to record, which would name a covered
@@ -416,9 +448,11 @@ export function secondRecheckRefused({ of, open, base, uncovered = [], reviewFro
       ? 'This range may hold code commits no Codex review record covers (the records could not be read against it)'
       : `This range holds ${uncovered.length === 1 ? '1 code commit' : `${uncovered.length} code commits`} no Codex review record covers (${uncovered.join(', ')})`;
   const review =
-    reviewFrom === null
-      ? 'no commit behind it starts a review rather than a recheck, so there is no command to name: ask the user how they are reviewed.'
-      : `review them from the nearest commit behind it that starts a review rather than a recheck, which reads again what a record covers after it: \`codex-review --base ${reviewFrom} --again\`.`;
+    merge !== null
+      ? `no command is named: a review from behind the merge ${merge.slice(0, 7)} would read the default branch's code again, and its record would clear the merge's findings unrechecked; ask the user how they are reviewed.`
+      : reviewFrom === null
+        ? 'no commit behind it starts a review rather than a recheck, so there is no command to name: ask the user how they are reviewed.'
+        : `review them from the nearest commit behind it that starts a review rather than a recheck, which reads again what a record covers after it: \`codex-review --base ${reviewFrom} --again\`.`;
   return `${refused}${held}, and a skip would leave them unread. ${task}, then ${review}`;
 }
 

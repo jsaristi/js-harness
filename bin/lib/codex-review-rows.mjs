@@ -110,15 +110,15 @@ function coveredDetail({ codeCommits, base }) {
  * says the debt was read past a merge, or joined there. */
 function correctionOwed(cwd, { codeCommits, covers, tip }, { spawn, below = null }) {
   let from = below;
+  let last;
   if (below === null) {
     const newest = codeCommits[0];
     if (newest === undefined) return null;
     // Only a review of Codex's says what the code owes: a skip or a range that held nothing records no
     // review, so one written later, as to a document commit after the head, must not hide the debt.
-    const last = covers.filter(({ rec, covered }) => rec.outcome === 'reviewed' && covered.has(newest.id)).at(-1);
+    last = covers.filter(({ rec, covered }) => rec.outcome === 'reviewed' && covered.has(newest.id)).at(-1)?.rec;
     if (last === undefined) return null;
-    from = last.rec.head;
-    below = last.rec.diff === 'remerge' ? from : null;
+    from = last.head;
   }
   let records;
   let runs;
@@ -130,12 +130,14 @@ function correctionOwed(cwd, { codeCommits, covers, tip }, { spawn, below = null
   }
   // A run log with no line holds no finding: nothing is owed, and git is asked nothing more.
   if (runs.length === 0) return null;
-  // Git is asked more only past a merge: most pushes end on a record of no merge, and pay nothing for this.
+  // Git is asked more only past a merge: most pushes end on a record of no merge, and pay nothing for this. So too
+  // the head of a recheck of a merge's own record, which may have been the third review of a debt below the merge
+  // (`recheckThrough`, codex-spend L26): read alone, it would name a second recheck the run then refuses.
+  const mergeOwnAt = (head) => records.findLast((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed' && rec.head === head)?.diff === 'remerge';
+  if (last !== undefined && (last.diff === 'remerge' || (typeof last.recheckOf === 'string' && mergeOwnAt(last.recheckOf)))) below = from;
   let state = recheckState({ from, records, runs });
   if (below !== null) state = recheckAt(cwd, { from, tip, records, runs, spawn }) ?? state;
   const through = state.at !== undefined;
-  // A run refused below a merge whose own review owes a correction: that correction is still owed (`recheckThrough`).
-  if (state.kind === 'refused' && state.owed !== undefined) state = state.owed;
   // The head whose review owes it: found past a merge (`at`), or past documents, where a recheck names it (`of`).
   if (state.at !== undefined || state.kind === 'recheck') from = state.at ?? state.of;
   if (state.kind === 'review' || (state.kind === 'refused' && state.open === 0)) return null;
