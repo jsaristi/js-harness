@@ -6,8 +6,8 @@
 // already asks (M2, Depth pass 1). Policy R: one advisor call with a result covers every gated act after it until his
 // next message (typed or queued), the next session event, or STRETCH_TOOL_CALLS tool calls.
 // It refuses an uncovered act (his answer to question 285, which moved refusal ahead of the warning week of P3): the
-// reason says how to consult and retry, and the decision is recorded either way. A sub-agent's end is recorded and never
-// blocked, which his yes left apart. It fails open: an unreadable transcript or payload lets the act through, recorded
+// reason says how to consult and retry, and the decision is recorded either way. A sub-agent's uncovered end is turned
+// back once and its next stop let through (his answer to question 294, odd/tasks/consistent-orders.md S4). It fails open: an unreadable transcript or payload lets the act through, recorded
 // unchecked. It acts only in a js-harness project
 // (a `harness.json` at or above the cwd), since the entry is in the user's settings and runs everywhere.
 import fs from 'node:fs';
@@ -25,6 +25,8 @@ export const ESTIMATED_DAILY_TOKENS = 2_400_000;
 export const MODE = 'refuse';
 /** How much of a transcript's end is read: R needs at most STRETCH_TOOL_CALLS tool calls back, and the hook has 5 s. */
 const TAIL_BYTES = 4 * 1024 * 1024;
+/** How much of the decision log's end is read for an earlier turn-back: 357 ends took 235 kB in four days. */
+const DECISIONS_TAIL_BYTES = 1024 * 1024;
 const SCHEMA = 'js-harness.advisor-gate/v1';
 const ADVISOR_TOOL_TYPE = 'advisor_20260301';
 
@@ -33,7 +35,7 @@ const USAGE = `Usage: js-harness advisor-gate --hook    (PreToolUse: the hook pa
        js-harness advisor-gate report [--since <YYYY-MM-DD>]
   Holds the acts that decide to an advisor call with a result in the caller's stretch (policy R): since his last
   message or the last session event, within ${STRETCH_TOOL_CALLS} tool calls. Mode ${MODE}: an uncovered act is refused, its reason
-  saying how to consult and retry; a sub-agent's end (--stop) is recorded, never blocked, and one whose transcript does not exist is recorded
+  saying how to consult and retry; a sub-agent's uncovered end (--stop) is turned back once, its next stop let through, and one whose transcript does not exist is recorded
   no-transcript with its agent type. Every decision is appended to <home>/.js-harness/advisor-gate/decisions.jsonl. It prints {} outside a
   project with a harness.json, and fails open: what it cannot read lets the act through, recorded unchecked.
   report: the decisions by day, kind and act, and the Fable input tokens of the advisor calls that followed a flag in
@@ -217,20 +219,69 @@ function backgroundTitle(home, sessionId) {
   return title;
 }
 
-function record(home, decision, stderr) {
+function record(home, decision, stderr, failed = 'the decision stands') {
   const file = path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl');
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.appendFileSync(file, `${JSON.stringify({ schema: SCHEMA, ...decision })}\n`);
+    return true;
   } catch (err) {
-    stderr(`js-harness advisor-gate: cannot append to ${file}: ${err.message}; the decision stands`);
+    stderr(`js-harness advisor-gate: cannot append to ${file}: ${err.message}; ${failed}`);
+    return false;
   }
 }
 
-/** The reason a refused PreToolUse act is given; a sub-agent's end is never refused, so it has none. */
+/** The reason a refused PreToolUse act is given; a sub-agent's end is turned back with its own, END_NOTICE. */
 const NOTICE = (act) => [
   advisorSay('missed', { act: `act (${act})`, calls: STRETCH_TOOL_CALLS }), advisorSay('how'), advisorSay('refused'),
 ].join(' ');
+
+/** What a sub-agent hears when its end is turned back: consult, then end with its whole result, since its caller reads
+ * only its last message; it is turned back once. */
+const END_NOTICE = [
+  advisorSay('missed', { act: 'act (end)', calls: STRETCH_TOOL_CALLS }), advisorSay('how'),
+  'Your end is turned back once: consult the advisor, then end by giving your whole result again, as your caller reads only your last message; the next stop goes through.',
+].join(' ');
+
+/** The last DECISIONS_TAIL_BYTES of the log `file`, as text. Throws when it cannot be read. */
+function readLogTail(file) {
+  const size = fs.statSync(file).size;
+  const fd = fs.openSync(file, 'r');
+  try {
+    const length = Math.min(size, DECISIONS_TAIL_BYTES);
+    const buffer = Buffer.alloc(length);
+    fs.readSync(fd, buffer, 0, length, size - length);
+    return buffer.toString('utf8');
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** Whether the newest end the log under `home` holds of the sub-agent `agent` of `session` is a turn-back, so this
+ * stop is that end's repeat: its tail, which a turn-back and its next stop sit close in. No log holds none (`false`);
+ * one there that cannot be read gives `null`. */
+function turnedBackBefore(home, session, agent, readTail = readLogTail) {
+  let text;
+  try {
+    text = readTail(path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl'));
+  } catch (err) {
+    // No log yet holds no turn-back; one there and unreadable cannot say, and the caller lets the end through.
+    return err.code === 'ENOENT' ? false : null;
+  }
+  // Once is per end (his words, "ese final"): only when this sub-agent's newest end is the turn-back is this stop its
+  // repeat; a later end of the same sub-agent, resumed say, is its own.
+  const lines = text.split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    let entry;
+    try {
+      entry = JSON.parse(lines[i]);
+    } catch {
+      continue;
+    }
+    if (entry?.act === 'end' && entry.agent === agent && entry.session === session) return entry.turnedBack === true;
+  }
+  return false;
+}
 
 /** Whether `file` does not exist: only ENOENT, so a transcript there but unreadable stays unchecked. */
 function missing(file) {
@@ -277,8 +328,18 @@ function decide(mode, payload, seams) {
   }
   if (stretch.calls > 0) return record(home, { ...base, ...facts, decision: 'covered' }, stderr), {};
   if (stretch.errors >= 2) return record(home, { ...base, ...facts, decision: 'outage' }, stderr), {};
-  record(home, { ...base, ...facts, decision: 'flagged', mode: MODE }, stderr);
-  if (mode === '--stop') return {};
+  // A sub-agent's end is turned back once (his answer to question 294): the second stop goes through, as the reply
+  // hook's. Once rests on the host's flag and on this log's own record of the turn-back, so a payload without the flag
+  // never loops.
+  // An end the log shows turned back is its repeat (afterTurnBack), which the report counts once with it; one let
+  // through by the host's flag alone (another hook may have turned it back) stays a flag of its own.
+  // A log it cannot read (null) or write leaves once unheld, so the end goes through, as his answer asks of a record
+  // that cannot be read.
+  const prior = mode === '--stop' ? turnedBackBefore(home, base.session, agent, seams.readLogTail) : false;
+  const afterTurnBack = prior === true;
+  const turnBack = mode === '--stop' && !base.secondStop && prior === false;
+  const written = record(home, { ...base, ...facts, decision: 'flagged', mode: MODE, ...(turnBack ? { turnedBack: true } : {}), ...(mode === '--stop' ? { afterTurnBack } : {}) }, stderr, turnBack ? 'the end goes through, since its turn-back could not be recorded and once could not be held' : undefined);
+  if (mode === '--stop') return turnBack && written ? { decision: 'block', reason: END_NOTICE } : {};
   return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: NOTICE(act) } };
 }
 
@@ -430,17 +491,21 @@ export function advisorGateReport({ home, since = null, projects = path.join(hom
     if (!days.has(day)) days.set(day, { day, decisions: {}, acts: {}, flagged: 0, followed: 0, addedTokens: 0 });
     return days.get(day);
   };
+  // A turned-back end flagged again at its next stop is the same end (afterTurnBack): one flag, one per act. An end
+  // recorded before the field existed says nothing of it, and its second stop stays the repeat it was counted as.
+  const repeat = (d) => d.afterTurnBack === true || (d.act === 'end' && d.afterTurnBack === undefined && d.secondStop === true);
+  const isFlag = (d) => d.decision === 'flagged' && !repeat(d);
   const shown = all.filter((d) => inRange(d.at));
   for (const d of shown) {
     const row = dayOf(d.at);
     row.decisions[d.decision] = (row.decisions[d.decision] ?? 0) + 1;
     row.acts[d.act] = (row.acts[d.act] ?? 0) + 1;
-    if (d.decision === 'flagged') row.flagged++;
+    if (isFlag(d)) row.flagged++;
   }
   // Every flag is read, in range or not: one before midnight can prompt a call after it, whose tokens are that day's.
   const flagsByTranscript = new Map();
   let untraced = 0;
-  for (const d of all.filter((x) => x.decision === 'flagged')) {
+  for (const d of all.filter(isFlag)) {
     if (typeof d.transcript !== 'string') {
       if (inRange(d.at)) untraced++;
       continue;
@@ -511,10 +576,10 @@ function formatReport({ days, acts, unchecked, decisions, noTranscript, unread, 
 /** A usage error of the argv: its message names the token, the usage follows, exit 2. */
 class AdvisorGateArgError extends Error {}
 
-/** `js-harness advisor-gate --hook | --stop | report`. Seams for the tests: `readStdin`, `home`, `cwd`, `now`. */
+/** `js-harness advisor-gate --hook | --stop | report`. Seams for the tests: `readStdin`, `home`, `cwd`, `now`, `readLogTail`. */
 export function advisorGateMain(argv, {
   stdout = (s) => process.stdout.write(s), stderr = console.error, readStdin = () => fs.readFileSync(0, 'utf8'),
-  home, env = process.env, cwd = process.cwd(), now = Date.now(),
+  home, env = process.env, cwd = process.cwd(), now = Date.now(), readLogTail: readTail,
 } = {}) {
   if (argv.length === 1 && (argv[0] === '--help' || argv[0] === '-h')) {
     stdout(`${USAGE}\n`);
@@ -554,7 +619,7 @@ export function advisorGateMain(argv, {
     return 0;
   }
   try {
-    stdout(JSON.stringify(decide(argv[0], payload ?? {}, { home: harnessHome({ given: home, env, cwd }), cwd, now, stderr })));
+    stdout(JSON.stringify(decide(argv[0], payload ?? {}, { home: harnessHome({ given: home, env, cwd }), cwd, now, stderr, readLogTail: readTail })));
   } catch (err) {
     stderr(`js-harness advisor-gate: ${err.message}; the act goes through unchecked`);
     stdout('{}');

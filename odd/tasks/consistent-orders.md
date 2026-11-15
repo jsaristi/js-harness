@@ -1,10 +1,9 @@
 # consistent-orders — orders that hold over a long run (JH 208)
 
 ## State
-PR 886 open: S1 and S5 built tests-first, reviewed by Codex and the Claude lenses, verified by the independent
-verifier (PASS, and PASS again on 2d9d8f0d, L11). It covers 1 of the 6 uncaught rows; the lead's own consult (S2) and
-sub-agents (S4) wait. Open as designs for the lead: S2 (T2), S6 (T7); S4 is his. S5's rule (`rules change
-away-autonomy`, a `rule/` branch) comes after the land: until then S5 is a capability, not a check.
+PR 886 landed (19:08Z). S4 is PR 887 on main at baf82737: reviewed clean by Codex and the lenses at each fix, the
+verifier PASS on its recheck (L21); ready goes to the lead. The S2 and S6 designs are written (L13, L14, S2's replay
+L17, L19) and wait for their double review and the lead; nothing of them is built. S5's rule is unblocked.
 
 ## Goal
 An order the harness gives a session, a work session or a sub-agent (first: consult the advisor when blocked) is held
@@ -173,7 +172,7 @@ answering a block, while a session waits) were missed with nothing to say so; on
 - [x] T1 (kind: build) S1, spec 1 (two cases failed on main, 26 of 26 pass after): `waiting` a gated act in `gatedAct`; tests first in bin/advisor-gate.test.mjs; route inline; commit `feat(advisor-gate): hold a waiting notice to a consult`
 - [ ] T2 (kind: design) S2, spec 2: replan on a blocked-state signal that survives a later `note` (the waiting, note, idle case first), with liveness and resolution rules, without changing readStalled's contract; define the idle close; the lead approves before a build
 - [ ] T3 (kind: build) S3, spec 3: left out, folded into S1 (Depth pass item 3)
-- [ ] T4 (kind: design) S4, spec 4: the lead asks him; build nothing until then
+- [x] T4 (kind: build) S4, spec 4: his yes (L12); turn back an unconsulted sub-agent end once; tests first; commit `feat(advisor-gate): turn back an unconsulted sub-agent end once`
 - [x] T5 (kind: build) S5, spec 5 (code built, two tests failed on main, 67 of 67 pass; the rule's `rule/` branch after this pull request lands): `forks` in the stretch plan, shown at open; rule via `rules change` on a `rule/` branch; route inline; commit `feat(stretch): pre-decided forks in the departure plan`
 - [ ] T7 (kind: design) S6, spec 6: amend `rule:reports-spanish-visual` with his quote (`rules change` on a `rule/` branch) and design the check that acts on it (a candidate: the reply hook turns back a report close with no Artifact published in the turn); the lead approves before a build
 - [x] T6 (kind: verify) one independent verifier (opus) over T1 and T5: PASS (L10)
@@ -186,6 +185,7 @@ answering a block, while a session waits) were missed with nothing to say so; on
 - [ ] F8 follow-up, owner: the lead — the gate's report will count `waiting` notices sent before S1 was installed as acts with no decision (bin/advisor-gate.mjs, the reconciliation)
 - [ ] F9 follow-up, owner: the lead — inherited false refusals: an `echo`, a shell comment or an unquoted heredoc commit body that names a gated notify reads as that act (JH 206's T8, odd/tasks/advisor-use.md); also a non-js-harness tool chained after a notice whose own `--kind` is a gated word (L11)
 - [ ] F10 follow-up, owner: the lead — README and the gate's usage text describe the stretch without the compaction break
+- [ ] F11 follow-up, owner: the lead — `notify --kind ready --pr` refuses while the pull request's head is not the sender's HEAD
 - [ ] F7 follow-up, owner: the lead — 8 stale `waiting` notices from sessions long gone stay newest in the channel
 
 ## Log
@@ -217,3 +217,103 @@ answering a block, while a session waits) were missed with nothing to say so; on
   checked by it: the host's real compaction entry (the fixture follows transcript 69918425's isCompactSummary lines).
 - L11 (2026-11-15) the verifier again, on 2d9d8f0d: PASS, 60 of 60 tests; only `clean` and `template new` take another
   `--kind`, with no gated value; one new low false refusal (another tool's `--kind ready` chained after a notice), F9.
+- L12 (2026-11-15, lead transcript 69918425) his answers: question 294, line 17415 (18:02:43Z), "Devolverlo una vez
+  (Recomendada)" to "ese final se devuelva una sola vez, para que el sub-agente consulte y luego termine; si el registro
+  no se puede leer, pasa sin bloquear ... No cubre bloquear más de una vez ni tocar otras órdenes"; question 295, line
+  17459 (18:03:39Z), "Sí, también consultan (Recomendada)": only the senior session and Fable-model sub-agents stay
+  exempt. For S6, line 17216 (the lead's note): "la idea es seguir haciendo todas las cosas así".
+- L13 (2026-11-15) S2's design, replanned (T2). Measured first: at the 13:08Z close the lead had already answered
+  JH 207's 12:46:11Z `waiting` with a note (12:47:47Z, channel line 3124), and JH 207, still blocked, sent three
+  notes (lines 3125-3127). So no rule on the kinds of notices alone catches 13:08Z, the lead's answer included.
+  - Signal, a new pure function beside `readStalled`, whose contract does not change: a work session is blocked from
+    its newest `waiting` to the orchestrator until it sends `ready`, `closed`, `relieved` or `question` (a question
+    moves the block to the owner), or its branch gets a commit after the notice (`branchCommitAt`, bin/lib/stall.mjs).
+    Neither its own later `note` nor the lead's answer clears it: the blocked session's next act does.
+  - Liveness: a block is live while the session has not given its work back, its background job was not removed
+    (`removed` in background/sessions.jsonl) and its newest own notice is under a bound the lead sets (proposed 6 h,
+    a constant). Probe at 13:08Z (`node C:/Users/Oficina/.claude/jobs/b8e90a0a/tmp/blocked.mjs`): of the 5 stale
+    unresolved `waiting` notices, 2 sent `ready` later (JH 58, JH 142), 2 had their job removed (JH 101, JH 134) and
+    1 is 39 h old with no job record (JH 193); all 5 are out under these rules.
+  - The check, at the lead's idle close: a lead stop whose reply closes in the `working` state ("Sigo solo"), with
+    or without a wait running in the background (13:08Z had one), is turned back once while a live session is
+    blocked and the lead has no advisor call with a result after that session's newest notice. Each note of a blocked
+    session asks a new consult, so a block cannot sit behind one early consult. The second stop goes through
+    (`stop_hook_active`); an unreadable record or transcript lets the close through, said on standard error.
+  - Where: `bin/lib/stop-consult.mjs`, called from bin/reply.mjs beside the wake check, reading the record and the
+    transcript through the stop's shared `io`; the consult is read with the advisor gate's parsing, exported.
+  - Limits: it acts at a close, never while the lead sits idle; a blocked session that commits something unrelated
+    clears its block. To measure at the build: the full replay of the lead's 62 ends with this predicate, 13:08Z
+    turned back expected.
+  - The lead decides: the 6 h bound, and whether a `question` clears the block.
+- L14 (2026-11-15) S6's design (T7). `rule:reports-spanish-visual` (bin/lib/protocols-skill.mjs:106) already sends what
+  the user reads to understand or decide as a visual, didactic page. His orders add three things: always ("siempre
+  dame informes en artefactos visuales", line 16680), for someone who knows nothing ("como si yo no supiera
+  absolutamente nada"), for any user of the harness, not only him ("no es solo una solucion para mi sino para una
+  persona que no tiene conocimiento de nada"), and to keep doing it ("la idea es seguir haciendo todas las cosas
+  así", line 17216).
+  - The rule change (`js-harness rules change reports-spanish-visual`, a `rule/` branch, his quotes with their
+    date): every report reaches the user as that page; it assumes no prior knowledge (each term said in everyday words
+    at its first use, a diagram for each mechanism, what a decision covers and does not); it is written for any user
+    of the harness, so no page leans on what one owner already knows.
+  - The check: the reply Stop hook turns back once a reply that closes in `decision`, `cut` or `finished` with a
+    body over a bound in lines (proposed 25) when the turn made no Artifact publish or open since the user's last
+    message; it fails open. Sessions that only report through `notify` are held already: a close carries its summary,
+    whose page `js-harness report feature` makes.
+  - The lead decides: the line bound, and whether a `working` close with a long report is held too.
+- L15 (2026-11-15) a mistake, told in five parts. What happened: my first `ready --pr 886` went out while the PR's
+  branch held 039902d9; the verified 2d9d8f0d sat on the local `worktree-consistent-orders`, pushed only inside the
+  later `feat/consistent-orders-s4`; the lead caught it (13:31 local). The fix now, checked: fast-forward, no force,
+  039902d9..8402785b (`gh pr view 886 --json headRefOid`: 8402785b), ready re-sent at 13:35 local. What stops it
+  recurring: a check before a line, F11 (`notify --kind ready --pr` refuses while the PR's head is not HEAD). Where
+  and when: notify's ready path, the lead's to assign. The proof: `js-harness failures` lists ready-head-not-pushed
+  with no second `- Seen:` line. The advisor, before the re-send, also found two S4 gaps the reviews missed: a
+  turned-back sub-agent might end with "consulted, done" and lose its result for the caller (the reason now asks for
+  the whole result again), and once rested only on `stop_hook_active`, which no record shows the host sending true
+  (357 of 357 ends recorded false; it is now also read from the gate's own turn-back record); both pinned by tests
+  that failed first.
+- L16 (2026-11-15) the independent verifier (opus) over 87b1c568: PASS with four findings. A, medium: the turned-back
+  sub-agent's result is lost to its caller; B, low: a payload with no `stop_hook_active` is blocked every stop
+  (bounded by the host's cap of 8); C, low: two comments still said never blocked; D, low: the report counted a
+  turned-back end twice. A, B and C were already fixed in the tree from the advisor's read (L15); D fixed with a test
+  that failed first. Its proof: the commit's tests run on 551f48e4, 26 pass and 2 fail, the two new ones; the
+  host's hooks reference confirms `{ decision: 'block', reason }` for SubagentStop and lists `stop_hook_active`.
+- L17 (2026-11-15) S2's replay with L13's predicate over the lead's 73 turn ends since 05:00Z
+  (`node C:/Users/Oficina/.claude/jobs/b8e90a0a/tmp/replay-s2.mjs`): 9 turned back, all 9 idle closes (of 70):
+  10:51Z (JH 206), 12:38Z, 12:48Z, 12:50Z, 12:56Z and 13:08:52Z (JH 207, which is caught), 16:35Z, 16:37Z and
+  16:50Z (JH 208's own 16:18Z `waiting`, and JH 207's at 16:47Z). An upper bound: the branches of JH 207 and JH 208
+  were not on origin, so the commit rule was not applied to them; the build reads the worktree, which would clear
+  JH 208's three if it committed after 16:18Z. A new consult for each note of a blocked session costs 3 of the 9
+  (12:50Z, 12:56Z, 13:08Z).
+- L18 (2026-11-15) S4's review rounds. 87b1c568: Codex clean (0.93), the lenses 0. 53b2038d (the advisor's and the
+  verifier's fixes): Codex and the reliability and readability lenses found the report still counted an end let
+  through by the log twice, and dropped one another hook turned back first; fixed in 64883e5f (`afterTurnBack` from
+  the gate's own log). Its review: Codex (blocking) and readability, old repeat records no longer dropped; fixed in
+  89b4948b (every new end record carries `afterTurnBack`; one without the key at a second stop stays a repeat).
+  Codex's recheck: 1 of 1 fixed. Answered, not fixed: the lenses' recheck says records written by 64883e5f's code
+  (the key only when true) would be misread. None exists: the hook runs the installed js-harness from main
+  (`~/.claude/settings.json` line 218, `js-harness advisor-gate --stop`), and the real log holds 0 records with
+  `afterTurnBack` or `turnedBack` and 0 with `"secondStop":true` (`grep -c` on decisions.jsonl); 64883e5f never ships.
+- L19 (2026-11-15) the advisor, before S4's ready: since 53b2038d once was per sub-agent id, not per end: a sub-agent
+  turned back once let every later end through uncounted, and his words are "ese final" (a sub-agent resumed with
+  SendMessage keeps its id). Fixed: a stop is a repeat only when that sub-agent's newest recorded end is the
+  turn-back; a test (a later unconsulted end of the same id is turned back again) failed first. L17's figure,
+  checked against local branches: JH 208 committed from 16:25:54Z after its 16:11:19Z `waiting`
+  (`git log worktree-consistent-orders`), and JH 207 from 15:32Z after its 14:53:30Z one (`git log feat/review-gate`),
+  so 16:35Z, 16:37Z and 16:50Z drop: S2 turns back 6 of the lead's 70 idle closes, 13:08:52Z among them, 3 of them
+  from a blocked session's later notes.
+- L20 (2026-11-15) the independent verifier (opus) on 9fce032c, the head after L19: PASS, 32 of 32, with probes of
+  14 stop sequences; no loop or wrong block in normal operation. Fixed with tests that failed first: (1) a decision
+  log the gate cannot write (or, not missing, cannot read) blocked every stop of one end when the host omits the flag,
+  so the end now goes through, his words for a record that cannot be read; (2) a log line that is no object threw
+  before any record, so it is skipped; (4) the test file's header. Left, a stated limit: (3) an end a second hook
+  turns back after the gate's repeat can count one extra flag in `report` (another hook's block, then a third stop).
+- L21 (2026-11-15) 3ac9ad53: Codex clean (0.94); the lenses: nothing pinned an unreadable but appendable log, and a
+  failed append on a turn-back still said the decision stands; fixed in baf82737 (a `readLogTail` seam, tests that
+  failed first). baf82737: Codex clean (0.97), the lenses 0 and 3 of 3 earlier findings fixed. The verifier's recheck
+  on baf82737: PASS, 36 of 36, 18 probes; fail-closed none. Limits it states: a turn-back more than 1 MB back (about
+  17 days at the log's rate) with no host flag lets one end be blocked twice, never more; the report can count a
+  repeat twice when the turn-back record cannot be read at the repeat, or when only the host's flag let it through.
+  S4's reach on the real record (`decisions.jsonl`, 379 sub-agent ends): 38 flagged, so turned back once under S4;
+  69 covered; 229 unchecked and 43 with no transcript, which S4 lets through as before. Per-end cost on this session's
+  two verifiers: 0, each of their 5 stops was covered. Not checked: the host's live behaviour after a turn-back; the
+  proof after the land is the first `turnedBack` record followed by `covered` for the same agent.

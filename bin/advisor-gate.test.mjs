@@ -1,6 +1,6 @@
 // Tests of `advisor-gate` (bin/advisor-gate.mjs): which acts it gates, how it reads policy R's stretch from a
-// transcript, what it records, and that an uncovered act is refused while a sub-agent's end is not (odd/tasks/advisor-use.md, P1, P2, T3,
-// his answer to question 285).
+// transcript, what it records, and that an uncovered act is refused and an uncovered sub-agent end turned back once
+// (odd/tasks/advisor-use.md, P1, P2, T3, his answer to question 285; odd/tasks/consistent-orders.md S4, question 294).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -260,16 +260,110 @@ test('a sub-agent\'s act is read from its own transcript', () => {
   assert.equal(r.answer.hookSpecificOutput.permissionDecision, 'deny', 'a sub-agent act is refused as a session act is');
 });
 
-test('SubagentStop never blocks (outside his yes to 285); a second stop is recorded as such', () => {
+test('an unconsulted sub-agent end is turned back once (his answer to question 294); its second stop is let through', () => {
+  const { home, project } = scratch();
+  const t = path.join(home, 'projects', 'p', 'agent.jsonl');
+  const stop = (active) => run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a2', agent_transcript_path: t, stop_hook_active: active }, home);
+  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
+  const first = stop(false);
+  assert.equal(first.answer?.decision, 'block');
+  assert.match(first.answer.reason, /consult the advisor/);
+  assert.match(first.answer.reason, /whole result again/, 'the caller reads only the last message, so the result is given again');
+  const again = stop(true);
+  assert.deepEqual(again.answer, {}, 'the second stop is let through, never a loop');
+  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall(), advisorCall()]);
+  assert.deepEqual(stop(false).answer, {}, 'a consulted end passes');
+  assert.deepEqual(decisions(home).map((d) => [d.act, d.decision, d.secondStop]), [['end', 'flagged', false], ['end', 'flagged', true], ['end', 'covered', false]]);
+});
+
+test('once rests on the gate\'s own record too: a second stop without stop_hook_active goes through; another sub-agent is still turned back', () => {
   const { home, project } = scratch();
   const t = path.join(home, 'projects', 'p', 'agent.jsonl');
   writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
-  const first = run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a2', agent_transcript_path: t, stop_hook_active: false }, home);
-  assert.deepEqual(first.answer, {});
-  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall(), advisorCall()]);
-  const second = run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a2', agent_transcript_path: t, stop_hook_active: true }, home);
-  assert.deepEqual(second.answer, {});
-  assert.deepEqual(decisions(home).map((d) => [d.act, d.decision, d.secondStop]), [['end', 'flagged', false], ['end', 'covered', true]]);
+  const stop = (agent) => run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: agent, agent_transcript_path: t }, home);
+  assert.equal(stop('a3').answer?.decision, 'block');
+  assert.deepEqual(stop('a3').answer, {}, 'a payload with no stop_hook_active is not blocked twice');
+  assert.equal(stop('a4').answer?.decision, 'block');
+  assert.deepEqual(decisions(home).map((d) => [d.agent, d.decision, d.turnedBack ?? false, d.afterTurnBack ?? false]), [['a3', 'flagged', true, false], ['a3', 'flagged', false, true], ['a4', 'flagged', true, false]]);
+  assert.deepEqual(advisorGateReport({ home }).days.map((d) => d.flagged), [2], 'the end let through by the log is the same end, one flag');
+  // His words are "ese final": a later end of the same sub-agent (resumed, say) is its own end, turned back again.
+  assert.equal(stop('a3').answer?.decision, 'block', 'once is per end, not per sub-agent');
+  assert.deepEqual(advisorGateReport({ home }).days.map((d) => d.flagged), [3]);
+});
+
+test('an end another hook turned back first goes through and is still a flag of its own', () => {
+  const { home, project } = scratch();
+  const t = path.join(home, 'projects', 'p', 'agent.jsonl');
+  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
+  const answer = run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a6', agent_transcript_path: t, stop_hook_active: true }, home).answer;
+  assert.deepEqual(answer, {});
+  assert.deepEqual(advisorGateReport({ home }).days.map((d) => d.flagged), [1]);
+  assert.equal(decisions(home)[0].afterTurnBack, false, 'a new end record says it is no repeat, so the report can tell it from an old one');
+});
+
+test('report: an end recorded before afterTurnBack existed, at a second stop, stays the repeat it was', () => {
+  const { home } = scratch();
+  writeDecisions(home, [
+    { at: '2026-11-15T10:01:00.000Z', act: 'end', agent: 'a1', decision: 'flagged', secondStop: false },
+    { at: '2026-11-15T10:02:00.000Z', act: 'end', agent: 'a1', decision: 'flagged', secondStop: true },
+  ]);
+  assert.deepEqual(advisorGateReport({ home }).days.map((d) => d.flagged), [1]);
+});
+
+test('a decision log the gate cannot write or read lets the end through: no record, no turn-back, never a loop', () => {
+  const { home, project } = scratch();
+  const t = path.join(home, 'projects', 'p', 'agent.jsonl');
+  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
+  fs.mkdirSync(path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl'), { recursive: true });
+  const stop = () => run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a7', agent_transcript_path: t }, home).answer;
+  assert.deepEqual(stop(), {});
+  assert.deepEqual(stop(), {});
+});
+
+test('a log there but unreadable, though it takes appends, lets the end through; a missing one holds no turn-back', () => {
+  const { home, project } = scratch();
+  const t = path.join(home, 'projects', 'p', 'agent.jsonl');
+  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
+  const payload = { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a9', agent_transcript_path: t };
+  const failing = (code) => ({ readLogTail: () => { throw Object.assign(new Error(code), { code }); } });
+  const unreadable = run(['--stop'], payload, home, failing('EACCES'));
+  assert.deepEqual(unreadable.answer, {});
+  assert.equal(decisions(home).at(-1).turnedBack, undefined, 'no turn-back is recorded where once cannot be held');
+  assert.equal(run(['--stop'], payload, home, failing('ENOENT')).answer?.decision, 'block');
+});
+
+test('a log the gate cannot append to says the end goes through, not that the decision stands', () => {
+  const { home, project } = scratch();
+  const t = path.join(home, 'projects', 'p', 'agent.jsonl');
+  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
+  fs.mkdirSync(path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl'), { recursive: true });
+  const { err } = run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a10', agent_transcript_path: t }, home, { readLogTail: () => '' });
+  assert.match(err, /the end goes through/);
+  assert.doesNotMatch(err, /the decision stands/);
+});
+
+test('a line of the log that is no object is skipped, and the end is still decided and recorded', () => {
+  const { home, project } = scratch();
+  const t = path.join(home, 'projects', 'p', 'agent.jsonl');
+  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
+  fs.mkdirSync(path.join(home, '.js-harness', 'advisor-gate'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl'), 'null\n42\n');
+  const answer = run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a8', agent_transcript_path: t }, home).answer;
+  assert.equal(answer?.decision, 'block');
+  assert.equal(decisions(home).filter((d) => d?.agent === 'a8').length, 1);
+});
+
+test('a sub-agent of the senior session consults too (his answer to question 295); a Fable sub-agent stays exempt', () => {
+  const { home, project } = scratch();
+  const t = path.join(home, 'projects', 'p', 'agent.jsonl');
+  const record = path.join(home, '.js-harness', 'background');
+  fs.mkdirSync(record, { recursive: true });
+  fs.writeFileSync(path.join(record, 'sessions.jsonl'), `${JSON.stringify({ event: 'started', sessionId: 'senior', title: 'JH SR · the senior for the hardest work' })}\n`);
+  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
+  const payload = { hook_event_name: 'SubagentStop', cwd: project, session_id: 'senior', agent_id: 'a5', agent_transcript_path: t, stop_hook_active: false };
+  assert.equal(run(['--stop'], payload, home).answer?.decision, 'block');
+  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall(FABLE, FABLE)]);
+  assert.deepEqual(run(['--stop'], payload, home).answer, {});
 });
 
 test('an end whose transcript does not exist is recorded apart with its agent type, not unchecked (T7)', () => {
@@ -349,6 +443,18 @@ function splitCall(timestamp, msg, tokens, { result = true } = {}) {
   if (result) entries.push({ type: 'assistant', timestamp, advisorModel: FABLE, message: { id: msg, model: OPUS, content: [{ type: 'advisor_tool_result', tool_use_id: callId, content: { type: 'advisor_redacted_result', encrypted_content: 'x' } }], usage: usage(tokens) } });
   return entries;
 }
+
+test('report: a turned-back end flagged again at its second stop is one flag, not two', () => {
+  const { home } = scratch();
+  const t = path.join(home, 'projects', 'p', 'end.jsonl');
+  writeTranscript(t, splitCall('2026-11-15T10:05:00.000Z', 'e1', 1000));
+  writeDecisions(home, [
+    { at: '2026-11-15T10:01:00.000Z', act: 'end', agent: 'a1', decision: 'flagged', turnedBack: true, secondStop: false, transcript: t },
+    { at: '2026-11-15T10:02:00.000Z', act: 'end', agent: 'a1', decision: 'flagged', secondStop: true, afterTurnBack: true, transcript: t },
+  ]);
+  const r = advisorGateReport({ home });
+  assert.deepEqual(r.days.map((d) => [d.day, d.flagged, d.followed]), [['2026-11-15', 1, 1]]);
+});
 
 test('report: decisions by day, and the Fable input tokens of the calls with a result that followed a flag in its stretch', () => {
   const { home } = scratch();

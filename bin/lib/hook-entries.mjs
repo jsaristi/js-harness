@@ -243,8 +243,8 @@ export function advisorGateEntry() {
   };
 }
 
-/** `advisor-gate --stop` registered as a `SubagentStop` hook: a sub-agent's end is recorded covered or flagged (P2) and
- * never blocked, which his yes to question 285 left apart. A `SubagentStop` entry takes no matcher. Five seconds, as `--hook`'s. */
+/** `advisor-gate --stop` registered as a `SubagentStop` hook: a sub-agent's end is recorded covered or flagged (P2), and
+ * an uncovered one is turned back once (his answer to question 294, odd/tasks/consistent-orders.md S4). A `SubagentStop` entry takes no matcher. Five seconds, as `--hook`'s. */
 export function advisorStopEntry() {
   return {
     hooks: [{ type: 'command', command: ADVISOR_STOP_HOOK_COMMAND, timeout: 5 }],
