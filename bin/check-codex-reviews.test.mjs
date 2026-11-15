@@ -974,6 +974,29 @@ test('a review that left out files the project marks covers its commits only whe
   assert.equal(checkCodexReviews(root, 'HEAD').pass, true);
 });
 
+test('B1-1: a mark taken off after the review that left the file out leaves that file\'s commit uncovered, since nobody read it', () => {
+  // The full audit's B1-1: the commit that adds a file is reviewed with the file marked, and a later commit takes the
+  // mark off. At the tip the file is code, its commit lies inside the first record's range, and the review of the
+  // second commit read only the attributes file: nobody read the code.
+  const { root, base } = makeRepo();
+  feature(root);
+  const app = commit(root, 'src/app.js', 'code', 'feat: the application');
+  const marks = commit(root, '.gitattributes', 'src/** -codex-review\n', 'chore: mark the application as left out');
+  record(root, base, marks, { leftOut: leftOutOf(0, 1) });
+  const unmark = commit(root, '.gitattributes', '# nothing is left out\n', 'chore: take the mark off');
+  record(root, marks, unmark);
+  const row = checkCodexReviews(root, unmark);
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /^1 of 3 code commits since origin\/main have no Codex review record/);
+  assert.ok(row.lines[0].startsWith(short(root, app)), row.lines.join('\n'));
+  // A file the mark still leaves out at the tip is no code there, so the record covers as before.
+  const kept = commit(root, '.gitattributes', 'src/** -codex-review\n# kept\n', 'chore: keep the mark');
+  record(root, unmark, kept);
+  git(root, 'reset', '--quiet', '--hard', marks);
+  const still = commit(root, 'README.md', 'words', 'docs: a note');
+  assert.equal(checkCodexReviews(root, still).pass, true, 'the mark still on at the tip');
+});
+
 test('a review that left out documents alone still covers an earlier tip where a record past the tip counts: no commit can make a Markdown file code', () => {
   // The push row counts no record past the tip (`beyondTip: false`); the reading that plans a review still does.
   const { root, base } = makeRepo();

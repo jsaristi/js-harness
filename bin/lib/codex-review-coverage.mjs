@@ -266,6 +266,16 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read 
   // revert), so a tip short of its head is a patch nobody reviewed. And a review that left out files the
   // project marks (`leftMarkedFilesOut`): the marks are those of its head, and a commit of its range can
   // be the one that adds them, so at a tip short of that head a file it left out can be code.
+  // And the marks a review left out are those of its head, which a later commit can take off: a file code at the tip
+  // but marked at the record's head was read by nobody, so its commit is not covered by that record (B1-1, the full
+  // audit of 2026-11-14). Marks that cannot be read at that head cover none of the code commits it reaches.
+  const readAtHead = (rec, covered) => {
+    const reached = codeCommits.filter((commit) => covered.has(commit.id));
+    const atHead = reached.length === 0 ? new Map() : leftOutOf(reached.flatMap((commit) => commit.files), { cwd, source: rec.head, spawn, where });
+    const unread = (commit) => atHead === null || commit.files.some((file) => !leftOut.has(file) && atHead.has(file));
+    const drop = new Set(reached.filter(unread).map((commit) => commit.id));
+    return drop.size === 0 ? covered : new Set([...covered].filter((id) => !drop.has(id)));
+  };
   const outside = (rec) => !rangeIds.has(rec.head);
   const onlyWhole = (rec) => rec.outcome === NOTHING_TO_REVIEW || leftMarkedFilesOut(rec);
   const mayLiePast = valid.filter((rec) => outside(rec) && !onlyWhole(rec));
@@ -282,7 +292,7 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read 
     }
     const covered = coveredBy(spawn, cwd, rec);
     if (!covered) ignored += 1;
-    else (beyondTip || !outside(rec) ? covers : beyond).push({ rec, covered });
+    else (beyondTip || !outside(rec) ? covers : beyond).push({ rec, covered: leftMarkedFilesOut(rec) ? readAtHead(rec, covered) : covered });
   }
   const uncovered = codeCommits.filter((commit) => !covers.some(({ covered }) => covered.has(commit.id)));
   return { codeCommits, covers, uncovered, invalid: records.length - valid.length, ignored, stale, ...(beyondTip ? {} : { beyond }) };
