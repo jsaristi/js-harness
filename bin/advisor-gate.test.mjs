@@ -120,6 +120,11 @@ test('a heredoc\'s text that names an act is not that act, unless a shell reads 
   assert.equal(act("${SHELL:-sh} <<'EOF'\njs-harness merge-queue --land\nEOF"), 'land', 'a variable with a default');
   assert.equal(act("cat <<'EOF' \\\n  | bash\njs-harness merge-queue --land\nEOF"), 'land', 'a pipe to a shell on a continued line');
   assert.equal(act("awk '{system($0)}' <<'EOF'\njs-harness merge-queue --land\nEOF"), 'land', 'awk runs its lines');
+  assert.equal(act("cat > a <<'EOF'\ndir C:\\\nEOF\njs-harness merge-queue --land\ncat > b <<'EOF'\nx\nEOF"), 'land', 'a body line ending in a backslash is not joined');
+  assert.equal(act("node --test x && git commit -F - <<'EOF'\nfix: js-harness merge-queue --land\nEOF"), 'land', 'a command off the inert list keeps the bodies: a refusal, not a miss');
+  assert.equal(act("cd /d/x && git commit -F - <<'EOF' 2>&1 | tail -3\nfix: js-harness merge-queue --land\nEOF"), null, 'inert commands, a redirect and a pipe');
+  assert.equal(act("js-harness gate -- bash <<'EOF'\njs-harness merge-queue --land\nEOF"), 'land', 'js-harness gate runs a command');
+  assert.equal(act("f() { bash; }; f <<'EOF'\njs-harness merge-queue --land\nEOF"), 'land', 'a function fed a heredoc');
   assert.equal(act('git add . && git commit -F - <<EOF\nfix: js-harness merge-queue --land\nEOF\ngit push origin $BRANCH'), null, 'a lone . or a $VAR as an argument runs nothing');
   assert.equal(act('cat > $OUT <<\'EOF\'\nthen js-harness sessions start\nEOF'), null, 'a redirect to a variable');
   assert.equal(act('git commit -F - -m "bash done" <<\'EOF\'\njs-harness merge-queue --land\nEOF'), null, 'a shell word inside quotes');

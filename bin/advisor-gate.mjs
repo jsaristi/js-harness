@@ -52,20 +52,20 @@ const unquoted = (command) => command.replace(/(--kind\s+|\b(?:bash|sh|zsh|pwsh|
   if (before || /(?:^|[\\/])js-harness(?:\.mjs)?$/.test(inner)) return (before ?? '') + inner;
   return '""';
 });
-/** A shell or an interpreter named as a word anywhere outside quoted text, which may run what a heredoc holds, now or
- * from a file it was written to (`bash <<EOF`, `cat <<EOF | bash`, `env bash <<EOF`, `bash s.sh`, `ssh host <<EOF`). */
-const RUNNER = /(?:^|[\s|;&(])(?:[^\s<>|;&()]*[\\/])?(?:bash|sh|zsh|dash|ksh|pwsh|powershell|node|deno|bun|python[\d.]*|perl|ruby|awk|gawk|mawk|ssh|xargs)(?:\.exe)?(?=[\s;|&)<>]|$)/;
-/** What runs lines only in a command's place: `source`, `eval`, `.`, a loop's `done`, a command in a variable (`$SH`),
- * a script run by its path (`./land.sh`). As an argument (`git add .`, `push origin $BRANCH`) it runs nothing. */
-const RUNS_AT_COMMAND = /(?:^|[;&|(\n]|\$\()\s*(?:\w+=\S*\s+)*(?:source|eval|done|\.|\$(?:\w+|\{[^}]*\})|\.{0,2}\/[^\s<>|;&()]+)(?=[\s;|&)<>]|$)/;
-/** Whether `text` (the command with its heredoc bodies dropped) may run one of them. Quoted text is blanked first,
- * but a quoted path to a shell (`"C:/Program Files/Git/bin/bash.exe"`) keeps its text. Matched loosely: a miss lets
- * an act through, a match only keeps the text. */
+/** The first words of commands that cannot run what a heredoc holds, nor a file it was written to, nor another
+ * command: their heredocs are data (a commit message, a file written, a pull request's body). A list of what is inert,
+ * not of what runs, since three review rounds each found a runner the other list missed (L29). */
+const INERT = new Set(['git', 'gh', 'cat', 'tee', 'cd', 'echo', 'printf', 'mkdir', 'chmod', 'ls', 'grep', 'wc', 'head', 'tail', 'true']);
+/** Whether `text` (the command with its heredoc bodies dropped) may run one of them: unless every simple command in it
+ * starts with an inert word, it may. Quoted text is blanked first, so a quoted first word, like a variable, a path, a
+ * wrapper or any word off the list, keeps the bodies, as do a `(` or a backtick outside quotes. */
 const mayRunBodies = (text) => {
-  const shellPath = /(?:^|[\\/])(?:bash|sh|zsh|dash|ksh|pwsh|powershell|node|python[\d.]*)(?:\.exe)?$/;
-  // A quoted variable (`"$SHELL"`) keeps its text too: in a command's place it is a command.
-  const bare = text.replace(/"([^"]*)"|'([^']*)'/g, (quoted, double, single) => (shellPath.test(double ?? single) ? 'bash' : /^\$(?:\w+|\{[^}]*\})$/.test(double ?? '') ? double : '""'));
-  return RUNNER.test(bare) || RUNS_AT_COMMAND.test(bare);
+  const bare = text.replace(/"[^"]*"|'[^']*'/g, '""').replace(/(^|\s)#[^\n]*/g, '$1');
+  if (/[(`]/.test(bare)) return true;
+  return bare.split(/\n|;|&&|\|\||\|&?|(?<![<>])&(?![>&])/).some((simple) => {
+    const words = simple.trim().replace(/^(?:\w+=\S*\s+)+/, '');
+    return words !== '' && !INERT.has(words.split(/[\s<>]/)[0]);
+  });
 };
 /** A body an unquoted heredoc expands, running a command: a `$(` or a backtick, on any of its lines. */
 const EXPANDS = /\$\(|`/;
@@ -76,13 +76,16 @@ const OPENER = /(?<!<)<<(?!<)(-?)\s*(?:'([^']+)'|"([^"]+)"|([^\s<>|;&()'"]+))/g;
  * what is not sure stays an act. Run before `unquoted`, since a quoted delimiter (`<<'EOF'`) and a lone quote in a
  * body would otherwise be read as quoted text. `<<<`, a here-string, is no heredoc. */
 function withoutHeredocText(command) {
-  // A line ended by a backslash goes on with the next, and a heredoc's body starts after that whole line.
-  const lines = command.replace(/\\\r?\n/g, ' ').split('\n');
+  const lines = command.split('\n');
   const kept = [];
   for (let i = 0; i < lines.length; i++) {
-    kept.push(lines[i]);
+    // A command line ended by a backslash goes on with the next, and a heredoc's body starts after that whole line;
+    // a body's lines are never joined, since they are skipped below.
+    let line = lines[i];
+    while (/\\\r?$/.test(line) && i + 1 < lines.length) line = line.replace(/\\\r?$/, ' ') + lines[++i];
+    kept.push(line);
     // A `<<` inside quoted text or a comment opens nothing; a quoted delimiter right after `<<` is kept.
-    const bare = lines[i].replace(/(<<-?\s*)?("[^"]*"|'[^']*')/g, (text, opener) => (opener ? text : '""')).replace(/(^|\s)#.*$/, '$1');
+    const bare = line.replace(/(<<-?\s*)?("[^"]*"|'[^']*')/g, (text, opener) => (opener ? text : '""')).replace(/(^|\s)#.*$/, '$1');
     // A `<<` inside `((` is an arithmetic shift, not an opener.
     const opens = [...bare.matchAll(OPENER)].filter((m) => !/\(\([^)]*$/.test(bare.slice(0, m.index)));
     if (opens.length === 0) continue;
@@ -101,7 +104,7 @@ function withoutHeredocText(command) {
     // Unterminated, or an unquoted body that expands a command: its text stays.
     if (at <= lines.length && !expands) i = at - 1;
   }
-  // A shell anywhere in what is left may run a body, now or from a file it was written to: then every body stays.
+  // A command off the inert list may run a body, now or from a file it was written to: then every body stays.
   const left = kept.join('\n');
   return left !== command && mayRunBodies(left) ? command : left;
 }
