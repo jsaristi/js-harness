@@ -1,7 +1,13 @@
 # consistent-orders — orders that hold over a long run (JH 208)
 
 ## State
-Depth pass written, sent to the lead; no source until the lead answers (the brief's STOP). Open for the lead: the
+Depth pass committed (039902d9, branch feat/consistent-orders); item 4's S2 replay corrected by
+`replay-lead.mjs` (job tmp): over all 62 lead ends, predicate A (a consult after the notice, by time) turns back 3
+(10:51Z, 12:38Z, 12:48Z), not 5, and misses the 13:08Z idle close (JH 207 had sent a later non-waiting notice);
+predicate B (inside the lead's stretch) turns back 19, mostly from 8 stale `waiting` notices of dead sessions
+(JH 101 ... JH SR), so S2 needs A plus a liveness bound. Still to do before the waiting notice: S3 against S1,
+whether any sub-agent ever sent `waiting`, the advisor's wording fixes; then a second docs commit, push, consult,
+notify. Open for the lead: the
 slice order, S4's sub-agent refusal (it changes what his yes to question 282 left apart), and whether the gentle-ai
 block question goes to him. Next, on the lead's answer: S1 tests first.
 
