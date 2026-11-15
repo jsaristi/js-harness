@@ -34,7 +34,8 @@ None: the work came from the lead's brief. The owner's answer it rests on is que
 - T8, heredoc false refusals: a new session, with a real shell tokenizer (the lead).
 - The `agentType` of the phantom ends is known only once this is installed (the lead installs).
 - The Done-when item "each defect has a test that failed before the fix" cannot hold for defect 3, since no fix was made, nor for T8, deferred.
-- Not checked: whether the desktop app bound PR #882 to this session.
+- PR #882 is linked to this session in the app (pr-link, 11:21:17Z): a land may archive it before `closed`.
+- fe46cc99's heredoc reading, kept, also misses an act when a lone quote in a heredoc body pairs with a later quote (L34): T8's tokenizer.
 
 ## Cost
 - Time: first notice 09:50Z (the file list), the waiting notice 10:46Z, the lead's answer 10:50Z.
