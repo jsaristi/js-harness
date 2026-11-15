@@ -64,6 +64,13 @@ and his words already decide the feature.
    69918425-3b43-430f-9f50-62b6422422ce, line 7461, 2026-11-14). Done when a cold reader given only the page can say
    what will advance, and that matches the plan; the departure, status and return pages stay consistent; the stretch
    record's format, the measures and the learned estimates do not change.
+7. Make a plan section's block (the F8 plan) readable on the return and the departure: "El regreso del tramo donde
+   dice F8 plan no lo entiendo bien tiene que organizarlo mejor para que lo pueda entender" (session
+   69918425-3b43-430f-9f50-62b6422422ce, line 9989, 2026-11-14). In plain Spanish the block says what the plan is
+   (and how its count relates to its phase's in the map), what its steps are, and which steps moved in the stretch
+   (forecast on the departure, measured on the return). Done when a cold reader given only the page text of each
+   page can say those three things and they match the roadmap; the step count holds every step the roadmap gives a
+   state; the stretch record's format, the measures and the learned estimates do not change.
 ## Design
 
 ### The command
@@ -165,6 +172,7 @@ itself is not limited to an absence: the skill text names it for any stretch.
 - [x] T6 (kind: build) the rule change, on `rule/away-autonomy-stretch`, in 865ec2e7 (PR 634, stacked on PR 633). Spec 1, 3. Route: inline.
 - [ ] T7 (kind: verify) a real stretch opened, checked and closed on this machine; reviews (Codex and the Claude lenses) on each slice. Route: inline.
 - [x] T8 (kind: build) the departure, status and return pages made plain (spec 6), on `feat/stretch-departure-clear` from main a20aa337, JH 196. Route: inline. Commits 7550f4ad, 2c29560c (L9).
+- [ ] T9 (kind: build) the plan block made readable (spec 7), on `feat/stretch-plan-block` from main 0c6c245f, JH 201, test first: the roadmap reader counts a step whose state is dated (`**State (2026-11-11):**`); a phase's left item numbered "2." is summarised by its first sentence, not "2."; the forecast section says what a plan is, its steps grouped by state, and which moved; the step-by-step section shows the steps that changed and groups the rest. Route: inline.
 
 ## Log
 - L1. 2026-10-28, the lead's brief for JH 71: his decision in question 103 ("Próximo cupo", line 8326), his words
@@ -243,6 +251,20 @@ itself is not limited to an absence: the skill text names it for any stretch.
   stay too (above). The titles also use internal names (T1, pregunta 285). On HEAD: 137 convention and stretch tests
   pass (`js-harness gate --`); the departure from HEAD and the real closed stretch's return (a copy of the throughput
   folder in a scratch home) read consistently. Not fixed, minor: a kind's factor of exactly 1 prints "ajustado ×1".
+- L10. 2026-11-14, JH 201, spec 7, the lead's brief (his words read with `js-harness sessions --quote
+  69918425-3b43-430f-9f50-62b6422422ce 9989`). The return of stretch 2026-11-14T23:16:33.945Z re-rendered from main
+  0c6c245f and read as text, and a departure from a scratch plan closing S8 in a scratch home. What he read: the
+  forecast's "F8 plan 68 % al abrir: 13 de 19 pasos / ~68 % al volver, aunque el trabajo se alargue / 68 % ahora",
+  three equal numbers that do not say what the plan is or why it is 68 % while the phase table says "F8 Harness
+  reorganization 3/7 · 43 %"; then "F8 plan, paso por paso": a chain of 19 ids, a table of 19 rows of "igual", each
+  with its whole State paragraph in English (S5c-a's runs about 2,000 characters). Found: (1) the roadmap reader
+  (`planOf`, `bin/lib/report-pages.mjs`) takes only `**State:**`, so S5, S6 and S7, written `**State (2026-11-11):**`,
+  are no steps: the plan has 22 steps with a state, not 19, and S5 and S6 are done, S7 built (checked by running
+  `planOf` over `docs/ROADMAP.md`: 19 ids, no S5, S6, S7); (2) a phase's left item that starts "2. " is summarised as
+  "2." (the first-sentence match stops at the number), so the F8 row shows "2.", "4.", "5.", "6." with the whole
+  text folded under each (the "repeated rows" of the brief are that fold read as text); (3) S4a, the desktop plan and
+  the outside feature open their State with no known word ("the hook done", "PRs 708 ...", "waits for"), so they
+  count as not done; that is the roadmap's wording, shown as it is, not rewritten here.
 
 ## Next step
 NOW (2026-11-14, JH 196, worktree `D:\js-harness\.claude\worktrees\advisor-refuse`, branch `feat/stretch-departure-clear`, head pushed): T8 built and
