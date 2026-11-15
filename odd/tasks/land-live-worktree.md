@@ -4,7 +4,8 @@ Locator: `odd/tasks/land-live-worktree.md` · Branch: `worktree-land-live-worktr
 Delivery: one pull request, landed by the lead · Test runner: `node --test`
 
 ## State
-Done: the reproduction (L2, L3). Next: T2, the failing tests. Open: nothing of his.
+Done: the reproduction (L2, L3), the tests and the fix (T2, T3 in one commit, L5), the failures and roadmap entries
+(T4). Next: T5, the reviews, the verifier, the pull request. Open: nothing of his.
 
 ## Goal
 `js-harness merge-queue --land` and `--prune` never run `git worktree remove` on a worktree a session listed by
@@ -90,10 +91,10 @@ Nothing: the brief settles the direction.
 
 ## Tasks
 - [x] T1 (kind: design) this document and the reproduction (spec 1; inline; its own commit)
-- [ ] T2 (kind: build) the failing tests (spec 1; inline; its own commit)
-- [ ] T3 (kind: build) the shared reading, the land and `--prune` keep a live session's worktree, the true failure line
-  (spec 1; inline; its own commit)
-- [ ] T4 (kind: docs) the `- Seen:` entry and the roadmap entry (specs 2, 4; inline; its own commit)
+- [x] T2 (kind: build) the failing tests (spec 1; inline; with T3, since the hook refuses a red commit)
+- [x] T3 (kind: build) the shared reading, the land and `--prune` keep a live session's worktree, the true failure line
+  (spec 1; inline; one commit with T2)
+- [x] T4 (kind: docs) the `- Seen:` entry and the roadmap entry (specs 2, 4; inline; its own commit)
 - [ ] T5 (kind: verify) Codex, the lenses, the verifier, the pull request and the ready notice
 
 ## Follow-up F1 (not built here): a notice from a session whose folder vanished
@@ -119,3 +120,12 @@ other than a listed session, or a session that enters after the listing, can sti
   `removed` was already empty on the incident); share the close's guest predicate; hoist the listing before the
   removal and keep all when it fails; inject `listAgents` in every land test; cover `--prune`; tell the false "it
   stays"; write down what the listing cannot see (a cwd elsewhere, a session that enters after the listing).
+- L5: red before the fix, on this branch at 06de13c2 plus the tests alone: `node --test --test-name-pattern="listed
+  session|standing in a worktree|listing of sessions|after deleting the registration|--prune keeps"
+  bin/merge-queue.test.mjs`: pass 0, fail 5, each on its own assertion (git was asked to remove `wt-a`; the line
+  said "it stays"; `--prune` removed `wt-a`). The pre-commit hook refused that red commit (GitHub run 43694025769),
+  so the tests went in with the fix. Green after it: the same five and every other worktree, prune and close test
+  of the file (17), and `bin/lib/background-close.test.mjs` with `bin/lib/background.test.mjs` (47).
+- L6: a decision of this session: a job of the listing whose `state` is anything but `done` (a `blocked` one) counts
+  as standing in its folder, for the land and for the close's guest check alike: keeping a worktree is the safe
+  side, and the close only keeps more.

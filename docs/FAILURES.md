@@ -1091,6 +1091,27 @@ dearest part finding it again.
 - Class: delivery
 - Seen: 2026-10-08 — odd/tasks/codex-review-cost.md:234-239 — "the parent's error, to not repeat"
 
+### land-removed-live-worktree
+`merge-queue --land` ran `git worktree remove` on the worktree of the pull request it landed while a session still
+worked there; on Windows git deleted the files and the registration, failed on the folder the session stood in, and
+the land said the worktree stayed.
+- Class: tool
+- Seen: 2026-11-14 — the lead's transcript `69918425-3b43-430f-9f50-62b6422422ce`, lines 10630 and 10632 (read by
+  path and line: `sessions --quote` reads only the user's lines); the land's record in `lands.jsonl` of the main
+  checkout's git directory; its output `land-878.out` in the lead's scratchpad — the land of PR 878 said "Could not
+  remove the worktree of PR 878 at D:/js-harness-worktrees/codex-spend (error: failed to delete
+  'D:/js-harness-worktrees/codex-spend': Permission denied): it stays." and recorded `"removed":[]`; JH 199, listed
+  there by `claude agents` idle with a live pid, found the folder empty and its `.git/worktrees` entry gone, and its
+  notice went to `~/.js-harness/channel/D--js-harness-worktrees-codex-spend.jsonl`, which no lead reads (the full
+  audit, A2-2); the lead re-added it by hand, line 10630: `git worktree add -b feat/codex-spend-t2
+  D:/js-harness-worktrees/codex-spend c472dcb`, line 10632: "HEAD is now at c472dcbe"; nothing committed was lost;
+  the mechanism was run again in a scratch repository (odd/tasks/land-live-worktree.md, L3)
+- Control: check — bin/merge-queue.test.mjs — "a land never asks git to remove a landed worktree a listed session
+  stands in, idle with a live pid; one nobody stands in goes" — since 2026-11-15
+- Proof: no land record after the merge names in `removed` a worktree whose session was at work, and no session
+  reports a worktree a land emptied; `node --test --test-name-pattern="listed session" bin/merge-queue.test.mjs`
+  passes
+
 ### land-took-pending-pr
 `merge-queue --land` took a pull request that was open as ready while a step only he could do, a walk through
 the console, was still pending.

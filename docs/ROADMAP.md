@@ -934,9 +934,11 @@ of the first version.
 - [ ] The advisor-gate sequence "consult, one other call, then act", a workaround for the gate not seeing a consult
   made in the same response: the gate sees it, and the sequence leaves the briefs. Owner: the gate-defects
   session (2026-11-14, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
-- [ ] The lead re-added by hand a worktree that a land removed while its session still worked. A fix is queued: a
-  land never removes a live session's worktree. Its `- Seen:` line in `docs/FAILURES.md` is still to write, from
-  the lead's transcript lines. Owner: this entry, until the fix's session takes it (2026-11-14, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
+- [x] The lead re-added by hand a worktree that a land removed while its session still worked. Done by JH 204
+  (`odd/tasks/land-live-worktree.md`): a land and `--prune` keep a worktree a session of `claude agents` stands in,
+  and the `- Seen:` line is `land-removed-live-worktree` in `docs/FAILURES.md`. Left: a session whose listed cwd is
+  elsewhere, or that enters after the listing, is not seen; and a notice from a session whose folder vanished still
+  goes to a record no lead reads (follow-up F1 there, under "notices that are never lost", question 287) (2026-11-14, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
 - [ ] The plan review with a verifier pass, run on Opus because the guard refused Fable for sub-agents: if it
   proves useful, it becomes a plan-review command. Owner: this entry, until a session takes it (2026-11-14, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
 - [ ] Stalled-session detection: the board, the lead's watch and its heartbeat name a work session that holds
