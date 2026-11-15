@@ -284,7 +284,17 @@ test('once rests on the gate\'s own record too: a second stop without stop_hook_
   assert.equal(stop('a3').answer?.decision, 'block');
   assert.deepEqual(stop('a3').answer, {}, 'a payload with no stop_hook_active is not blocked twice');
   assert.equal(stop('a4').answer?.decision, 'block');
-  assert.deepEqual(decisions(home).map((d) => [d.agent, d.decision, d.turnedBack ?? false]), [['a3', 'flagged', true], ['a3', 'flagged', false], ['a4', 'flagged', true]]);
+  assert.deepEqual(decisions(home).map((d) => [d.agent, d.decision, d.turnedBack ?? false, d.afterTurnBack ?? false]), [['a3', 'flagged', true, false], ['a3', 'flagged', false, true], ['a4', 'flagged', true, false]]);
+  assert.deepEqual(advisorGateReport({ home }).days.map((d) => d.flagged), [2], 'the end let through by the log is the same end, one flag');
+});
+
+test('an end another hook turned back first goes through and is still a flag of its own', () => {
+  const { home, project } = scratch();
+  const t = path.join(home, 'projects', 'p', 'agent.jsonl');
+  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
+  const answer = run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a6', agent_transcript_path: t, stop_hook_active: true }, home).answer;
+  assert.deepEqual(answer, {});
+  assert.deepEqual(advisorGateReport({ home }).days.map((d) => d.flagged), [1]);
 });
 
 test('a sub-agent of the senior session consults too (his answer to question 295); a Fable sub-agent stays exempt', () => {
@@ -384,7 +394,7 @@ test('report: a turned-back end flagged again at its second stop is one flag, no
   writeTranscript(t, splitCall('2026-11-15T10:05:00.000Z', 'e1', 1000));
   writeDecisions(home, [
     { at: '2026-11-15T10:01:00.000Z', act: 'end', agent: 'a1', decision: 'flagged', turnedBack: true, secondStop: false, transcript: t },
-    { at: '2026-11-15T10:02:00.000Z', act: 'end', agent: 'a1', decision: 'flagged', secondStop: true, transcript: t },
+    { at: '2026-11-15T10:02:00.000Z', act: 'end', agent: 'a1', decision: 'flagged', secondStop: true, afterTurnBack: true, transcript: t },
   ]);
   const r = advisorGateReport({ home });
   assert.deepEqual(r.days.map((d) => [d.day, d.flagged, d.followed]), [['2026-11-15', 1, 1]]);

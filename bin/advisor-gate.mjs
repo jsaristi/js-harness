@@ -318,8 +318,11 @@ function decide(mode, payload, seams) {
   // A sub-agent's end is turned back once (his answer to question 294): the second stop goes through, as the reply
   // hook's. Once rests on the host's flag and on this log's own record of the turn-back, so a payload without the flag
   // never loops.
-  const turnBack = mode === '--stop' && !base.secondStop && !turnedBackBefore(home, base.session, agent);
-  record(home, { ...base, ...facts, decision: 'flagged', mode: MODE, ...(turnBack ? { turnedBack: true } : {}) }, stderr);
+  // An end the log shows turned back is its repeat (afterTurnBack), which the report counts once with it; one let
+  // through by the host's flag alone (another hook may have turned it back) stays a flag of its own.
+  const afterTurnBack = mode === '--stop' && turnedBackBefore(home, base.session, agent);
+  const turnBack = mode === '--stop' && !base.secondStop && !afterTurnBack;
+  record(home, { ...base, ...facts, decision: 'flagged', mode: MODE, ...(turnBack ? { turnedBack: true } : {}), ...(afterTurnBack ? { afterTurnBack: true } : {}) }, stderr);
   if (mode === '--stop') return turnBack ? { decision: 'block', reason: END_NOTICE } : {};
   return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: NOTICE(act) } };
 }
@@ -472,8 +475,8 @@ export function advisorGateReport({ home, since = null, projects = path.join(hom
     if (!days.has(day)) days.set(day, { day, decisions: {}, acts: {}, flagged: 0, followed: 0, addedTokens: 0 });
     return days.get(day);
   };
-  // A turned-back end flagged again at its second stop is the same end: one flag, so the share stays one per act.
-  const isFlag = (d) => d.decision === 'flagged' && !(d.act === 'end' && d.secondStop === true);
+  // A turned-back end flagged again at its next stop is the same end (afterTurnBack): one flag, one per act.
+  const isFlag = (d) => d.decision === 'flagged' && d.afterTurnBack !== true;
   const shown = all.filter((d) => inRange(d.at));
   for (const d of shown) {
     const row = dayOf(d.at);
