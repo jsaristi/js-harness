@@ -262,6 +262,54 @@ test('the status measures the stretch against its forecast: at the opening, the 
   assert.match(unread, /no pronosticaba que cambiara ninguna fase del mapa del proyecto/);
 });
 
+// odd/tasks/stretch-protocol.md, spec 7: the plan's block says what the plan is, how it differs from its phase in the
+// map, its steps by state, and which steps move: forecast on the departure, measured on the return.
+const STEPS = [
+  { id: 'S0', title: 'S0 Baseline', reported: 'done' }, { id: 'S6', title: 'S6 The read surface', reported: 'to do' },
+  { id: 'S9', title: 'S9 The host watch', reported: 'in progress' }, { id: 'S8', title: 'S8 Certification', reported: 'to do' },
+];
+const PLAN_FORECAST = {
+  ...FORECAST,
+  named: 1,
+  phases: [...FORECAST.phases, { title: 'F8 Harness reorganization', done: 3, total: 7, forecast: 3, low: 3, high: 3 }],
+  plans: [{ name: 'F8 plan', done: 1, total: 4, forecast: 2, low: 1, high: 2, steps: STEPS }],
+  rows: [{ in: 'F8 plan', step: 'S8', plan: true, text: 'S8', items: ['s8'], when: 'likely' }],
+};
+const planBlock = (html) => html.slice(html.indexOf('<strong>F8 plan</strong>'), html.indexOf('Mapa del proyecto'));
+
+test('the departure\'s plan block says what the plan is, its steps by state and the step the stretch closes', () => {
+  const html = renderDeparture({ ...departure, items: [...departure.items, { id: 's8', title: 'la certificación', kind: 'verify', hours: [1, 2], corrected: [1, 2], correction: { factor: 1, samples: 0, from: 'none' }, session: null }], map: MAP, forecast: PLAN_FORECAST });
+  const block = planBlock(html);
+  assert.match(block, /sección de la hoja de ruta[\s\S]*1 de 4 pasos hechos \(25 %\)/);
+  assert.match(block, /fase «F8 Harness reorganization»[\s\S]*3 de 7 filas \(43 %\)/);
+  assert.match(block, /Hechos \(1\)[\s\S]*S0 Baseline[\s\S]*En curso \(1\)[\s\S]*Por hacer \(2\)[\s\S]*S6 The read surface · S8 Certification/);
+  assert.match(block, /Este tramo cierra[\s\S]*S8 Certification[\s\S]*cierra si va como se estimó/);
+  assert.match(block, /~50 %/, 'a plan that moves keeps its tiles');
+});
+
+test('a plan the stretch does not touch says so in one line, with no tiles of three equal numbers', () => {
+  const still = { ...PLAN_FORECAST, named: 0, rows: [], plans: [{ ...PLAN_FORECAST.plans[0], forecast: 1, high: 1 }] };
+  const block = planBlock(renderDeparture({ ...departure, map: MAP, forecast: still }));
+  assert.match(block, /Ningún trabajo de este tramo cierra un paso de este plan/);
+  assert.doesNotMatch(block, /~25 %|al volver/);
+  // With no phase of the same name in the map, the block does not invent one.
+  const alone = planBlock(renderDeparture({ ...departure, map: MAP, forecast: { ...still, phases: FORECAST.phases } }));
+  assert.doesNotMatch(alone, /fase «/);
+});
+
+test('the return\'s plan block names the steps whose state moved in the stretch, from what to what', () => {
+  const nowSteps = STEPS.map((one) => (one.id === 'S6' ? { ...one, reported: 'done' } : one));
+  const now = { total: { done: 99, total: 109 }, phases: [], plans: [{ name: 'F8 plan', done: 2, total: 4, steps: nowSteps }], rows: [{ ...PLAN_FORECAST.rows[0], now: 'open' }], forecastDone: { done: 0, of: 1 }, gained: 0 };
+  const moments = { head: { open: 'c0', now: 'c1', reconstructed: false }, goals: { met: { met: 1, of: 2, unknown: 0 }, inTime: { met: 1, of: 1, unknown: 0 } }, work: { met: 1, of: 2, unknown: 0, others: {}, waiting: [] }, outside: { sessions: [], untitled: 0 }, map: null, plans: [], forecast: { ...PLAN_FORECAST, now }, timeline: [], why: [], unavailable: {} };
+  const block = planBlock(renderReturn({ ...view, state: 'closed', moments }));
+  assert.match(block, /al abrir[\s\S]*1 de 4[\s\S]*ahora[\s\S]*2 de 4/);
+  assert.match(block, /Cambiaron de estado en el tramo: S6 The read surface \(por hacer → hecho\)/);
+  assert.match(block, /Hechos \(2\)[\s\S]*S0 Baseline · S6 The read surface/, 'the steps by their state now');
+  const same = { ...now, plans: [{ name: 'F8 plan', done: 1, total: 4, steps: STEPS }] };
+  const quiet = planBlock(renderReturn({ ...view, state: 'closed', moments: { ...moments, forecast: { ...PLAN_FORECAST, now: same } } }));
+  assert.match(quiet, /Ningún paso cambió de estado en el tramo/);
+});
+
 test('the open stretch reads as in course, goals not checked yet said so', () => {
   const html = renderView({ ...view, state: 'open', goals: { ...view.goals, checkedAt: null, met: 0, list: view.goals.list.map((goal) => ({ ...goal, met: null, said: null })) } });
   assert.match(html, /en curso/);

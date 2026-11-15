@@ -30,17 +30,19 @@ export function sharesTiles({ goals, work, outside }) {
 // A roadmap item can run to hundreds of words; on his phone a phase's row is its first sentence, the rest folded.
 const LEFT_CUT = 160;
 
-/** What is left in a phase, each item its first sentence cut to `LEFT_CUT` characters, the whole item folded below
- * when that is not all of it. */
+/** A long roadmap text as its first sentence cut to `LEFT_CUT` characters, the whole text folded below when that is not
+ * all of it. A leading number ("2. ") belongs to the first sentence, never ends it. */
+function foldHtml(text) {
+  const whole = String(text).trim();
+  const first = /^(?:\d+\.\s+)?[\s\S]*?[.!?](?=\s|$)/.exec(whole)?.[0] ?? whole;
+  const short = first.length > LEFT_CUT ? `${first.slice(0, LEFT_CUT - 1)}…` : first;
+  return short === whole ? escapeHtml(whole) : `<details><summary>${escapeHtml(short)}</summary>${escapeHtml(whole)}</details>`;
+}
+
+/** What is left in a phase, each item folded (`foldHtml`). */
 function leftHtml(open) {
   if (open.length === 0) return '—';
-  const items = open.map((text) => {
-    const whole = String(text).trim();
-    const first = /^[\s\S]*?[.!?](?=\s|$)/.exec(whole)?.[0] ?? whole;
-    const short = first.length > LEFT_CUT ? `${first.slice(0, LEFT_CUT - 1)}…` : first;
-    return short === whole ? `<li>${escapeHtml(whole)}</li>` : `<li><details><summary>${escapeHtml(short)}</summary>${escapeHtml(whole)}</details></li>`;
-  });
-  return { html: `<ul class="left">${items.join('')}</ul>` };
+  return { html: `<ul class="left">${open.map((text) => `<li>${foldHtml(text)}</li>`).join('')}</ul>` };
 }
 
 const PHASE_CHANGE = { same: ['igual', 'mut'], changed: ['cambió', 'part'], closed: ['cerrada', 'ok'], new: ['nueva', 'part'], gone: ['ya no está', 'no'], unmeasured: ['sin medir', 'mut'] };
@@ -69,19 +71,46 @@ const STEP_CHANGE = {
   'text changed': ['texto cambiado', 'part'], new: ['nuevo', 'part'], gone: ['ya no está', 'no'], unmeasured: ['sin medir', 'mut'],
 };
 
+/** The class of a step's reported state (`STEP_STATE`): `done`, `moving`, `todo` or `other`. */
+export const stepState = (reported) => STEP_STATE[reported] ?? 'other';
+
+// Each class of `stepState` in the page's words, a group's heading and one step's state, in the order a page lists them.
+export const STATE_WORDS = { done: ['Hechos', 'hecho'], moving: ['En curso', 'en curso'], todo: ['Por hacer', 'por hacer'], other: ['Sin estado claro', 'sin estado claro'] };
+
+/** A plan's steps (`{ title, reported }`) grouped by their state, each group its count and its steps by title as the
+ * roadmap writes them, and what "sin estado claro" means when a step has it (spec 7 of odd/tasks/stretch-protocol.md). */
+export function stepsByState(steps) {
+  const groups = Object.entries(STATE_WORDS).map(([state, [heading]]) => [heading, steps.filter((one) => stepState(one.reported) === state)]).filter(([, list]) => list.length > 0);
+  const unclear = steps.some((one) => stepState(one.reported) === 'other')
+    ? '<p class="note">Sin estado claro: el estado que la hoja de ruta le escribe no empieza por una palabra que el conteo conozca (done, built, in progress, to do...), así que no cuenta como hecho.</p>'
+    : '';
+  return `<ul>${groups.map(([heading, list]) => `<li><strong>${heading} (${list.length})</strong>: ${list.map((one) => escapeHtml(one.title ?? one.id)).join(' · ')}</li>`).join('')}</ul>${unclear}`;
+}
+
+// The changes a step-by-step table leaves out, each said in one line of the steps' titles.
+const QUIET_CHANGES = { same: 'Sin cambio', unmeasured: 'Sin medir' };
+
 /** Each plan (`comparePlans`) as a section: its steps as a chain by the state the roadmap reports, the ones that
- * advanced outlined, and a table of what the roadmap says now and the tasks of the documents each step names. */
+ * advanced outlined; a table of the steps that changed, with what the roadmap says now folded under its first sentence
+ * and the tasks of the documents each step names; then one line for the steps with no change, by title. */
 export function planSections(plans) {
   return plans.map((plan) => {
-    const steps = plan.steps.map((step) => ({ id: step.id, state: STEP_STATE[(step.after ?? step.before)?.reported] ?? 'other', moved: step.change === 'advanced' }));
-    const rows = plan.steps.map((step) => {
+    const steps = plan.steps.map((step) => ({ id: step.id, state: stepState((step.after ?? step.before)?.reported), moved: step.change === 'advanced' }));
+    const changed = plan.steps.filter((step) => !(step.change in QUIET_CHANGES));
+    const rows = changed.map((step) => {
       const [word, tone] = STEP_CHANGE[step.change] ?? [step.change, 'mut'];
       const tasks = step.documents.map((one) => `${one.path}: ${fraction(one.before)} → ${fraction(one.after)}`).join('; ') || 'ningún documento nombrado';
-      return [{ text: step.id, mono: true }, step.after?.said ?? step.before?.said ?? '—', tasks, { pill: pill(word, tone) }];
+      return [{ text: step.id, mono: true }, { html: foldHtml(step.after?.said ?? step.before?.said ?? '—') }, tasks, { pill: pill(word, tone) }];
     });
+    // With no step changed, "Ningún paso cambió" and the chain say it; a line of every title would repeat the chain.
+    const quiet = Object.entries(QUIET_CHANGES).map(([change, words]) => {
+      const list = rows.length || change === 'unmeasured' ? plan.steps.filter((step) => step.change === change) : [];
+      return list.length ? `<p>${words} (${list.length}): ${list.map((step) => escapeHtml(step.title ?? step.id)).join(' · ')}</p>` : '';
+    }).join('');
+    const none = rows.length || plan.steps.every((step) => step.change === 'unmeasured') ? '' : '<p>Ningún paso cambió.</p>';
     return {
       title: `${plan.name}, paso por paso`,
-      html: `${chain(steps)}${table(['Paso', 'Lo que dice ahora', 'Tareas de sus documentos (antes → ahora)', 'Cambio'], rows)}`,
+      html: `${chain(steps)}${none}${rows.length ? table(['Paso', 'Lo que dice ahora', 'Tareas de sus documentos (antes → ahora)', 'Cambio'], rows) : ''}${quiet}`,
       note: 'El color de cada paso es lo que dice la hoja de ruta, no una prueba; un paso avanzó cuando sus documentos ganaron tareas hechas o su estado fue hacia adelante.',
     };
   });

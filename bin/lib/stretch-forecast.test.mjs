@@ -119,3 +119,13 @@ test('planShare counts a plan\'s steps done as the forecast counts them: done, b
   const [plan] = forecastOf({ items: [], lanes: [], hours: 1, roadmap: ROADMAP }).plans;
   assert.deepEqual(planShare(ROADMAP.plans[0]), { done: plan.done, total: plan.total });
 });
+
+// odd/tasks/stretch-protocol.md, spec 7: the pages name each step of a plan, so the forecast carries them, at the
+// opening and now, by id, title and the state the roadmap reports.
+test('each plan of the forecast and of now carries its steps by id, title and reported state', () => {
+  const roadmap = { ...ROADMAP, plans: [{ name: 'F8 plan', steps: [{ id: 'S0', title: 'S0 Baseline', reported: 'done', said: 'done, long text' }, { id: 'S13', title: 'S13 Rehearsal', reported: 'to do', said: 'to do' }] }] };
+  const forecast = forecastOf({ items: [], lanes: [], hours: 1, roadmap });
+  assert.deepEqual(forecast.plans[0].steps, [{ id: 'S0', title: 'S0 Baseline', reported: 'done' }, { id: 'S13', title: 'S13 Rehearsal', reported: 'to do' }]);
+  const now = forecastNow(forecast, roadmap);
+  assert.deepEqual(now.plans[0].steps, forecast.plans[0].steps);
+});

@@ -6,7 +6,7 @@
 // (odd/tasks/visual-pages.md) built from the shared parts of `pages.mjs`.
 import { localMinute } from './local-time.mjs';
 import { escapeHtml, page, table, tiles } from './pages.mjs';
-import { mapNowSection, mapSection, planSections, sharesTiles, timelineSection } from './pages-sections.mjs';
+import { mapNowSection, mapSection, planSections, sharesTiles, STATE_WORDS, stepsByState, stepState, timelineSection } from './pages-sections.mjs';
 import { HISTORY_MIN } from './stretch.mjs';
 
 const STYLE = `<style>
@@ -98,15 +98,71 @@ const NOW_WORDS = { done: 'hecha', open: 'abierta', gone: 'ya no está con ese t
 
 const FORECAST_NOTE = 'Sobre el mapa de la apertura: una fila que se añada mientras no estás no cambia el pronóstico. "~" es si cada trabajo termina en el punto medio de su estimado; el rango va de que todos se alarguen a que todos vayan rápido. Un plan se cuenta por pasos, que no pesan igual.';
 
-/** One scope of the forecast, a plan section by its steps or the map by its rows: a heading, then the share at the
- * opening, the forecast with its range beside it and, once measured, the share now. */
-function scopeTiles({ name, unit, counts, now }) {
-  const list = [
+/** One scope of the forecast, a plan section by its steps or the map by its rows: a heading, then its tiles. */
+const scopeTiles = ({ name, unit, counts, now }) => `<p><strong>${escapeHtml(name)}</strong></p>${countTiles(unit, counts, now)}`;
+
+/** The share at the opening, the forecast with its range beside it and, once measured, the share now. */
+function countTiles(unit, counts, now) {
+  return tiles([
     { value: share(counts.done, counts.total), share: meter(counts.done, counts.total), caption: `${now ? 'al abrir' : 'ahora'}: ${counts.done} de ${counts.total} ${unit}` },
     { value: `~${share(counts.forecast, counts.total)}`, share: meter(counts.forecast, counts.total), caption: counts.low === counts.high ? 'al volver, aunque el trabajo se alargue' : `al volver, entre ${share(counts.low, counts.total)} y ${share(counts.high, counts.total)}` },
     ...(now ? [{ value: share(now.done, now.total), share: meter(now.done, now.total), caption: `ahora: ${now.done} de ${now.total} ${unit}` }] : []),
+  ]);
+}
+
+const countText = ({ done, total }, unit) => `${done} de ${total} ${unit} (${share(done, total)})`;
+
+/** The phase of the map a plan details: the one whose title opens with the plan's first word (F8 plan, F8 Harness
+ * reorganization), or none. */
+function phaseOf(name, phases) {
+  const word = name.split(/\s+/)[0];
+  return phases.find((one) => one.title.split(/\s+/)[0] === word) ?? null;
+}
+
+/** Which steps moved, in one sentence: on the departure the steps the stretch closes and when; measured, the steps
+ * whose state changed class from the opening to now, then the steps the forecast counted on and where they are. */
+function movedSentence(plan, now, rows) {
+  const titleOf = (id) => escapeHtml(plan.steps?.find((one) => one.id === id)?.title ?? id);
+  const closing = rows.map((row) => `${titleOf(row.text)} (${WHEN_WORDS[row.when] ?? escapeHtml(row.when)}${now ? `; ahora: ${NOW_WORDS[row.now] ?? '—'}` : ''})`).join('; ');
+  if (!now) return `<p>${rows.length ? `Este tramo cierra ${rows.length === 1 ? '1 paso' : `${rows.length} pasos`}: ${closing}.` : 'Ningún trabajo de este tramo cierra un paso de este plan, así que no se mueve por él.'}</p>`;
+  const forecastLine = rows.length ? ` El tramo pronosticaba cerrar: ${closing}.` : '';
+  if (!plan.steps || !now.steps) return forecastLine ? `<p>${forecastLine.trim()}</p>` : '';
+  const before = new Map(plan.steps.map((one) => [one.id, one]));
+  const after = new Set(now.steps.map((one) => one.id));
+  const word = (one) => STATE_WORDS[stepState(one.reported)][1];
+  const moved = [
+    ...now.steps.flatMap((one) => {
+      const was = before.get(one.id);
+      if (!was) return [`${escapeHtml(one.title ?? one.id)} (nuevo, ${word(one)})`];
+      return stepState(was.reported) === stepState(one.reported) ? [] : [`${escapeHtml(one.title ?? one.id)} (${word(was)} → ${word(one)})`];
+    }),
+    ...plan.steps.filter((one) => !after.has(one.id)).map((one) => `${escapeHtml(one.title ?? one.id)} (ya no está)`),
   ];
-  return `<p><strong>${escapeHtml(name)}</strong></p>${tiles(list)}`;
+  return `<p>${moved.length ? `Cambiaron de estado en el tramo: ${moved.join('; ')}.` : 'Ningún paso cambió de estado en el tramo.'}${forecastLine}</p>`;
+}
+
+/** A plan section of the forecast (spec 7 of odd/tasks/stretch-protocol.md), in the order he reads it: what the plan
+ * is and its count, how that differs from its phase in the map, which steps move, the tiles only when something moves
+ * (three equal numbers say nothing), and its steps by state, now once measured. */
+function planBlock(plan, { forecast, measured }) {
+  const now = measured?.plans.find((one) => one.name === plan.name) ?? null;
+  const same = now && now.done === plan.done && now.total === plan.total;
+  const count = !now ? `Va en ${countText(plan, 'pasos hechos')}.`
+    : same ? `Va en ${countText(now, 'pasos hechos')}, igual que al abrir.`
+      : `Al abrir iba en ${countText(plan, 'pasos hechos')}; ahora va en ${countText(now, 'pasos hechos')}.`;
+  const phase = phaseOf(plan.name, forecast.phases);
+  const phaseNow = phase && measured ? measured.phases.find((one) => one.title === phase.title) ?? phase : phase;
+  const what = phase ? `una sección de la hoja de ruta que detalla, paso a paso, parte de la fase «${escapeHtml(phase.title)}»` : 'una sección de la hoja de ruta que lista un trabajo grande paso a paso';
+  const versus = phase
+    ? `<p>La fase, en el mapa, cuenta otra cosa: sus propias filas, ${countText(phaseNow, 'filas')}. Una fila de la fase puede abarcar varios pasos de este plan, así que los dos porcentajes no coinciden.</p>`
+    : '';
+  const rows = forecast.rows.filter((row) => row.plan && row.in === plan.name).map((row) => ({ ...row, now: measured?.rows.find((one) => one.plan && one.in === row.in && one.text === row.text)?.now }));
+  const moves = plan.forecast !== plan.done || plan.low !== plan.done || plan.high !== plan.done || (now && (now.done !== plan.done || now.total !== plan.total));
+  const steps = now?.steps ?? plan.steps;
+  return `<p><strong>${escapeHtml(plan.name)}</strong></p>
+<p>Qué es: ${what}. Cada paso lleva su estado escrito a mano y el plan se cuenta por pasos. ${count}</p>${versus}
+${movedSentence(plan, now, rows)}${moves ? countTiles('pasos', plan, now) : ''}
+${steps ? `<p>Sus pasos${now ? ' ahora' : ''}:</p>${stepsByState(steps)}` : ''}`;
 }
 
 /** How far the stretch moves the roadmap (`forecastOf`, with `now` from `forecastNow` once `status` measured it): each
@@ -117,10 +173,8 @@ function scopeTiles({ name, unit, counts, now }) {
 export function forecastSection(forecast, titles = new Map(), { closed = false, saidAbove = false } = {}) {
   if (forecast.unavailable) return `<p class="note">El mapa no se pudo leer: ${escapeHtml(forecast.unavailable)}; sin él no hay pronóstico.</p>`;
   const measured = forecast.now && !forecast.now.unavailable ? forecast.now : null;
-  const scopes = [
-    ...forecast.plans.map((plan) => ({ name: plan.name, unit: 'pasos', counts: plan, now: measured?.plans.find((one) => one.name === plan.name) ?? null })),
-    { name: 'Mapa del proyecto', unit: 'filas', counts: forecast.total, now: measured?.total ?? null },
-  ];
+  const plans = forecast.plans.map((plan) => planBlock(plan, { forecast, measured })).join('');
+  const mapScope = { name: 'Mapa del proyecto', unit: 'filas', counts: forecast.total, now: measured?.total ?? null };
   const moving = forecast.phases.filter((phase) => {
     if (phase.forecast !== phase.done || phase.low !== phase.done || phase.high !== phase.done) return true;
     if (!measured) return false;
@@ -148,7 +202,7 @@ export function forecastSection(forecast, titles = new Map(), { closed = false, 
   const against = measured === null ? '' : `<p>${measured.forecastDone.done} de ${measured.forecastDone.of} filas y pasos del pronóstico hechos; ${gained} desde la apertura, que el porcentaje de ahora cuenta y el pronóstico no.</p>`;
   const unread = forecast.now?.unavailable ? `<p class="note">El mapa de ahora no se pudo leer: ${escapeHtml(forecast.now.unavailable)}.</p>` : '';
   const problems = (forecast.problems ?? []).map((one) => `<li>${escapeHtml(titles.get(one.item) ?? one.item)}: ${escapeHtml(one.error)}</li>`).join('');
-  return `${scopes.map(scopeTiles).join('')}${said}${against}${unread}
+  return `${plans}${scopeTiles(mapScope)}${said}${against}${unread}
 ${phases}
 ${rows.length ? table(['Lo que cierra', 'Dónde', 'Trabajo', 'Cuándo', ...(measured ? ['Ahora'] : [])], rows) : ''}${problems ? `<ul class="no">${problems}</ul>` : ''}`;
 }
