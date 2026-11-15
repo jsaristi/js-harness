@@ -45,6 +45,13 @@ test('the plan section gives its steps in order, each with its State text whole 
   assert.deepEqual(plan.steps[1].names, ['f8-s11'], 'a quoted name the command may find as a document');
 });
 
+test('a State bullet that carries its date is a State: the step counts, and a later State bullet of the step wins', () => {
+  const dated = '## F8 plan\n\n### S6 The read surface\n- **State (2026-11-12):** done, PR 838.\n\n### S9 The host watch\n- **State (2026-10-30):** the first review is written.\n- **State:** in progress (JH 109).\n';
+  const [plan] = planOf(dated);
+  assert.deepEqual(plan.steps.map((step) => [step.id, step.reported]), [['S6', 'done'], ['S9', 'in progress']]);
+  assert.equal(plan.steps[0].said, 'done, PR 838.');
+});
+
 test('a roadmap with no plan section gives none', () => {
   assert.deepEqual(planOf('# R\n\n## Checklist\n'), []);
 });
