@@ -333,7 +333,8 @@ test("the status page and the printed report carry the F8 share and the last str
   const four = fs.readFileSync(html, 'utf8').split('4. El mapa')[1].split('5. Lo que espera')[0];
   assert.match(four, /La migración[\s\S]*F8 plan[\s\S]*1 de 2 pasos · 50 %[\s\S]*2 de 2 pasos · 100 %/);
   // odd/tasks/departure-stretch.md, spec 9: the steps at the cut and now, read from git at both commits.
-  assert.match(four, /F8 plan, paso por paso[\s\S]*S0[\s\S]*igual[\s\S]*S13[\s\S]*avanzó[\s\S]*El último tramo/);
+  // Spec 7 of odd/tasks/stretch-protocol.md: the step that changed is a row, the unchanged one a line by title.
+  assert.match(four, /F8 plan, paso por paso[\s\S]*S0[\s\S]*S13[\s\S]*avanzó[\s\S]*Sin cambio \(1\): S0 Baseline[\s\S]*El último tramo/);
   assert.match(four, /El último tramo[\s\S]*PR 630 en main[\s\S]*sí[\s\S]*exit 0[\s\S]*S12 empezada[\s\S]*no[\s\S]*exit 1/);
   assert.match(four, /F8 plan[\s\S]*1 de 2 · 50 %[\s\S]*~100 %[\s\S]*2 de 2 · 100 %/);
 }));

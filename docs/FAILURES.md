@@ -317,6 +317,16 @@ the input tokens it had read were spent.
   `859a797..6a721cc`, part 1 of 7, 49,568 input tokens; run again in a turn of the gate lock, on
   the same model, and not recorded as a skip
 
+### codex-review-edited-during-run
+A session edited tracked files in its worktree while its own Codex review ran, so the review read a tree that was not
+the committed range and wrote no record: its tokens were spent on a finding with no record to carry it.
+- Class: tool
+- Seen: 2026-11-14 — odd/tasks/stretch-protocol.md, L12 (JH 201) — `codex-review --base 0c6c245f` over
+  0c35bde..a690647, 173,920 input tokens, "Tracked files changed while Codex was reviewing ... no record was written";
+  the session wrote `docs/FAILURES.md` and the feature document while the review ran in the background
+- Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews leaves no record" —
+  since 2026-10-12
+
 ### codex-review-incomplete
 A Codex review followed the delegation rules of its home instead of reading the patch, read a tenth
 of it and recorded nothing.
@@ -1299,6 +1309,19 @@ to it were delivered only after the prompt was answered.
   through the orchestrator" — replaced on 2026-10-16: T17 was found delivered and checked off
   (odd/tasks/session-channel.md, Progress of 2026-10-15), and the board has marked a session the
   user refused or stopped since 2026-10-14 (commit cb09dc0, which names this case)
+
+### plan-state-dated-dropped
+The roadmap reader took a plan step's state only from a literal `**State:**` bullet; the roadmap writes some as
+`**State (2026-11-11):**`, so those steps were no steps, and every count of the F8 plan read through `planOf` (the
+report's migration share, the stretch forecast) left them out.
+- Class: wrong-information
+- Seen: 2026-11-14 — the return of stretch 2026-11-14T23:16:33.945Z, re-rendered from main 0c6c245f — "F8 plan
+  13 de 19 pasos"; S5, S6 and S7 were missing, so the plan held 22 steps with a state, 16 of them done
+  (odd/tasks/stretch-protocol.md, L10)
+- Control: check — bin/lib/report-pages.test.mjs — "a State bullet that carries its date is a State: the step
+  counts, and a later State bullet of the step wins" — since 2026-11-14
+- Proof: `planOf` over `docs/ROADMAP.md` gives S5, S6 and S7 among its steps, and a stretch page's F8 plan block
+  counts every step the roadmap gives a state (16 de 22 on 2026-11-14)
 
 ### pnpm-cleanup-deleted-link-targets
 A cleanup of pnpm's old install folders deleted folders that live installs still pointed to: in

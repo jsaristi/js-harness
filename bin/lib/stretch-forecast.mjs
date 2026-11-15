@@ -15,6 +15,9 @@ const DONE_STATES = new Set(['done', 'built', 'applied']);
  * migration's share the status report shows (odd/tasks/report-stretch-share.md). */
 export const planShare = (plan) => ({ done: plan.steps.filter((one) => DONE_STATES.has(one.reported)).length, total: plan.steps.length });
 
+/** A plan's steps as the pages name them (spec 7 of odd/tasks/stretch-protocol.md): id, title and reported state. */
+const stepsOf = (plan) => plan.steps.map(({ id, title, reported }) => ({ id, title, reported }));
+
 /** Why an item's `closes` (a list of `{ in, step }`, both texts) is refused, or `null`; absent is none. */
 export function closesProblem(id, closes) {
   if (closes === undefined) return null;
@@ -70,7 +73,8 @@ function countsOf(done, total, rows) {
 /** The forecast of a stretch: its `items` (`{ id, waitsFor?, closes? }`), their `lanes` (`laneOut`), its `hours` and the
  * `roadmap` at the opening (`{ done, total, phases, plans }`). `{ named, total, phases, plans, rows, problems }`: the
  * items that name a row, the map's counts in total and by phase (`done` at the opening, `forecast`, `low` and `high`
- * the rows done at the return by the middle, the long and the short end), each plan's steps counted the same way, one
+ * the rows done at the return by the middle, the long and the short end), each plan's steps counted the same way and
+ * listed (`stepsOf`), one
  * row a step with every item that names it and the soonest `when` of theirs, and each entry that names no row. */
 export function forecastOf({ items, lanes, hours, roadmap }) {
   const ends = new Map(lanes.flatMap((lane) => lane.items.map((one) => [one.id, one.end])));
@@ -101,7 +105,7 @@ export function forecastOf({ items, lanes, hours, roadmap }) {
     phases: roadmap.phases.map((phase) => ({ title: phase.title, ...countsOf(phase.done, phase.total, mapRows.filter((one) => one.in === phase.title)) })),
     plans: roadmap.plans.map((plan) => {
       const { done, total } = planShare(plan);
-      return { name: plan.name, ...countsOf(done, total, list.filter((one) => one.plan && one.in === plan.name)) };
+      return { name: plan.name, ...countsOf(done, total, list.filter((one) => one.plan && one.in === plan.name)), steps: stepsOf(plan) };
     }),
     rows: list,
     problems,
@@ -129,7 +133,7 @@ export function forecastNow(forecast, roadmap) {
   return {
     total: { done: roadmap.done, total: roadmap.total },
     phases: roadmap.phases.map((phase) => ({ title: phase.title, done: phase.done, total: phase.total })),
-    plans: roadmap.plans.map((plan) => ({ name: plan.name, ...planShare(plan) })),
+    plans: roadmap.plans.map((plan) => ({ name: plan.name, ...planShare(plan), steps: stepsOf(plan) })),
     rows,
     forecastDone: { done: counted.filter((one) => one.now === 'done').length, of: counted.length },
     gained: roadmap.total - forecast.total.total,

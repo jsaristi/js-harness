@@ -10,7 +10,8 @@ import { tokenize } from './progress.mjs';
 const PLAN_HEADING = /^##\s+(.+\bplan)\s*$/i;
 const SECTION_HEADING = /^#{1,2}\s/;
 const STEP_HEADING = /^###\s+(.+?)\s*$/;
-const STATE_BULLET = /^\s*[-*+]\s+\*\*State:\*\*\s*(.*)$/;
+// A step's state, `**State:**` or with its date, `**State (2026-11-11):**`, as the roadmap writes both.
+const STATE_BULLET = /^\s*[-*+]\s+\*\*State(?:\s*\([^)]*\))?:\*\*\s*(.*)$/;
 const NEXT_BULLET = /^\s*[-*+]\s/;
 const STEP_ID = /^S\d+[\w-]*$/;
 const DOCUMENT = /odd\/tasks\/[\w.-]+\.md/g;
