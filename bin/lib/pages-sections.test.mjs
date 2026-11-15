@@ -61,6 +61,10 @@ test('a left item numbered "2. " is summarised by its first sentence, number inc
   const html = mapNowSection({ done: 0, total: 1, phases: [{ title: 'F8', done: 0, total: 1, open: [item] }] });
   assert.match(html, /<summary>2\. His decisions from \[the register\]\(proposals\/harness-diet\.md#1-what-is-his\), split by kind\.<\/summary>/);
   assert.doesNotMatch(html, /<summary>2\.<\/summary>/);
+  // An item with no sentence end after its number is summarised by its start, cut, never by the number.
+  const open = `5. Final certification (S8): the S0 and S8 measures of section 7, ${'graded side by side '.repeat(10)}and the closing count of each failure class`;
+  const five = mapNowSection({ done: 0, total: 1, phases: [{ title: 'F8', done: 0, total: 1, open: [open] }] });
+  assert.match(five, /<summary>5\. Final certification \(S8\): the S0 and S8 measures[^<]*…<\/summary>/);
 });
 
 test('a map with no before says it has none and still shows now', () => {

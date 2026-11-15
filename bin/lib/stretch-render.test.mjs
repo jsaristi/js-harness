@@ -322,6 +322,9 @@ test('the return\'s plan block names the steps whose state moved in the stretch,
   const same = { ...now, plans: [{ name: 'F8 plan', done: 1, total: 4, steps: STEPS }] };
   const quiet = planBlock(renderReturn({ ...view, state: 'closed', moments: { ...moments, forecast: { ...PLAN_FORECAST, now: same } } }));
   assert.match(quiet, /Ningún paso cambió de estado en el tramo/);
+  // A step the stretch named is said as named, with its own when and a step's words for where it is now.
+  assert.match(block, /El tramo nombraba: S8 Certification \(cierra si va como se estimó; ahora: sin hacer\)/);
+  assert.doesNotMatch(block, /pronosticaba cerrar|ahora: abierta/);
   // The reliability lens: a plan the roadmap of now no longer holds says so, with no tiles of the opening's numbers.
   const gone = planBlock(renderReturn({ ...view, state: 'closed', moments: { ...moments, forecast: { ...PLAN_FORECAST, named: 0, rows: [], plans: [{ ...PLAN_FORECAST.plans[0], forecast: 1, high: 1 }], now: { ...now, plans: [] } } } }));
   assert.match(gone, /ya no está en la hoja de ruta de ahora/);

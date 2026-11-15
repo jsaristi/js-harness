@@ -102,6 +102,8 @@ const meter = (done, total) => (total === 0 ? null : done / total);
 // When a row closes (`whenOf` of ./stretch-forecast.mjs) and where it is now (`forecastNow`), in the page's words.
 const WHEN_WORDS = { sure: 'cierra aunque se alargue', likely: 'cierra si va como se estimó', possible: 'cierra solo si va más rápido de lo estimado', beyond: 'después de tu vuelta', waits: 'espera por ti' };
 const NOW_WORDS = { done: 'hecha', open: 'abierta', gone: 'ya no está con ese texto' };
+// The same for a plan's step, which is "un paso", not "una fila".
+const STEP_NOW_WORDS = { done: 'hecho', open: 'sin hacer', gone: 'ya no está' };
 
 const FORECAST_NOTE = 'Sobre el mapa de la apertura: una fila que se añada mientras no estás no cambia el pronóstico. "~" es si cada trabajo termina en el punto medio de su estimado; el rango va de que todos se alarguen a que todos vayan rápido. Un plan se cuenta por pasos, que no pesan igual.';
 
@@ -140,10 +142,11 @@ function phaseOf(name, phases) {
  * whose state changed class from the opening to now, then the steps the forecast counted on and where they are. */
 function movedSentence(plan, now, rows) {
   const titleOf = (id) => escapeHtml(plan.steps?.find((one) => one.id === id)?.title ?? id);
-  const closing = rows.map((row) => `${titleOf(row.text)} (${WHEN_WORDS[row.when] ?? escapeHtml(row.when)}${now ? `; ahora: ${NOW_WORDS[row.now] ?? '—'}` : ''})`).join('; ');
+  const closing = rows.map((row) => `${titleOf(row.text)} (${WHEN_WORDS[row.when] ?? escapeHtml(row.when)}${now ? `; ahora: ${STEP_NOW_WORDS[row.now] ?? '—'}` : ''})`).join('; ');
   // Each named step keeps its own when: one may end after the return or wait for him, so none is promised here.
   if (!now) return `<p>${rows.length ? `Pasos que nombra este tramo: ${closing}.` : 'Ningún trabajo de este tramo dice que cierre un paso de este plan, así que el pronóstico deja el plan como está.'}</p>`;
-  const forecastLine = rows.length ? ` El tramo pronosticaba cerrar: ${closing}.` : '';
+  // Named, not promised: each step keeps its when, as on the departure (Codex's P2 on the mark).
+  const forecastLine = rows.length ? ` El tramo nombraba: ${closing}.` : '';
   if (!plan.steps || !now.steps) return forecastLine ? `<p>${forecastLine.trim()}</p>` : '';
   const before = new Map(plan.steps.map((one) => [one.id, one]));
   const after = new Set(now.steps.map((one) => one.id));

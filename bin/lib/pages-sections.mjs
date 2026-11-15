@@ -34,7 +34,9 @@ const LEFT_CUT = 160;
  * all of it. A leading number ("2. ") belongs to the first sentence, never ends it. */
 function foldHtml(text) {
   const whole = String(text).trim();
-  const first = /^(?:\d+\.\s+)?[\s\S]*?[.!?](?=\s|$)/.exec(whole)?.[0] ?? whole;
+  const number = /^\d+\.\s+/.exec(whole)?.[0] ?? '';
+  const rest = whole.slice(number.length);
+  const first = `${number}${/^[\s\S]*?[.!?](?=\s|$)/.exec(rest)?.[0] ?? rest}`;
   const short = first.length > LEFT_CUT ? `${first.slice(0, LEFT_CUT - 1)}…` : first;
   return short === whole ? escapeHtml(whole) : `<details><summary>${escapeHtml(short)}</summary>${escapeHtml(whole)}</details>`;
 }
