@@ -1,10 +1,9 @@
 # consistent-orders — orders that hold over a long run (JH 208)
 
 ## State
-PR 886 re-sent ready at head 8402785b (L15); the lead lands it. S4 built on feat/consistent-orders-s4, stacked:
-an unconsulted sub-agent end is turned back once, asked to give its whole result again, once resting on the host's
-flag and on the gate's own record; reviews of the fix, the verifier and its PR follow. The S2 and S6 designs are
-written (L13, L14); S2's replay is done (L17); both wait for their double review and the lead.
+PR 886 re-sent ready at head 8402785b (L15); the lead lands it. S4 built and reviewed on feat/consistent-orders-s4
+(87b1c568, 53b2038d, 64883e5f, 89b4948b; L18), its PR stacked on feat/consistent-orders. The S2 and S6 designs are
+written (L13, L14, S2's replay L17) and wait for their double review and the lead; nothing of them is built.
 
 ## Goal
 An order the harness gives a session, a work session or a sub-agent (first: consult the advisor when blocked) is held
@@ -285,3 +284,12 @@ answering a block, while a session waits) were missed with nothing to say so; on
   were not on origin, so the commit rule was not applied to them; the build reads the worktree, which would clear
   JH 208's three if it committed after 16:18Z. A new consult for each note of a blocked session costs 3 of the 9
   (12:50Z, 12:56Z, 13:08Z).
+- L18 (2026-11-15) S4's review rounds. 87b1c568: Codex clean (0.93), the lenses 0. 53b2038d (the advisor's and the
+  verifier's fixes): Codex and the reliability and readability lenses found the report still counted an end let
+  through by the log twice, and dropped one another hook turned back first; fixed in 64883e5f (`afterTurnBack` from
+  the gate's own log). Its review: Codex (blocking) and readability, old repeat records no longer dropped; fixed in
+  89b4948b (every new end record carries `afterTurnBack`; one without the key at a second stop stays a repeat).
+  Codex's recheck: 1 of 1 fixed. Answered, not fixed: the lenses' recheck says records written by 64883e5f's code
+  (the key only when true) would be misread. None exists: the hook runs the installed js-harness from main
+  (`~/.claude/settings.json` line 218, `js-harness advisor-gate --stop`), and the real log holds 0 records with
+  `afterTurnBack` or `turnedBack` and 0 with `"secondStop":true` (`grep -c` on decisions.jsonl); 64883e5f never ships.
