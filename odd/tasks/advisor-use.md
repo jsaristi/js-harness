@@ -255,7 +255,7 @@ What the three reads left that this proposal does not settle, for him to weigh:
 - [x] T6 (kind: build) refuse now, his answer to question 285 (spec 4) — route: here — commits: 9e0ae5f2, e9b7aec1, ba96d4e7; PR #871
 - [x] T7 (kind: build) a sub-agent's end with no transcript is recorded apart, with its `agent_type`, not as unchecked (L24) — route: here — commit: the T7 fix
 - [x] T8 (kind: build) a heredoc's text that names an act is not that act, unless a shell reads it (L25) — route: here — commit: the T8 fix
-- [ ] T9 (kind: verify) "consult alone, one other call, then the act" reproduced: no defect; the ROADMAP Later line corrected (L26) — route: here — commit: docs
+- [x] T9 (kind: verify) "consult alone, one other call, then the act" reproduced: no defect; the ROADMAP Later line corrected (L26) — route: here — commit: docs
 
 ## Log
 - L1 (2026-11-13) His request, as written: S1, S2, S3 above; the lead's brief: `js-harness sessions --opening 'JH 196
