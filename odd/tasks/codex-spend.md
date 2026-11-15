@@ -1,9 +1,9 @@
 # codex-spend: no Codex waste, no review weakened
 
 ## State
-v4 after the plan's three reads (L9-L11), clearances in (L12). T1 written (L14) and committed; next on it:
-verifier (opus), codex-review and lens-review on the slice, PR, ready notice with --pr. Then T2, T3, T5, and T4
-last, after JH 198's T6. Q1+Q2 drafts after T1.
+T1 done: PR 878 open at its head; Codex and lens records cover bc87ce6..fc1c9f0 (L16-L18). Next: ready notice
+--pr 878 (advisor consulted), then Q1+Q2 drafts to the lead's folder; T2 commits stay local (or a stacked branch)
+until 878 lands; unbind 878 on land; then T2, T3, T5, and T4 last. Two spec-1 departures await the lead (L18).
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
@@ -136,7 +136,7 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
    `node_modules` is not empty, the run reads the live folder exactly as today, the three checks on the live folder,
    and says why. Proofs: a commit and an edit in the live folder during a run leave the record written; a gate turn's
    Codex command run in the snapshot gives what it gives in the live tree; finding paths come back relative; `--cwd`
-   at a turn worktree makes no nested snapshot; a stale snapshot of a dead pid is swept at start; a removal that
+   at a turn worktree makes no nested snapshot; a stale snapshot of a dead pid is swept before the next first session; a removal that
    fails is a warning; sentinel files behind a symlink or junction in or above the snapshot area survive removal and
    sweep; a part that passed is kept (existing, `keptPartFor`).
 2. HEAD's merge of the default branch is set apart first (it is reviewed by `mergeStart` by what was written in it,
@@ -293,3 +293,8 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   each of them to clear what only a killed run leaves, which the next run that starts Codex clears anyway. Taken:
   `measuring` is its own option, no longer folded into `inTurn`; the refusal of a snapshot dirty when made builds
   its own text instead of stripping `snapshotChanged`'s by a regex.
+- L18 2026-11-15T00:20Z, the fix fc1c9f09 rechecked: Codex passed (60,265 input tokens); lenses resilience,
+  reliability, readability: 5 earlier findings fixed, 0 new. PR 878 opened, pre-push covering 3 code commits. Put to
+  the lead with the ready, not settled by this log: measuring runs make no snapshot (L14), and the sweep runs before
+  the first Codex session rather than at every start (L17). Not tested: snapshot removal after a throw, and the
+  Ctrl-C test asserting the snapshot is gone; a test of either costs another review round, offered to the lead.
