@@ -1,10 +1,11 @@
 # consistent-orders — orders that hold over a long run (JH 208)
 
 ## State
-PR 886 open: S1 and S5 built tests-first, reviewed by Codex and the Claude lenses, verified by the independent
-verifier (PASS, and PASS again on 2d9d8f0d, L11). It covers 1 of the 6 uncaught rows; the lead's own consult (S2) and
-sub-agents (S4) wait. Open as designs for the lead: S2 (T2), S6 (T7); S4 is his. S5's rule (`rules change
-away-autonomy`, a `rule/` branch) comes after the land: until then S5 is a capability, not a check.
+PR 886 sent ready (S1, S5); the lead lands it. S4 is a go (L12): a sub-agent's end with no consult in its stretch is
+turned back once (SubagentStop `decision: block`, the second stop let through, as the reply hook does), an unreadable
+transcript fails open; exempt only the senior session and Fable-model sub-agents (the senior's Opus sub-agents
+consult). Built on a branch stacked on feat/consistent-orders, tests first in bin/advisor-gate.test.mjs (today the test
+'SubagentStop never blocks' pins the old behaviour and changes with it). Then S2 and S6 designs.
 
 ## Goal
 An order the harness gives a session, a work session or a sub-agent (first: consult the advisor when blocked) is held
@@ -173,7 +174,7 @@ answering a block, while a session waits) were missed with nothing to say so; on
 - [x] T1 (kind: build) S1, spec 1 (two cases failed on main, 26 of 26 pass after): `waiting` a gated act in `gatedAct`; tests first in bin/advisor-gate.test.mjs; route inline; commit `feat(advisor-gate): hold a waiting notice to a consult`
 - [ ] T2 (kind: design) S2, spec 2: replan on a blocked-state signal that survives a later `note` (the waiting, note, idle case first), with liveness and resolution rules, without changing readStalled's contract; define the idle close; the lead approves before a build
 - [ ] T3 (kind: build) S3, spec 3: left out, folded into S1 (Depth pass item 3)
-- [ ] T4 (kind: design) S4, spec 4: the lead asks him; build nothing until then
+- [ ] T4 (kind: build) S4, spec 4: his yes (L12); turn back an unconsulted sub-agent end once; tests first; commit `feat(advisor-gate): turn back an unconsulted sub-agent end once`
 - [x] T5 (kind: build) S5, spec 5 (code built, two tests failed on main, 67 of 67 pass; the rule's `rule/` branch after this pull request lands): `forks` in the stretch plan, shown at open; rule via `rules change` on a `rule/` branch; route inline; commit `feat(stretch): pre-decided forks in the departure plan`
 - [ ] T7 (kind: design) S6, spec 6: amend `rule:reports-spanish-visual` with his quote (`rules change` on a `rule/` branch) and design the check that acts on it (a candidate: the reply hook turns back a report close with no Artifact published in the turn); the lead approves before a build
 - [x] T6 (kind: verify) one independent verifier (opus) over T1 and T5: PASS (L10)
@@ -217,3 +218,8 @@ answering a block, while a session waits) were missed with nothing to say so; on
   checked by it: the host's real compaction entry (the fixture follows transcript 69918425's isCompactSummary lines).
 - L11 (2026-11-15) the verifier again, on 2d9d8f0d: PASS, 60 of 60 tests; only `clean` and `template new` take another
   `--kind`, with no gated value; one new low false refusal (another tool's `--kind ready` chained after a notice), F9.
+- L12 (2026-11-15, lead transcript 69918425) his answers: question 294, line 17415 (18:02:43Z), "Devolverlo una vez
+  (Recomendada)" to "ese final se devuelva una sola vez, para que el sub-agente consulte y luego termine; si el registro
+  no se puede leer, pasa sin bloquear ... No cubre bloquear más de una vez ni tocar otras órdenes"; question 295, line
+  17459 (18:03:39Z), "Sí, también consultan (Recomendada)": only the senior session and Fable-model sub-agents stay
+  exempt. For S6, line 17216 (the lead's note): "la idea es seguir haciendo todas las cosas así".
