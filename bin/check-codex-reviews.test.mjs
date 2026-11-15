@@ -17,6 +17,7 @@ import { lensCandidate } from './lib/lens-candidate.mjs';
 import { reviewCoverage } from './lib/codex-review-coverage.mjs';
 import { appendLensReview, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
 import { commandStep, firstStep, noStep } from './lib/next-step.mjs';
+import { giveRange } from './lib/codex-records.testkit.mjs';
 
 // Real git in every test, isolated from the host's config like project.test.mjs does.
 let configDir;
@@ -147,13 +148,21 @@ function feature(root) {
   git(root, 'checkout', '-b', 'feature');
 }
 
+let runCount = 0;
 function record(root, base, head, extra = {}) {
+  // A review is evidence only through the run line that names it (S5, JH 207): a record of a review this file writes
+  // has one, as `codex-review` writes it, unless the test names its own run or writes the record bare (`forged`).
+  const reviewed = (extra.outcome ?? 'reviewed') === 'reviewed';
+  const own = reviewed && extra.run === undefined && extra.runs === undefined ? { run: `run-${base.slice(0, 7)}-${head.slice(0, 7)}-${(runCount += 1)}` } : {};
+  if (own.run) run(root, { id: own.run, base, from: base, head });
+  else if (reviewed && typeof extra.run === 'string') giveRange(root, extra.run, { base, head }, { where: whereOf(root) });
   appendCodexReview(root, {
     schema: CODEX_REVIEW_SCHEMA,
     base,
     head,
     reviewedAt: '2026-09-29T00:00:00.000Z',
     outcome: 'reviewed',
+    ...own,
     ...extra,
   });
   // A push asks for the Claude lenses' record too (odd/tasks/f8-s1-reviews.md, T4): a range Codex reviewed here was
@@ -164,6 +173,55 @@ function record(root, base, head, extra = {}) {
 }
 
 const short = (root, rev) => git(root, 'rev-parse', '--short', rev);
+
+// S5 (C-3 + B2-12, JH 207): a record of a review is evidence only where a run line of the log names it, as the lens
+// records are (`admittedLensReviews`). His answers: question 293, "Exigirla a todos"; question 299, "Seguir con S5".
+const forged = (root, base, head, extra = {}) => appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-10-05T22:40:07.430Z', outcome: 'reviewed', ...extra });
+const twoCode = () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  commit(root, 'b.js', 'two', 'feat: two');
+  return { root, base, head: commit(root, 'c.js', 'three', 'feat: three') };
+};
+
+test('S5: a record of a review that names no run line covers nothing, as the two of feat/codex-parity (5f772ede, ef0e71f1) would not', () => {
+  const { root, base, head } = twoCode();
+  forged(root, base, head);
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /^2 of 2 code commits since origin\/main have no Codex review record/);
+});
+
+test('S5: a record whose run line is of another range, or is missing from the log, covers nothing', () => {
+  const { root, base, head } = twoCode();
+  run(root, { id: 'other', base, from: base, head: base });
+  forged(root, base, head, { run: 'other' });
+  forged(root, base, head, { run: 'missing' });
+  forged(root, base, head, { runs: ['other', 'missing'] });
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, false);
+});
+
+test('S5: a run line is claimed by the first record that names it; a second record naming it covers nothing', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const first = commit(root, 'b.js', 'two', 'feat: two');
+  run(root, { id: 'r1', base, from: base, head: first });
+  forged(root, base, first, { run: 'r1' });
+  const second = commit(root, 'c.js', 'three', 'feat: three');
+  forged(root, first, second, { run: 'r1' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /^1 of 2 code commits/);
+  // The real run of the second range covers it.
+  record(root, first, second);
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, true);
+});
+
+test('S5: a record of nothing to review covers only a range that changes no file a review reads, as git says', () => {
+  const { root, base, head } = twoCode();
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-11-15T00:00:00.000Z', outcome: NOTHING_TO_REVIEW, reason: 'said by hand' });
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, false, 'code in the range');
+});
 
 test('every code commit inside a recorded range passes, and the detail counts them', () => {
   const { root, base } = makeRepo();
@@ -247,6 +305,20 @@ test('Y1: a commit and its revert above a review that owes a correction, recorde
   assert.equal(row.pass, false, row.detail);
   assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
   assert.ok(row.lines.join('\n').includes(priorLine(finding)), row.lines.join('\n'));
+});
+
+test('S5: a record with no run line above a review that owes a correction neither covers its commit nor pays the correction', () => {
+  // The advisor on S5: the correction is read from the records that cover (`correctionOwed`), so a bare record of a
+  // review over the fix's place is no review of it, and the push still asks for the recheck from the owing head.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const fix = commit(root, 'c.js', 'the fix', 'fix: the finding');
+  forged(root, head, fix);
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /1 of 2 code commits since origin\/main have no Codex review record/);
+  // The review it asks for starts at the owing head, so it is the recheck of those findings (`recheckState`).
+  assert.equal(row.review.base, `${short(root, fix)}^`);
+  assert.equal(git(root, 'rev-parse', `${fix}^`), head);
 });
 
 test('Y1: check --push itself refuses that push, on the Codex row', async () => {
@@ -359,7 +431,7 @@ test('a recheck whose counts were not kept passes with the warning too', () => {
   assert.match(row.lines.join('\n'), /warning: the Codex recheck that ended at .* left findings open \(its counts were not kept\)/);
 });
 
-test('a review that found nothing, or a branch with no run log, passes as before', () => {
+test('a review that found nothing passes as before; a branch with no run log has no review, since nothing names one (S5)', () => {
   const { root } = reviewedWith({ verdict: 'correct', findings: [] });
   assert.equal(checkCodexReviews(root, 'HEAD').pass, true);
   const { root: bare, base } = makeRepo();
@@ -367,8 +439,8 @@ test('a review that found nothing, or a branch with no run log, passes as before
   const head = commit(bare, 'b.js', 'two', 'feat: two');
   record(bare, base, head, { run: 'run-1' });
   const row = checkCodexReviews(bare, 'HEAD');
-  assert.equal(row.pass, true, row.detail);
-  assert.match(row.detail, /1 code commit since origin.main, all covered by a Codex review record/);
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /^1 of 1 code commit since origin.main have no Codex review record/);
 });
 
 test('a push of a commit that is not HEAD names no command, which HEAD would not be bound to: the step is to check it out', () => {

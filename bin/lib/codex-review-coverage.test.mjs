@@ -7,6 +7,7 @@ import path from 'node:path';
 import { baseLeftOut, COMMITS_UNREAD, MARKS_UNREAD, mergeStart, notReviews, rangeStart, reviewCoverage, reviewStart } from './codex-review-coverage.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './codex-reviews.mjs';
 import { repoTemplate } from './git-fixture.testkit.mjs';
+import { withRunLine } from './codex-records.testkit.mjs';
 
 // Real git in every test, isolated from the host's config. What `check` says of the records over the range
 // of a push is in `bin/check-codex-reviews.test.mjs`, which is the net of the definition itself; here are
@@ -58,7 +59,7 @@ function makeRepo() {
 }
 
 function record(root, base, head, extra = {}) {
-  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-10-08T00:00:00.000Z', outcome: 'reviewed', ...extra });
+  appendCodexReview(root, withRunLine(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-10-08T00:00:00.000Z', outcome: 'reviewed', ...extra }));
 }
 
 /** A `spawn` that runs git for real and keeps, in `started`, the git command of each process it starts. */
@@ -254,8 +255,10 @@ test('the records that cover a code commit and are no review are told apart from
   // A skip of the commit of the document alone covers no code commit, and is not counted.
   record(root, one, doc, { outcome: 'unavailable', reason: 'nothing but words' });
   const coverage = reviewCoverage(root, { from: first, tip: three });
-  assert.deepEqual(coverage.uncovered, []);
-  assert.deepEqual(notReviews(coverage).map((rec) => [rec.outcome, rec.head]), [['unavailable', two], [NOTHING_TO_REVIEW, three]]);
+  // The range with nothing to review holds a code commit, so git refuses the record (S5, JH 207): its commit is not
+  // covered, and the skip is the one record that covers code without being a review.
+  assert.deepEqual(coverage.uncovered.map((commit) => commit.id), [three]);
+  assert.deepEqual(notReviews(coverage).map((rec) => [rec.outcome, rec.head]), [['unavailable', two]]);
 });
 
 test('a coverage that cannot be told says what could not be read, and never reads as nothing uncovered', () => {

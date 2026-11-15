@@ -15,6 +15,7 @@ import { appendLensReview, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-r
 import { repoTemplate } from './lib/git-fixture.testkit.mjs';
 import { declarationOf } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
+import { recordLine } from './lib/codex-records.testkit.mjs';
 
 // The fixtures are real repositories: the host's git configuration (hooks, signing, rename or identity settings)
 // would change what they do, so it is left out of every git this file starts (Codex, 2026-10-14).
@@ -810,7 +811,7 @@ const REVIEWED_AT = '2026-10-16T12:00:00.000Z';
 function writeRecord(root, { base, head, lens = 'reviewed' }) {
   fs.mkdirSync(path.join(root, '.git', 'js-harness'), { recursive: true });
   const rec = { schema: 'js-harness.codex-review/v1', base, head, reviewedAt: REVIEWED_AT, outcome: 'reviewed' };
-  fs.appendFileSync(path.join(root, '.git', 'js-harness', 'codex-reviews.jsonl'), `${JSON.stringify(rec)}\n`, 'utf8');
+  fs.appendFileSync(path.join(root, '.git', 'js-harness', 'codex-reviews.jsonl'), recordLine(root, rec), 'utf8');
   if (lens) writeLensRecord(root, { base, head, outcome: lens });
 }
 

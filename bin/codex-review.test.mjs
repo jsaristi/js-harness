@@ -27,6 +27,7 @@ import { isValidCodexReview } from './lib/codex-reviews.mjs';
 import { EFFORTS } from './lib/model-home.mjs';
 import { gitDirs } from './lib/project.mjs';
 import { autoMaintenanceOff, withoutAutoMaintenance } from './lib/git-fixture.testkit.mjs';
+import { withRunLine } from './lib/codex-records.testkit.mjs';
 
 // Two levels that are not the review's, picked from the levels a host takes and never written as words: a switch of
 // Codex's home may write any level, and the tests that took a written one as another failed once the home moved to it
@@ -155,9 +156,10 @@ const readCodexReviews = (root) => reviewRecords.readCodexReviews(root, { where:
   if (subjectHash !== undefined) assert.match(subjectHash, /^[0-9a-f]{64}$/);
   return rest;
 });
-const appendCodexReview = (root, record) => reviewRecords.appendCodexReview(root, record, { where: whereOf(root) });
+const appendCodexReview = (root, record) => reviewRecords.appendCodexReview(root, withRunLine(root, record, { where: whereOf(root) }), { where: whereOf(root) });
 const codexReviewRunsPath = (root) => reviewRuns.codexReviewRunsPath(root, { where: whereOf(root) });
-const readCodexReviewRuns = (root) => reviewRuns.readCodexReviewRuns(root, { where: whereOf(root) });
+// The lines a run wrote: those the testkit writes for the records a test sets up (`withRunLine`) stand for earlier runs it does not model.
+const readCodexReviewRuns = (root) => reviewRuns.readCodexReviewRuns(root, { where: whereOf(root) }).filter((line) => line.testkit !== true);
 
 // Building a repository takes eight git processes, and most tests ask for one of the same few. So each
 // distinct one is built once in a run of this file, and a test is handed a copy of it: a folder of its
@@ -4434,13 +4436,12 @@ test('the push row asks git the first-parent line once where a merge alone at th
   assert.equal(line(quiet.asked), 0);
 });
 
-test('a range covered whole asks git the first-parent line once where the run log holds a line, to tell a correction owed below a merge at HEAD, and never where it holds none (codex-spend L24, V5)', async () => {
+test('a range covered whole asks git the first-parent line once where the run log holds a line, to tell a correction owed below a merge at HEAD (codex-spend L24, V5)', async () => {
+  // Its other half, never where the run log holds none, has no case since S5 (JH 207): a record covers only where a
+  // line of the run log names it, so a covered range always comes with a line.
   const line = (asked) => asked.filter(({ args }) => args[0] === 'rev-list' && args.includes('--first-parent') && args.includes('--parents')).length;
   const { root, base, head } = makeRepo();
   appendCodexReview(root, reviewedRecord(base, head));
-  const none = countingGit(startsNothing(root).deps);
-  const quiet = await run(['--base', base, '--cwd', root], none.deps);
-  assert.deepEqual([quiet.code, line(none.asked)], [0, 0], quiet.err);
   reviewRuns.appendCodexReviewRun(root, { schema: reviewRuns.CODEX_REVIEW_RUN_SCHEMA, id: idOf(5), outcome: 'reviewed', answer: { findings: [], verdict: 'correct' } }, { where: whereOf(root) });
   const logged = countingGit(startsNothing(root).deps);
   const covered = await run(['--base', base, '--cwd', root], logged.deps);

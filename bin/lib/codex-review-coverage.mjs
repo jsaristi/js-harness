@@ -9,8 +9,10 @@
 // (odd/tasks/codex-review-cost.md). Were the two to count apart, the command would call a range covered
 // that the push then refuses, or pay again for one the push lets through.
 import { spawnSync } from 'node:child_process';
-import { isValidCodexReview, leftMarkedFilesOut, NOTHING_TO_REVIEW, readCodexReviews } from './codex-reviews.mjs';
+import path from 'node:path';
+import { codexReviewsPath, isValidCodexReview, leftMarkedFilesOut, NOTHING_TO_REVIEW, readCodexReviews } from './codex-reviews.mjs';
 import { NO_RENAMES, RENAMES } from './codex-review-parts.mjs';
+import { readCodexReviewRuns } from './codex-review-runs.mjs';
 import { leftOutOf, rangeFiles, reviewScope } from './codex-review-scope.mjs';
 import { lensCandidate } from './lens-candidate.mjs';
 
@@ -195,7 +197,7 @@ function stillHashes(cwd, rec, spawn) {
  * they ask for: a record whose head lies past the tip then covers nothing, and is given back in `beyond`, as
  * `{ rec, covered }`, for a row to name. The door reads a pull request merged onto main, past which no head lies, so a
  * cut inside a reviewed range passed the push and was refused there (docs/FAILURES.md, door-covers-past-tip). */
-export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read = readCodexReviews, isValid = isValidCodexReview, beyondTip = true }) {
+export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read, isValid, beyondTip = true }) {
   // Every commit of the range, merges included: a record whose head is one is worth expanding.
   const inRange = gitOut(spawn, cwd, ['rev-list', `${from}..${tip}`]);
   if (inRange === null) return { unknown: COMMITS_UNREAD };
@@ -256,8 +258,10 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read 
   };
   const codeCommits = commits.filter(isCode).map(ownFiles).filter(isCode);
 
-  const records = read(cwd, { spawn, where });
-  const valid = records.filter(isValid);
+  // Codex's records, unless a caller names its own: those a run line admits (`admittedCodexReviews`, S5).
+  const codex = read === undefined && isValid === undefined ? admittedCodexReviews(cwd, { spawn, where }) : null;
+  const records = codex ? codex.records : (read ?? readCodexReviews)(cwd, { spawn, where });
+  const valid = records.filter(codex ? codex.admitted : (isValid ?? isValidCodexReview));
   // A record can cover part of the range only when its head is in it, or lies past the tip (a review of
   // base..D still covers C when C is the tip). Any other record is unrelated, and expanding it would cost
   // one git process per record ever written.
@@ -299,6 +303,55 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read 
   }
   const uncovered = codeCommits.filter((commit) => !covers.some(({ covered }) => covered.has(commit.id)));
   return { codeCommits, covers, uncovered, invalid: records.length - valid.length, ignored, stale, ...(beyondTip ? {} : { beyond }) };
+}
+
+/** The Codex review records of the repository at `cwd` and which of them are evidence, as `admittedLensReviews` says
+ * it of the lenses': `{ records, admitted }`. A review is evidence only where the run log names it: every run it
+ * names (`run`, or `runs` for one in parts) has a line in the log, a line of the last one ends at its head and starts
+ * at its base, and no earlier record claimed that run over that range. A record anyone could append by hand, as the 78 written before
+ * run lines were, covers nothing (C-3 and B2-12 of the full audit of 2026-11-14; his answers to questions 293 and 299
+ * on 2026-11-15). A skip is admitted as it is, since every row lists it as no review; a range with nothing to review
+ * only where git finds that it changes no file a review reads, asked of such a record alone. */
+export function admittedCodexReviews(cwd, { spawn = spawnSync, where } = {}) {
+  // Where the two files are is asked of git once, as reading the records alone asked it: the rows count their processes.
+  const file = where?.commonGitDir !== undefined ? null : codexReviewsPath(cwd, { spawn, where });
+  const at = file === null ? where : { ...where, commonGitDir: path.dirname(path.dirname(file)) };
+  const records = readCodexReviews(cwd, { spawn, where: at });
+  const linesOf = new Map();
+  for (const line of readCodexReviewRuns(cwd, { spawn, where: at })) {
+    if (typeof line?.id !== 'string') continue;
+    if (!linesOf.has(line.id)) linesOf.set(line.id, []);
+    linesOf.get(line.id).push(line);
+  }
+  const claimed = new Set();
+  const admitted = new Set();
+  const nothing = [];
+  for (const rec of records) {
+    if (!isValidCodexReview(rec)) continue;
+    if (rec.outcome === NOTHING_TO_REVIEW) nothing.push(rec);
+    if (rec.outcome !== 'reviewed') {
+      if (rec.outcome !== NOTHING_TO_REVIEW) admitted.add(rec);
+      continue;
+    }
+    const ids = Array.isArray(rec.runs) ? rec.runs : typeof rec.run === 'string' ? [rec.run] : [];
+    if (ids.length === 0 || !ids.every((id) => typeof id === 'string' && linesOf.has(id))) continue;
+    // The run, with the range it ran over, is claimed once: a second record of the same run and range is a copy.
+    const claim = `${ids.at(-1)} ${rec.base} ${rec.head}`;
+    if (claimed.has(claim) || !linesOf.get(ids.at(-1)).some((line) => line.head === rec.head && (line.base === rec.base || line.from === rec.base))) continue;
+    claimed.add(claim);
+    admitted.add(rec);
+  }
+  const asked = new Map();
+  const changesNoCode = (rec) => {
+    if (!asked.has(rec)) {
+      const names = gitOut(spawn, cwd, ['diff', '--name-only', '-z', '--no-renames', '--no-relative', rec.base, rec.head]);
+      const files = names === null ? null : names.split('\0').filter(Boolean);
+      const left = files === null ? null : leftOutOf(files, { cwd, source: rec.head, spawn, where });
+      asked.set(rec, left !== null && files.every((file) => left.has(file)));
+    }
+    return asked.get(rec);
+  };
+  return { records, admitted: (rec) => admitted.has(rec) || (nothing.includes(rec) && changesNoCode(rec)) };
 }
 
 /** The paths the review of `rec` left out, read from its range with the marks of its head as `js-harness codex-review`

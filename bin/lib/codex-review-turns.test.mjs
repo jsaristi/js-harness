@@ -9,6 +9,7 @@ import { leftOutSaid } from './codex-review-scope.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './codex-reviews.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, readCodexReviewRuns } from './codex-review-runs.mjs';
 import { addTurnWorktree, afterTurn, gapBelowMerge, inTurnWorktree, mergeTurn,PART_AS_CHANGED_LINES, plansAsOne, recheckAt, removeTurnWorktree, snapshotOfHead, sweepTurnWorktrees, TURN_WORKTREE_MAX_AGE_MS, turnsCheaper } from './codex-review-turns.mjs';
+import { withRunLine } from './codex-records.testkit.mjs';
 
 // Real git in every test, isolated from the host's config: where a review of a range holding a merge of
 // the default branch below HEAD is cut into turns (odd/tasks/merge-below-head.md, S1).
@@ -42,7 +43,7 @@ function commit(root, file, content, message) {
 }
 
 function record(root, base, head, extra = {}) {
-  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-10-16T00:00:00.000Z', outcome: 'reviewed', ...extra });
+  appendCodexReview(root, withRunLine(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-10-16T00:00:00.000Z', outcome: 'reviewed', ...extra }));
 }
 
 /** A branch `feat` off `first`: c1, then M, a merge of `trunk` (where `origin/main` points) with a line
@@ -232,7 +233,8 @@ test('gap below a merge: after the turn of the gap, its valid record of nothing 
   assert.deepEqual(afterTurn(root, turns), { stopped: false });
   appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base: first, head: c1, reviewedAt: '2026-10-16T00:00:00.000Z', outcome: 'nothing-to-review' });
   assert.match(afterTurn(root, turns).refused ?? '', /is not in the run log/);
-  record(root, first, c1, { run: 'r1' });
+  // Written bare: `record` would write the run line `codex-review` writes (S5's fixtures), and this one has none.
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base: first, head: c1, reviewedAt: '2026-10-16T00:00:00.000Z', outcome: 'reviewed', run: 'r1' });
   assert.match(afterTurn(root, turns).refused ?? '', /is not in the run log/);
 });
 

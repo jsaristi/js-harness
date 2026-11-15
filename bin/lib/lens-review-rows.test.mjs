@@ -10,6 +10,7 @@ import { lensCandidate } from './lens-candidate.mjs';
 import { appendLensReview, LENS_REVIEW_SCHEMA, startLensRun } from './lens-reviews.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, withSubjectHash } from './codex-reviews.mjs';
 import { withoutAutoMaintenance } from './git-fixture.testkit.mjs';
+import { withRunLine } from './codex-records.testkit.mjs';
 
 // The project turns the lens review on in the first commit, so every code commit after it asks for a lens record.
 const LENS_ON = '{ "functions": { "lensReview": "on" } }\n';
@@ -168,7 +169,7 @@ test('a Codex record gains the subject hash of its range, the same identity a le
 });
 
 const debt = () => checkReviewDebt(dir);
-const codexRecord = (over) => appendCodexReview(dir, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: new Date().toISOString(), ...over });
+const codexRecord = (over) => appendCodexReview(dir, withRunLine(dir, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: new Date().toISOString(), ...over }));
 
 test('the review row informs: a code commit with no lens record is named with the command, and nothing fails', () => {
   const said = debt();

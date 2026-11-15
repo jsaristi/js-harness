@@ -9,6 +9,7 @@ import { checkCodexReviews } from './codex-review-rows.mjs';
 import { lensCandidate } from './lens-candidate.mjs';
 import { appendLensReview, LENS_REVIEW_SCHEMA, startLensRun } from './lens-reviews.mjs';
 import { firstStep } from './next-step.mjs';
+import { recordLine } from './codex-records.testkit.mjs';
 
 // The door's reading of a pull request's reviews, against a clone of a bare origin made here, with the Codex and lens
 // reviews on in main's harness.json and records written as the two commands write them. The queue's own runs of it,
@@ -50,7 +51,7 @@ function makeRepo({ codexReview = 'on' } = {}) {
     const reviewedAt = '2026-10-29T12:00:00.000Z';
     fs.mkdirSync(path.join(root, '.git', 'js-harness'), { recursive: true });
     const rec = { schema: 'js-harness.codex-review/v1', base, head, reviewedAt, outcome: 'reviewed' };
-    fs.appendFileSync(path.join(root, '.git', 'js-harness', 'codex-reviews.jsonl'), `${JSON.stringify(rec)}\n`, 'utf8');
+    fs.appendFileSync(path.join(root, '.git', 'js-harness', 'codex-reviews.jsonl'), recordLine(root, rec), 'utf8');
     const { subjectHash } = lensCandidate(root, { base, head });
     const results = [{ lens: 'risk', outcome: 'complete', findings: [] }];
     appendLensReview(root, { schema: LENS_REVIEW_SCHEMA, base, head, subjectHash, run: startLensRun(root, { base, head, subjectHash }), reviewedAt, outcome: 'reviewed', results });
