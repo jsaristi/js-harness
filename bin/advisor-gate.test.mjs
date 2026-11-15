@@ -66,6 +66,10 @@ test('gatedAct names the acts of P1 and nothing else', () => {
   // A block is consulted before it is said (odd/tasks/consistent-orders.md, S1): JH 207 sent two unconsulted.
   assert.equal(gatedAct('Bash', { command: 'js-harness notify --to orchestrator --kind waiting "blocked"' }, cwd), 'waiting');
   assert.equal(gatedAct('Bash', { command: 'js-harness notify --to orchestrator --kind note "--kind waiting"' }, cwd), null, 'a note that names waiting is none');
+  // The verifier's finding: kindOf read the first --kind, notify keeps the last, and a chain holds two notices.
+  assert.equal(gatedAct('Bash', { command: 'js-harness notify --kind note x && js-harness notify --kind waiting y' }, cwd), 'waiting', 'a chained second notice');
+  assert.equal(gatedAct('Bash', { command: 'js-harness notify --kind note --kind waiting x' }, cwd), 'waiting', 'a repeated --kind, whose last notify keeps');
+  assert.equal(gatedAct('Bash', { command: 'js-harness notify --kind note --kind ready --pr 2 x' }, cwd), 'done');
   assert.equal(gatedAct('Bash', { command: 'js-harness notify --to orchestrator --kind "ready" --pr 3 "done"' }, cwd), 'done');
   assert.equal(gatedAct('Bash', { command: "js-harness notify --kind 'question'" }, cwd), 'question');
   assert.equal(gatedAct('Bash', { command: 'git commit -m "explain js-harness merge-queue --land"' }, cwd), null, 'a commit body that names a land is none');

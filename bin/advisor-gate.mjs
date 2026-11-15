@@ -54,7 +54,9 @@ const unquoted = (command) => command.replace(/(--kind\s+|\b(?:bash|sh|zsh|pwsh|
   return '""';
 });
 /** The value of `--kind` in an unquoted command. */
-const kindOf = (command) => /--kind\s+(\w+)/.exec(command)?.[1] ?? null;
+/** Every value of `--kind` in an unquoted command: a chain may send two notices, and notify keeps the last of a repeated
+ * flag, so the first alone could hide a gated one (the verifier's finding, odd/tasks/consistent-orders.md). */
+const kindsOf = (command) => [...command.matchAll(/--kind\s+(\w+)/g)].map((match) => match[1]);
 
 /** A task document's path, whose creation is a plan. */
 const TASK_DOCUMENT = /[\\/]odd[\\/]tasks[\\/][^\\/]+\.md$/;
@@ -73,12 +75,12 @@ export function gatedAct(tool, input, cwd) {
   if (!/js-harness/.test(input.command)) return null;
   const command = unquoted(input.command);
   if (runs(command, 'notify')) {
-    const kind = kindOf(command);
-    if (kind === 'question') return 'question';
-    if (kind === 'ready' || kind === 'closed') return 'done';
+    const kinds = kindsOf(command);
+    if (kinds.includes('question')) return 'question';
+    if (kinds.includes('ready') || kinds.includes('closed')) return 'done';
     // A block is consulted before it is said (odd/tasks/consistent-orders.md, S1): on 2026-11-15 two unconsulted
     // `waiting` notices preceded a session's 2 h 40 min wait.
-    if (kind === 'waiting') return 'waiting';
+    if (kinds.includes('waiting')) return 'waiting';
   }
   if (runs(command, 'merge-queue') && /--land\b/.test(command) && !/--dry-run\b/.test(command)) return 'land';
   if (runs(command, 'sessions\\s+start') && !/--help\b/.test(command)) return 'session';
@@ -126,7 +128,7 @@ function breakOf(entry) {
 
 /** Policy R's stretch at the end of the transcript `file`: `{ calls, errors, broken, toolCalls, model, hadAdvisor }`.
  * `calls` counts advisor calls with a result that is not an error, `errors` those whose result is one; `broken` says
- * what ended the stretch (his message, a session event, the tool-call bound, or the start of what was read);
+ * what ended the stretch (his message, a session event, a compaction, the tool-call bound, or the start of what was read);
  * `hadAdvisor` is true, false or null (not known), from the last assistant entry's `advisorModel` when it differs from
  * its model, else from a request-shape line naming the advisor tool (M1). Throws when the file cannot be read. */
 export function readStretch(file, { tailBytes = TAIL_BYTES } = {}) {
