@@ -4,7 +4,7 @@
 PR 886 re-sent ready at head 8402785b (L15); the lead lands it. S4 built on feat/consistent-orders-s4, stacked:
 an unconsulted sub-agent end is turned back once, asked to give its whole result again, once resting on the host's
 flag and on the gate's own record; reviews of the fix, the verifier and its PR follow. The S2 and S6 designs are
-written (L13, L14); S2 waits for its replay with the new predicate, both for their double review and the lead.
+written (L13, L14); S2's replay is done (L17); both wait for their double review and the lead.
 
 ## Goal
 An order the harness gives a session, a work session or a sub-agent (first: consult the advisor when blocked) is held
@@ -272,3 +272,16 @@ answering a block, while a session waits) were missed with nothing to say so; on
   the whole result again), and once rested only on `stop_hook_active`, which no record shows the host sending true
   (357 of 357 ends recorded false; it is now also read from the gate's own turn-back record); both pinned by tests
   that failed first.
+- L16 (2026-11-15) the independent verifier (opus) over 87b1c568: PASS with four findings. A, medium: the turned-back
+  sub-agent's result is lost to its caller; B, low: a payload with no `stop_hook_active` is blocked every stop
+  (bounded by the host's cap of 8); C, low: two comments still said never blocked; D, low: the report counted a
+  turned-back end twice. A, B and C were already fixed in the tree from the advisor's read (L15); D fixed with a test
+  that failed first. Its proof: the commit's tests run on 551f48e4, 26 pass and 2 fail, the two new ones; the
+  host's hooks reference confirms `{ decision: 'block', reason }` for SubagentStop and lists `stop_hook_active`.
+- L17 (2026-11-15) S2's replay with L13's predicate over the lead's 73 turn ends since 05:00Z
+  (`node C:/Users/Oficina/.claude/jobs/b8e90a0a/tmp/replay-s2.mjs`): 9 turned back, all 9 idle closes (of 70):
+  10:51Z (JH 206), 12:38Z, 12:48Z, 12:50Z, 12:56Z and 13:08:52Z (JH 207, which is caught), 16:35Z, 16:37Z and
+  16:50Z (JH 208's own 16:18Z `waiting`, and JH 207's at 16:47Z). An upper bound: the branches of JH 207 and JH 208
+  were not on origin, so the commit rule was not applied to them; the build reads the worktree, which would clear
+  JH 208's three if it committed after 16:18Z. A new consult for each note of a blocked session costs 3 of the 9
+  (12:50Z, 12:56Z, 13:08Z).
