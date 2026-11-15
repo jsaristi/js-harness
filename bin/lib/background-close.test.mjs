@@ -250,6 +250,20 @@ test('closeFinished keeps a session while a job that is not its own stands in it
   assert.ok(!world.gitCalls.some((args) => args[0] === 'worktree' && args[1] === 'remove'));
 }));
 
+// odd/tasks/land-live-worktree.md, L7: the guest check reads `standingIn`, which counts a blocked job with no pid; a
+// job that ended in another state keeps nothing.
+test('closeFinished keeps a session while a blocked job that is not its own stands in its worktree, with no pid', withWorld((world) => {
+  const entry = startSession(world, 'aaaa1111');
+  const result = closeFinished({
+    home: world.home, root: world.root, cwd: world.root, base: 'origin/main', notices: [notice(entry, 'closed', 30)], gitIn: world.gitIn, claude: world.claude,
+    agents: [{ id: 'cccc3333', kind: 'background', cwd: entry.worktreePath, state: 'blocked' }],
+    alive: () => false,
+    pause: () => {},
+  });
+  assert.deepEqual(result.kept.map((item) => [item.entry.id, item.why]), [['aaaa1111', `another job, cccc3333, stands in its worktree ${entry.worktreePath}`]]);
+  assert.ok(!world.gitCalls.some((args) => args[0] === 'worktree' && args[1] === 'remove'));
+}));
+
 test('closeFinished reads claude\'s listing again after the wait for its job, and keeps a session a message woke meanwhile', withWorld((world) => {
   const woken = startSession(world, 'aaaa1111');
   const blind = startSession(world, 'bbbb2222');
