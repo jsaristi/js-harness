@@ -40,7 +40,7 @@ function gitYes(spawn, cwd, args) {
 /** Whether `git <args>` answers yes (exit 0) or no (exit 1), for the yes/no commands where a non-zero exit is
  * an answer; `null` when git did not say: it failed, it could not be started, or it threw. Unlike `gitYes`,
  * a git that fails is no "no", which is what a caller needs when a "no" is the one answer it acts on. */
-function gitAnswer(spawn, cwd, args) {
+export function gitAnswer(spawn, cwd, args) {
   try {
     const result = spawn('git', args, { cwd, encoding: 'utf8' });
     if (!result || result.error) return null;

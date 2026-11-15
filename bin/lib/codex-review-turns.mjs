@@ -1,6 +1,8 @@
 // Where a review of a range is cut into turns: a merge of the default branch below HEAD, read by what was
 // written in it, then the commits after it (odd/tasks/merge-below-head.md). His answer of 2026-10-16:
-// a hand-resolved merge of main is reviewed only on the lines written in it, wherever it sits. With the worktrees a
+// a hand-resolved merge of main is reviewed only on the lines written in it, wherever it sits. Or at a merge of main
+// at HEAD: the commits below it no record covers, alone, then the merge by what was written in it, so that main's
+// code is never read again (odd/tasks/codex-spend.md, spec 2). With the worktrees a
 // run reads in: that of a turn, and the snapshot of the head every run's Codex sessions read, so that an edit or a
 // commit in the live folder while Codex reads refuses neither a part nor the record (odd/tasks/codex-spend.md,
 // spec 1); and the removal and the sweep of both, which delete nothing out of their area and follow no link.
@@ -9,7 +11,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { normalizeAnswer } from './codex-review-answer.mjs';
-import { mergeStart } from './codex-review-coverage.mjs';
+import { defaultBranch, gitAnswer, mergeStart } from './codex-review-coverage.mjs';
 import { counted, planLines, thousands } from './codex-review-plan.mjs';
 import { RECHECK_LOOK_BACK, recheckAnchor, recheckState, runsLogged } from './codex-review-recheck.mjs';
 import { readCodexReviewRuns } from './codex-review-runs.mjs';
@@ -60,6 +62,63 @@ export function mergeTurn(cwd, { given, tip, uncovered, spawn = spawnSync, where
   }
   if (state.kind !== 'review') return null;
   return { merge: oldest.id, ...atMerge };
+}
+
+/** The turns of the review of `given..tip` when HEAD, `tip`, is a merge of the default branch and every other code
+ * commit of `uncovered` (as `mergeTurn` takes it) lies below it on its first-parent line: the gap, reviewed alone
+ * (odd/tasks/codex-spend.md, spec 2). `{ gap: true, at, from, headMerge, ranges }`: the newest commit of the gap,
+ * where its turn's worktree is made, the parent of its oldest, where that turn starts, what `mergeStart` says of
+ * the merge at HEAD (`null` when it writes no line, which needs no review), and the turns as `{ from, to, read }`.
+ * `null` for a range taken as today.
+ *
+ * Without it such a range started where `reviewStart` puts it: at the parent of the gap, a range that holds all
+ * main brought in with the merge, or back at `given`, which reads the branch's covered work again (L4). It is cut
+ * only where nothing is lost: no commit of the gap is a merge or a root, every commit from its newest to its oldest
+ * on the line has one parent, so its turn reads that line alone; its files are left out alike by the marks at its
+ * newest commit, which its turn reads, and at `tip`, which the push reads; and a merge that writes lines is read
+ * from its first parent by what was written in it (`mergeStart`), so the turn after the gap never reads its whole
+ * diff with main, while one that writes none merges a commit of the default branch. The checks that ask git
+ * nothing come first, and one `rev-list` reads the line: most runs pay nothing for this. `null` too wherever git
+ * cannot say. */
+export function gapBelowMerge(cwd, { given, tip, uncovered, spawn = spawnSync, where, remote = 'origin' }) {
+  const atTip = uncovered.find((commit) => commit.id === tip);
+  if (atTip !== undefined && atTip.parentCount !== 2) return null;
+  const below = uncovered.filter((commit) => commit.id !== tip);
+  if (below.length === 0 || below.some((commit) => commit.parentCount !== 1)) return null;
+  // The first-parent line of `tip` down to `given`, each commit with all its parents.
+  const listed = gitOut(cwd, spawn, ['rev-list', '--first-parent', '--parents', tip, `^${given}`]);
+  const line = listed === null ? [] : listed.split('\n').filter(Boolean).map((row) => row.split(' '));
+  if (line[0]?.[0] !== tip || line[0].length !== 3) return null;
+  const places = below.map((commit) => line.findIndex(([id]) => id === commit.id));
+  if (places.includes(-1)) return null;
+  // By their places on the line, not by the order of `git log`, which follows the dates of the commits.
+  const [newest, oldest] = [Math.min(...places), Math.max(...places)];
+  if (line.slice(newest, oldest + 1).some((row) => row.length !== 2)) return null;
+  const [at, from] = [line[newest][0], line[oldest][1]];
+  const files = [...new Set(below.flatMap((commit) => commit.files))];
+  const [atGap, atTipMarks] = [at, tip].map((source) => leftOutOf(files, { cwd, source, spawn, where }));
+  if (atGap === null || atTipMarks === null || files.some((file) => atGap.has(file) !== atTipMarks.has(file))) return null;
+  const [, first, side] = line[0];
+  const gapTurn = { from, to: at, read: null };
+  if (atTip === undefined) {
+    const branch = defaultBranch(spawn, cwd, remote);
+    if (branch === null || gitAnswer(spawn, cwd, ['merge-base', '--is-ancestor', side, branch.ref]) !== true) return null;
+    return { gap: true, at, from, headMerge: null, ranges: [gapTurn] };
+  }
+  const headMerge = mergeStart(cwd, { given: first, tip, spawn, where, remote });
+  if (headMerge === null) return null;
+  return { gap: true, at, from, headMerge, ranges: [gapTurn, { from: first, to: tip, read: { side: headMerge.side, branch: headMerge.branch, auto: headMerge.auto } }] };
+}
+
+/** The turns the review of `given..tip` is cut in, from `options` as `mergeTurn` takes them: at a merge of the
+ * default branch below HEAD (`mergeTurn`), else at the gap below a merge at HEAD (`gapBelowMerge`). Each has `at`,
+ * the commit its first turn's worktree is made at, and `ranges`, the turns as `{ from, to, read }`, `read` what a
+ * turn that reads a merge by what was written in it reads it with; `null` for a range reviewed as one. */
+export function turnsAt(cwd, options) {
+  const atMerge = mergeTurn(cwd, options);
+  if (atMerge === null) return gapBelowMerge(cwd, options);
+  const read = { side: atMerge.side, branch: atMerge.branch, auto: atMerge.auto };
+  return { ...atMerge, at: atMerge.merge, ranges: [{ from: atMerge.from, to: atMerge.merge, read }, { from: atMerge.merge, to: options.tip, read: null }] };
 }
 
 // What a part costs beyond its changed lines, counted in changed lines: the fixed input of a Codex session,
@@ -115,34 +174,65 @@ export function mergeReviewSaid({ head, side, branch, stacked = false }) {
   return `${head.slice(0, 7)} is a merge of ${side.slice(0, 7)}, ${of}: its review reads what was written in the merge (its diff with the automatic merge of its parents), not what the merge brought in.`;
 }
 
-/** The line a run says before turn `index` of a range cut at the merge `merge` below `head` (odd/tasks/merge-below-head.md). */
-export function turnSaid(index, { merge, head }) {
+/** The line a run says before turn `index` of a range cut at the merge `merge` below `head`
+ * (odd/tasks/merge-below-head.md), or of one cut at the gap below the merge at `head` (`gapBelowMerge`, from
+ * `from` to `at`), which is one turn when that merge writes no line. */
+export function turnSaid(index, { merge, head, gap = false, from, at, ranges = [] }) {
+  if (gap && index === 1) {
+    const alone = ranges.length === 1 ? ' The merge writes no line of its own, so it needs no review.' : '';
+    return `Turn 1 of ${ranges.length}, ${from.slice(0, 7)}..${at.slice(0, 7)}: the commits below the merge ${head.slice(0, 7)} that no Codex review record covers.${alone}`;
+  }
+  if (gap) return `Turn 2 of 2, the merge ${head.slice(0, 7)}: what was written in it.`;
   return index === 1
     ? `Turn 1 of 2, the merge ${merge.slice(0, 7)}: what was written in it.`
     : `Turn 2 of 2, ${merge.slice(0, 7)}..${head.slice(0, 7)}: the commits after the merge.`;
 }
 
-/** What a run says when the turn at the merge of a cut range owes a correction, and it stops there. */
-export function turnStopped({ merge, head }) {
+/** What a run says when the first turn of a cut range owes a correction, and it stops there: the turn at the
+ * merge, or that of the gap below the merge at HEAD, after which the merge is not reviewed. */
+export function turnStopped({ merge, head, gap = false, from, at: gapAt, ranges = [] }) {
+  if (gap) {
+    const [start, at] = [from.slice(0, 7), gapAt.slice(0, 7)];
+    const rest = ranges.length > 1 ? ', so the merge was not reviewed' : '';
+    return `The review of ${start}..${at}, below the merge ${head.slice(0, 7)}, found what owes a correction${rest}: once the correction is committed, the review from ${at} is a recheck of those findings.`;
+  }
   const [at, tip] = [merge.slice(0, 7), head.slice(0, 7)];
   return `The review of the merge ${at} found what owes a correction, so the commits after it (${at}..${tip}) were not reviewed: once the correction is committed, the review from ${at} is a recheck of those findings.`;
 }
 
-/** What `--plan` prints of a range cut in two turns (`cutInTurns` in ../codex-review.mjs): each turn under its
- * line, then what they come to in all, with the one review the range would be without the cut, which they cost
- * less than. */
+/** How a run names the first turn of the cut range `turns` and what is not reviewed when it stops there:
+ * `{ turn, notReviewed }`, the second a clause that says so. */
+export function turnNamed(turns) {
+  if (!turns.gap) return { turn: 'the turn at the merge', notReviewed: 'the commits after it were not reviewed' };
+  const turn = `the turn of ${turns.from.slice(0, 7)}..${turns.at.slice(0, 7)}`;
+  return { turn, notReviewed: turns.ranges.length > 1 ? `the merge ${turns.head.slice(0, 7)} was not reviewed` : 'the run ends there' };
+}
+
+/** Why a run stops after the turn of the gap of `turns` when the records now leave a range that is not the merge
+ * at HEAD read by what was written in it (`mergeStart`), nor nothing: from there its review would read what the
+ * merge brought in, the whole diff with the default branch, which the gap was cut so as never to read. */
+export function gapLeftMerge(turns) {
+  const head = turns.head.slice(0, 7);
+  return `After the turn of ${turns.from.slice(0, 7)}..${turns.at.slice(0, 7)}, the merge ${head} is not read by what was written in it, so it was not reviewed and nothing more was recorded: its review would read all the merge brought in.`;
+}
+
+/** What `--plan` prints of a range cut in turns (`cutInTurns` in ../codex-review.mjs): each turn under its line,
+ * the merge's with the line that says it is read by what was written in it, then what they come to in all, with
+ * the one review the range would be without the cut. Two turns at a merge below HEAD cost less than that review
+ * (`turnsCheaper`); the gap below a merge at HEAD is never dearer, so it is not asked. */
 export function turnsLines(turns) {
   const [first, second] = turns.plans;
   const one = plansAsOne(turns.plans);
   const { today } = turns;
   const sends = one.inputTokens === null ? '' : `, about ${thousands(one.inputTokens)} input tokens`;
+  const read = turns.gap ? turns.headMerge : turns;
+  const merged = read === null ? [] : [mergeReviewSaid({ head: turns.gap ? turns.head : turns.merge, side: read.side, branch: read.branch, stacked: read.stacked === true })];
   return [
     turnSaid(1, turns),
-    mergeReviewSaid({ head: turns.merge, side: turns.side, branch: turns.branch, stacked: turns.stacked === true }),
+    ...(turns.gap ? [] : merged),
     ...planLines(first),
-    turnSaid(2, turns),
-    ...planLines(second),
-    `In all, 2 turns: ${counted(one.parts.length, 'part')}, ${counted(one.changedLines, 'changed line')} in ${counted(one.files, 'file')}${sends}, ` +
+    ...(second === undefined ? [] : [turnSaid(2, turns), ...(turns.gap ? merged : []), ...planLines(second)]),
+    `In all, ${counted(turns.plans.length, 'turn')}: ${counted(one.parts.length, 'part')}, ${counted(one.changedLines, 'changed line')} in ${counted(one.files, 'file')}${sends}, ` +
       `where one review from ${today.range.split('..')[0]} would be ${counted(today.parts.length, 'part')}, ${counted(today.changedLines, 'changed line')} in ${counted(today.files, 'file')}.`,
   ];
 }
@@ -159,24 +249,26 @@ export function turnArgv(turns, place, args) {
   ];
 }
 
-/** What the records say of the turn at the merge of `turns` once its run ended well: `{ refused }`, why the
- * commits after it are not reviewed; else `{ stopped }`, whether its record owes a correction, which stops the
- * run there (`turnStopped`). A record whose run line never reached the log reads as owing nothing, which says
- * nothing, so it is refused too. */
+/** What the records say of the first turn of `turns` (`turnsAt`), at the merge or of the gap below the merge at
+ * HEAD, once its run ended well: `{ refused }`, why what comes after it is not reviewed; else `{ stopped }`,
+ * whether its record owes a correction, which stops the run there (`turnStopped`). A record whose run line never
+ * reached the log reads as owing nothing, which says nothing, so it is refused too. */
 export function afterTurn(cwd, turns, { spawn = spawnSync, where } = {}) {
+  const { turn, notReviewed } = turnNamed(turns);
   let records;
   let runs;
   try {
     records = readCodexReviews(cwd, { spawn, where });
     runs = readCodexReviewRuns(cwd, { spawn, where });
   } catch (err) {
-    return { refused: `Could not read the record of the turn at the merge (${err.message}), so the commits after it were not reviewed.` };
+    return { refused: `Could not read the record of ${turn} (${err.message}), so ${notReviewed}.` };
   }
-  const at = turns.merge.slice(0, 7);
-  const written = records.findLast((record) => record.base === turns.from && record.head === turns.merge);
-  if (written === undefined) return { refused: `The turn at the merge ${at} wrote no record, so the commits after it were not reviewed.` };
-  if (!runsLogged(written, runs)) return { refused: `The run line of the turn at the merge ${at} is not in the run log, so whether it owes a correction cannot be said and the commits after it were not reviewed: run the review again.` };
-  return { stopped: recheckState({ from: turns.merge, records, runs }).kind !== 'review' };
+  // The turn at the merge is named by its commit here; that of a gap by its range, which its name holds.
+  const named = turns.gap ? turn : `${turn} ${turns.at.slice(0, 7)}`;
+  const written = records.findLast((record) => record.base === turns.from && record.head === turns.at);
+  if (written === undefined) return { refused: `T${named.slice(1)} wrote no record, so ${notReviewed}.` };
+  if (!runsLogged(written, runs)) return { refused: `The run line of ${named} is not in the run log, so whether it owes a correction cannot be said and ${notReviewed}: run the review again.` };
+  return { stopped: recheckState({ from: turns.at, records, runs }).kind !== 'review' };
 }
 
 // The worktree a turn below HEAD is reviewed in: `<common git dir>/js-harness/review-turn-<pid>-<time>` (S7);

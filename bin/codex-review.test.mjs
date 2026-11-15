@@ -1421,6 +1421,19 @@ test('reads a snapshot of the head: a range in parts reads one snapshot for all 
   assert.deepEqual(readCodexReviews(root).map((record) => [record.base, record.head, record.runs.length]), [[base, head, 3]]);
 });
 
+test('reads a snapshot of the head: a run that throws once its snapshot is made still removes it', async () => {
+  const { root } = makeRepo();
+  let during = null;
+  // The weekly limit is read after the snapshot is made, and outside every catch of the run: a throw there leaves it.
+  const readMeter = async () => {
+    during = snapshotsIn(root).length;
+    throw new Error('the meter broke');
+  };
+  await assert.rejects(run(['--base', 'HEAD~1', '--cwd', root], { ...fakeCodex(''), readMeter }), /the meter broke/);
+  assert.equal(during, 1, 'the snapshot was there when the run threw');
+  assert.deepEqual([snapshotsIn(root), worktreesOf(root).length], [[], 1]);
+});
+
 test('the review asks git about the end of its range by the commit it resolved, never by the word HEAD', async () => {
   const { root, base, head } = makeRepo();
   const { deps, asked } = countingGit(fakeCodex(reviewed(root, base)));
@@ -2157,6 +2170,22 @@ test('Ctrl-C during a lean review removes its home too', async () => {
   assert.deepEqual(listed(mine.homes), []);
   assert.equal(fs.statSync(mine.auth).nlink, 1);
   assert.equal(fs.readFileSync(mine.auth, 'utf8'), LOGIN);
+});
+
+test('reads a snapshot of the head: Ctrl-C during a review removes its snapshot too', async () => {
+  const { root } = makeRepo();
+  const fake = fakeCodex('', { hang: true });
+  const signals = new EventEmitter();
+  const pending = run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, signals });
+  while (fake.calls.length === 0) await new Promise((resolve) => setImmediate(resolve));
+  // Read, then interrupt, then assert: a failed assertion before the signal would leave the review waiting.
+  const during = snapshotsIn(root).length;
+  signals.emit('SIGINT');
+  const result = await pending;
+  assert.equal(during, 1, 'the snapshot was there when the review was interrupted');
+  assert.equal(result.code, 1);
+  assert.equal(onlyRun(root).outcome, 'interrupted');
+  assert.deepEqual([snapshotsIn(root), worktreesOf(root).length], [[], 1]);
 });
 
 test('a login Codex refreshed during a lean review is the real login afterwards: the link, not a copy', async () => {
@@ -3752,6 +3781,162 @@ test('when the tokens are not known the summary says so plainly, with no zeros a
   const failed = await run(['--base', 'HEAD~1', '--again', '--cwd', root], fakeCodex('', { error: new Error('boom') }));
   assert.equal(failed.code, 1);
   assert.ok(failed.out.includes('Codex ran for 0 s; its tokens are not known for this session (its Codex home held no token count): no items.'), failed.out);
+});
+
+// --- the gap below a merge of main at HEAD (odd/tasks/codex-spend.md, spec 2) ---
+
+/** A branch whose commits up to `mine` have a record, then a commit no record covers (`gap`, which adds `g.txt`),
+ * then a merge of its remote's default branch at HEAD: `{ root, base, mine, gap, main, head }`. With `written` both
+ * sides changed `m.txt` and the merge resolves it by hand; without, main changed `s.txt` alone and the merge writes
+ * no line. `offAtGap`: the gap turns the Codex review off, and the merge turns it on again. */
+function mergeAboveGap({ written = true, offAtGap = false } = {}) {
+  const { root, base } = makeRepoWith({ 'a.txt': 'a1\n', 's.txt': 's1\n', 'm.txt': 'm1\n' }, { 'a.txt': 'A1 changed\n' });
+  const trunk = git(root, 'rev-parse', '--abbrev-ref', 'HEAD');
+  fs.writeFileSync(path.join(root, 'm.txt'), 'M1 mine\n', 'utf8');
+  git(root, 'commit', '-qam', 'mine');
+  const mine = git(root, 'rev-parse', 'HEAD');
+  fs.writeFileSync(path.join(root, 'g.txt'), 'G1 the gap\n', 'utf8');
+  if (offAtGap) fs.writeFileSync(path.join(root, 'harness.json'), '{ "functions": { "codexReview": "off" } }\n', 'utf8');
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'the gap');
+  const gap = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', '-b', 'side', base);
+  fs.writeFileSync(path.join(root, written ? 'm.txt' : 's.txt'), 'changed on main\n', 'utf8');
+  git(root, 'commit', '-qam', 'main moves');
+  const main = git(root, 'rev-parse', 'HEAD');
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', main);
+  git(root, 'checkout', '--quiet', trunk);
+  spawnSync('git', ['merge', '--no-ff', '--no-commit', '--quiet', 'side'], { cwd: root });
+  if (written) fs.writeFileSync(path.join(root, 'm.txt'), 'M1 both\n', 'utf8');
+  if (offAtGap) fs.writeFileSync(path.join(root, 'harness.json'), '{ "functions": { "codexReview": "on" } }\n', 'utf8');
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'merge main');
+  const head = git(root, 'rev-parse', 'HEAD');
+  appendCodexReview(root, reviewedRecord(base, mine));
+  return { root, base, mine, gap, main, head };
+}
+
+/** The session of the turn of the gap of `mergeAboveGap`: Codex shows the diff of `mine..gap`, and answers `said`. */
+const gapSession = ({ root, mine, gap }, said) => ({
+  stdout: jsonl(thread, turn, cmd(diffCmd(mine), 0, git(root, 'diff', '--no-color', '--no-ext-diff', mine, gap)), msg(FINDINGS), done),
+  ...(said ? { said } : {}),
+});
+
+/** The session of the merge at HEAD of `mergeAboveGap`, read by what was written in it, from the gap. */
+const mergeAfterGap = ({ root, gap, main, head }) => mergeTurnSession({ root, mine: gap, main, merge: head });
+
+/** The lines a run says before the turn of the gap of `mergeAboveGap` and before the merge, of `turns` turns. */
+const gapTurnSaid = ({ mine, gap, head }, turns = 2) => `Turn 1 of ${turns}, ${rangeOf(mine, gap)}: the commits below the merge ${head.slice(0, 7)} that no Codex review record covers.${turns === 1 ? ' The merge writes no line of its own, so it needs no review.' : ''}`;
+const mergeTurnSaid = ({ head }) => `Turn 2 of 2, the merge ${head.slice(0, 7)}: what was written in it.`;
+
+test('gap below a merge: a commit no record covers below a merge of main at HEAD is reviewed alone in a worktree at it, then the merge by what was written in it, and main\'s code is read by neither', async () => {
+  const repo = mergeAboveGap();
+  const { root, mine, gap, head } = repo;
+  const fake = fakeCodexInParts(gapSession(repo), mergeAfterGap(repo));
+  const result = await run(['--base', repo.main, '--cwd', root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 2);
+  // The gap in a worktree at its newest commit, from the parent of its oldest; the merge in the snapshot of the head.
+  const [atGap, atHead] = fake.calls.map((call) => call.opts.cwd);
+  assert.match(path.basename(atGap), /^review-turn-\d+-\d+$/);
+  assert.match(path.basename(atHead), /^review-head-\d+-\d+$/);
+  assert.deepEqual(fake.calls[0].args.slice(fake.calls[0].args.indexOf('--base'), fake.calls[0].args.indexOf('--base') + 2), ['--base', mine]);
+  assert.ok(fake.calls[1].child.received.text.includes(spawnSync('git', ['merge-tree', '--write-tree', gap, repo.main], { cwd: root, encoding: 'utf8' }).stdout.split('\n')[0]), 'the merge against its automatic merge');
+  assert.deepEqual(readCodexReviews(root).slice(-2).map((record) => [record.base, record.head, record.outcome, record.diff]), [[mine, gap, 'reviewed', undefined], [gap, head, 'reviewed', 'remerge']]);
+  const lines = result.out.split('\n');
+  assert.ok(lines.indexOf(gapTurnSaid(repo)) !== -1 && lines.indexOf(gapTurnSaid(repo)) < lines.indexOf(mergeTurnSaid(repo)), result.out);
+  assert.deepEqual([turnWorktrees(root), snapshotsIn(root), worktreesOf(root).length], [[], [], 1]);
+});
+
+test('gap below a merge: the gap is cut where two turns cost more than the one review left today, since that review reads covered code again', async () => {
+  // The branch's covered work is two lines: as a merge below HEAD, this range would not be cut (`turnsCheaper`).
+  const repo = mergeAboveGap();
+  const nothing = startsNothing(repo.root);
+  const result = await run(['--base', repo.main, '--plan', ...nothing.home, '--cwd', repo.root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, ''], result.err);
+  nothing.untouched('the plan of a gap below a merge');
+  const written = writtenLines(repo.root, repo.head);
+  assert.deepEqual(result.out.split('\n'), [
+    gapTurnSaid(repo),
+    ...planned(repo.root, repo.mine, repo.gap, [{ files: ['g.txt'], changedLines: 1 }]),
+    mergeTurnSaid(repo),
+    mergeReviewSaid({ head: repo.head, side: repo.main, branch: 'origin/main' }),
+    ...planned(repo.root, repo.gap, repo.head, [{ files: ['m.txt'], changedLines: written }]),
+    `In all, 2 turns: 2 parts, ${written + 1} changed lines in 2 files, where one review from ${repo.main.slice(0, 7)} would be 1 part, 5 changed lines in 3 files.`,
+    methodSaid(repo.root),
+  ]);
+});
+
+test('gap below a merge: a merge at HEAD that writes no line needs no turn: the gap is the one turn, and the run ends after it', async () => {
+  const repo = mergeAboveGap({ written: false });
+  const nothing = startsNothing(repo.root);
+  const plan = await run(['--base', repo.main, '--plan', ...nothing.home, '--cwd', repo.root], nothing.deps);
+  assert.deepEqual([plan.code, plan.err], [0, ''], plan.err);
+  const lines = plan.out.split('\n');
+  assert.equal(lines[0], gapTurnSaid(repo, 1));
+  assert.ok(lines.includes(`In all, 1 turn: 1 part, 1 changed line in 1 file, where one review from ${repo.main.slice(0, 7)} would be 1 part, 5 changed lines in 3 files.`), plan.out);
+  assert.doesNotMatch(plan.out, /^Turn 2 /m);
+  // A second session would fail the run: only one is listed.
+  const fake = fakeCodexInParts(gapSession(repo));
+  const result = await run(['--base', repo.main, '--cwd', repo.root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 1);
+  assert.deepEqual(readCodexReviews(repo.root).slice(-1).map((record) => [record.base, record.head]), [[repo.mine, repo.gap]]);
+  // The run ends with the gap's record, and says of no range that nothing was recorded.
+  assert.equal(result.out.split('\n').at(-1), `Recorded the Codex review of ${rangeOf(repo.mine, repo.gap)} in ${codexReviewsPath(repo.root)}.`, result.out);
+  assert.doesNotMatch(result.out, /Nothing to review/);
+  assert.deepEqual([turnWorktrees(repo.root), snapshotsIn(repo.root)], [[], []]);
+});
+
+test('gap below a merge: a turn of the gap that owes a correction stops the run before the merge', async () => {
+  const repo = mergeAboveGap();
+  const incorrect = { findings: [found('g.txt', 1, 1, { title: '[P1] The gap drops a line' })], overall_correctness: 'patch is incorrect', overall_explanation: 'A line is lost.', overall_confidence_score: 0.7 };
+  // A second session would fail the run: only one is listed.
+  const fake = fakeCodexInParts(gapSession(repo, incorrect));
+  const result = await run(['--base', repo.main, '--cwd', repo.root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 1);
+  assert.deepEqual(readCodexReviews(repo.root).slice(-1).map((record) => [record.base, record.head]), [[repo.mine, repo.gap]]);
+  const [from, at, head] = [repo.mine, repo.gap, repo.head].map((id) => id.slice(0, 7));
+  assert.ok(result.out.split('\n').includes(`The review of ${from}..${at}, below the merge ${head}, found what owes a correction, so the merge was not reviewed: once the correction is committed, the review from ${at} is a recheck of those findings.`), result.out);
+  assert.deepEqual(turnWorktrees(repo.root), []);
+});
+
+test('gap below a merge: a gap that starts where a review owing a correction ended is its recheck, and the merge follows once it leaves nothing open', async () => {
+  const repo = mergeAboveGap();
+  const finding = found('m.txt', 1, 1, { title: '[P1] Mine drops a line' });
+  reviewRuns.appendCodexReviewRun(repo.root, { schema: reviewRuns.CODEX_REVIEW_RUN_SCHEMA, id: RUN_ID, outcome: 'reviewed', answer: { findings: [finding], verdict: 'incorrect' } }, { where: whereOf(repo.root) });
+  const fake = fakeCodexInParts(gapSession(repo), mergeAfterGap(repo));
+  const result = await run(['--base', repo.main, '--cwd', repo.root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(fake.calls.length, 2);
+  assert.ok(fake.calls[0].child.received.text.includes('## A recheck of earlier findings'), 'the gap is asked as a recheck');
+  assert.deepEqual(readCodexReviews(repo.root).slice(-2).map((record) => [record.base, record.head, record.recheckOf, record.diff]), [[repo.mine, repo.gap, repo.mine, undefined], [repo.gap, repo.head, undefined, 'remerge']]);
+});
+
+test('gap below a merge: a gap with the Codex review off at its newest commit is no turn, and the range is taken as today', async () => {
+  const repo = mergeAboveGap({ offAtGap: true });
+  const nothing = startsNothing(repo.root);
+  const result = await run(['--base', repo.main, '--plan', ...nothing.home, '--cwd', repo.root], nothing.deps);
+  assert.deepEqual([result.code, result.err], [0, ''], result.err);
+  assert.doesNotMatch(result.out, /^Turn |^In all/m);
+  assert.match(result.out, new RegExp(`^Plan of the Codex review of ${repo.main.slice(0, 7)}\\.\\.${repo.head.slice(0, 7)}:`, 'm'));
+});
+
+test('gap below a merge: after the turn of the gap, a merge the run can no longer read by what was written in it is refused, never read whole against main', async () => {
+  const repo = mergeAboveGap();
+  // A second session would fail the run: only one is listed.
+  const fake = fakeCodexInParts(gapSession(repo));
+  const gitOf = fake.spawn;
+  // Once the gap's session ran, git cannot merge the merge's parents again, which reading what was written in it needs.
+  fake.spawn = (command, args, opts) => (command === 'git' && args[0] === 'merge-tree' && fake.calls.length > 0 ? { status: 128, stdout: '', stderr: 'fatal: no' } : gitOf(command, args, opts));
+  const result = await run(['--base', repo.main, '--cwd', repo.root], { ...fake, randomUUID: runIds() });
+  assert.equal(result.code, 1, result.out);
+  assert.equal(fake.calls.length, 1);
+  assert.match(result.err, new RegExp(`^After the turn of ${rangeOf(repo.mine, repo.gap)}, the merge ${repo.head.slice(0, 7)} is not read by what was written in it`, 'm'));
+  assert.deepEqual(readCodexReviews(repo.root).slice(-1).map((record) => [record.base, record.head]), [[repo.mine, repo.gap]]);
+  assert.deepEqual([turnWorktrees(repo.root), snapshotsIn(repo.root)], [[], []]);
 });
 
 // Half of this file's test time is above this line, by the durations of a run of it alone (2026-10-12).

@@ -1,9 +1,6 @@
-# codex-spend: no Codex waste, no review weakened
-
-## State
-T1 done: PR 878 open at its head; Codex and lens records cover bc87ce6..fc1c9f0 (L16-L18). Next: ready notice
---pr 878 (advisor consulted), then Q1+Q2 drafts to the lead's folder; T2 commits stay local (or a stacked branch)
-until 878 lands; unbind 878 on land; then T2, T3, T5, and T4 last. Two spec-1 departures await the lead (L18).
+# codex-T1 landed (PR 878, main c472dcb). T2 on branch feat/codex-spend-t2 from c472dcb, with a writer (opus,
+background, uncommitted, S2 plus the two tests L19 names); design in the lead's notes folder, jh-199-t2-design.md.
+When it returns: check diff and tests, commit, verifier, codex-review and lens-review, PR, ready. Then T3, T5, T4 last.
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
@@ -298,3 +295,14 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   the lead with the ready, not settled by this log: measuring runs make no snapshot (L14), and the sweep runs before
   the first Codex session rather than at every start (L17). Not tested: snapshot removal after a throw, and the
   Ctrl-C test asserting the snapshot is gone; a test of either costs another review round, offered to the lead.
+- L19 2026-11-15T01:05Z, the lead: PR 878 landed (main c472dcb, green local and Actions); L18 accepted (measuring
+  runs make no snapshot; the sweep runs before the first Codex session). Inside T2: a test of snapshot removal after
+  a throw, and the Ctrl-C test asserting the snapshot is gone. The land removed this worktree (empty at 19:55 local);
+  the lead re-added it on feat/codex-spend-t2 at c472dcb. A leftover snapshot is a registered git worktree, which
+  the next sweep removes with `worktree remove --force` and `worktree prune`.
+- L20 2026-11-15T02:30Z, T2 written by a js-harness-writer (opus), Covered: S2, with the two L19 tests (both pass on
+  T1's `finally` and fail with the removal off). Measured on the incident (scratchpad probe-gap.mjs, today's records):
+  cc54678..af986f0 leaves 1de6ed6 alone uncovered and `turnsAt` cuts it as the gap cc54678..1de6ed6, the merge
+  needing no read, so main's code is not read again. Left as today: a range where a commit of main has no record
+  (off the first-parent line, no gap). Follow-up outside the surface: `bin/lib/codex-review-rows.mjs` sizes the
+  push's debt with `mergeTurn` alone. `--plan` does not say when the gap turn is a recheck.
