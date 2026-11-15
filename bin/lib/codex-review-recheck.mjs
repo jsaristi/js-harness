@@ -121,11 +121,12 @@ export function recheckAnchor({ from, records, back, changedBetween }) {
 
 /** Whether the line from `nearest` up to `from` (`at`, each commit's place behind `from`) is walked by records that
  * are no review alone, with documents between them: from `from` down, a valid skip or range with nothing to review
- * whose head is `from` or below it past documents only, and whose base lies on the line at or above `nearest`, takes
- * the walk to its base, until `nearest` is reached past documents only. A stretch no such record covers stops it. */
+ * whose head is `from` or below it past documents only, and whose base lies on the line, takes the walk to its base,
+ * until `nearest` is reached past documents only, or passed: a record whose base is older than `nearest` spans the
+ * reviewed head and pays none of what it owes either. A stretch no such record covers stops it. */
 function throughNoReview({ from, nearest, records, at, documentsOnly }) {
   const limit = at.get(nearest);
-  const noReviews = records.filter((rec) => isValidCodexReview(rec) && (rec.outcome === 'unavailable' || rec.outcome === NOTHING_TO_REVIEW) && at.has(rec.head) && at.has(rec.base) && at.get(rec.base) <= limit && at.get(rec.head) < at.get(rec.base));
+  const noReviews = records.filter((rec) => isValidCodexReview(rec) && (rec.outcome === 'unavailable' || rec.outcome === NOTHING_TO_REVIEW) && at.has(rec.head) && at.has(rec.base) && at.get(rec.head) < at.get(rec.base));
   // `recheckAnchor` already asked whether `nearest..from` changed documents alone: git is asked nothing more where no
   // such record lies on the line, and each step asks it only of where the walk has moved to.
   let cur = from;
@@ -136,7 +137,7 @@ function throughNoReview({ from, nearest, records, at, documentsOnly }) {
       .reduce((oldest, rec) => (oldest === null || at.get(rec.base) > at.get(oldest.base) ? rec : oldest), null);
     if (next === null) return false;
     cur = next.base;
-    if (documentsOnly(nearest, cur)) return true;
+    if (at.get(cur) >= limit || documentsOnly(nearest, cur)) return true;
   }
   return false;
 }
