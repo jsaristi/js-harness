@@ -1,9 +1,9 @@
 # consistent-orders — orders that hold over a long run (JH 208)
 
 ## State
-PR 886 landed (19:08Z). S4 is PR 887 on main, from feat/consistent-orders-s4: once is per end (L19); its fix's
-reviews and the verifier on the final head come before its ready. The S2 and S6 designs are written (L13, L14, S2's
-replay L17) and wait for their double review and the lead; nothing of them is built. S5's rule is unblocked.
+PR 886 landed (19:08Z). S4 is PR 887 on main at baf82737: reviewed clean by Codex and the lenses at each fix, the
+verifier PASS on its recheck (L21); ready goes to the lead. The S2 and S6 designs are written (L13, L14, S2's replay
+L17, L19) and wait for their double review and the lead; nothing of them is built. S5's rule is unblocked.
 
 ## Goal
 An order the harness gives a session, a work session or a sub-agent (first: consult the advisor when blocked) is held
@@ -307,3 +307,13 @@ answering a block, while a session waits) were missed with nothing to say so; on
   so the end now goes through, his words for a record that cannot be read; (2) a log line that is no object threw
   before any record, so it is skipped; (4) the test file's header. Left, a stated limit: (3) an end a second hook
   turns back after the gate's repeat can count one extra flag in `report` (another hook's block, then a third stop).
+- L21 (2026-11-15) 3ac9ad53: Codex clean (0.94); the lenses: nothing pinned an unreadable but appendable log, and a
+  failed append on a turn-back still said the decision stands; fixed in baf82737 (a `readLogTail` seam, tests that
+  failed first). baf82737: Codex clean (0.97), the lenses 0 and 3 of 3 earlier findings fixed. The verifier's recheck
+  on baf82737: PASS, 36 of 36, 18 probes; fail-closed none. Limits it states: a turn-back more than 1 MB back (about
+  17 days at the log's rate) with no host flag lets one end be blocked twice, never more; the report can count a
+  repeat twice when the turn-back record cannot be read at the repeat, or when only the host's flag let it through.
+  S4's reach on the real record (`decisions.jsonl`, 379 sub-agent ends): 38 flagged, so turned back once under S4;
+  69 covered; 229 unchecked and 43 with no transcript, which S4 lets through as before. Per-end cost on this session's
+  two verifiers: 0, each of their 5 stops was covered. Not checked: the host's live behaviour after a turn-back; the
+  proof after the land is the first `turnedBack` record followed by `covered` for the same agent.
