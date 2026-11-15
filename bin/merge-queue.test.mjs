@@ -221,7 +221,8 @@ const workflowRun = (status, conclusion = null, more = {}) => ({ id: 1, name: 'g
 async function land(root, prs, { suite = () => ({ ok: true }), checks = [[workflowRun('completed', 'success')]], onChecks, wrap = (run) => run, env, cwd = root, gh, more = {} } = {}) {
   const { run, calls } = landRunner(prs, checks, onChecks, gh);
   const out = [];
-  const code = await mergeQueueMain(['--land', '--cwd', cwd], { run: wrap(run), covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line), ...(env && { env }), ...more });
+  // No session listed unless a test lists one: claude's own listing on the machine that runs the tests is not asked.
+  const code = await mergeQueueMain(['--land', '--cwd', cwd], { run: wrap(run), covered: () => ({ pass: true }), suite, sleep: async () => {}, stdout: (line) => out.push(line), stderr: (line) => out.push(line), listAgents: () => [], ...(env && { env }), ...more });
   return { code, out, calls };
 }
 
@@ -1887,6 +1888,87 @@ test('a removal git refuses is said, and the land still exits 0', async () => {
   assert.deepEqual(removedOf(root), []);
 });
 
+// odd/tasks/land-live-worktree.md: on 2026-11-14 the land of PR 878 ran `git worktree remove` on the worktree JH 199
+// worked in. Every check passed; git deleted its files and its registration, failed on the folder the session stood
+// in, and the land said "it stays". claude's listing named the session there: interactive, idle, its pid alive.
+/** A runner wrapper that keeps the folder of every `git worktree remove` it passes on. */
+const removalsSeen = () => {
+  const seen = [];
+  const wrap = (run) => (command, args, options) => {
+    if (command === 'git' && args[0] === 'worktree' && args[1] === 'remove') seen.push(path.basename(args.at(-1)));
+    return run(command, args, options);
+  };
+  return { seen, wrap };
+};
+/** A session claude's listing names, as it named JH 199: interactive, idle, a live pid (this process), in `cwd`. */
+const listedIn = (cwd, more = {}) => ({ sessionId: '32c68504-c7fd-43c0-8abb-ae2bcc6c299a', name: 'JH 199 · in it', status: 'idle', pid: process.pid, cwd, kind: 'interactive', ...more });
+
+test('a land never asks git to remove a landed worktree a listed session stands in, idle with a live pid; one nobody stands in goes', async () => {
+  const { root, heads } = makeQueueRepo();
+  const top = path.dirname(root);
+  const lived = idle(worktree(root, path.join(top, 'wt-a'), 'feat/a'));
+  const empty = idle(worktree(root, path.join(top, 'wt-b'), 'feat/b'));
+  const { seen, wrap } = removalsSeen();
+  // A folder inside the worktree, as the session's shell may stand in one.
+  const agents = [listedIn(path.join(lived, 'bin'))];
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], { wrap, more: { listAgents: () => agents } });
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(seen.includes('wt-a'), false, `git was asked to remove it: ${seen.join(', ')}`);
+  assert.equal(fs.readFileSync(path.join(lived, 'a.txt'), 'utf8'), 'A from a\n', 'its files stay');
+  assert.equal(fs.existsSync(empty), false, out.join('\n'));
+  assert.deepEqual(removedOf(root), [[2, 'wt-b']]);
+  assert.ok(out.some((line) => line.startsWith('Kept the worktree of PR 1 at ') && line.includes('JH 199 · in it')), out.join('\n'));
+});
+
+test('a land counts a session at work, or a background job not done, as standing in a worktree; a finished one is not', async () => {
+  const ended = spawnSync(process.execPath, ['-e', '']).pid;
+  const living = [
+    (dir) => listedIn(dir, { status: 'busy', pid: undefined }),
+    (dir) => ({ id: 'bbbb2222', name: 'JH 2 · blocked', state: 'blocked', cwd: dir, kind: 'background' }),
+  ];
+  for (const live of living) {
+    const { root, heads } = makeQueueRepo();
+    const top = path.dirname(root);
+    const kept = idle(worktree(root, path.join(top, 'wt-a'), 'feat/a'));
+    const done = idle(worktree(root, path.join(top, 'wt-b'), 'feat/b'));
+    const agents = [live(kept), { id: 'cccc3333', name: 'JH 3 · done', state: 'done', cwd: done, kind: 'background' }, listedIn(done, { pid: ended, name: 'JH 4 · its process ended' })];
+    const { seen, wrap } = removalsSeen();
+    const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b'])], { wrap, more: { listAgents: () => agents } });
+    assert.equal(code, 0, out.join('\n'));
+    assert.deepEqual(seen.filter((name) => name.startsWith('wt-')), ['wt-b'], out.join('\n'));
+    assert.deepEqual(removedOf(root), [[2, 'wt-b']]);
+  }
+});
+
+test('a land whose listing of sessions cannot be read removes no worktree, and says so', async () => {
+  const { root, heads } = makeQueueRepo();
+  const kept = idle(worktree(root, path.join(path.dirname(root), 'wt-a'), 'feat/a'));
+  const { seen, wrap } = removalsSeen();
+  const listAgents = () => { throw new Error('claude agents --json --all exited 1: made up'); };
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { wrap, more: { listAgents } });
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(seen.includes('wt-a'), false);
+  assert.equal(fs.existsSync(kept), true);
+  assert.deepEqual(removedOf(root), []);
+  assert.ok(out.some((line) => line.includes('no worktree of a landed pull request was removed') && line.includes('made up')), out.join('\n'));
+});
+
+test('a removal git fails after deleting the registration is told as what it left, not as a worktree that stays', async () => {
+  const { root, heads } = makeQueueRepo();
+  const gone = idle(worktree(root, path.join(path.dirname(root), 'wt-a'), 'feat/a'));
+  // As git did on Windows with a session in the folder: the files and the registration deleted, then a failure.
+  const wrap = failingGit((args) => args[0] === 'worktree' && args[1] === 'remove' && path.basename(args.at(-1)) === 'wt-a', (run, args, options) => {
+    run('git', ['worktree', 'remove', '--force', args.at(-1)], options);
+    fs.mkdirSync(gone, { recursive: true });
+    return { status: 255, stdout: '', stderr: `error: failed to delete '${gone}': Permission denied` };
+  });
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { wrap });
+  assert.equal(code, 0, out.join('\n'));
+  const line = out.find((said) => said.includes('PR 1') && said.includes('wt-a')) ?? '';
+  assert.doesNotMatch(line, /it stays/, out.join('\n'));
+  assert.match(line, /no longer lists it/, out.join('\n'));
+});
+
 // `git worktree remove` takes a worktree's ignored files with it, and `git status` does not show them: an eval run kept
 // under `evals/runs/` would be lost with no branch to bring it back (Codex, 2026-10-17, P1).
 test('a land keeps a landed worktree that holds an ignored file', async () => {
@@ -1913,7 +1995,7 @@ test('--prune removes every clean, idle worktree on a branch origin/main holds, 
   const notInMain = idle(worktree(root, path.join(top, 'wt-b'), 'feat/b'));
   const { run, calls } = runner([]);
   const out = [];
-  const code = await mergeQueueMain(['--prune', '--cwd', root], { run, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  const code = await mergeQueueMain(['--prune', '--cwd', root], { run, listAgents: () => [], stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   assert.equal(code, 0, out.join('\n'));
   assert.equal(fs.existsSync(inMain), false, out.join('\n'));
   assert.equal(fs.existsSync(notInMain), true);
@@ -1923,6 +2005,21 @@ test('--prune removes every clean, idle worktree on a branch origin/main holds, 
   assert.equal(out.at(-1), '1 worktree removed.');
   assert.deepEqual(landsOf(root), []);
   assert.equal(calls.some((call) => call.startsWith('gh ')), false, 'no pull request is asked about');
+});
+
+test('--prune keeps a worktree a listed session stands in, and removes none when the listing cannot be read', async () => {
+  const { root } = makeQueueRepo();
+  git(root, 'push', '--quiet', 'origin', 'feat/a:main');
+  const lived = idle(worktree(root, path.join(path.dirname(root), 'wt-a'), 'feat/a'));
+  for (const listAgents of [() => [listedIn(lived)], () => { throw new Error('made up'); }]) {
+    const { run } = runner([]);
+    const { seen, wrap } = removalsSeen();
+    const out = [];
+    const code = await mergeQueueMain(['--prune', '--cwd', root], { run: wrap(run), listAgents, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+    assert.equal(seen.includes('wt-a'), false, out.join('\n'));
+    assert.equal(fs.existsSync(lived), true);
+    assert.equal(code === 0 ? out.at(-1) : 'refused', code === 0 ? '0 worktrees removed.' : 'refused', out.join('\n'));
+  }
 });
 
 test('--prune is a mode of its own: with --land or --dry-run it is a usage error', async () => {

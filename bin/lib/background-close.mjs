@@ -13,7 +13,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { CLOSE_FINISHED, LOCK_WAIT_MS, atWork, exists, finishedHere, finishedOf, readRecord, recordFileOf, saidBy, sleepSync, undoSession, within, workingIn, worktreeHolding, worktreeOf } from './background.mjs';
+import { CLOSE_FINISHED, LOCK_WAIT_MS, exists, finishedHere, finishedOf, readRecord, recordFileOf, saidBy, sleepSync, standingIn, undoSession, within, workingIn, worktreeHolding, worktreeOf } from './background.mjs';
 import { readNotices } from './channel.mjs';
 import { defaultBranchOf } from './default-branch.mjs';
 import { projectSlug } from './sessions.mjs';
@@ -174,7 +174,7 @@ export function closeFinished({ home, root, cwd = root, base, baseName = base, n
       // A job that is not this session's is not stopped here, and no folder is removed from under one.
       const guestIn = (agents) => {
         const own = listedOf(chain, agents);
-        return agents.find((agent) => !own.includes(agent) && typeof agent.cwd === 'string' && within(agent.cwd, worktree) && (atWork(agent) || (Number.isInteger(agent.pid) && alive(agent.pid))));
+        return standingIn(agents, worktree, { alive, except: (agent) => own.includes(agent) });
       };
       const guestWhy = (guest) => `another job, ${guest.id}${guest.name ? ` · ${guest.name}` : ''}, stands in its worktree ${worktree}`;
       const guest = guestIn(seen);
