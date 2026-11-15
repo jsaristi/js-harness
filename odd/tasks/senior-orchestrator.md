@@ -152,3 +152,5 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   start, a title-only offer too, as `seniorStarterRefusal` does for the command. One live senior counts the app's
   records not archived with an SR title of the code, since a `start_session` senior writes nothing to the command's
   record. `use_worktree: false` is refused, since `detach_session` refuses a session that shares a worktree.
+- L4 2026-11-15 17:50 local, the lead's note: T7's scope, from S5. 17:55: pause for a machine restart; resume from
+  this document's State.
