@@ -270,7 +270,17 @@ ${advance ? `<h3>Lo que va a avanzar</h3>${advanceList(view, null)}` : ''}
 <h3>Cómo se reparte</h3>${coverSentence(view)}
 <h3>Sesiones (la línea marca tu vuelta; en tono más claro, lo que puede alargarse)</h3>${lanes}
 <h3>Metas: cada una es un comando que termina en 0</h3>${goalList(view.goals, false)}
-<h3>Espera por ti: no corre hasta que respondas o hagas lo que dice</h3>${waiting.length ? `<ul>${waiting.map((line) => `<li>${line}</li>`).join('')}</ul>` : '<p class="soft">nada</p>'}</div>`;
+<h3>Espera por ti: no corre hasta que respondas o hagas lo que dice</h3>${waiting.length ? `<ul>${waiting.map((line) => `<li>${line}</li>`).join('')}</ul>` : '<p class="soft">nada</p>'}
+${forkSection(view.forks ?? [])}</div>`;
+}
+
+/** The forks the lead pre-decided (his yes to question 290): each case with its proposed answer and their bound, or
+ * that none was, so a departure without them says so. */
+function forkSection(forks) {
+  const body = forks.length
+    ? `<ul>${forks.map((fork) => `<li>Si ${escapeHtml(fork.if)}: ${escapeHtml(fork.then)}</li>`).join('')}</ul><p class="soft">Con tu aprobación, actúo según estos casos mientras no estás: nada fuera de estos casos, ni gasto, ni publicar.</p>`
+    : '<p class="soft">ningún caso: lo que es tuyo espera tu vuelta</p>';
+  return `<h3>Decidido por adelantado</h3>${body}`;
 }
 
 const STATES = { finished: 'terminó', running: 'en curso', silent: 'en silencio', stopped: 'detenida', queued: 'sin empezar' };

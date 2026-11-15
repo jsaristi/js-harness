@@ -415,7 +415,7 @@ function departureLines(view) {
     ...(view.forks?.length ? [
       ...view.forks.map((fork, i) => `  fork ${i + 1}: if ${fork.if}, then ${fork.then}`),
       '  the forks, once the user approves them, are what the lead acts on while they are away: nothing outside these forks, no spend and no publishing',
-    ] : []),
+    ] : ['  no fork pre-decided: what is the user\'s waits for their return']),
   ];
 }
 

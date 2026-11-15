@@ -109,7 +109,7 @@ test('open shows the pre-decided forks and that they grant no spend and no publi
   assert.match(opened.out, /nothing outside these forks, no spend and no publishing/);
   const json = await stretch(scratch(), ['open', '--plan', planFile(place, { ...PLAN, forks }), '--json']);
   assert.deepEqual(JSON.parse(json.out).forks, forks);
-  assert.doesNotMatch((await stretch(scratch(), ['open', '--plan', planFile(place, PLAN)])).out, /fork/, 'no forks, no fork lines');
+  assert.match((await stretch(scratch(), ['open', '--plan', planFile(place, PLAN)])).out, /no fork pre-decided: what is the user's waits for their return/, 'no forks is said, not silent');
 });
 
 test('open refuses while a stretch is open (exit 1), a plan it does not accept (exit 2) and an unknown argument (exit 2)', async () => {
