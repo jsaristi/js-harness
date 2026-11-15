@@ -6,9 +6,9 @@ Delivery: findings only, no code, rule or roadmap change. Opened 2026-11-14 by J
 lead's brief (`~/.js-harness/background/briefs/2026-11-15T02-10-23-626Z-2a6b0f77.md`).
 
 ## State
-T1-T5 done: 13 part files, the coverage run, the verifier, the Synthesis below and the page
-`auditoria-2026-11-14.html` in the notes folder (not published). Last: the gate and `notify --kind closed` with the
-summary `docs/sessions/2026-11-15-jh-203-auditoria-completa-de-lo-construido.md`.
+T1-T5 done; the Synthesis and the page reconciled with `verifier.md`'s Verdicts and every part's `## Not checked`
+(the advisor's close review). Last: `js-harness contract run`, then `notify --kind closed --summary
+docs/sessions/2026-11-15-jh-203-auditoria-completa-de-lo-construido.md`.
 
 ## Goal
 Tell, part by part with evidence, what of js-harness to keep, fix, shrink or remove so the harness matures.
@@ -193,20 +193,23 @@ claim unless marked **verified** (the verifier re-derived it, re-ran it where no
 ### Bad news first
 - **The checks that decide "ready" can pass while what they check is false.** The review gate can say "covered"
   for code no reviewer read (B1-1, B1-2, B2-1, verified by reading; B1's two by the reader's probe), a session can
-  forge a Codex review record the push accepts (C-3 + B2-12, **verified, re-run**: the guard passes `sort -o` and
-  `awk` writes to `codex-reviews.jsonl`, and `isValidCodexReview` admits a record on shape alone,
-  `bin/lib/codex-reviews.mjs:117-125`), the gate runs unlocked after one stray file (C-12, **verified on Windows**:
-  `EPERM` in 1,353 ms, `gate-turn.mjs:171-172`), `rules check` passes with 52 hits of its own patterns (D-1..3),
-  the size ceiling counts lines while a file packs 2,811-character lines (E2-24), and a backup is recorded as a
-  success while a repository went unbundled (F-2, F-4). This is the core of "immature": the harness's own proofs
+  forge a Codex review record the push accepts (C-3 + B2-12: the guard bypass is **verified, re-run** — the guard
+  passes `sort -o` and `awk` writes to `codex-reviews.jsonl`; that the push then accepts it is verified by reading
+  only: `isValidCodexReview` admits a record on shape alone, `bin/lib/codex-reviews.mjs:117-125`), the gate runs unlocked after one stray file (C-12, **verified on Windows**:
+  `EPERM` in 1,353 ms, `gate-turn.mjs:171-172`), and, by the readers' word, not attacked by the verifier:
+  `rules check` passes with 52 hits of its own patterns (D-1..3), the size ceiling counts lines while a file packs
+  2,811-character lines (E2-24, verified, medium), and a backup is recorded as a success while a repository went
+  unbundled (F-2; F-4 verified). This is the core of "immature": the harness's own proofs
   are weaker than its prose says.
 - **The lead can miss notices.** `wait` misses a notice stamped before it started but appended after (A2-1,
-  verified by reading), and a blocked session's notice went to a record no lead reads (A2-2, verified: JH 199's
-  message that 878's land removed its worktree sits in `D--js-harness-worktrees-codex-spend.jsonl`, unseen).
+  verified by reading), and a blocked session's notice went to a record no lead reads (A2-2, partly verified: JH
+  199's message that 878's land removed its worktree sits in `D--js-harness-worktrees-codex-spend.jsonl`, unseen;
+  the cause is that land removing the worktree under the session, so `mainCheckout` fell back to the folder, and
+  the reader's proposed fix would not have fired).
 - **Security guards have holes.** Any session can approve a permission card meant for the lead (C-2, verified by
-  reading); the guard never sees the host's `PowerShell` tool (C-1); 8.3 short names pass the secret-path guard
-  (C-5); `remote` accepts `bypassPermissions` and nothing shows it afterwards (F-10); hooks fail open on any error
-  (C-9).
+  reading). By the readers' word, not attacked: the guard never sees the host's `PowerShell` tool (C-1); 8.3 short
+  names pass the secret-path guard (C-5); `remote` accepts `bypassPermissions` and nothing shows it afterwards
+  (F-10); hooks fail open on any error (C-9).
 - **The undo promise of AGENTS.md holds for `~/.claude` only.** Installed hooks, skills and output style match main
   and are recorded (E1, probe), but about 20 folders under `~/.js-harness` survive `uninstall machine` silently
   (E1-3), a killed `init` leaves writes unrecorded (E2-1), the `@AGENTS.md` import is not recorded (E2-2), and a
@@ -243,13 +246,13 @@ High, held by the verifier:
 | C-12 | one stray file in `gate/lock/` and every gate runs unlocked | fix |
 | A1-1 | copied transcript entries rewind the reported context size | fix |
 | A2-1 | `wait` misses a notice in flight | fix (stamp at append, or cursor by count) |
-| A2-2 | notices recorded where no lead reads | fix (refuse an unknown record) |
 | E2-1 | killed `init` leaves its writes unrecorded | fix |
 | I-1 | workshop heartbeat down since 2026-11-11 | fix |
-| I (release) | `release-gate.mjs` has never gated a release, and accepts any record file | fix |
-Partly held, severity lowered by the verifier: A3-1 (installed copy one land behind: normal lag, but the F8 share it
-shows is wrong; main also drops one finished step, G-1), E1-1 (`stack backup` leftovers: the next run refuses and
-names them), E2-24 (line-count ceiling: medium).
+| I-5 | `release-gate.mjs` has never gated a release, and accepts any record file | fix |
+Partly held (verifier): A2-2 (mechanism holds; cause is a land removing the session's worktree, so the fix must
+cover a vanished folder, not a worktree being created), A3-1 (installed copy one land behind: normal lag, but the F8
+share it shows is wrong; main also drops one finished step, G-1), E1-1 (`stack backup` leftovers: the next run
+refuses and names them). Holds with severity lowered to medium: E2-24 (line-count ceiling).
 
 Medium, the recurring patterns: lens findings never block (B2-2); `check`'s quiet line hides Codex debt (G-2);
 contract, spec and failures rows check shape only (G-13); a documents-only commit runs two test files (G-3);
@@ -271,12 +274,20 @@ times what the code does, and the prose drifted to features that left or moved t
   90-120 KB, an estimate, D); the merge queue's refresh-copy machinery (about 44 KB, B2-20); onboarding profiles (1
   of 11 kinds used, E2-26); `resume --pause` load cost (A3); README and SPEC to one home each, with `--help` the
   source for command prose (H).
-- **Remove, only where the verifier found no caller:** `stack backup` code (E1-15, but a documented command and a
-  ROADMAP line: his call), the dead scripts not imported by tests (I-6/I-28 minus `rehearsal*`, which
-  `scripts/migration.test.mjs` imports, I-17), `docs/sweep-2026-10-11.md`, the excused mechanism (B1-12, 0
-  firings; then C-11's fix is moot), `branchMatches` and other unused exports named per part. **Not** to remove as
-  written: E2-18 (`--home` is passed by `tui.mjs:461`), I-14 (`rules-switch.mjs:289` reads the Codex probe by path),
-  `docs/todo.md` (indexed as the live inbox), G's `## Effort` (47 task documents carry it), D-13.
+- **Remove, cleared by the verifier (no caller found):** `RELIEF_LINES` re-export and `QUESTION_DISMISSED` (A1-12);
+  the TUI's `sync` action and `computeStackState` (core-04-11); the never-read `kind:'stretch'` page record
+  (core-07-11); the excused mechanism (B1-12, 0 firings; then C-11's fix is moot); `runPrompt`, `runFindings` and
+  `runSession`'s `current` branch (B1-13, B1-14); the gentle-ai `--base-ref` guard (C-20); `traceName` (C-23); dead
+  parameters in `update.mjs` (E1-19); the `trustConfigs` write path (E2-19, its reader stays); dead imports in
+  `remote.mjs` (F-18); `branchMatches` (G); workshop `audit` (I-29, weakly).
+- **Remove, the reader's claim, not attacked:** `docs/sweep-2026-10-11.md`; the other unused exports named per part;
+  the old scripts of I-6/I-28 beyond what the verifier checked.
+- **Not to remove as written** (verifier): E2-18 (`--home` is passed by `tui.mjs:461`); I-14 (`rules-switch.mjs:289`
+  reads the Codex probe by path); I-17 (`rehearsal*` is imported by `scripts/migration.test.mjs:15-16`, and
+  `rehearsal*` and `s2-verify` are listed by path in `conventions-model-home.test.mjs:43` and
+  `gentle-ai-absence.test.mjs:58-59,109-110`); `stack backup` (E1-15: unused, but a documented command, a ROADMAP
+  line and `s2-verify` reference it: his call); `docs/todo.md` (indexed as the live inbox); G's `## Effort` (47 task
+  documents carry it; only the validation may go); D-13 (a project-rules key, a config-format change).
 - **His call:** the Codex-as-agent eval (about 250 KB, one result from 2026-10-13, I-14), the status line (A3-4
   says remove, E1 says keep and test), `JS_HARNESS_MERGE_QUEUE=1` as the only guard of main pushes (I-4, B2-3).
 
@@ -307,8 +318,20 @@ fix (C-11). Status line: remove (A3-4) vs keep and test (E1). F8 share: main's 1
 - Not checked: the verifier attacked 43 findings (all 15 high, 21 remove, a 7-row convenience sample of medium),
   not the rest; its error rate is 1 refuted of 43, with remove verdicts wrong or incomplete 7 of 21. B1-1, B1-2,
   B2-1, A2-1, C-2 and E2-1 were re-read, not re-probed, by the verifier. `evals/`, `scripts/`, `workshop/` have no
-  line coverage. `odd/tasks/` was read only by grep. Readers ran some part tests in wave 1 under load, which made
-  timing tests fail; waves 2 and 3 ran none.
+  line coverage. Wave 1 (A1, A2, A3, B1, B2) ran before the coverage summary existed, against the lead's ask that
+  every part get it; each of those five says so and inferred coverage from test titles. Wave 1 readers ran their
+  part tests under load, which made timing tests fail; waves 2 and 3 ran none.
+- Not read (from each part's `## Not checked`): `odd/tasks/` (6.7 MB, grep only); `docs/sessions/`,
+  `docs/host-updates/`, `docs/proposals/`; SPEC `:274-1005` beyond three capabilities, ROADMAP from `:157`, RECORDS
+  past line 60 (H); `resume.mjs:300-454,720-829` and most of `stretch-render.mjs` (A3); `reviewCoverage` and
+  `codexReviewCoverage` bodies behind B2-5 and B2-12 (B2); `test-run-warning.mjs:120-237`, `permit.mjs` parsing,
+  parts of `trace-reads.cjs` (C); `rules-switch.mjs` outside `switchRules`, `rules-applied-read.mjs`, parts of
+  `rules-coverage.mjs` (D, by structure); `stack-backup.mjs` past line 330 (E1); large spans of `lib/onboard.mjs`,
+  `profiles.mjs`, `project-coverage.mjs`, `share-check.mjs`, `bin/migrate.mjs` (E2); `pages*.mjs`, `summary`,
+  `measures` beyond cited lines, the 56 `check-*.test.mjs` bodies (G); `practice*`, workshop `throughput` and `docs`
+  by structure (I). Test bodies were read only where a finding cites them. A1 (66k reported tokens), E1 (107k) and
+  G (105k) finished well under their sized parts; their `Not checked` lists are the record of what they skipped.
+  So "28.1 MB in parts" means every file was assigned, not every byte read.
 - Two inputs were wrong and corrected during the run: P0's first import graph missed `export … from` (fixed in
   `p0-v2.md`; it had made `hook-count.mjs` and `project-messages.mjs` look dead), and `rules-coverage-data.mjs` and
   `template-registry.mjs` are read as text by path, not dead.
@@ -334,3 +357,12 @@ fix (C-11). Status line: remove (A3-4) vs keep and test (E1). F8 share: main's 1
   sent. No guard or gate refused it; the session had committed and pushed `b8683009` and was at the brief's gate
   step (advisor, then one call, then the notice) when the go arrived from the pushed document. The advisor tool
   answered this session at the partition step (before the commit), so it was not down here then.
+- L4 2026-11-14 to 15, mid-run decisions of this session: coverage run started at the go, alongside wave 1; after
+  wave 1's parallel part-test runs (about 200 node processes, timing tests failing) the common brief forbade part
+  test runs for waves 2 and 3; P0 re-run as `p0-v2.md` after readers C and E2 showed it missed `export … from`;
+  reader C used one nested general-purpose sub-reader for the gate files and marked its claims suspected.
+- L5 2026-11-15, the close against the depth pass. Item 3: spec 1 met (13 files), spec 2 met (`verifier.md`), spec 3
+  met (one `## Synthesis`), spec 4 met (the page). Item 4: predicted the request holds (P0: 35 untested sources, 4
+  installed files differing); measured 15 high findings, 12 held and 3 partly by the verifier, so the refutation
+  test pointed the right way. Commits: `b8683009` 2026-11-14 21:23 local, `04a29a7a` 2026-11-15 00:55,
+  `26aae220` 00:59.

@@ -40,7 +40,10 @@ solo ver el plan sino ver completamente todo que se ha hecho" — lead transcrip
 - Not attacked by the verifier: medium and low findings outside its 7-row sample (listed in `verifier.md`).
 
 ## Cost
-- Time: brief read about 21:10 local on 2026-11-14; the go at 22:43; synthesis committed after 01:00 on 2026-11-15.
+- Time: worktree opened 21:10 local on 2026-11-14 (`ls -la docs/audits`), partition `b8683009` at 21:23, the go at
+  22:43, synthesis `04a29a7a` at 00:55 and the page commit `26aae220` at 00:59 on 2026-11-15 (`git log --format=%ci`).
+- Wave 1 (A1, A2, A3, B1, B2) ran without the coverage summary the lead asked every part to get; it was not ready
+  until after they finished, and each says so.
 - Sub-agents: 13 readers plus 1 verifier on opus, reported `subagent_tokens` summing to about 3.3M.
 - One coverage run of `bin` (about 46 minutes under load); three pre-commit gate runs on document commits; no Codex
   or lens review (no code, per the brief).
