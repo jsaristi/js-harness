@@ -78,8 +78,9 @@ Nothing: the brief settles the direction and the default for the check.
   a worktree re-added by hand after a land removed it, the plan review with a verifier pass), each in the
   orchestrator's conversation only, until the brief of JH 202.
 - Twice, or once at a cost: four times in one day, and he asked twice for it to be cemented (L1).
-- Can a check do it: not cheaply; see "The check not built" below. The rule's sensor today is the same as the rule
-  it amends: `js-harness guard` refuses a feedback note with no home (`rule:memory-feedback-home`).
+- Can a check do it: not cheaply; see "The check not built" below. The new clause has no sensor: the guard's refusal
+  of a feedback note with no home (`rule:memory-feedback-home`) sees a memory note, not a workaround left in a
+  conversation, so the clause holds by reading alone.
 - Can an existing one be amended: yes, `rule:rules-live-in-the-harness` (searched as in item 4).
 - What it costs: one bullet of the protocols skill, read when a rule changes; and one roadmap line a workaround,
   written in the reply that tells of it. What leaves: the memory note `dogfood-cement-everything.md` becomes a
@@ -93,6 +94,8 @@ Nothing: the brief settles the direction and the default for the check.
   both miss and over-report (a reply quoting the rule itself, a FAILURES line), and one more line in every reply the
   hook reads. A second cost the audit names: `rules check` already passes with 52 hits of its own patterns (D-1..3),
   so another pattern sensor adds to an unpaid debt.
+- A limit of the rule as built: its bullet sits in the protocols skill's rule section, read when a rule changes, so
+  nothing loads it at the moment a workaround happens. The check above is what would close that.
 - Why not now: the audit's point 4 and his default through the brief. It is revisited when the audit's fix-first
   list is paid, or when a workaround is found later with no follow-up (a `- Seen:` line would show it).
 
@@ -124,3 +127,7 @@ Nothing: the brief settles the direction and the default for the check.
   9,062 and 9,060 input tokens. Codex over 4c41917..01bcbaa, the one code commit (fcdc884a): "the patch is correct",
   confidence 0.94, no finding; 61,803 input tokens (42,240 cached) in 34 s. Nothing to fix; this docs commit gets no
   rerun.
+- L5: the advisor, before the ready: the new clause has no sensor (the guard sees memory notes, not conversations),
+  and its bullet is read only when a rule changes; both written above. The memory note `dogfood-cement-everything.md`
+  was rewritten as a pointer to the rule, and its index line with it. CI: the gate runs of 06:25Z and 06:40Z passed;
+  `js-harness contract run` printed `met`.
