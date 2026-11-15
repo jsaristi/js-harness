@@ -1,7 +1,6 @@
-# codex-T2 at d1c152a6, the chain fix at 74256214 (local, not pushed). Its verifier found a blocker (L24): not to be
-reviewed or pushed. A second writer round (opus, background) fixes V1 and V2 with tests first, plus gap c, V5 and V6, as
-a new commit on top. Then a verifier on that delta (running both big test files), then Codex and the lenses on
-d1c152a6 and on the fix commits as their own slices, push, PR, advisor, ready --pr.
+# codex-T2 at d1c152a6, the chain fix at 74256214 and 457bb1c9 (local, not pushed). A second verifier pass (opus,
+background) is on 457bb1c9; the lead lands only after a clean one (L25). Then Codex and the lenses on d1c152a6 and on
+the fix commits as their own slices, push, PR (its body answers B1-1 and B1-2, L25), advisor, ready --pr.
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
@@ -344,3 +343,17 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   changes the record shape or the three-review count goes to the lead first. The gate at 74256214 ran no tests
   locally (gate.yml sends them to CI at push); the writer's own run of every file is what holds them; nothing was
   pushed (ls-remote empty). V3 and V4 are follow-ups.
+- L25 2026-11-15T07:00Z, the second writer round committed as 457bb1c9 (its own run of the 16 codex-review test files:
+  904 pass, 0 fail; the gate runs none locally). V1: `recheckAt` lists `--first-parent --parents`, one git call,
+  tests with 600 main commits by `git fast-import`. V2: below a merge whose own record owes a first recheck the walk
+  goes on, and a debt found below joins it, one recheck carrying both findings, `recheckOf` still the merge; refused
+  where the debt below is refused or would reach a third review, the merge's debt kept in memory (`owed`) for the
+  push row. Gap c, V5 and V6 have tests. Left open by the writer, put to the verifier: after a joined recheck no
+  record names the gap's head, so `--again --base <gap head>` could reach a fourth review (needs a record-shape
+  change, out of scope); the debt below at its second recheck refuses rather than joins; a merge's debt over three
+  reviews spent below refuses until escalated; older merge-recheck records read as covering the debt below. The
+  lead asked (2026-11-15) for a clean second verifier pass before ready, and for the PR body to say whether the rule
+  decides the full audit's B1-1 and B1-2: it decides neither. B1-1 (removing a `-codex-review` mark leaves code
+  covered) is coverage by marks in `reviewCoverage`, a mechanism the rule does not touch; B1-2 (an `--unavailable`
+  skip over a later code commit erases an owed correction) is V3 of L24, there before this work: `correctionOwed`
+  reads only reviewed records, so a skip covering the newest code commit hides the debt. Neither is fixed in T2.
