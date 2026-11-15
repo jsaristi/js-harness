@@ -219,14 +219,14 @@ function backgroundTitle(home, sessionId) {
   return title;
 }
 
-function record(home, decision, stderr) {
+function record(home, decision, stderr, failed = 'the decision stands') {
   const file = path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl');
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.appendFileSync(file, `${JSON.stringify({ schema: SCHEMA, ...decision })}\n`);
     return true;
   } catch (err) {
-    stderr(`js-harness advisor-gate: cannot append to ${file}: ${err.message}; the decision stands`);
+    stderr(`js-harness advisor-gate: cannot append to ${file}: ${err.message}; ${failed}`);
     return false;
   }
 }
@@ -243,23 +243,27 @@ const END_NOTICE = [
   'Your end is turned back once: consult the advisor, then end by giving your whole result again, as your caller reads only your last message; the next stop goes through.',
 ].join(' ');
 
+/** The last DECISIONS_TAIL_BYTES of the log `file`, as text. Throws when it cannot be read. */
+function readLogTail(file) {
+  const size = fs.statSync(file).size;
+  const fd = fs.openSync(file, 'r');
+  try {
+    const length = Math.min(size, DECISIONS_TAIL_BYTES);
+    const buffer = Buffer.alloc(length);
+    fs.readSync(fd, buffer, 0, length, size - length);
+    return buffer.toString('utf8');
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 /** Whether the newest end the log under `home` holds of the sub-agent `agent` of `session` is a turn-back, so this
  * stop is that end's repeat: its tail, which a turn-back and its next stop sit close in. No log holds none (`false`);
  * one there that cannot be read gives `null`. */
-function turnedBackBefore(home, session, agent) {
+function turnedBackBefore(home, session, agent, readTail = readLogTail) {
   let text;
   try {
-    const file = path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl');
-    const size = fs.statSync(file).size;
-    const fd = fs.openSync(file, 'r');
-    try {
-      const length = Math.min(size, DECISIONS_TAIL_BYTES);
-      const buffer = Buffer.alloc(length);
-      fs.readSync(fd, buffer, 0, length, size - length);
-      text = buffer.toString('utf8');
-    } finally {
-      fs.closeSync(fd);
-    }
+    text = readTail(path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl'));
   } catch (err) {
     // No log yet holds no turn-back; one there and unreadable cannot say, and the caller lets the end through.
     return err.code === 'ENOENT' ? false : null;
@@ -331,10 +335,10 @@ function decide(mode, payload, seams) {
   // through by the host's flag alone (another hook may have turned it back) stays a flag of its own.
   // A log it cannot read (null) or write leaves once unheld, so the end goes through, as his answer asks of a record
   // that cannot be read.
-  const prior = mode === '--stop' ? turnedBackBefore(home, base.session, agent) : false;
+  const prior = mode === '--stop' ? turnedBackBefore(home, base.session, agent, seams.readLogTail) : false;
   const afterTurnBack = prior === true;
   const turnBack = mode === '--stop' && !base.secondStop && prior === false;
-  const written = record(home, { ...base, ...facts, decision: 'flagged', mode: MODE, ...(turnBack ? { turnedBack: true } : {}), ...(mode === '--stop' ? { afterTurnBack } : {}) }, stderr);
+  const written = record(home, { ...base, ...facts, decision: 'flagged', mode: MODE, ...(turnBack ? { turnedBack: true } : {}), ...(mode === '--stop' ? { afterTurnBack } : {}) }, stderr, turnBack ? 'the end goes through, since its turn-back could not be recorded and once could not be held' : undefined);
   if (mode === '--stop') return turnBack && written ? { decision: 'block', reason: END_NOTICE } : {};
   return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: NOTICE(act) } };
 }
@@ -572,10 +576,10 @@ function formatReport({ days, acts, unchecked, decisions, noTranscript, unread, 
 /** A usage error of the argv: its message names the token, the usage follows, exit 2. */
 class AdvisorGateArgError extends Error {}
 
-/** `js-harness advisor-gate --hook | --stop | report`. Seams for the tests: `readStdin`, `home`, `cwd`, `now`. */
+/** `js-harness advisor-gate --hook | --stop | report`. Seams for the tests: `readStdin`, `home`, `cwd`, `now`, `readLogTail`. */
 export function advisorGateMain(argv, {
   stdout = (s) => process.stdout.write(s), stderr = console.error, readStdin = () => fs.readFileSync(0, 'utf8'),
-  home, env = process.env, cwd = process.cwd(), now = Date.now(),
+  home, env = process.env, cwd = process.cwd(), now = Date.now(), readLogTail: readTail,
 } = {}) {
   if (argv.length === 1 && (argv[0] === '--help' || argv[0] === '-h')) {
     stdout(`${USAGE}\n`);
@@ -615,7 +619,7 @@ export function advisorGateMain(argv, {
     return 0;
   }
   try {
-    stdout(JSON.stringify(decide(argv[0], payload ?? {}, { home: harnessHome({ given: home, env, cwd }), cwd, now, stderr })));
+    stdout(JSON.stringify(decide(argv[0], payload ?? {}, { home: harnessHome({ given: home, env, cwd }), cwd, now, stderr, readLogTail: readTail })));
   } catch (err) {
     stderr(`js-harness advisor-gate: ${err.message}; the act goes through unchecked`);
     stdout('{}');

@@ -320,6 +320,28 @@ test('a decision log the gate cannot write or read lets the end through: no reco
   assert.deepEqual(stop(), {});
 });
 
+test('a log there but unreadable, though it takes appends, lets the end through; a missing one holds no turn-back', () => {
+  const { home, project } = scratch();
+  const t = path.join(home, 'projects', 'p', 'agent.jsonl');
+  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
+  const payload = { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a9', agent_transcript_path: t };
+  const failing = (code) => ({ readLogTail: () => { throw Object.assign(new Error(code), { code }); } });
+  const unreadable = run(['--stop'], payload, home, failing('EACCES'));
+  assert.deepEqual(unreadable.answer, {});
+  assert.equal(decisions(home).at(-1).turnedBack, undefined, 'no turn-back is recorded where once cannot be held');
+  assert.equal(run(['--stop'], payload, home, failing('ENOENT')).answer?.decision, 'block');
+});
+
+test('a log the gate cannot append to says the end goes through, not that the decision stands', () => {
+  const { home, project } = scratch();
+  const t = path.join(home, 'projects', 'p', 'agent.jsonl');
+  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
+  fs.mkdirSync(path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl'), { recursive: true });
+  const { err } = run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a10', agent_transcript_path: t }, home, { readLogTail: () => '' });
+  assert.match(err, /the end goes through/);
+  assert.doesNotMatch(err, /the decision stands/);
+});
+
 test('a line of the log that is no object is skipped, and the end is still decided and recorded', () => {
   const { home, project } = scratch();
   const t = path.join(home, 'projects', 'p', 'agent.jsonl');
