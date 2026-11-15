@@ -54,7 +54,10 @@ export const USAGE = [
   '  A stretch is the work run while the user is away, or any stretch the lead plans. Its record is',
   '    <home>/.js-harness/throughput/<project>/stretches.jsonl, one line an event, which uninstall keeps.',
   '  open: reads the plan, a JSON object { hours, slots, goals: [{ id, text, command }], items: [{ id, title, kind,',
-  '    hours: [low, high], session?, waitsFor?, closes?: [{ in, step }] }], waits?: [text] }. A goal is met when its',
+  '    hours: [low, high], session?, waitsFor?, closes?: [{ in, step }] }], waits?: [text], forks?: [{ if, then }] }.',
+  '    forks are 2 to 4 cases the lead pre-decides before the user leaves, each with its proposed answer; open prints',
+  '    them, and once the user approves them they are what the lead acts on while away: nothing outside them, no spend',
+  '    and no publishing. A goal is met when its',
   '    command exits 0; on Windows it runs in cmd.exe, so a goal with $( ) is refused. An item is one session\'s work:',
   '    kind is design, build, verify or docs; hours the work left now; session its label (JH 71) once it has one;',
   '    waitsFor what of the user it cannot start without, which keeps it out',
@@ -409,6 +412,10 @@ function departureLines(view) {
     ...forecastLines(view.forecast),
     ...view.items.map((item) => `  ${item.id} ${item.title} (${item.kind}${item.session ? `, ${item.session}` : ''}): ${range(item.hours)}, corrected ${range(item.corrected)}${item.waitsFor ? `, waits for ${item.waitsFor}` : ''}`),
     ...view.goals.list.map((goal) => `  goal ${goal.id} ${goal.text}: ${goal.command}`),
+    ...(view.forks?.length ? [
+      ...view.forks.map((fork, i) => `  fork ${i + 1}: if ${fork.if}, then ${fork.then}`),
+      '  the forks, once the user approves them, are what the lead acts on while they are away: nothing outside these forks, no spend and no publishing',
+    ] : ['  no fork pre-decided: what is the user\'s waits for their return']),
   ];
 }
 
@@ -484,6 +491,7 @@ async function openCommand(ctx, flags, events) {
     ...lanes,
     goals: goalsOf({ open, check: null }),
     waits: read.plan.waits,
+    forks: read.plan.forks,
     map: head === null ? null : momentAt(ctx.run, ctx.root, head).map ?? null,
     forecast: roadmap.unavailable ? { unavailable: roadmap.unavailable } : forecastOf({ items, lanes: lanes.lanes, hours: read.plan.hours, roadmap }),
   };

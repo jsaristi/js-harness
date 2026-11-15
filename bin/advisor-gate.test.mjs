@@ -63,6 +63,13 @@ test('gatedAct names the acts of P1 and nothing else', () => {
   assert.equal(gatedAct('Bash', { command: 'js-harness sessions start --title "JH 1 · x"' }, cwd), 'session');
   assert.equal(gatedAct('Bash', { command: 'js-harness sessions start --help' }, cwd), null);
   assert.equal(gatedAct('Bash', { command: 'js-harness notify --to orchestrator --kind note "a --kind question"' }, cwd), null);
+  // A block is consulted before it is said (odd/tasks/consistent-orders.md, S1): JH 207 sent two unconsulted.
+  assert.equal(gatedAct('Bash', { command: 'js-harness notify --to orchestrator --kind waiting "blocked"' }, cwd), 'waiting');
+  assert.equal(gatedAct('Bash', { command: 'js-harness notify --to orchestrator --kind note "--kind waiting"' }, cwd), null, 'a note that names waiting is none');
+  // The verifier's finding: kindOf read the first --kind, notify keeps the last, and a chain holds two notices.
+  assert.equal(gatedAct('Bash', { command: 'js-harness notify --kind note x && js-harness notify --kind waiting y' }, cwd), 'waiting', 'a chained second notice');
+  assert.equal(gatedAct('Bash', { command: 'js-harness notify --kind note --kind waiting x' }, cwd), 'waiting', 'a repeated --kind, whose last notify keeps');
+  assert.equal(gatedAct('Bash', { command: 'js-harness notify --kind note --kind ready --pr 2 x' }, cwd), 'done');
   assert.equal(gatedAct('Bash', { command: 'js-harness notify --to orchestrator --kind "ready" --pr 3 "done"' }, cwd), 'done');
   assert.equal(gatedAct('Bash', { command: "js-harness notify --kind 'question'" }, cwd), 'question');
   assert.equal(gatedAct('Bash', { command: 'git commit -m "explain js-harness merge-queue --land"' }, cwd), null, 'a commit body that names a land is none');
@@ -136,6 +143,20 @@ test('a queued message of his breaks the stretch as a typed one does', () => {
   writeTranscript(t, [advisorCall(), toolCall(), queued(), toolCall()]);
   run(['--hook'], { tool_name: 'ExitPlanMode', tool_input: {}, cwd: project, session_id: 's', transcript_path: t }, home);
   assert.equal(decisions(home)[0].decision, 'flagged');
+});
+
+test('a compaction breaks the stretch, marked isMeta or not, so a consult before it covers no waiting after it', () => {
+  const { home, project } = scratch();
+  const t = path.join(home, 'projects', 'p', 'w.jsonl');
+  const waiting = bash('js-harness notify --to orchestrator --kind waiting "blocked"');
+  for (const isMeta of [false, true]) {
+    const summary = { type: 'user', isCompactSummary: true, isVisibleInTranscriptOnly: true, ...(isMeta && { isMeta }), message: { role: 'user', content: 'This session is being continued from a previous conversation.' } };
+    writeTranscript(t, [advisorCall(), summary, toolCall()]);
+    const r = run(['--hook'], { ...waiting, cwd: project, session_id: 's', transcript_path: t }, home);
+    assert.equal(r.answer?.hookSpecificOutput?.permissionDecision, 'deny', `isMeta ${isMeta}`);
+    assert.match(r.answer.hookSpecificOutput.permissionDecisionReason, /consult the advisor, then retry it/);
+  }
+  assert.deepEqual(decisions(home).map((d) => d.broken), ['compaction', 'compaction']);
 });
 
 test('a session event breaks the stretch; a task notification does not', () => {
@@ -398,7 +419,7 @@ test('report: reconciles the decisions with the gated acts found in the transcri
   assert.match(out.join(''), /let through unchecked: 1 of 4 decisions \(25%\)/);
 });
 
-test('each of the five acts is refused when uncovered, by a session and by a sub-agent (his yes to 285)', () => {
+test('each gated act is refused when uncovered, by a session and by a sub-agent (his yes to 285)', () => {
   const { home, project } = scratch();
   const acts = [
     ['land', bash('js-harness merge-queue --land 7')],
@@ -406,6 +427,7 @@ test('each of the five acts is refused when uncovered, by a session and by a sub
     ['question', bash('js-harness notify --to orchestrator --kind question "q"')],
     ['done', bash('js-harness notify --to orchestrator --kind ready --pr 1 "r"')],
     ['done', bash('js-harness notify --to orchestrator --kind closed --summary s.md "c"')],
+    ['waiting', bash('js-harness notify --to orchestrator --kind waiting "blocked on S2"')],
     ['session', { tool_name: 'mcp__ccd_session__start_session', tool_input: {} }],
     ['session', bash('js-harness sessions start --title "x"')],
     ['plan', { tool_name: 'ExitPlanMode', tool_input: {} }],

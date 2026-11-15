@@ -30,6 +30,15 @@ test('the departure says the hours, each lane on the hour scale, the goals and w
   assert.match(html, /gasto.*su sí/s);
 });
 
+test('the departure page shows the pre-decided forks and their bound, or says none was pre-decided (question 290)', () => {
+  const forks = [{ if: 'el verificador encuentra un fallo <ya> en main', then: 'aterrizo' }, { if: 'Codex llega al piso', then: 'registro el salto' }];
+  const html = renderDeparture({ ...departure, forks });
+  assert.match(html, /Decidido por adelantado/);
+  assert.match(html, /el verificador encuentra un fallo &lt;ya&gt; en main[\s\S]*aterrizo/);
+  assert.match(html, /nada fuera de estos casos, ni gasto, ni publicar/);
+  assert.match(renderDeparture(departure), /Decidido por adelantado[\s\S]*ningún caso: lo que es tuyo espera tu vuelta/);
+});
+
 // --- the departure made plain (spec 6) ---
 
 test('the departure opens with what will advance: each item that can run, as its title says, its session and hours', () => {
