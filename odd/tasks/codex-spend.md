@@ -1,6 +1,7 @@
-# codex-T2 at d1c152a6 and the chain fix at 74256214 (local, not pushed; gate passed at commit). A verifier (opus,
-background) is on 74256214, judging the matrix and the writer's declared gaps (L23). Next: take its findings, then
-Codex and the lenses on d1c152a6 and on 74256214 as their own slices, push, PR, advisor, ready --pr.
+# codex-T2 at d1c152a6, the chain fix at 74256214 (local, not pushed). Its verifier found a blocker (L24): not to be
+reviewed or pushed. A second writer round (opus, background) fixes V1 and V2 with tests first, plus gap c, V5 and V6, as
+a new commit on top. Then a verifier on that delta (running both big test files), then Codex and the lenses on
+d1c152a6 and on the fix commits as their own slices, push, PR, advisor, ready --pr.
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
@@ -330,3 +331,16 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   The writer's declared gaps, outside the matrix: both turns owe; `--unavailable` on the merge; a 'refused' state
   at the first parent; plain check's debt row base; the second-recheck warning's base; exit codes differ, one turn
   against two. Put to the verifier.
+- L24 2026-11-15T04:40Z, the verifier (opus) on 74256214: the 12 matrix cells pass, but two default-command shapes
+  still lose the debt, the push row ending on pass. V1 blocker: `recheckAt` lists `rev-list --parents
+  --max-count=500` without `--first-parent`, by date, so a merge of a busy main pushes the owing record out of the
+  window (n=600 probes, two turns, one turn and main's own shape; in this repo merge fa8e650 has its first parent at
+  507). `git rev-list --first-parent --parents` still prints both parents of a merge (checked on c472dcb). V2 major:
+  where the merge's own record also owes, `recheckThrough` returns at once and the gap's finding is never rechecked
+  (probe PA). Minor: V3 `--unavailable` drops a debt, as before this commit; V4 plain check's debt row prints a
+  base the guard refuses; V5 the one-turn rerun exits 0 as covered where L21 asks for a refusal; V6 two correction
+  tests assert only pass false. The advisor: no review on 74256214; one more round as a new commit; V2's rule
+  written before code and checked against the push row, which reads only the last covering record; a fix that
+  changes the record shape or the three-review count goes to the lead first. The gate at 74256214 ran no tests
+  locally (gate.yml sends them to CI at push); the writer's own run of every file is what holds them; nothing was
+  pushed (ls-remote empty). V3 and V4 are follow-ups.
