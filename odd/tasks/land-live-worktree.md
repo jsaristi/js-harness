@@ -5,8 +5,17 @@ Delivery: one pull request, landed by the lead · Test runner: `node --test`
 
 ## State
 Done: the reproduction (L2, L3), the tests and the fix (T2, T3 in one commit, L5), the failures and roadmap entries
-(T4), the reviews and the verifier (L7, L8). Next: the pull request and its ready notice; the lead lands it.
-Open: nothing of his.
+(T4), the reviews and the verifier (L7, L8); PR 881 open, turned to draft on the advisor's word. Next, before ready:
+(a) the last sentence of merge-queue's USAGE says --prune "exits 0 unless git cannot fetch or list the worktrees":
+add the listing (doctor.mjs:366 only names the command, no caller relies on its exit); (b) a blocked-guest row in
+`bin/lib/background-close.test.mjs`; (c) FAILURES `land-removed-live-worktree` Proof: replace the `removed` clause by
+a count the incident fails (a session `claude agents` lists in a folder `git worktree list` no longer names);
+(d) one codegraph call on the board's session reading in `bin/lib/sessions.mjs`, result in the Log, named under
+Left if it reads a current cwd; (e) a session summary under `docs/sessions/` as JH 202's (1e67637d); (f) drop the
+"Generated with" line from the PR body if `mergeMessage` (`bin/lib/pull-request.mjs`) copies the body. (a)+(b) are a
+code commit: one Codex and the lenses on it, cost said first. Then `gh pr ready 881`, the gate (advisor alone, one
+call, the notice alone) and `js-harness notify --to orchestrator --kind ready --pr 881`, checked in the project's
+channel record. Open: nothing of his.
 
 ## Goal
 `js-harness merge-queue --land` and `--prune` never run `git worktree remove` on a worktree a session listed by
@@ -147,3 +156,11 @@ other than a listed session, or a session that enters after the listing, can sti
   11,000 input tokens each, and the three earlier findings rechecked as fixed. Left open from the verifier: the
   close's guest check has no test of its own in `bin/lib/background-close.test.mjs` (the shared `standingIn` has
   one), and a half-removed worktree is printed, not recorded.
+- L9: the advisor before the ready: PR 881 turned to draft (a land takes any open PR not a draft,
+  `land-took-pending-pr`); --prune's help still said exit 0 unless git fails, fixed with the close's blocked-guest
+  test in one code commit; the FAILURES Proof's first clause held on the incident's day (`"removed":[]`), replaced by
+  a count the incident fails; `mergeMessage` (`bin/lib/pull-request.mjs:27`) copies no PR body, so its attribution
+  line stays out of commits. The board (`readSessionsWindow`, `bin/sessions.mjs:405`) reads each session's transcript
+  by project folder, and every transcript entry carries its `cwd` (the lead's transcript does): the last entry's cwd
+  is the candidate for "a session whose listed cwd is elsewhere", not built. The whole test file ran on GitHub's
+  Linux only (gate runs 43695331848 green, 43694712942 the size refusal), not on this machine.

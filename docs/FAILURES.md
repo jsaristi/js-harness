@@ -1108,9 +1108,9 @@ the land said the worktree stayed.
   the mechanism was run again in a scratch repository (odd/tasks/land-live-worktree.md, L3)
 - Control: check — bin/merge-queue.test.mjs — "a land never asks git to remove a landed worktree a listed session
   stands in, idle with a live pid; one nobody stands in goes" — since 2026-11-15
-- Proof: no land record after the merge names in `removed` a worktree whose session was at work, and no session
-  reports a worktree a land emptied; `node --test --test-name-pattern="listed session" bin/merge-queue.test.mjs`
-  passes
+- Proof: after the merge, no session `claude agents --json --all` lists has a cwd in a folder that `git worktree list`
+  no longer names (the incident is one: JH 199's cwd in `D:\js-harness-worktrees\codex-spend` after the land), and no
+  land prints "no longer lists it"; `node --test --test-name-pattern="listed session" bin/merge-queue.test.mjs` passes
 
 ### land-took-pending-pr
 `merge-queue --land` took a pull request that was open as ready while a step only he could do, a walk through
