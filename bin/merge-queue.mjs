@@ -714,7 +714,7 @@ function removeLandedWorktrees({ cwd, run, now, log, list, stdout }) {
     stdout('Could not list the worktrees: no worktree of a landed pull request was removed.');
     return;
   }
-  removeUnlived(found, { cwd, gitIn, list, stdout, none: 'no worktree of a landed pull request was removed', what: (tree) => `the worktree of PR ${log.landedBranches.get(tree.branch)}`, done: (tree) => {
+  removeUnlived(found, { cwd, gitIn, list, stdout, unlisted: (why) => stdout(`Could not remove the worktrees: ${why}, so no worktree of a landed pull request was removed.`), what: (tree) => `the worktree of PR ${log.landedBranches.get(tree.branch)}`, done: (tree) => {
     log.record.removed.push({ pr: log.landedBranches.get(tree.branch), path: tree.path });
     stdout(`Removed the worktree of PR ${log.landedBranches.get(tree.branch)} at ${tree.path}: its branch ${tree.branch} is in main, and the worktree was clean and idle. The branch stays.`);
   } });
@@ -739,7 +739,7 @@ function pruneRun(args, { run = spawnSync, now = Date.now, env = process.env, li
     stderr(`merge-queue: could not ${base ? 'list the worktrees' : `read origin/${named.name}`}: none was removed.`);
     return 1;
   }
-  const removed = removeUnlived(found, { cwd: args.cwd, gitIn, list, stdout, none: 'none was removed', what: () => 'the worktree', done: (tree) => {
+  const removed = removeUnlived(found, { cwd: args.cwd, gitIn, list, stdout, unlisted: (why) => stderr(`merge-queue: ${why}: none was removed.`), what: () => 'the worktree', done: (tree) => {
     stdout(`Removed the worktree at ${tree.path}: its branch ${tree.branch} is in origin/${named.name}, and the worktree was clean and idle. The branch stays.`);
   } });
   if (removed === null) return 1;

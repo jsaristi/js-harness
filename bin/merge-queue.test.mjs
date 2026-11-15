@@ -1921,7 +1921,9 @@ test('a land never asks git to remove a landed worktree a listed session stands 
 });
 
 test('a land counts a session at work, or a background job not done, as standing in a worktree; a finished one is not', async () => {
-  const ended = spawnSync(process.execPath, ['-e', '']).pid;
+  // A pid no process has: above Linux's largest (2^22) and Windows's in use; the pid of a child that just ended could
+  // be given again to one of the git processes the land starts.
+  const ended = 2_147_483_644;
   const living = [
     (dir) => listedIn(dir, { status: 'busy', pid: undefined }),
     (dir) => ({ id: 'bbbb2222', name: 'JH 2 · blocked', state: 'blocked', cwd: dir, kind: 'background' }),
@@ -2011,14 +2013,22 @@ test('--prune keeps a worktree a listed session stands in, and removes none when
   const { root } = makeQueueRepo();
   git(root, 'push', '--quiet', 'origin', 'feat/a:main');
   const lived = idle(worktree(root, path.join(path.dirname(root), 'wt-a'), 'feat/a'));
-  for (const listAgents of [() => [listedIn(lived)], () => { throw new Error('made up'); }]) {
+  const cases = [
+    { listAgents: () => [listedIn(lived)], code: 0, last: ['out', '0 worktrees removed.'] },
+    { listAgents: () => { throw new Error('made up'); }, code: 1, last: ['err', 'merge-queue: whether a session stands in the worktrees cannot be told (made up): none was removed.'] },
+  ];
+  for (const { listAgents, code: expected, last } of cases) {
+    // The run before refreshed the index with its git status: put it back past the minutes a removal waits for.
+    idle(lived);
     const { run } = runner([]);
     const { seen, wrap } = removalsSeen();
-    const out = [];
-    const code = await mergeQueueMain(['--prune', '--cwd', root], { run: wrap(run), listAgents, stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
-    assert.equal(seen.includes('wt-a'), false, out.join('\n'));
+    const lines = [];
+    const code = await mergeQueueMain(['--prune', '--cwd', root], { run: wrap(run), listAgents, stdout: (line) => lines.push(['out', line]), stderr: (line) => lines.push(['err', line]) });
+    const said = lines.map(([, line]) => line).join('\n');
+    assert.equal(seen.includes('wt-a'), false, said);
     assert.equal(fs.existsSync(lived), true);
-    assert.equal(code === 0 ? out.at(-1) : 'refused', code === 0 ? '0 worktrees removed.' : 'refused', out.join('\n'));
+    assert.equal(code, expected, said);
+    assert.deepEqual(lines.at(-1), last, said);
   }
 });
 

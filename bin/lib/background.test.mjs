@@ -3,7 +3,26 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { BACKGROUND_SCHEMA, LOCK_WAIT_MS, RM_TRIES, backgroundChanges, backgroundOf, idOfStart, readRecord, recordFileOf, resumedChain, startArgs, undoSession, within, worktreeHolding, worktreeOf } from './background.mjs';
+import { BACKGROUND_SCHEMA, LOCK_WAIT_MS, RM_TRIES, backgroundChanges, backgroundOf, idOfStart, readRecord, recordFileOf, resumedChain, standingIn, startArgs, undoSession, within, worktreeHolding, worktreeOf } from './background.mjs';
+
+// odd/tasks/land-live-worktree.md: the land and the close keep a folder a listed session stands in. Only the states seen
+// live count; a job that ended in any other state, with no live pid, keeps nothing (the verifier, L7).
+test('standingIn finds a listed session in the folder or under it that is at work, blocked or alive by its pid, and no other', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-standing-'));
+  const inside = path.join(dir, 'bin');
+  const alive = (pid) => pid === 7;
+  const found = (agent, options = {}) => standingIn([agent], dir, { alive, ...options }) === agent;
+  assert.equal(found({ cwd: inside, status: 'idle', pid: 7 }), true, 'idle with a live pid, as JH 199 was');
+  assert.equal(found({ cwd: dir, status: 'busy' }), true);
+  assert.equal(found({ cwd: dir, state: 'working' }), true);
+  assert.equal(found({ cwd: dir, state: 'blocked' }), true);
+  for (const state of ['done', 'stopped', 'failed']) assert.equal(found({ cwd: dir, state, pid: 8 }), false, state);
+  assert.equal(found({ cwd: `${dir}-2`, status: 'busy' }), false, 'a sibling folder is not inside');
+  assert.equal(found({ cwd: '', status: 'busy' }), false);
+  assert.equal(found({ cwd: dir, status: 'busy' }, { except: () => true }), false, 'the caller\'s own job');
+  assert.equal(standingIn([null, { status: 'busy' }], dir, { alive }), undefined, 'a row with no cwd is no one');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
 
 test('idOfStart reads the id claude --bg prints, and the attach hint when the first line is missing', () => {
   assert.equal(idOfStart('backgrounded · 0db8bc5e · jh-bg-probe-1\n  claude agents             list sessions\n'), '0db8bc5e');

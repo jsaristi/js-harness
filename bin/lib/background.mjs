@@ -478,13 +478,14 @@ const liveChain = (record, entry) => resumedChain(record.started ?? [], entry).f
 export const atWork = (agent) => agent?.status === 'busy' || agent?.status === 'waiting' || agent?.state === 'working';
 
 /** The agent of claude's listing `agents` that stands in the folder `dir` and lives, or `undefined`: its cwd is `dir`
- * or inside it, and it is at work, its pid is alive, or it is a job that is not done (a `blocked` one waits on
- * something). On 2026-11-14 a land emptied the worktree of JH 199, listed there idle with a live pid
- * (odd/tasks/land-live-worktree.md). `except(agent)` leaves out the caller's own jobs. A session whose listed cwd is
- * elsewhere is not seen: the listing says where it started, not where its shell stands now. */
+ * or inside it, and it is at work, its pid is alive, or it is a `blocked` job, which waits on something. Only the
+ * states seen live count (`working`, `blocked`, on 2026-11-15): a job that ended in another state would otherwise keep
+ * a folder for ever (the verifier, odd/tasks/land-live-worktree.md, L7). On 2026-11-14 a land emptied the worktree of
+ * JH 199, listed there idle with a live pid. `except(agent)` leaves out the caller's own jobs. A session whose listed
+ * cwd is elsewhere is not seen: the listing says where it started, not where its shell stands now. */
 export function standingIn(agents, dir, { alive = exists, except = () => false } = {}) {
   return agents.find((agent) => !except(agent) && typeof agent?.cwd === 'string' && agent.cwd !== '' && within(agent.cwd, dir)
-    && (atWork(agent) || (Number.isInteger(agent.pid) && alive(agent.pid)) || (typeof agent.state === 'string' && agent.state !== 'done')));
+    && (atWork(agent) || agent.state === 'blocked' || (Number.isInteger(agent.pid) && alive(agent.pid))));
 }
 
 /** The machine uninstall's part (S3): every recorded session undone as `sessions stop` does, except one at work or one

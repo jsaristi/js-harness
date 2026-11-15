@@ -126,6 +126,17 @@ other than a listed session, or a session that enters after the listing, can sti
   said "it stays"; `--prune` removed `wt-a`). The pre-commit hook refused that red commit (GitHub run 43694025769),
   so the tests went in with the fix. Green after it: the same five and every other worktree, prune and close test
   of the file (17), and `bin/lib/background-close.test.mjs` with `bin/lib/background.test.mjs` (47).
-- L6: a decision of this session: a job of the listing whose `state` is anything but `done` (a `blocked` one) counts
-  as standing in its folder, for the land and for the close's guest check alike: keeping a worktree is the safe
-  side, and the close only keeps more.
+- L6: a decision of this session: a `blocked` job of the listing counts as standing in its folder, for the land and
+  for the close's guest check alike: keeping a worktree is the safe side, and the close only keeps more. First
+  written as "any state but `done`", narrowed at L7.
+- L7: reviews of a5ff8fd..930410c (code commit eaab9805). Codex: "the patch is correct", confidence 0.88, no finding;
+  113,291 input tokens (76,416 cached) in 53 s. Lenses risk, resilience, reliability, readability (`--doc`): 0, 0, 1
+  and 2 findings, about 15,800 input tokens each: a test used the pid of a child that just ended as a dead one, which
+  Windows may give again (now a pid above any in use, ESRCH checked); the `--prune` test could not fail on its exit
+  (now exact: 0 and `0 worktrees removed.`, 1 and the refusal on stderr; it also had to put the index back to idle
+  between its two runs); `--prune` told a failed listing on stdout (now stderr, `merge-queue:` as its other
+  refusals). The verifier (opus, 607 s, 86,085 tokens): no blocker; should-fix, a job listed `stopped` or `failed`
+  would keep a folder and block the close for ever, so only `working` and `blocked` count now; nits: no test of the
+  shared reading for the close (now `standingIn`'s own test in `bin/lib/background.test.mjs`), the `--prune` exit
+  and stream (above), and a removal git fails part-way is printed but not recorded in the land's record (left: no
+  spec asks for it; the line says what git left).

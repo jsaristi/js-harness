@@ -159,15 +159,15 @@ export function worktreesInMain({ cwd, run = spawnSync, now = Date.now }) {
  * odd/tasks/land-live-worktree.md), so it is not left to git's refusal. A listing that cannot be read removes none, a
  * failed listing never being "none"; it is read once, so a session that enters after it is not seen. A removal that
  * fails is told by what git still lists, not as a worktree that stays. `what(tree)` names the worktree in a line, and
- * `none` says what was not done when the listing fails. Returns how many were removed, or null when the listing could
- * not be read. */
-export function removeUnlived(found, { cwd, gitIn, list, stdout, none, what, done }) {
+ * `unlisted(why)` tells, as its caller tells a refusal, that the listing failed and nothing was removed. Returns how
+ * many were removed, or null when the listing could not be read. */
+export function removeUnlived(found, { cwd, gitIn, list, stdout, unlisted, what, done }) {
   if (found.length === 0) return 0;
   let agents;
   try {
     agents = list();
   } catch (err) {
-    stdout(`Could not tell whether a session stands in the worktrees (${err.message}): ${none}.`);
+    unlisted(`whether a session stands in the worktrees cannot be told (${err.message})`);
     return null;
   }
   let removed = 0;
