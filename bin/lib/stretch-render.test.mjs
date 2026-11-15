@@ -283,7 +283,7 @@ test('the departure\'s plan block says what the plan is, its steps by state and 
   assert.match(block, /sección de la hoja de ruta[\s\S]*1 de 4 pasos hechos \(25 %\)/);
   assert.match(block, /fase «F8 Harness reorganization»[\s\S]*3 de 7 filas \(43 %\)/);
   assert.match(block, /Hechos \(1\)[\s\S]*S0 Baseline[\s\S]*En curso \(1\)[\s\S]*Por hacer \(2\)[\s\S]*S6 The read surface · S8 Certification/);
-  assert.match(block, /Este tramo cierra[\s\S]*S8 Certification[\s\S]*cierra si va como se estimó/);
+  assert.match(block, /Pasos que nombra este tramo: S8 Certification \(cierra si va como se estimó\)/);
   assert.match(block, /~50 %/, 'a plan that moves keeps its tiles');
 });
 
@@ -301,7 +301,12 @@ test('a plan the stretch does not touch says so in one line, with no tiles of th
 
 test('the departure marks where it is listed the step the stretch closes, and says closing a step marks no phase row', () => {
   const block = planBlock(renderDeparture({ ...departure, map: MAP, forecast: PLAN_FORECAST }));
-  assert.match(block, /Por hacer \(2\)[\s\S]*S8 Certification <em>\(este tramo lo cierra\)<\/em>/);
+  assert.match(block, /Por hacer \(2\)[\s\S]*S8 Certification <em>\(este tramo: cierra si va como se estimó\)<\/em>/);
+  // Codex, P2: the mark keeps the row's when, so a step that ends after the return is not promised in the stretch.
+  const late = { ...PLAN_FORECAST, rows: [{ ...PLAN_FORECAST.rows[0], when: 'beyond' }] };
+  const lateBlock = planBlock(renderDeparture({ ...departure, map: MAP, forecast: late }));
+  assert.match(lateBlock, /S8 Certification <em>\(este tramo: después de tu vuelta\)<\/em>/);
+  assert.doesNotMatch(lateBlock, /lo cierra|Este tramo cierra/);
   assert.match(block, /cerrar un paso no marca por sí solo una fila de la fase/);
   assert.doesNotMatch(block, /S6 The read surface <em>/);
 });
@@ -317,6 +322,10 @@ test('the return\'s plan block names the steps whose state moved in the stretch,
   const same = { ...now, plans: [{ name: 'F8 plan', done: 1, total: 4, steps: STEPS }] };
   const quiet = planBlock(renderReturn({ ...view, state: 'closed', moments: { ...moments, forecast: { ...PLAN_FORECAST, now: same } } }));
   assert.match(quiet, /Ningún paso cambió de estado en el tramo/);
+  // The reliability lens: a plan the roadmap of now no longer holds says so, with no tiles of the opening's numbers.
+  const gone = planBlock(renderReturn({ ...view, state: 'closed', moments: { ...moments, forecast: { ...PLAN_FORECAST, named: 0, rows: [], plans: [{ ...PLAN_FORECAST.plans[0], forecast: 1, high: 1 }], now: { ...now, plans: [] } } } }));
+  assert.match(gone, /ya no está en la hoja de ruta de ahora/);
+  assert.doesNotMatch(gone, /al volver|ahora: 1 de 4/);
 });
 
 test('the return says the forecast in the past, drops "0 de 0", and leaves out a step-by-step section with no step changed', () => {

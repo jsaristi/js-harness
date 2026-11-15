@@ -141,7 +141,8 @@ function phaseOf(name, phases) {
 function movedSentence(plan, now, rows) {
   const titleOf = (id) => escapeHtml(plan.steps?.find((one) => one.id === id)?.title ?? id);
   const closing = rows.map((row) => `${titleOf(row.text)} (${WHEN_WORDS[row.when] ?? escapeHtml(row.when)}${now ? `; ahora: ${NOW_WORDS[row.now] ?? '—'}` : ''})`).join('; ');
-  if (!now) return `<p>${rows.length ? `Este tramo cierra ${rows.length === 1 ? '1 paso' : `${rows.length} pasos`}: ${closing}.` : 'Ningún trabajo de este tramo dice que cierre un paso de este plan, así que el pronóstico no lo mueve.'}</p>`;
+  // Each named step keeps its own when: one may end after the return or wait for him, so none is promised here.
+  if (!now) return `<p>${rows.length ? `Pasos que nombra este tramo: ${closing}.` : 'Ningún trabajo de este tramo dice que cierre un paso de este plan, así que el pronóstico deja el plan como está.'}</p>`;
   const forecastLine = rows.length ? ` El tramo pronosticaba cerrar: ${closing}.` : '';
   if (!plan.steps || !now.steps) return forecastLine ? `<p>${forecastLine.trim()}</p>` : '';
   const before = new Map(plan.steps.map((one) => [one.id, one]));
@@ -163,8 +164,12 @@ function movedSentence(plan, now, rows) {
  * (three equal numbers say nothing), and its steps by state, now once measured. */
 function planBlock(plan, { forecast, measured }) {
   const now = measured?.plans.find((one) => one.name === plan.name) ?? null;
+  // Measured, a plan the roadmap of now no longer holds (renamed or removed) has no now: it says so, and shows no
+  // tiles, whose captions would read the opening's numbers as now's.
+  const gone = measured !== null && now === null;
   const same = now && now.done === plan.done && now.total === plan.total;
-  const count = !now ? `Va en ${countText(plan, 'pasos hechos')}.`
+  const count = gone ? `Al abrir iba en ${countText(plan, 'pasos hechos')}; ya no está en la hoja de ruta de ahora.`
+    : !now ? `Va en ${countText(plan, 'pasos hechos')}.`
     : same ? `Va en ${countText(now, 'pasos hechos')}, igual que al abrir.`
       : `Al abrir iba en ${countText(plan, 'pasos hechos')}; ahora va en ${countText(now, 'pasos hechos')}.`;
   const phase = phaseOf(plan.name, forecast.phases);
@@ -174,14 +179,15 @@ function planBlock(plan, { forecast, measured }) {
     ? `<p>La fase, en el mapa, cuenta otra cosa: sus propias filas, ${countText(phaseNow, 'filas')}. Una fila de la fase puede abarcar varios pasos de este plan, así que los dos porcentajes no coinciden, y cerrar un paso no marca por sí solo una fila de la fase: la hoja de ruta la marca aparte.</p>`
     : '';
   const rows = forecast.rows.filter((row) => row.plan && row.in === plan.name).map((row) => ({ ...row, now: measured?.rows.find((one) => one.plan && one.in === row.in && one.text === row.text)?.now }));
-  const moves = movesOf(plan, measured ? now ?? 'gone' : null);
+  const moves = !gone && movesOf(plan, now);
   const steps = now?.steps ?? plan.steps;
-  // On the departure, a step the stretch closes is marked where it is listed, so "por hacer" is not read as untouched.
-  const marks = new Map(now ? [] : rows.map((row) => [row.text, 'este tramo lo cierra']));
+  // On the departure, a step the stretch names is marked where it is listed with its own when, so "por hacer" is not
+  // read as untouched and a step that ends after the return is not promised.
+  const marks = new Map(measured ? [] : rows.map((row) => [row.text, `este tramo: ${WHEN_WORDS[row.when] ?? row.when}`]));
   return `<p><strong>${escapeHtml(plan.name)}</strong></p>
 <p>Qué es: ${what}. Cada paso lleva su estado escrito a mano y el plan se cuenta por pasos. ${count}</p>${versus}
-${movedSentence(plan, now, rows)}${moves ? countTiles('pasos', plan, now) : ''}
-${steps ? `<p>Sus pasos${now ? ' ahora' : ''}:</p>${stepsByState(steps, marks)}` : ''}`;
+${gone ? '' : movedSentence(plan, now, rows)}${moves ? countTiles('pasos', plan, now) : ''}
+${steps ? `<p>Sus pasos${now ? ' ahora' : gone ? ' al abrir' : ''}:</p>${stepsByState(steps, marks)}` : ''}`;
 }
 
 /** How far the stretch moves the roadmap (`forecastOf`, with `now` from `forecastNow` once `status` measured it): each
