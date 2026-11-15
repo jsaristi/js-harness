@@ -1,6 +1,6 @@
-# codex-T2 at d1c152a6, the chain fix at 74256214 and 457bb1c9 (local, not pushed). A second verifier pass (opus,
-background) is on 457bb1c9; the lead lands only after a clean one (L25). Then Codex and the lenses on d1c152a6 and on
-the fix commits as their own slices, push, PR (its body answers B1-1 and B1-2, L25), advisor, ready --pr.
+# codex-T2 at d1c152a6, the chain fix at 74256214 and 457bb1c9 (local, not pushed). The second verifier pass found a
+major, W1 (L26): not clean. A third writer round (opus, background) fixes W1, W3, W5 and W6 as a new commit; then a
+third verifier pass on that delta, then Codex and the lenses, push, PR, advisor, ready --pr.
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
@@ -357,3 +357,21 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   covered) is coverage by marks in `reviewCoverage`, a mechanism the rule does not touch; B1-2 (an `--unavailable`
   skip over a later code commit erases an owed correction) is V3 of L24, there before this work: `correctionOwed`
   reads only reviewed records, so a skip covering the newest code commit hides the debt. Neither is fixed in T2.
+- L26 2026-11-15T08:00Z, the second verifier pass (opus) on 457bb1c9: V1, V2, gap c, V5 and V6 closed by probe; the five
+  test files pass on its own run (26, 26, 112, 211, 164). Not clean: W1 major, where the merge's own record owes a first
+  recheck over a gap at its second recheck, or with three reviews spent, `recheckThrough` refuses the run
+  (codex-review-recheck.mjs:251-252), and the refusal prints `--base <far back> --again`, a plain review whose
+  record clears the merge's finding unrechecked and reads main's diff (probes N1, N2, Z1); on 74256214 that merge got
+  its first recheck, so this is a regression. Minor: W2 `--again --base <gap>` rechecks the gap's finding alone
+  (an override, V3's class, older); W3 a fourth review is reachable, since `recheckOrAgain` checks
+  `againPastThreeReviews` only on a plain review; W4 an octopus merge of main loses the debt (documented stop,
+  older); W5 one extra first-parent rev-list on the push row with uncovered plain commits and a run log, unpinned;
+  W6 the V5 refusal names the docs commit above the merge as the merge; W7 older merge-recheck records read as
+  covering the debt below. The anchor scan of the real records: 143 of 2,060 range starts moved anchor, none changed
+  the recheck state. Taken (advisor): W1 shape (3), three reviews spent below: the merge's own recheck runs alone, as on
+  74256214. W1 shape (2), the debt below at its second recheck: join only if the next run can tell from the records
+  that the debt below had its three after a joined recheck that still owes (a cap, test first); if not, the writer
+  stops there and the lead is asked, with an uncapped join as the default and its cost. Merge-alone is V2 again and
+  refusing is W1, so neither stays. Every refusal test runs the command the refusal prints. W3 only as the
+  one-condition change with a failing test; W5 and W6 taken. W2, W4 and W7 are follow-ups. A third pass that finds
+  another major goes to the lead as a problem, not a fourth round.
