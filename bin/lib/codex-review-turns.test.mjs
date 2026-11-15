@@ -8,7 +8,7 @@ import { reviewCoverage } from './codex-review-coverage.mjs';
 import { leftOutSaid } from './codex-review-scope.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './codex-reviews.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, readCodexReviewRuns } from './codex-review-runs.mjs';
-import { addTurnWorktree, gapBelowMerge, inTurnWorktree, mergeTurn,PART_AS_CHANGED_LINES, plansAsOne, recheckAt, removeTurnWorktree, snapshotOfHead, sweepTurnWorktrees, TURN_WORKTREE_MAX_AGE_MS, turnsCheaper } from './codex-review-turns.mjs';
+import { addTurnWorktree, afterTurn, gapBelowMerge, inTurnWorktree, mergeTurn,PART_AS_CHANGED_LINES, plansAsOne, recheckAt, removeTurnWorktree, snapshotOfHead, sweepTurnWorktrees, TURN_WORKTREE_MAX_AGE_MS, turnsCheaper } from './codex-review-turns.mjs';
 
 // Real git in every test, isolated from the host's config: where a review of a range holding a merge of
 // the default branch below HEAD is cut into turns (odd/tasks/merge-below-head.md, S1).
@@ -223,6 +223,17 @@ test('gap below a merge: a merge at HEAD that writes no line needs no turn, and 
   // One that merges a commit the default branch does not hold is no merge of main: the range is taken as today.
   git(root, 'update-ref', 'refs/remotes/origin/main', first);
   assert.equal(gapOf(root, side, merge), null);
+});
+
+test('gap below a merge: after the turn of the gap, its valid record of nothing to review goes on to the merge with no run line; a review with none, or a record of nothing to review with no reason, is still refused', () => {
+  const { root, first, c1, merge } = branchWithMerge();
+  const turns = { gap: true, from: first, at: c1, head: merge, ranges: [{}, {}] };
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base: first, head: c1, reviewedAt: '2026-10-16T00:00:00.000Z', outcome: 'nothing-to-review', reason: 'the range changes no file' });
+  assert.deepEqual(afterTurn(root, turns), { stopped: false });
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base: first, head: c1, reviewedAt: '2026-10-16T00:00:00.000Z', outcome: 'nothing-to-review' });
+  assert.match(afterTurn(root, turns).refused ?? '', /is not in the run log/);
+  record(root, first, c1, { run: 'r1' });
+  assert.match(afterTurn(root, turns).refused ?? '', /is not in the run log/);
 });
 
 test('gap below a merge: no gap where HEAD is no merge, covered or not, where nothing is uncovered below HEAD, or where its merge is not read by what was written in it', () => {

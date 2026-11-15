@@ -214,6 +214,9 @@ export function recheckState({ from, records, runs, holds = () => null }) {
  * `recheckOf` is a merge's own record and below which the walk joins a second recheck still due (nothing names that
  * debt's head since), the range is refused as past three reviews, with what that recheck left open and `merge`, the
  * merge, which `secondRecheckRefused` names. That refuses the merge's own findings at their second review as well.
+ * The cap holds below a later merge whose own record owes too (codex-spend L28, X1): a state below it that the cap
+ * refuses is spent as a refused one is, and that merge's recheck is of its own findings alone. Joined, a second merge
+ * of main above the third review bought a fourth, and a third merge a fifth.
  *
  * `rows` are the commits behind `from` as `git rev-list --first-parent --parents` gives them, `from` first, each
  * `[id, ...parents]`; `records`, `runs` and `holds` as `recheckState` takes them. The line is walked in `rows` alone,
@@ -259,8 +262,9 @@ export function recheckThrough({ from, rows, records, runs, holds = () => null, 
             continue;
           }
           if (owed === null) return capped(state, at) ?? { ...state, at, merge: newest };
-          // Three reviews spent below, or a recheck there refused: the merge's own recheck runs alone (W1).
-          return state.kind === 'refused' ? owed : join(state);
+          // Three reviews spent below, or a recheck there refused, by its own state or by the cap: the merge's own
+          // recheck runs alone (W1, X1).
+          return state.kind === 'refused' || capped(state, at) !== null ? owed : join(state);
         }
         if (parents.length !== 2 || rec.diff !== 'remerge' || rec.base !== parents[0]) return owed;
       } else if (parents.length !== 2) {
