@@ -107,7 +107,7 @@ Nothing: the brief settles the direction and the default for the check.
 - [x] T1 (kind: docs) this document (spec 1, 2, 3; inline; its own commit)
 - [x] T2 (kind: docs) amend `rule:rules-live-in-the-harness` through `rules change` (spec 1; inline; its own commit)
 - [x] T3 (kind: docs) the four follow-ups in the roadmap's Later list (spec 2; inline; its own commit)
-- [ ] T4 (kind: verify) the reviews, the pull request and the ready notice
+- [x] T4 (kind: verify) the reviews, the pull request and the ready notice
 
 ## Log
 - L1: his request, as the brief relays it from the orchestrator's transcript `69918425-3b43-430f-9f50-62b6422422ce`,
@@ -120,3 +120,7 @@ Nothing: the brief settles the direction and the default for the check.
 - L3: overlaps searched before T3: `stop-removed-live-worktree` in `docs/FAILURES.md` is `sessions stop`, not a land,
   so the land's removal is a new sighting still to write; `odd/tasks/advisor-use.md` builds the advisor gate's
   report, not the same-response blind spot.
+- L4: reviews of 9d4546a7..01bcbaad. Claude lenses readability and reliability (`lens-review --doc`): 0 findings each,
+  9,062 and 9,060 input tokens. Codex over 4c41917..01bcbaa, the one code commit (fcdc884a): "the patch is correct",
+  confidence 0.94, no finding; 61,803 input tokens (42,240 cached) in 34 s. Nothing to fix; this docs commit gets no
+  rerun.
