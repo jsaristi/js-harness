@@ -179,7 +179,7 @@ itself is not limited to an absence: the skill text names it for any stretch.
 - [x] T6 (kind: build) the rule change, on `rule/away-autonomy-stretch`, in 865ec2e7 (PR 634, stacked on PR 633). Spec 1, 3. Route: inline.
 - [ ] T7 (kind: verify) a real stretch opened, checked and closed on this machine; reviews (Codex and the Claude lenses) on each slice. Route: inline.
 - [x] T8 (kind: build) the departure, status and return pages made plain (spec 6), on `feat/stretch-departure-clear` from main a20aa337, JH 196. Route: inline. Commits 7550f4ad, 2c29560c (L9).
-- [x] T9 (kind: build) the plan block made readable (spec 7), on `feat/stretch-plan-block` from main 0c6c245f, JH 201, test first: the roadmap reader counts a step whose state is dated (`**State (2026-11-11):**`); a phase's left item numbered "2." is summarised by its first sentence, not "2."; the forecast section says what a plan is, its steps grouped by state, and which moved; the step-by-step section shows the steps that changed and groups the rest. Route: inline. Commits 4222ff27, 0c35bded, a6906471 (L11).
+- [x] T9 (kind: build) the plan block made readable (spec 7), on `feat/stretch-plan-block` from main 0c6c245f, JH 201, test first: the roadmap reader counts a step whose state is dated (`**State (2026-11-11):**`); a phase's left item numbered "2." is summarised by its first sentence, not "2."; the forecast section says what a plan is, its steps grouped by state, and which moved; the step-by-step section shows the steps that changed and groups the rest. Route: inline. Commits 4222ff27, 0c35bded, a6906471, 9348f419, 728daf57, 066e3895 (L11 to L15).
 
 ## Log
 - L1. 2026-10-28, the lead's brief for JH 71: his decision in question 103 ("Próximo cupo", line 8326), his words
@@ -324,13 +324,16 @@ itself is not limited to an absence: the skill text names it for any stretch.
   ran no `stretch bind` and no merge-queue command; a grep of `bin/` for a PR's bound state found none to check. (4) The
   cold-read pages of L12 were rendered from a6906471; two departure lines were reworded after. The orchestrator relayed
   spec 8 (his words, line 10936); it is its own slice after this PR.
+- L15. 2026-11-14, JH 201. Last round over 066e3895: Codex correct (0.96), the lenses 0 findings. The real return and the
+  real departure rendered from HEAD (scratch homes; the departure's copy cut before the stretch the lead opened at
+  01:23Z) read right: the plan block, and the F8 row's "5. Final certification (S8): ...…" summary. Not verified: what
+  binds a PR (grep of bin/merge-queue.test.mjs shows heads bound to commands, not PRs); this session bound nothing.
+  Left open: on a return naming a step, the rows table says "abierta" where the block says "sin hacer".
 
 ## Next step
 NOW (2026-11-14, JH 201, worktree `D:\js-harness\.claude\worktrees\f8-plan-block`, branch `feat/stretch-plan-block`):
-UPDATE (L14): items 1, 2 and 4 below are done in commit 066e3895 and the docs commit after it; left: Codex and the
-lenses over the last fix commit (no edits while they run), push, re-render the real pages from HEAD and read the
-block, `gh pr edit 879` (drop the progress claim), `gh pr checks 879`, the advisor gate, notify ready naming spec 8
-(an optional `doc` plan field) as the next slice. Then spec 8 (T10) on a new branch from main once 879 lands.
+NOW (L15): PR 879 reviewed whole and pushed; left: the advisor gate and `notify --kind ready --pr 879`; then spec 8
+(T10) on a new branch from main once 879 lands, an optional `doc` field per plan item.
 T9 built and reviewed (L10 to L13), pushed, PR 879 open. The advisor's last consult left, in order: (1) the claim
 that `progress` under-counted is unproven (progress does not read `planOf`): fix the PR body (`gh pr edit 879`) and
 the FAILURES entry plan-state-dated-dropped; (2) the return/status line "El tramo pronosticaba cerrar: S8 (después
