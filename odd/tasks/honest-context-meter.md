@@ -5,9 +5,21 @@ Design only, stopped by the brief: the cause is found and reproduced, the fix is
 main with the real shape (163131 counted, 82430 sent) and leave the gate green. Next: the lead and the owner read
 this design (question 292: no block builds before its design returns to him); then T2 builds it and drops the todos.
 Open: the one non-advisor reply with several passes, and 8 replies whose passes do not sum to the top (Depth pass 4).
-Resume (JH 209, branch feat/honest-context-meter, worktree D:\js-harness\.claude\worktrees\owner-rules-meter): the
-test commit 366481f has Codex (0.98) and reliability-lens (0 findings) records; push, PR, Spanish page, then the
-owner's rule changes (his typed line 18679 of lead transcript 69918425: cap 6, retire growth-limit).
+Closed by JH 209 for the restart (2026-11-15). PR 889 (draft) holds this design; its page for him:
+https://claude.ai/artifact/JvVbfErrhTMFqF5148onZT (a yes builds T2). The code commit 366481f has Codex (0.98) and
+reliability-lens (0 findings) records; the later commits are docs only.
+Next, outside this feature, for the session that takes them:
+- The cap, his typed line 18679 of lead transcript 69918425 ("El tope de sesiones de trabajo a la vez es 6."), the lead's go
+  (2026-11-15 15:16): `work-sessions-public` 12 -> 6, subject kept ("the most work sessions open at one time in a
+  public repository"). It waits until `rule/away-autonomy` (JH 208) lands, since `rules change` holds one open
+  change. On a `rule/` branch off origin/main, `js-harness rules change work-sessions-public --dry-run` with the
+  JSON below on stdin, then the real run, gate, Codex, lenses, ready with the subject and the dry-run line. The
+  manifest names the rule by mark only (no restated 12).
+  `{"value":6,"source":{"kind":"words","quotes":[{"session":"69918425-3b43-430f-9f50-62b6422422ce","line":18679,"excerpt":"El tope de sesiones de trabajo a la vez es 6."}],"reading":"The most work sessions open at one time in a public repository is 6, down from 12. His sentence names no scope; js-harness is public, so this is the one rule in force that speaks of it, and one value is what block 4's check will read. It replaces his cap of two that lived only in the lead's relief file (question 262, relief line 2525), and the 3 he tapped in question 296 (lead transcript 69918425, line 17500), which a tap cannot write. Left as they are: work-sessions-private-wsl at 6, and the Windows-only private cap retired on 2026-10-30. Whether other public repositories drop to 6 too, and whether a Windows-only private repository gets a cap again, are his, and travel with block 4's design; this reading is the session's and his to correct.","accepted":"Typed by him in the lead's session (line 18679, 2026-11-15T19:50Z) after the lead asked for his own words, since question 296 was a tap (lead transcript line 18632). Which rule carries his sentence was not put to him: that reading is the session's, and his to correct when he reads the pull request."}}`
+- PR 888 (draft, six Later lines): rebase on main (PR 890 landed), move settled ROADMAP entries whole to
+  `docs/roadmap-history.md`, fix PR 890's prose (Decided row "First version's scope" names no scope now, ask the
+  lead; "Later." says "before it" with nothing before; `odd/tasks/replan-execute.md:130` quoted real output and
+  was reworded), then a ready notice.
 
 ## Goal
 The share of the context window the harness reads from a transcript is what the model was given for the last reply,
