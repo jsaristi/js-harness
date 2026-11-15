@@ -1,13 +1,9 @@
 # consistent-orders — orders that hold over a long run (JH 208)
 
 ## State
-Depth pass done and corrected (item 4 replayed over all 62 lead ends; S3 folded into S1). Sent to the lead with a
-`waiting` notice; no source until it answers (the brief's STOP). With S4 left out, this plan builds nothing for
-sub-agents: no sub-agent has ever sent `waiting` (0 of 973), and line 15682 names them, so that is the lead's first
-decision. The plan's double review (one Claude read, one Codex read) runs once the lead's answer fixes the plan, so a
-plan that changes is not read twice. Open for the lead: the
-slice order, S4's sub-agent refusal (it changes what his yes to question 282 left apart), and whether the gentle-ai
-block question goes to him. Next, on the lead's answer: S1 tests first.
+The lead ruled (L7): S1 and S5 go, S2 waits to be replanned on the stall signal, S4 is his later, no per-turn
+block. Next: the plan's double review (cost said to the lead), then S1 tests first, then S5, then S2's plan on
+`readStalled`.
 
 ## Goal
 An order the harness gives a session, a work session or a sub-agent (first: consult the advisor when blocked) is held
@@ -191,3 +187,8 @@ brief was skipped at least once with nothing to say so.
 - L4 (2026-11-15, line 16074, 15:54:55Z) his answer to question 290: "Sí, por adelantado (Recomendada)", to "al abrir un tramo, el plan lleva 2 a 4 casos con mi respuesta propuesta (por ejemplo: 'si el verificador encuentra un fallo que ya está en main, aterrizo'); los apruebas o corriges de una vez y durante tu ausencia actúo según ellos. Es un cambio de protocolo; no autoriza nada fuera de esos casos, ni gasto, ni publicar." The lead's note of 10:55 local puts it in this feature: inside `stretch open`'s plan, no new command, cemented as a rule.
 - L5 his earlier words on gentle-ai, transcript 0f71b2c6: line 14832 (2026-10-29T02:51Z) "hay que hacer plantillas de todo y estandarizar todo ... osea como lo hace gentle-ai que funciona tambien en todo"; line 14968 (02:55Z) "el arnes lo que hace es que genera consistencia ... podemos hacerlo para que funcione SI o SI como debe"; line 62099 (2026-11-04T02:06Z) "Recuerda que no es copiarla lo de gentle-ai, para eso se hizo una revision completa y profunda de como ibamos a cuadrar y a utilizar el arnes completo". Read together with L2: copy the form (checks at the act), not the doctrine; whether to bring back a per-turn block is his.
 - L6 (2026-11-15) depth pass written; verdict supports; sent to the lead, no source before its answer.
+- L7 (2026-11-15 11:15 local, the lead's note) S1 and S5 go. S2 not yet: its predicate misses 13:08Z; plan it on the
+  stall signal (odd/tasks/stalled-sessions.md, `readStalled` in bin/lib/stall.mjs:200) if that is the signal to
+  amend. Compaction: reuse `breakOf` (bin/advisor-gate.mjs:107-117), which fails safe. No per-turn block (his line
+  62099). S4 is his question later. The plan's double review costs about 1.1M Claude and 0.9M Codex tokens, about 1%
+  of Codex's weekly limit (weekly at 76% now), said to the lead before it runs.
