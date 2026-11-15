@@ -10,6 +10,7 @@ import {
   childEnv, CODEX_WEEKLY_FLOOR, codexArgs, codexReviewMain, EXCUSED_LINE, mergeReviewSaid, OWN_OUT_OF_TURN, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, REVIEW_TIMEOUT_MS, turnSaid, turnStopped,
   reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
+import { afterTurn } from './lib/codex-review-turns.mjs';
 import { NO_TEST_EXIT, NO_TEST_LINE, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
 import { ESCALATION_MODEL } from './lib/codex-review-recheck.mjs';
 import { commandStep } from './lib/next-step.mjs';
@@ -4455,6 +4456,59 @@ test('gap below a merge: a gap whose change is reverted inside it is recorded as
   assert.deepEqual([result.code, fake.calls.length], [0, 1], result.err);
   assert.deepEqual(readCodexReviews(repo.root).slice(-2).map((record) => [record.base, record.head, record.outcome, record.diff]), [[repo.mine, repo.gap, 'nothing-to-review', undefined], [repo.gap, repo.head, 'reviewed', 'remerge']]);
   assert.equal(checkCodexReviews(repo.root).pass, true);
+});
+
+/** The run line that makes the review of `repo.mine` (`mergeAboveGap` records it with `RUN_ID`) owe a correction. */
+const mineOwesRun = (repo) => reviewRuns.appendCodexReviewRun(repo.root, { schema: reviewRuns.CODEX_REVIEW_RUN_SCHEMA, id: RUN_ID, outcome: 'reviewed', answer: { findings: [found('m.txt', 1, 1, { title: '[P1] Mine drops a line' })], verdict: 'incorrect' } }, { where: whereOf(repo.root) });
+
+test('Y1, one turn (C1e): a gap whose change is reverted inside it, over a review that owes a correction, below a merge that writes nothing: the run records the gap, exits 1 saying the correction is still owed, and the push row refuses', async () => {
+  const repo = mergeAboveGap({ reverted: true, written: false });
+  mineOwesRun(repo);
+  const fake = fakeCodexInParts();
+  const result = await run(['--base', repo.main, '--cwd', repo.root], { ...fake, randomUUID: runIds() });
+  assert.deepEqual([result.code, fake.calls.length], [1, 0], result.out);
+  assert.deepEqual(readCodexReviews(repo.root).slice(-1).map((record) => [record.base, record.head, record.outcome]), [[repo.mine, repo.gap, 'nothing-to-review']]);
+  assert.match(result.err, new RegExp(`The review that ended at ${repo.mine.slice(0, 7)} owes a correction`), result.err);
+  const row = checkCodexReviews(repo.root);
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`^the Codex review that ended at ${repo.mine.slice(0, 7)} owes a correction`), row.detail);
+});
+
+test('Y1, afterTurn: the valid record of nothing to review of a gap over a review that owes a correction is refused, naming the debt and, where the merge writes lines, that it was not reviewed; over one that owes nothing it goes on', () => {
+  for (const written of [false, true]) {
+    const repo = mergeAboveGap({ reverted: true, written });
+    appendCodexReview(repo.root, { schema: 'js-harness.codex-review/v1', base: repo.mine, head: repo.gap, reviewedAt: '2026-10-16T00:00:00.000Z', outcome: 'nothing-to-review', reason: 'the range changes no file' });
+    const turns = { gap: true, from: repo.mine, at: repo.gap, head: repo.head, ranges: written ? [{}, {}] : [{}] };
+    reviewRuns.appendCodexReviewRun(repo.root, { schema: reviewRuns.CODEX_REVIEW_RUN_SCHEMA, id: RUN_ID, outcome: 'reviewed', answer: { findings: [], verdict: 'correct' } }, { where: whereOf(repo.root) });
+    assert.deepEqual(afterTurn(repo.root, turns), { stopped: false });
+    mineOwesRun(repo);
+    const { refused } = afterTurn(repo.root, turns);
+    assert.match(refused ?? '', new RegExp(`^The review that ended at ${repo.mine.slice(0, 7)} owes a correction`), String(written));
+    assert.equal(/the merge \w+ above it was not reviewed/.test(refused), written, refused);
+  }
+});
+
+test('Y1, no merge (C1f): a commit and its revert over a review that owes a correction: the run records nothing to review, exits 1 saying the correction is still owed, and the push row refuses', async () => {
+  const { root, base } = makeRepoWith({ 'a.txt': 'a1\n', 'm.txt': 'm1\n' }, { 'a.txt': 'A1 changed\n' });
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', base);
+  fs.writeFileSync(path.join(root, 'm.txt'), 'M1 mine\n', 'utf8');
+  git(root, 'commit', '-qam', 'mine');
+  const mine = git(root, 'rev-parse', 'HEAD');
+  appendCodexReview(root, reviewedRecord(base, mine));
+  mineOwesRun({ root });
+  fs.writeFileSync(path.join(root, 'g.txt'), 'G1\n', 'utf8');
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'the gap');
+  git(root, 'revert', '--no-edit', 'HEAD');
+  const back = git(root, 'rev-parse', 'HEAD');
+  const nothing = startsNothing(root);
+  const result = await run(['--base', base, ...nothing.home, '--cwd', root], nothing.deps);
+  assert.equal(result.code, 1, result.out);
+  nothing.started('C1f');
+  assert.deepEqual(readCodexReviews(root).slice(-1).map((record) => [record.base, record.head, record.outcome]), [[mine, back, 'nothing-to-review']]);
+  assert.match(result.err, new RegExp(`The review that ended at ${mine.slice(0, 7)} owes a correction`), result.err);
+  assert.equal(checkCodexReviews(root).pass, false);
 });
 
 test('a correction owed below a merge: one turn, a merge that resolves its conflict by taking the branch\'s side and brings in other code of main writes nothing, as coverage counts it: the push row says the correction is owed, and the correction above the merge is the recheck of the gap\'s findings', async () => {

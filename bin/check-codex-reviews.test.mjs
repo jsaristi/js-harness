@@ -230,6 +230,50 @@ test('a skip ending at a later document commit does not clear the correction the
   assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
 });
 
+/** Y1, shape C1f (JH 199's narrow verifier on PR 883): a review that owes a correction, then a commit and its revert
+ * above it, which the default run records as a range with nothing to review. */
+function owedUnderNothing() {
+  const { root, base, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  commit(root, 'c.js', 'the gap', 'feat: the gap');
+  git(root, 'revert', '--no-edit', 'HEAD');
+  const back = git(root, 'rev-parse', 'HEAD');
+  record(root, head, back, { outcome: NOTHING_TO_REVIEW, reason: 'the range changes no file' });
+  return { root, base, head, back };
+}
+
+test('Y1: a commit and its revert above a review that owes a correction, recorded as nothing to review, pay none of it: the push row refuses', () => {
+  const { root, head } = owedUnderNothing();
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+  assert.ok(row.lines.join('\n').includes(priorLine(finding)), row.lines.join('\n'));
+});
+
+test('Y1: check --push itself refuses that push, on the Codex row', async () => {
+  const { root, head } = owedUnderNothing();
+  const { code, output } = await runCheck(['--push', '--cwd', root, '--home', tmp('js-harness-check-push-home-')]);
+  assert.equal(code, 1, output);
+  assert.match(output, new RegExp(`FAIL {2}codex-review {2}the Codex review that ended at ${short(root, head)} owes a correction`), output);
+});
+
+test('Y1: a document commit above that revert changes nothing: the push row still refuses', () => {
+  const { root, head } = owedUnderNothing();
+  commit(root, 'docs/NOTES.md', 'notes', 'docs: notes');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction`));
+});
+
+test('Y1: a commit and its revert above a review that owed nothing pass, as they did', () => {
+  const { root, base, head } = reviewedWith({ verdict: 'correct', findings: [] });
+  commit(root, 'c.js', 'the gap', 'feat: the gap');
+  git(root, 'revert', '--no-edit', 'HEAD');
+  record(root, head, git(root, 'rev-parse', 'HEAD'), { outcome: NOTHING_TO_REVIEW, reason: 'the range changes no file' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  void base;
+});
+
 test('a correction its recheck found fixed passes', () => {
   const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
   const fix = commit(root, 'b.js', 'two, fixed', 'fix: read the right field');

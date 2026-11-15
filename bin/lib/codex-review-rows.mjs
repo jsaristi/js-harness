@@ -117,8 +117,12 @@ function correctionOwed(cwd, { codeCommits, covers, tip }, { spawn, below = null
     // Only a review of Codex's says what the code owes: a skip or a range that held nothing records no
     // review, so one written later, as to a document commit after the head, must not hide the debt.
     last = covers.filter(({ rec, covered }) => rec.outcome === 'reviewed' && covered.has(newest.id)).at(-1)?.rec;
-    if (last === undefined) return null;
-    from = last.head;
+    if (last !== undefined) from = last.head;
+    // Covered by records that are no review alone, a skip or a range with nothing to review, the newest code commit
+    // pays no correction either: what is owed is read from the tip as the next run reads it (`recheckAt`), and a
+    // commit and its revert above a review that owes leave it owed (Y1, JH 199's verifier on pull request 883).
+    else if (covers.some(({ covered }) => covered.has(newest.id))) [from, below] = [tip, tip];
+    else return null;
   }
   let records;
   let runs;

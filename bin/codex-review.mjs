@@ -189,7 +189,7 @@ import { EXCUSED_REFUSED_TESTS, excusedByRefusal, isRefusal, NO_TEST_EXIT, noTes
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, readCodexReviewRuns, runKept } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW, readCodexReviews, withSubjectHash } from './lib/codex-reviews.mjs';
 import {
-  addTurnWorktree, afterTurn, answerFrom, gapLeftMerge, MERGE_OWN_PROMPT, mergeReviewSaid, owedBelowMergeSaid, owedBelowUncut, plansAsOne, recheckAt, removeTurnWorktree, snapshotChanged, snapshotChangedAfterReview, snapshotOfHead, turnArgv, turnNamed, turnSaid, turnsAt, turnsCheaper, turnsLines, turnStopped,
+  addTurnWorktree, afterTurn, nothingPaidExit, answerFrom, gapLeftMerge, MERGE_OWN_PROMPT, mergeReviewSaid, owedBelowMergeSaid, owedBelowUncut, plansAsOne, recheckAt, removeTurnWorktree, snapshotChanged, snapshotChangedAfterReview, snapshotOfHead, turnArgv, turnNamed, turnSaid, turnsAt, turnsCheaper, turnsLines, turnStopped,
 } from './lib/codex-review-turns.mjs';
 import {
   againPastThreeReviews, classifyRecheck, openAfterRecheck, priorLine, RECHECK_PROMPT_VERSION, recheckPrompt, recheckTooLarge, REVIEW_FROM_LOOK_BACK, secondRecheckRefused,
@@ -1654,7 +1654,7 @@ async function reviewRun(argv, env, deps, snapshot) {
         return 1;
       }
       log(`${nothing}, and the range was recorded as having nothing to review in ${file}.`);
-      return 0;
+      return nothingPaidExit(recheckFor(head), plan.range, error);
     }
     // A bound of parts. A run over it is one nobody chose the size of: it is not started until it names
     // its count, and the refusal says the count, so that going on is a decision made with the plan above
