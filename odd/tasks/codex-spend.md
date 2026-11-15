@@ -1,6 +1,9 @@
-# codex-T2 and the chain fix reviewed as c472dcb..3ddfd3e: lenses 0 findings, Codex 3 P2 (L30). A writer (opus, background,
-uncommitted) fixes all three, tests first. Then commit, Codex's recheck and the lenses on the fix, push, PR (B1-1/B1-2
-per L25), advisor, ready --pr with the worktree lock line. Worktree locked "JH 199 live".
+# codex-spend: no Codex waste, no review weakened
+
+## State
+T2 and the chain fix reviewed whole: c472dcb..3ddfd3e (L30), then the fix of its three P2 at 13367429, Codex 3 of 3
+fixed and lenses 0 findings (L31). Next: push, PR to main (B1-1/B1-2 per L25), advisor, ready --pr with the worktree
+lock line; unbind the PR on land; then T3, T5, T4 last, T6. Worktree locked "JH 199 live".
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
@@ -417,3 +420,10 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   (PR now, X1 a follow-up) cannot ship without them: all three fixed in one commit, tests first, then Codex's
   recheck and the lenses on it, no fourth verifier pass; the lead told so (notify 04:58 local). X1 leaves the
   follow-up list of L29 once the fix lands; X2 to X6, W2, W4 and W7 stay on it.
+- L31 2026-11-15T11:40Z, the fix of L30's three P2 at 13367429 (writer 4, tests first; each new test failed before
+  its fix; 917 pass, 0 fail across the 16 touched or neighbouring test files): `afterTurn` takes a gap's valid
+  nothing-to-review record as owing nothing; `recheckThrough` leaves a merge's recheck alone where `capped` refuses
+  the state below (X1, which leaves L29's follow-up list); `writesNothing` asks `reviewCoverage`, as `mergeStart`
+  does. Codex's recheck of 6e6adbf..1336742: 3 of 3 fixed, correct at 0.95, 126,887 input tokens; lenses risk and
+  reliability: 0 findings. Not covered: a third merge only by a unit test. The title and `## State` header, lost
+  to a state script at d1c152a6, are restored. Follow-ups that stay: X2 to X6, W2, W4, W7, V3/B1-2, V4.
