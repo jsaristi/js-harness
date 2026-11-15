@@ -32,7 +32,8 @@ const USAGE = `Usage: js-harness advisor-gate --hook    (PreToolUse: the hook pa
        js-harness advisor-gate report [--since <YYYY-MM-DD>]
   Holds the acts that decide to an advisor call with a result in the caller's stretch (policy R): since his last
   message or the last session event, within ${STRETCH_TOOL_CALLS} tool calls. Mode ${MODE}: an uncovered act is refused, its reason
-  saying how to consult and retry; a sub-agent's end (--stop) is recorded, never blocked. Every decision is appended to <home>/.js-harness/advisor-gate/decisions.jsonl. It prints {} outside a
+  saying how to consult and retry; a sub-agent's end (--stop) is recorded, never blocked, and one whose transcript does not exist is recorded
+  no-transcript with its agent type. Every decision is appended to <home>/.js-harness/advisor-gate/decisions.jsonl. It prints {} outside a
   project with a harness.json, and fails open: what it cannot read lets the act through, recorded unchecked.
   report: the decisions by day, kind and act, and the Fable input tokens of the advisor calls that followed a flag in
   its stretch with a result (the calls the flags prompted), against the estimate of ${ESTIMATED_DAILY_TOKENS} a day;
@@ -51,6 +52,28 @@ const unquoted = (command) => command.replace(/(--kind\s+|\b(?:bash|sh|zsh|pwsh|
   if (before || /(?:^|[\\/])js-harness(?:\.mjs)?$/.test(inner)) return (before ?? '') + inner;
   return '""';
 });
+/** A line that names a shell as a command (`bash <<EOF`, `cat <<EOF | bash`), which runs what a heredoc feeds it. */
+const SHELL_READS = /(?:^|[|;&(]|\$\()\s*(?:\w+=\S*\s+)*(?:\S*[\\/])?(?:bash|sh|zsh|pwsh|powershell)(?:\.exe)?(?=\s|$)/;
+/** The command with each heredoc's body and terminator dropped, so a commit message or a file written by `cat <<EOF`
+ * that names a gated command is not one (L25). A body a shell reads keeps its text, as an unterminated heredoc does:
+ * what is not sure stays an act. Run before `unquoted`, since a quoted delimiter (`<<'EOF'`) and a lone quote in a
+ * body would otherwise be read as quoted text. `<<<`, a here-string, is no heredoc. */
+function withoutHeredocText(command) {
+  const lines = command.split('\n');
+  const kept = [];
+  for (let i = 0; i < lines.length; i++) {
+    kept.push(lines[i]);
+    const opens = [...lines[i].matchAll(/(?<!<)<<(?!<)(-?)\s*(['"]?)([A-Za-z_][\w-]*)\2/g)];
+    if (opens.length === 0 || SHELL_READS.test(lines[i])) continue;
+    let at = i + 1;
+    for (const [, dash, , word] of opens) {
+      while (at < lines.length && (dash ? lines[at].replace(/^\t+/, '') : lines[at]).replace(/\r$/, '') !== word) at++;
+      at++;
+    }
+    if (at <= lines.length) i = at - 1;
+  }
+  return kept.join('\n');
+}
 /** The value of `--kind` in an unquoted command. */
 const kindOf = (command) => /--kind\s+(\w+)/.exec(command)?.[1] ?? null;
 
@@ -68,7 +91,7 @@ export function gatedAct(tool, input, cwd) {
   }
   if (tool !== 'Bash' || typeof input?.command !== 'string') return null;
   if (!/js-harness/.test(input.command)) return null;
-  const command = unquoted(input.command);
+  const command = unquoted(withoutHeredocText(input.command));
   if (runs(command, 'notify')) {
     const kind = kindOf(command);
     if (kind === 'question') return 'question';
@@ -229,7 +252,7 @@ function decide(mode, payload, seams) {
   if (act === null) return {};
   if (nearestHarness(cwd) === null) return {};
   const agent = typeof payload.agent_id === 'string' ? payload.agent_id : null;
-  const base = { at: new Date(seams.now).toISOString(), session: payload.session_id ?? null, agent, act, tool: payload.tool_name ?? null, toolUseId: typeof payload.tool_use_id === 'string' ? payload.tool_use_id : null, cwd };
+  const base = { at: new Date(seams.now).toISOString(), session: payload.session_id ?? null, agent, act, tool: payload.tool_name ?? null, toolUseId: typeof payload.tool_use_id === 'string' ? payload.tool_use_id : null, agentType: typeof payload.agent_type === 'string' ? payload.agent_type : null, cwd };
   if (mode === '--stop') base.secondStop = payload.stop_hook_active === true;
   const title = backgroundTitle(home, payload.session_id);
   if (agent === null && seniorTitle(title)) return record(home, { ...base, decision: 'exempt-senior', title }, stderr), {};
@@ -237,6 +260,9 @@ function decide(mode, payload, seams) {
   if (mode !== '--stop' && agent !== null && typeof payload.transcript_path === 'string') {
     file = path.join(path.dirname(payload.transcript_path), String(payload.session_id), 'subagents', `agent-${agent}.jsonl`);
   }
+  // An end whose transcript does not exist is no sub-agent the gate can read: the host's own agents after a turn write
+  // none (L24). It is recorded apart, by its agent type, so the unchecked share counts only acts a read failed for.
+  if (mode === '--stop' && typeof file === 'string' && !fs.existsSync(file)) return record(home, { ...base, transcript: file, decision: 'no-transcript' }, stderr), {};
   let stretch;
   try {
     if (typeof file !== 'string') throw new Error('no transcript path in the payload');
@@ -379,7 +405,8 @@ function reconcile(projects, from, decisions) {
 }
 
 /** The report of the decisions under `home` since `since` (an ISO day, or null): `{ days, acts, unchecked, decisions,
- * unread, untraced, estimate }`. Each day holds its decisions by kind and by act, how many of its flags an advisor
+ * noTranscript, unread, untraced, estimate }`; `decisions` leaves out the ends with no transcript, which `noTranscript`
+ * counts by agent type. Each day holds its decisions by kind and by act, how many of its flags an advisor
  * call with a result followed in their stretch, and the Fable input tokens of those calls on that day, each call once.
  * `acts` reconciles the decisions with the gated acts the transcripts under `projects` show since the first decision.
  * A transcript that cannot be read (`unread`) or a flag that recorded none (`untraced`) is counted, not guessed. */
@@ -449,15 +476,21 @@ export function advisorGateReport({ home, since = null, projects = path.join(hom
   const first = all.filter((d) => 'toolUseId' in d).reduce((min, d) => (min === null || d.at < min ? d.at : min), null);
   const from = first === null ? null : since !== null && since > first ? since : first;
   const acts = from === null ? { found: 0, decided: 0, missing: [], unread: 0 } : reconcile(projects, from, all);
+  // An end recorded before T7 as unchecked because its transcript did not exist (ENOENT) is read as one with no
+  // transcript, so the share covers the past too; decisions.jsonl itself is not rewritten.
+  const endless = (d) => d.decision === 'no-transcript' || (d.act === 'end' && d.decision === 'unchecked' && /: ENOENT;/.test(d.reason ?? ''));
+  const noTranscript = {};
+  for (const d of shown.filter(endless)) noTranscript[d.agentType ?? 'unknown'] = (noTranscript[d.agentType ?? 'unknown'] ?? 0) + 1;
+  const decided = shown.filter((d) => !endless(d));
   return {
     days: [...days.values()].sort((a, b) => a.day.localeCompare(b.day)),
-    acts, unchecked: shown.filter((d) => d.decision === 'unchecked').length, decisions: shown.length,
+    acts, unchecked: decided.filter((d) => d.decision === 'unchecked').length, decisions: decided.length, noTranscript,
     unread, untraced, estimate: ESTIMATED_DAILY_TOKENS,
   };
 }
 
 /** The report as text: one line a day, then the reconciliation with the transcripts. */
-function formatReport({ days, acts, unchecked, decisions, unread, untraced, estimate }) {
+function formatReport({ days, acts, unchecked, decisions, noTranscript, unread, untraced, estimate }) {
   const n = (x) => x.toLocaleString('en-US');
   const share = (part, whole) => (whole === 0 ? '0%' : `${Math.round((100 * part) / whole)}%`);
   const counts = (o) => Object.entries(o).map(([k, v]) => `${k} ${v}`).join(', ');
@@ -470,6 +503,8 @@ function formatReport({ days, acts, unchecked, decisions, unread, untraced, esti
   if (acts.unread > 0) lines.push(`  ${acts.unread} transcript(s) could not be read; their acts are in neither count.`);
   for (const m of acts.missing.slice(0, 10)) lines.push(`  no decision: ${m.act} (${m.tool}) at ${m.at} in ${m.transcript}`);
   lines.push(`let through unchecked: ${unchecked} of ${decisions} decisions (${share(unchecked, decisions)})`);
+  const ends = Object.values(noTranscript).reduce((sum, v) => sum + v, 0);
+  if (ends > 0) lines.push(`sub-agent ends with no transcript: ${ends} (${counts(noTranscript)}), apart from the decisions above, by agent type: most come right after a turn, agents the host runs itself (odd/tasks/advisor-use.md, L24)`);
   if (unread > 0) lines.push(`${unread} transcript(s) could not be read; their flags count, their calls and tokens do not.`);
   if (untraced > 0) lines.push(`${untraced} flag(s) recorded no transcript (written before the report existed); their calls and tokens are not known.`);
   return `${lines.join('\n')}\n`;
