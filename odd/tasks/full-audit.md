@@ -6,10 +6,8 @@ Delivery: findings only, no code, rule or roadmap change. Opened 2026-11-14 by J
 lead's brief (`~/.js-harness/background/briefs/2026-11-15T02-10-23-626Z-2a6b0f77.md`).
 
 ## State
-Step 1 of the brief done: partition sized, costed, P0 cross-cut and the installed-copy diff run by script.
-Waiting for the lead's go on a tier (A, B or C below; B recommended) and on the optional coverage run.
-No sub-agent launched. Next after the go: launch the parts of the chosen tier on `opus`, then the verifier,
-then the synthesis here and the page `auditoria-2026-11-14.html` in the notes folder.
+T1-T4 done: 13 part files, the coverage run, the verifier and the Synthesis below. Next: the page
+`auditoria-2026-11-14.html` in the notes folder (T5), commit, push, the gate, `notify --kind ready` or `closed`.
 
 ## Goal
 Tell, part by part with evidence, what of js-harness to keep, fix, shrink or remove so the harness matures.
@@ -184,11 +182,141 @@ Optional, for the lead to decide, not run: one `node --test --experimental-test-
 "what no test covers" instead of inferring it. Cost: one full suite run on this machine (its time not measured
 here), and a few thousand tokens to read a summary written to a file.
 
+## Synthesis
+
+Sources: the 13 findings files `$NOTES/full-audit/{A1,A2,A3,B1,B2,C,D,E1,E2,F,G,H,I}.md` (each finding carries its
+`path:line`, probe or commit there; ids below point to them), the verifier's `$NOTES/full-audit/verifier.md`, the
+coverage run `$NOTES/full-audit/coverage-summary.md`, and P0 (`p0-v2.md`). Every finding below is the reader's
+claim unless marked **verified** (the verifier re-derived it, re-ran it where noted).
+
+### Bad news first
+- **The checks that decide "ready" can pass while what they check is false.** The review gate can say "covered"
+  for code no reviewer read (B1-1, B1-2, B2-1, verified by reading; B1's two by the reader's probe), a session can
+  forge a Codex review record the push accepts (C-3 + B2-12, **verified, re-run**: the guard passes `sort -o` and
+  `awk` writes to `codex-reviews.jsonl`, and `isValidCodexReview` admits a record on shape alone,
+  `bin/lib/codex-reviews.mjs:117-125`), the gate runs unlocked after one stray file (C-12, **verified on Windows**:
+  `EPERM` in 1,353 ms, `gate-turn.mjs:171-172`), `rules check` passes with 52 hits of its own patterns (D-1..3),
+  the size ceiling counts lines while a file packs 2,811-character lines (E2-24), and a backup is recorded as a
+  success while a repository went unbundled (F-2, F-4). This is the core of "immature": the harness's own proofs
+  are weaker than its prose says.
+- **The lead can miss notices.** `wait` misses a notice stamped before it started but appended after (A2-1,
+  verified by reading), and a blocked session's notice went to a record no lead reads (A2-2, verified: JH 199's
+  message that 878's land removed its worktree sits in `D--js-harness-worktrees-codex-spend.jsonl`, unseen).
+- **Security guards have holes.** Any session can approve a permission card meant for the lead (C-2, verified by
+  reading); the guard never sees the host's `PowerShell` tool (C-1); 8.3 short names pass the secret-path guard
+  (C-5); `remote` accepts `bypassPermissions` and nothing shows it afterwards (F-10); hooks fail open on any error
+  (C-9).
+- **The undo promise of AGENTS.md holds for `~/.claude` only.** Installed hooks, skills and output style match main
+  and are recorded (E1, probe), but about 20 folders under `~/.js-harness` survive `uninstall machine` silently
+  (E1-3), a killed `init` leaves writes unrecorded (E2-1), the `@AGENTS.md` import is not recorded (E2-2), and a
+  replaced user file is never restored (E2-3).
+- **The earlier whole-code audit (Fable 5.2, 2026-11-09) is mostly unpaid.** Per the readers' re-check tables:
+  A1 3 fixed / 7 open; A2 4 / 18; A3 3 (+1 partly) / 21; B1 1 / most; B2 3 / 18; C 1 / most; D 4 / 14; E1 0 / 15;
+  E2 4 / most; F 2 / 5; G 5 / most; H 7 / 16; I 4 (+3 partly) / about 25. Roughly 30 fixed against 170 or more
+  still open, five days later (counts assumed from the readers' files, not re-tallied here).
+- **The workshop heartbeat has been down since 2026-11-11** (I-1, **verified, re-run**: `ticks` exits 1, all three
+  ticks stale), so nobody reads the daily Windows run, and SPEC's "a Windows regression is found within a day"
+  (`docs/SPEC.md:397`) is false today.
+
+### What works reliably
+- Install into `~/.claude`: every file and hook recorded, hashes match main (E1).
+- The rules registry and `rules change` on `rule/` branches: 60 merged PRs since 2026-10-16, quotes checked against
+  transcripts (D).
+- The Codex launch on Windows: shim, PATH, stdin prompt, tree kill, all tested (B1).
+- Backup restore never overwrites newer data (F); `clean` confines each kind to its folder and logs deletions (F).
+- CI `gate.yml` runs what AGENTS.md says, Linux plus the Windows `remote` job (I).
+- The test suite: 7,692 tests passed in one coverage run; every `bin` source but one data file and three `.ps1`
+  scripts is loaded by a test (`coverage-summary.md`). The 4 failures were 3 timing tests under machine load and
+  `report-feature.test.mjs:120`, not reproduced in 20 runs (G-8).
+- Docs: every backticked command and flag but one exists, every path exists, 17 of 17 sampled defaults match (H).
+
+### Findings by severity (after the verifier)
+High, held by the verifier:
+| Id | What | Verdict |
+|---|---|---|
+| B1-1 | removing a `-codex-review` mark leaves unreviewed code "covered" | fix |
+| B1-2 | an `--unavailable` skip erases an owed correction | fix |
+| B2-1 | commits before a `codexReview: false` commit are asked by no review | fix |
+| C-3 + B2-12 | forged Codex record accepted by `check --push` | fix (one evidence rule for both reviews) |
+| C-2 | any session can approve the lead's permission card | fix |
+| C-12 | one stray file in `gate/lock/` and every gate runs unlocked | fix |
+| A1-1 | copied transcript entries rewind the reported context size | fix |
+| A2-1 | `wait` misses a notice in flight | fix (stamp at append, or cursor by count) |
+| A2-2 | notices recorded where no lead reads | fix (refuse an unknown record) |
+| E2-1 | killed `init` leaves its writes unrecorded | fix |
+| I-1 | workshop heartbeat down since 2026-11-11 | fix |
+| I (release) | `release-gate.mjs` has never gated a release, and accepts any record file | fix |
+Partly held, severity lowered by the verifier: A3-1 (installed copy one land behind: normal lag, but the F8 share it
+shows is wrong; main also drops one finished step, G-1), E1-1 (`stack backup` leftovers: the next run refuses and
+names them), E2-24 (line-count ceiling: medium).
+
+Medium, the recurring patterns: lens findings never block (B2-2); `check`'s quiet line hides Codex debt (G-2);
+contract, spec and failures rows check shape only (G-13); a documents-only commit runs two test files (G-3);
+backup mirrors deletions with no shrink guard (F-1) and judges "on a remote" from stale refs (F-3); the engram swap
+can leave no binary (E1-2); `wake` misses worktree sessions (A2-3); PowerShell started by bare name (A1-2);
+non-atomic writes of shared or user files (A2-6, A2-8, E1-12, B2-10: `codex-trust` rewrites `config.toml` in
+place); each Bash call pays two node starts, 1.1 s and 1.5-2.1 s on a loaded machine (C-8); docs describe three
+times what the code does, and the prose drifted to features that left or moved to the workshop (H).
+
+### Keep, fix, shrink, remove
+- **Keep:** install's `~/.claude` side, the rules registry and `rules change`, `rules-sources`, the Codex launcher,
+  backup restore, `clean`, CI `gate.yml`, `process-tree`, `machine-busiest`, `stall`, `pause`, `land-records`,
+  `default-branch`, the testkits and convention tests, `GUIDE.md`, `RULES.md`, `FAILURES.md`.
+- **Fix first (the high table above), then:** B2-2, G-2, G-3, G-13, F-1..4, E1-2..4, E2-2..4, A2-3, C-1, C-5,
+  C-9, F-10, H-1, H-2.
+- **Shrink:** `bin/lib/sessions.mjs` (227 KB, 48% comments; split by consumer, 71 of 76 exports live, A1 S1);
+  `bin/codex-review.mjs` (159 KB, 52% comments, one 1,166-line function, B1-21); `bin/lib/manifest.mjs` (135 KB, 50 KB
+  skill prose, to about 60 KB, E2-25); `bin/check.mjs`; rules coverage, `rules switch`, `rules applied` (roughly
+  90-120 KB, an estimate, D); the merge queue's refresh-copy machinery (about 44 KB, B2-20); onboarding profiles (1
+  of 11 kinds used, E2-26); `resume --pause` load cost (A3); README and SPEC to one home each, with `--help` the
+  source for command prose (H).
+- **Remove, only where the verifier found no caller:** `stack backup` code (E1-15, but a documented command and a
+  ROADMAP line: his call), the dead scripts not imported by tests (I-6/I-28 minus `rehearsal*`, which
+  `scripts/migration.test.mjs` imports, I-17), `docs/sweep-2026-10-11.md`, the excused mechanism (B1-12, 0
+  firings; then C-11's fix is moot), `branchMatches` and other unused exports named per part. **Not** to remove as
+  written: E2-18 (`--home` is passed by `tui.mjs:461`), I-14 (`rules-switch.mjs:289` reads the Codex probe by path),
+  `docs/todo.md` (indexed as the live inbox), G's `## Effort` (47 task documents carry it), D-13.
+- **His call:** the Codex-as-agent eval (about 250 KB, one result from 2026-10-13, I-14), the status line (A3-4
+  says remove, E1 says keep and test), `JS_HARNESS_MERGE_QUEUE=1` as the only guard of main pushes (I-4, B2-3).
+
+### What most moves maturity
+1. **One honest review gate.** Fix B1-1, B1-2, B2-1, B2-2 and the forged-record hole with one evidence rule shared
+   by Codex and lens records, and make `check`'s quiet line show both debts (G-2). Today the land's proof is the
+   weakest point and the most consequential.
+2. **A notice path that cannot lose a notice.** A2-1 and A2-2, then `wake` for worktrees (A2-3). Sessions run in
+   the background; a lost notice is a lost session.
+3. **Close the guard holes before adding guards.** C-2, C-1, C-5, C-12, F-10 visibility; decide fail-open vs
+   fail-closed per hook (C-9).
+4. **Pay the backlog before new mechanisms.** About 170 earlier-audit findings are open and the plan added more
+   steps than it closed this week; a slice that fixes findings is maturity, a new command is not.
+5. **Shrink to what is read.** Split the three largest files, remove what the verifier cleared, give docs one home.
+   Half the code is comment prose that no test checks.
+6. **Restore the heartbeat and make "installed = main" visible.** I-1 now; bump the version (unchanged since
+   2026-10-27 across 1,098 commits, H-6) so the label tells copies apart.
+
+### Disagreements between readers (from the verifier)
+M36 fixed (A3, E2) vs folders still left (E1-3): both hold, different scope. Excused mechanism: remove (B1-12) vs
+fix (C-11). Status line: remove (A3-4) vs keep and test (E1). F8 share: main's 16/22 also drops one finished step
+(G-1). Severity of non-atomic writes applied unevenly (A2-6, A2-8, E1-12, B2-10).
+
+### How it was taken, and its limits
+- 13 opus readers in three waves, one verifier: the sum of their reported `subagent_tokens` is about 3.3M (66k
+  to 304k each), against the 2.5M fresh estimate; whether that field is the final context or the total spent is not
+  known, and the bill, with cache re-reads, is a multiple of it.
+- Not checked: the verifier attacked 43 findings (all 15 high, 21 remove, a 7-row convenience sample of medium),
+  not the rest; its error rate is 1 refuted of 43, with remove verdicts wrong or incomplete 7 of 21. B1-1, B1-2,
+  B2-1, A2-1, C-2 and E2-1 were re-read, not re-probed, by the verifier. `evals/`, `scripts/`, `workshop/` have no
+  line coverage. `odd/tasks/` was read only by grep. Readers ran some part tests in wave 1 under load, which made
+  timing tests fail; waves 2 and 3 ran none.
+- Two inputs were wrong and corrected during the run: P0's first import graph missed `export … from` (fixed in
+  `p0-v2.md`; it had made `hook-count.mjs` and `project-messages.mjs` look dead), and `rules-coverage-data.mjs` and
+  `template-registry.mjs` are read as text by path, not dead.
+
 ## Tasks
 - [x] T1 (kind: design) Partition, sizes, P0 and the cost of each tier; commit; notify waiting.
-- [ ] T2 (kind: verify) After the go: one opus sub-agent per part of the chosen tier, findings in files.
-- [ ] T3 (kind: verify) One adversarial verifier over every remove, merge, done or broken finding.
-- [ ] T4 (kind: docs) Synthesis here: findings by severity, keep / fix / shrink / remove, what moves maturity.
+- [x] T2 (kind: verify) After the go: one opus sub-agent per part of the chosen tier, findings in files.
+- [x] T3 (kind: verify) One adversarial verifier over every remove, merge, done or broken finding.
+- [x] T4 (kind: docs) Synthesis here: findings by severity, keep / fix / shrink / remove, what moves maturity.
 - [ ] T5 (kind: docs) The page `auditoria-2026-11-14.html` in the notes folder, not published.
 
 ## Notes folder
@@ -198,3 +326,10 @@ here), and a few thousand tokens to read a summary written to a file.
 - L1 2026-11-15T01:43:53Z, his request as written (lead transcript 69918425 line 11078): see Why.
 - L2 2026-11-14, the lead's brief: audit everything built, part by part, with sub-agents; first step the
   partition and its cost, then stop for the go.
+- L3 2026-11-14 22:43 and 22:44 local, the lead (channel notes, its claim): "go for JH 203: tier B"; "14 opus
+  sub-agents as your doc sizes it, in waves of at most 5 at a time to hold machine load; the verifier after all
+  parts. Run the optional coverage run once over bin (summary to a file in your notes path) before the wave with G
+  and C, and give it to every part." It also asked why the waiting notice never reached the channel: it was never
+  sent. No guard or gate refused it; the session had committed and pushed `b8683009` and was at the brief's gate
+  step (advisor, then one call, then the notice) when the go arrived from the pushed document. The advisor tool
+  answered this session at the partition step (before the commit), so it was not down here then.
