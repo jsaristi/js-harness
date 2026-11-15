@@ -1,6 +1,8 @@
-# codex-T1 landed (PR 878, main c472dcb). T2 on branch feat/codex-spend-t2 from c472dcb, with a writer (opus,
-background, uncommitted, S2 plus the two tests L19 names); design in the lead's notes folder, jh-199-t2-design.md.
-When it returns: check diff and tests, commit, verifier, codex-review and lens-review, PR, ready. Then T3, T5, T4 last.
+# codex-T2 at d1c152a6 (local only): NOT to be reviewed or pushed. Its verifier found a blocker (L21): a gap turn with
+findings leaves them unenforced across runs. Next: probe whether main already leaks (a merge at HEAD over a record
+owing a correction), report that to the lead first if so; ask the lead whether the chain fix rides T2's PR; write the
+acceptance matrix (L21) as tests first; then the fix with F3, F4, F6, F7 in one round, the verifier again, then
+Codex and lenses. Then T3, T5, T4 last.
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
@@ -306,3 +308,16 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   needing no read, so main's code is not read again. Left as today: a range where a commit of main has no record
   (off the first-parent line, no gap). Follow-up outside the surface: `bin/lib/codex-review-rows.mjs` sizes the
   push's debt with `mergeTurn` alone. `--plan` does not say when the gap turn is a recheck.
+- L21 2026-11-15T03:00Z, T2's verifier (opus) on d1c152a6: no record covers code Codex did not read, but open findings
+  escape across runs (probe: scratchpad probe-gap-findings.mjs). F1 blocker: after a gap turn with findings, a rerun
+  at the same HEAD reads the merge through `mergeStart`, which asks no recheck state (`mergeTurn` does), and the
+  clean merge record then discharges the push's `correctionOwed`. F2 major: the correction, which can only go above
+  the merge, is a plain review (`recheckAnchor` passes only documents), so the findings are never rechecked, while
+  `turnStopped` promises a recheck. Minor: F3 a one-turn gap makes a snapshot it never reads; F4 in a gate turn with
+  installed dependencies the gap turn reads a worktree with no node_modules; F5 `gapLeftMerge` lasts one run; F6 the
+  new rev-list runs on ordinary runs, untested by the counting tests; F7 the HEAD-is-a-merge guard has no failing
+  test. The advisor: F1 and F2 are one defect (an owed correction is enforced only at the head of the last covering
+  record, and nothing chains from a merge back to it); rewording is no fix. Acceptance matrix, at the push row's level:
+  after a gap turn with findings, one turn and two turns, each with a rerun at the same HEAD, the push row's printed
+  command, a correction above the merge with --base on main, and with base M^: each ends in a recheck naming the gap
+  record, or a refusal with no session and no record, and the row says owed until then.
