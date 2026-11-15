@@ -11,7 +11,7 @@ session whose job process is still ending, and the land's refresh no longer wait
 Each one costs the lead a red land or a hand step: the two budget tests left PR 736 and PR 740 out of lands while other
 sessions loaded the machine; `sessions stop` refused six sessions since 2026-10-30 because claude's lock still named the
 job's process; and `merge-queue --land --refresh-copy` waited its 30 minutes on sessions that only ran a
-`js-harness wait`, exited 75, and the lead refreshed by hand. All three are fixes, which `rule:growth-limit` lets open.
+`js-harness wait`, exited 75, and the lead refreshed by hand. All three are fixes, which the growth limit (retired 2026-11-15) lets open.
 
 ## Done when
 - `node bin/js-harness.mjs contract check odd/tasks/defect-trio.md` exits 0

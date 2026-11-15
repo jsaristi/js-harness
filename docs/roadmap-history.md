@@ -347,3 +347,9 @@ reasons, is under [Session channel](ROADMAP.md#session-channel). Also open:
   and the `- Seen:` line is `land-removed-live-worktree` in `docs/FAILURES.md`. Left: a session whose listed cwd is
   elsewhere, or that enters after the listing, is not seen; and a notice from a session whose folder vanished still
   goes to a record no lead reads (follow-up F1 there, under "notices that are never lost", question 287) (2026-11-14, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
+
+### The growth limit of 2026-11-01
+
+The Decided row as it stood until his retirement of the rule on 2026-11-15:
+
+| First version's scope | **Since 2026-11-01, his growth limit, the growth limit.** Asked by the lead, after he read [the re-planning analysis](../odd/tasks/replan-analysis.md) (section E) and its page: "¿adoptas el ajuste, es decir, seguir con F8 y poner el límite al crecimiento?" (the lead's transcript `0f71b2c6`, line 48066), he typed "Listo entonces continuemos y reactives todo para hacer le plan" (line 48080, 2026-11-01T18:44:12Z, read with `js-harness sessions --quote`). What it holds and how the week is computed are the rule's, read with its declaration in `bin/lib/rules-data.mjs` and the last line of `js-harness progress --pace`. It replaces his "No, sigue entrando" of 2026-10-17 (transcript `e152c9d8`, line 17535), the answer that kept new work entering the first version, and his reason of 2026-10-14 for it ("tiene que quedar funcionando como un reloj suizo", transcript `ffe99ebf`, line 5853) ([replan-execute](../odd/tasks/replan-execute.md)) |

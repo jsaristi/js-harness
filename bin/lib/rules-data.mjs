@@ -309,7 +309,11 @@ export const RULES = [
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-11-01",
-    "value": "a fix or a step of F8",
+    "was": [
+      { "value": "a fix or a step of F8", "until": "2026-11-15" }
+    ],
+    "retired": "2026-11-15",
+    "successors": [],
     "review": "2026-11-15"
   },
   {
