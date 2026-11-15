@@ -322,7 +322,7 @@ function decide(mode, payload, seams) {
   // through by the host's flag alone (another hook may have turned it back) stays a flag of its own.
   const afterTurnBack = mode === '--stop' && turnedBackBefore(home, base.session, agent);
   const turnBack = mode === '--stop' && !base.secondStop && !afterTurnBack;
-  record(home, { ...base, ...facts, decision: 'flagged', mode: MODE, ...(turnBack ? { turnedBack: true } : {}), ...(afterTurnBack ? { afterTurnBack: true } : {}) }, stderr);
+  record(home, { ...base, ...facts, decision: 'flagged', mode: MODE, ...(turnBack ? { turnedBack: true } : {}), ...(mode === '--stop' ? { afterTurnBack } : {}) }, stderr);
   if (mode === '--stop') return turnBack ? { decision: 'block', reason: END_NOTICE } : {};
   return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: NOTICE(act) } };
 }
@@ -475,8 +475,10 @@ export function advisorGateReport({ home, since = null, projects = path.join(hom
     if (!days.has(day)) days.set(day, { day, decisions: {}, acts: {}, flagged: 0, followed: 0, addedTokens: 0 });
     return days.get(day);
   };
-  // A turned-back end flagged again at its next stop is the same end (afterTurnBack): one flag, one per act.
-  const isFlag = (d) => d.decision === 'flagged' && d.afterTurnBack !== true;
+  // A turned-back end flagged again at its next stop is the same end (afterTurnBack): one flag, one per act. An end
+  // recorded before the field existed says nothing of it, and its second stop stays the repeat it was counted as.
+  const repeat = (d) => d.afterTurnBack === true || (d.act === 'end' && d.afterTurnBack === undefined && d.secondStop === true);
+  const isFlag = (d) => d.decision === 'flagged' && !repeat(d);
   const shown = all.filter((d) => inRange(d.at));
   for (const d of shown) {
     const row = dayOf(d.at);

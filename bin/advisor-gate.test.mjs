@@ -295,6 +295,16 @@ test('an end another hook turned back first goes through and is still a flag of 
   const answer = run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a6', agent_transcript_path: t, stop_hook_active: true }, home).answer;
   assert.deepEqual(answer, {});
   assert.deepEqual(advisorGateReport({ home }).days.map((d) => d.flagged), [1]);
+  assert.equal(decisions(home)[0].afterTurnBack, false, 'a new end record says it is no repeat, so the report can tell it from an old one');
+});
+
+test('report: an end recorded before afterTurnBack existed, at a second stop, stays the repeat it was', () => {
+  const { home } = scratch();
+  writeDecisions(home, [
+    { at: '2026-11-15T10:01:00.000Z', act: 'end', agent: 'a1', decision: 'flagged', secondStop: false },
+    { at: '2026-11-15T10:02:00.000Z', act: 'end', agent: 'a1', decision: 'flagged', secondStop: true },
+  ]);
+  assert.deepEqual(advisorGateReport({ home }).days.map((d) => d.flagged), [1]);
 });
 
 test('a sub-agent of the senior session consults too (his answer to question 295); a Fable sub-agent stays exempt', () => {
