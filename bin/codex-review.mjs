@@ -139,6 +139,16 @@
 // `--again` is the way to review on purpose what has a record: the range as it was given, with the records
 // not read. So is a range whose records cannot be read against it, with a line that says why.
 //
+// Codex reads a snapshot of the commit the record names, not the live folder (odd/tasks/codex-spend.md, spec 1):
+// a detached worktree made from `head` in `<git common dir>/js-harness/`, once a run and removed however it ends,
+// with what killed runs left there swept just before it is made (`snapshotOfHead`, ./lib/codex-review-turns.mjs),
+// which deletes nothing out of that folder and follows no symlink or junction. What is read
+// before Codex starts (the range, the patch, the marks, the intent) is read as before. An edit or a commit in the
+// live folder while Codex reads refuses neither a part nor the record: the checks after a part, after the turn at
+// a merge and after the review read the snapshot, and refuse a change of it as one of the review's own snapshot.
+// The refusal of a dirty tree at the start reads the live folder. A run in a turn worktree, and one in a turn of
+// the gate lock whose declared dependencies are installed, read the live folder with the checks on it, as before.
+//
 // Two files are written, both in `<git common dir>/js-harness/`. `codex-reviews.jsonl` is the record
 // above: a line for a review that met the evidence rule, for an explicit skip, or for a range that held
 // commits and nothing to review, which started no session. `codex-review-runs.jsonl`
@@ -168,7 +178,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { allowanceLine, readProjectRules, reviewAllowance } from './lib/codex-review-allowance.mjs';
-import { answerFailure, byPlace, findingCounts, findingLine, normalizeAnswer, rolloutAnswer, verdictLine } from './lib/codex-review-answer.mjs';
+import { answerFailure, byPlace, findingCounts, findingLine, rolloutAnswer, verdictLine } from './lib/codex-review-answer.mjs';
 import { baseLeftOut, baseLeftOutSaid, MARKS_UNREAD, mergeStart, notReviewedSaid, rangeDiff, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
 import { PART_MAX_CHANGED_LINES, PART_MAX_FILES, RENAMES, reviewParts } from './lib/codex-review-parts.mjs';
@@ -178,9 +188,11 @@ import { AskedError, askedIntent } from './lib/review-asked.mjs';
 import { EXCUSED_REFUSED_TESTS, excusedByRefusal, isRefusal, NO_TEST_EXIT, noTestNodeOptions } from './lib/no-test-outside-turn.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, readCodexReviewRuns, runKept } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW, readCodexReviews, withSubjectHash } from './lib/codex-reviews.mjs';
-import { addTurnWorktree, mergeTurn, plansAsOne, removeTurnWorktree, sweepTurnWorktrees, turnsCheaper } from './lib/codex-review-turns.mjs';
 import {
-  againPastThreeReviews, classifyRecheck, openAfterRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, REVIEW_FROM_LOOK_BACK, runsLogged, secondRecheckRefused,
+  addTurnWorktree, afterTurn, answerFrom, MERGE_OWN_PROMPT, mergeReviewSaid, mergeTurn, plansAsOne, removeTurnWorktree, snapshotChanged, snapshotChangedAfterReview, snapshotOfHead, turnArgv, turnSaid, turnsCheaper, turnsLines, turnStopped,
+} from './lib/codex-review-turns.mjs';
+import {
+  againPastThreeReviews, classifyRecheck, openAfterRecheck, priorLine, RECHECK_LOOK_BACK, RECHECK_PROMPT_VERSION, recheckAnchor, recheckPrompt, recheckState, recheckTooLarge, REVIEW_FROM_LOOK_BACK, secondRecheckRefused,
 } from './lib/codex-review-recheck.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit } from './lib/project-functions.mjs';
 import { noRolloutReading, rolloutReading, sessionReading } from './lib/codex-usage.mjs';
@@ -900,46 +912,8 @@ function rangeGroups(spawn, root, { from, head, maxChangedLines, everyFile, wher
 // end of the file before it.
 const SUBMODULE_AS_A_FILE = '--submodule=short';
 
-/** Why the review of a merge is asked with this command's own prompt, whatever was asked for: Codex's own
- * `--base` reads a diff of two commits, and a merge is read against its automatic merge (verifier A3). */
-const MERGE_OWN_PROMPT = 'The review of a merge is asked with this command\'s own prompt: the sentence Codex writes for `--base` names a diff of two commits, not what was written in a merge.';
-
-/** The line that says a review reads a merge by what was written in it (`mergeStart`). */
-export function mergeReviewSaid({ head, side, branch, stacked = false }) {
-  const of = stacked ? `a stacked base off ${branch}, each of whose own code commits has a record` : `a commit of ${branch}`;
-  return `${head.slice(0, 7)} is a merge of ${side.slice(0, 7)}, ${of}: its review reads what was written in the merge (its diff with the automatic merge of its parents), not what the merge brought in.`;
-}
-
-/** The line a run says before turn `index` of a range cut at the merge `merge` below `head` (odd/tasks/merge-below-head.md). */
-export function turnSaid(index, { merge, head }) {
-  return index === 1
-    ? `Turn 1 of 2, the merge ${merge.slice(0, 7)}: what was written in it.`
-    : `Turn 2 of 2, ${merge.slice(0, 7)}..${head.slice(0, 7)}: the commits after the merge.`;
-}
-
-/** What a run says when the turn at the merge of a cut range owes a correction, and it stops there. */
-export function turnStopped({ merge, head }) {
-  const [at, tip] = [merge.slice(0, 7), head.slice(0, 7)];
-  return `The review of the merge ${at} found what owes a correction, so the commits after it (${at}..${tip}) were not reviewed: once the correction is committed, the review from ${at} is a recheck of those findings.`;
-}
-
-/** What `--plan` prints of a range cut in two turns (`cutInTurns`): each turn under its line, then what they
- * come to in all, with the one review the range would be without the cut, which they cost less than. */
-function turnsLines(turns) {
-  const [first, second] = turns.plans;
-  const one = plansAsOne(turns.plans);
-  const { today } = turns;
-  const sends = one.inputTokens === null ? '' : `, about ${thousands(one.inputTokens)} input tokens`;
-  return [
-    turnSaid(1, turns),
-    mergeReviewSaid({ head: turns.merge, side: turns.side, branch: turns.branch, stacked: turns.stacked === true }),
-    ...planLines(first),
-    turnSaid(2, turns),
-    ...planLines(second),
-    `In all, 2 turns: ${counted(one.parts.length, 'part')}, ${counted(one.changedLines, 'changed line')} in ${counted(one.files, 'file')}${sends}, ` +
-      `where one review from ${today.range.split('..')[0]} would be ${counted(today.parts.length, 'part')}, ${counted(today.changedLines, 'changed line')} in ${counted(today.files, 'file')}.`,
-  ];
-}
+// What a run says of a merge it reads and of its turns, kept with the turns. Exported from here as before.
+export { mergeReviewSaid, turnSaid, turnStopped };
 
 /** The parts the lean session reviews `from..head` in (both full commit ids), when the range changes more
  * lines than a part holds or more files (`PART_MAX_FILES`), from its `groups` (`rangeGroups`): `{ parts }`,
@@ -1079,8 +1053,8 @@ function leftByRecords(spawn, root, { from, head, given, where }) {
  * `monotonicNow` (milliseconds on a clock that never steps, for the wall time of the review),
  * `randomUUID` (the id of the run line, which is also the name of its Codex home), `homedir` (the
  * OS home, which the harness's state dir and the real Codex home default to), `createLeanHome` (what
- * makes the session's home), `platform`, `log`, `error` and `write` (the review passed through
- * to the user)
+ * makes the session's home), `removeWorktree` (what removes the snapshot of the head, `removeTurnWorktree`),
+ * `platform`, `log`, `error` and `write` (the review passed through to the user)
  * so tests use fixtures; `env` is the parent environment Codex's is derived from. Exits 2 with usage
  * on a bad flag; 1 when nothing could be recorded or the review did not complete, and for a run of more
  * parts than it may start, which starts nothing; 0 for `--plan`, which prints the plan and starts nothing,
@@ -1100,6 +1074,22 @@ function leftByRecords(spawn, root, { from, head, given, where }) {
  *    whether the line reached the run log, and its answer as `normalizeAnswer` gives it (`null` when none
  *    was read). */
 export async function codexReviewMain(argv = process.argv.slice(2), env = process.env, deps = {}) {
+  // The snapshot of the head the run read (`readingPlace`), removed however the run ends, after the check that
+  // follows the review; what could not be removed is a warning, and the next run's sweep removes it.
+  const snapshot = { place: null, root: null, commonGitDir: null };
+  try {
+    return await reviewRun(argv, env, deps, snapshot);
+  } finally {
+    if (snapshot.place !== null) {
+      const remove = deps.removeWorktree ?? removeTurnWorktree;
+      const left = remove(snapshot.root, snapshot.place, { commonGitDir: snapshot.commonGitDir, spawn: deps.spawn ?? spawnSync });
+      if (left) (deps.error ?? console.error)(`Warning: the snapshot of the head this review read was not removed, and the next run's sweep removes it: ${left}.`);
+    }
+  }
+}
+
+/** The run `codexReviewMain` describes, which fills `snapshot` with the snapshot of the head it makes. */
+async function reviewRun(argv, env, deps, snapshot) {
   const { spawn = spawnSync, spawnAsync = spawnChild, now = () => new Date(), log = console.log, error = console.error, platform = process.platform } = deps;
   const { timeoutMs = REVIEW_TIMEOUT_MS, maxBuffer = REVIEW_MAX_BUFFER, signals = process, randomUUID = newUUID } = deps;
   const { monotonicNow = () => performance.now(), homedir = os.homedir, createLeanHome = makeLeanHome } = deps;
@@ -1213,9 +1203,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   // no such header (a git that does not know the form, a failed process, a branch with no commit) is not read:
   // the two questions are then asked alone, as before, and the one form is not tried again in this run.
   let oneStatus = true;
-  const headAndTree = () => {
+  const headAndTree = (at = root) => {
     if (oneStatus) {
-      const answer = gitOutput(spawn, root, ['status', '--porcelain=v2', '--branch', '--no-ahead-behind', '--untracked-files=no']);
+      const answer = gitOutput(spawn, at, ['status', '--porcelain=v2', '--branch', '--no-ahead-behind', '--untracked-files=no']);
       const lines = typeof answer === 'string' ? answer.split('\n').filter((line) => line !== '') : [];
       const oids = lines.filter((line) => line.startsWith('# branch.oid ')).map((line) => line.slice('# branch.oid '.length));
       if (oids.length === 1 && isFullCommitId(oids[0])) {
@@ -1224,9 +1214,24 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       oneStatus = false;
     }
     return {
-      headNow: git(spawn, root, ['rev-parse', '--verify', 'HEAD^{commit}']),
-      tree: git(spawn, root, ['status', '--porcelain', '--untracked-files=no']),
+      headNow: git(spawn, at, ['rev-parse', '--verify', 'HEAD^{commit}']),
+      tree: git(spawn, at, ['status', '--porcelain', '--untracked-files=no']),
     };
+  };
+
+  // The folder this run's Codex sessions read, made once, the first time one is about to start, and kept in
+  // `readFrom` (`snapshotOfHead`, spec 1): the snapshot of the head, or this folder; `null`, said, when it could
+  // not be made, which refuses the run. The area is swept then, not when the run begins: by then the records have
+  // asked where the git folder is, and a run that starts nothing touches nothing there. A run in a turn worktree,
+  // and one that measures (`onResult`, the comparison, which reviews in a clone of its own at the head), read here.
+  let readFrom = null;
+  const readingPlace = () => {
+    if (readFrom !== null) return readFrom.refused ? null : readFrom;
+    readFrom = snapshotOfHead(root, head, { commonGitDir: where.commonGitDir, spawn, inTurn: mergeTurnOnly, measuring: onResult !== null, gateHeld: !outOfTurn, warn: error });
+    if (readFrom === null || readFrom.refused) error(`${readFrom?.refused ?? `Could not make the snapshot of ${head.slice(0, 7)} that Codex reads, a worktree in the git folder, so nothing was started or recorded`}.\n${nextLine(reviewNext())}`);
+    else if (readFrom.snapshot) Object.assign(snapshot, { place: readFrom.place, root, commonGitDir: where.commonGitDir });
+    else if (readFrom.said) log(readFrom.said);
+    return readFrom?.refused ? null : readFrom;
   };
 
   /** The plan of the review of this range in `groups`, with what it leaves out, `leftOut` (`rangeGroups`),
@@ -1491,54 +1496,37 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       error(`Could not find the git directory, where the worktree of the merge is made, so nothing was started or recorded.\n${nextLine(noStep('git did not say where its folder is, so the worktree of the merge cannot be made'))}`);
       return 1;
     }
-    sweepTurnWorktrees(root, { commonGitDir: common, spawn, now: () => now().getTime() });
+    // The snapshot the commits after the merge are read in, made before the turn, for the check after it.
+    const read = readingPlace();
+    if (read === null) return 1;
     const place = addTurnWorktree(root, turns.merge, { commonGitDir: common, spawn, now: () => now().getTime() });
     if (place === null) {
       error(`Could not make a worktree at the merge ${turns.merge.slice(0, 7)}, so nothing was started or recorded.\n${nextLine(reviewNext())}`);
       return 1;
     }
-    // Resolved values only: the base by its full id, a home that is absolute, the intent already read.
-    const turnArgv = [
-      '--base', turns.from, '--cwd', place, '--prompt', args.prompt, '--part-lines', String(args.partLines),
-      ...(args.maxParts === undefined ? [] : ['--max-parts', String(args.maxParts)]),
-      ...(args.home ? ['--home', path.resolve(args.home)] : []),
-      ...(args.keepHome ? ['--keep-home'] : []),
-      ...(args.fresh ? ['--fresh'] : []),
-    ];
+    // The intent already read goes with it (`turnArgv` resolves the rest).
     let code;
     try {
-      code = await codexReviewMain(turnArgv, env, { ...deps, turnIntent: intent, mergeTurnOnly: true });
+      code = await codexReviewMain(turnArgv(turns, place, args), env, { ...deps, turnIntent: intent, mergeTurnOnly: true });
     } finally {
-      removeTurnWorktree(root, place, { spawn });
+      removeTurnWorktree(root, place, { commonGitDir: common, spawn });
     }
     if (code !== 0) return code;
-    let records;
-    let runs;
-    try {
-      records = readCodexReviews(root, { spawn, where });
-      runs = readCodexReviewRuns(root, { spawn, where });
-    } catch (err) {
-      error(`Could not read the record of the turn at the merge (${err.message}), so the commits after it were not reviewed.\n${nextLine(reviewNext())}`);
+    const ended = afterTurn(root, turns, { spawn, where });
+    if (ended.refused) {
+      error(`${ended.refused}\n${nextLine(reviewNext())}`);
       return 1;
     }
-    const written = records.findLast((record) => record.base === turns.from && record.head === turns.merge);
-    if (written === undefined) {
-      error(`The turn at the merge ${turns.merge.slice(0, 7)} wrote no record, so the commits after it were not reviewed.\n${nextLine(reviewNext())}`);
-      return 1;
-    }
-    // A record whose run line never reached the log reads as owing nothing, which says nothing here.
-    if (!runsLogged(written, runs)) {
-      error(`The run line of the turn at the merge ${turns.merge.slice(0, 7)} is not in the run log, so whether it owes a correction cannot be said and the commits after it were not reviewed: run the review again.\n${nextLine(reviewNext())}`);
-      return 1;
-    }
-    if (recheckState({ from: turns.merge, records, runs }).kind !== 'review') {
+    if (ended.stopped) {
       log(turnStopped(turns));
       return 0;
     }
-    // The commits after the merge are reviewed as committed: HEAD and the tracked tree as they were before the turn.
-    const still = headAndTree();
+    // The commits after the merge are reviewed as committed: HEAD and the tracked tree of the folder they are read
+    // in, the snapshot of the head or this one (`readingPlace`), as they were before the turn.
+    const still = headAndTree(read.place);
     if (still.headNow !== head || still.tree !== '') {
-      error(`HEAD or the tracked files changed during the turn at the merge, so the commits after it were not reviewed: run the review again.\n${nextLine(reviewNext())}`);
+      const changed = read.snapshot ? `The review's own snapshot of ${head.slice(0, 7)} changed` : 'HEAD or the tracked files changed';
+      error(`${changed} during the turn at the merge, so the commits after it were not reviewed: run the review again.\n${nextLine(reviewNext())}`);
       return 1;
     }
     log(turnSaid(2, turns));
@@ -1565,7 +1553,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   let recheck = null;
   if (args.unavailable === undefined) {
     // The record claims the committed range base..HEAD, so the review must see exactly that: a
-    // dirty tracked tree would be reviewed and then recorded as if it were committed.
+    // dirty tracked tree would be reviewed and then recorded as if it were committed. Asked of this folder.
     const dirty = git(spawn, root, ['status', '--porcelain', '--untracked-files=no']);
     if (dirty === null) {
       error(`Could not run \`git status\` to check for uncommitted changes, so the review was not started and nothing was recorded.\n${nextLine(reviewNext())}`);
@@ -1712,6 +1700,9 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         return 1;
       }
     }
+    // The folder every session reads, made after all that is read before Codex starts (`readingPlace`).
+    const readIn = readingPlace();
+    if (readIn === null) return 1;
     const range = `${base.slice(0, 7)}..${head.slice(0, 7)}`;
     /** What a recheck that stands found of the findings it checked, after the findings and the verdict: how
      * many are fixed, then the follow-ups and the blocking findings apart, and whether the next range may be
@@ -1795,10 +1786,11 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       // whole review would refuse the record and leave that part in the run log, to be taken as a review of
       // the range by the next run of it. Before its session nothing is asked: the review started on a tree with
       // no tracked change, and the part before it asked this a moment ago. The one session of a whole range
-      // keeps nothing, and is held by the check that follows the review alone.
+      // keeps nothing, and is held by the check that follows the review alone. Asked of the folder it read.
       const notTheRange = () => {
         if (key === null) return null;
-        const { headNow, tree } = headAndTree();
+        const { headNow, tree } = headAndTree(readIn.place);
+        if (readIn.snapshot) return snapshotChanged({ headNow, tree }, head);
         if (headNow === null || tree === null) return 'HEAD and the state of the tree could not be read';
         if (headNow !== head) return `HEAD moved from ${head.slice(0, 7)} to ${headNow.slice(0, 7)}`;
         return tree === '' ? null : 'tracked files differ from HEAD';
@@ -1867,7 +1859,7 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
         // stdin is ignored under the default prompt (Codex would wait to read it) and carries the prompt
         // under the own one; stdout carries the JSONL, stderr (the progress) stays live.
         result = await runReview(spawnAsync, kill, platform, codexArgv, {
-          cwd: root,
+          cwd: readIn.place,
           stdio: [ownPrompt ? 'pipe' : 'ignore', 'pipe', 'inherit'],
           // The home of the run, and nothing else added or taken away.
           env: leanEnv(codexEnv, leanHome.home, platform, { outOfTurn }),
@@ -1897,7 +1889,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       const reading = sessionReading(events);
       // The answer as this command keeps it, when there is one that is valid. It is kept
       // in the run line whatever the attempt comes to, as what it spent is: a measurement.
-      const review = answered?.ok ? normalizeAnswer(answered.answer, { root, platform }) : null;
+      // The file of each finding from the top of the folder Codex read, else from the top of this one (`answerFrom`).
+      const review = answered?.ok ? answerFrom(answered.answer, { root, place: readIn.place, platform }) : null;
       // Out of a turn, an `incorrect` that rests on refused `node --test` runs alone owes no correction.
       const excused = outOfTurn && review !== null && excusedByRefusal(review, evidence.commands);
       /** Appends this attempt's line to the run log and returns its id, or `undefined` when the line
@@ -2089,7 +2082,8 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
       if (after !== null) {
         const why = `${after} after part ${part.index} of ${part.of} passed, so what its session read is not the committed range alone`;
         logRun('failed', why);
-        error(`${why[0].toUpperCase()}${why.slice(1)}; it is not kept and no record was written. Nothing is edited or committed in a worktree while its review runs; run the review again.\n${waysOn(reviewNext())}`);
+        const inWhat = readIn.snapshot ? 'in the snapshot a review reads' : 'in a worktree while its review runs';
+        error(`${why[0].toUpperCase()}${why.slice(1)}; it is not kept and no record was written. Nothing is edited or committed ${inWhat}; run the review again.\n${waysOn(reviewNext())}`);
         return { exit: 1 };
       }
       // The run line goes first, so that the record can name it. If the record then cannot be written
@@ -2199,8 +2193,14 @@ export async function codexReviewMain(argv = process.argv.slice(2), env = proces
   // The record claims the committed range as it was when the review started. A commit made, or a tracked file
   // edited, while Codex read would be reviewed in part and recorded as if it were not there, so HEAD and the
   // tracked tree are read again here, after the review, and nothing is written unless both are as they were.
-  // A skip reviewed nothing, so there is nothing to hold.
-  if (args.unavailable === undefined) {
+  // A skip reviewed nothing, so there is nothing to hold. Both are read of the folder Codex read (`readingPlace`).
+  if (args.unavailable === undefined && readFrom?.snapshot) {
+    const changed = snapshotChangedAfterReview(headAndTree(readFrom.place), { base, head });
+    if (changed !== null) {
+      error(`${changed}\n${nextLine(reviewNext())}`);
+      return 1;
+    }
+  } else if (args.unavailable === undefined) {
     const { headNow, tree } = headAndTree();
     if (headNow !== null && headNow !== head) {
       error(

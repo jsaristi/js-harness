@@ -8,7 +8,7 @@ import { reviewCoverage } from './codex-review-coverage.mjs';
 import { leftOutSaid } from './codex-review-scope.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './codex-reviews.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './codex-review-runs.mjs';
-import { addTurnWorktree, mergeTurn, PART_AS_CHANGED_LINES, plansAsOne, removeTurnWorktree, sweepTurnWorktrees, TURN_WORKTREE_MAX_AGE_MS, turnsCheaper } from './codex-review-turns.mjs';
+import { addTurnWorktree, inTurnWorktree, mergeTurn, PART_AS_CHANGED_LINES, plansAsOne, removeTurnWorktree, snapshotOfHead, sweepTurnWorktrees, TURN_WORKTREE_MAX_AGE_MS, turnsCheaper } from './codex-review-turns.mjs';
 
 // Real git in every test, isolated from the host's config: where a review of a range holding a merge of
 // the default branch below HEAD is cut into turns (odd/tasks/merge-below-head.md, S1).
@@ -176,8 +176,9 @@ test('a turn worktree whose run is gone is removed by the next run, and one whos
   sweepTurnWorktrees(root, { commonGitDir, running: (pid) => pid === 222, now: () => 3 });
   assert.deepEqual([fs.existsSync(gone), fs.existsSync(going)], [false, true]);
   // A folder that cannot be removed throws nothing: the removal runs in a `finally` (a review, R3/R4).
-  assert.doesNotThrow(() => removeTurnWorktree(root, going, { rm: () => { throw new Error('EBUSY'); } }));
-  removeTurnWorktree(root, going);
+  const spawnNoRemove = (command, args, opts) => (args[0] === 'worktree' && args[1] === 'remove' ? { status: 128, stdout: '', stderr: 'fatal: no' } : spawnSync(command, args, opts));
+  assert.doesNotThrow(() => removeTurnWorktree(root, going, { commonGitDir, spawn: spawnNoRemove, rm: () => { throw new Error('EBUSY'); } }));
+  removeTurnWorktree(root, going, { commonGitDir });
   assert.equal(fs.existsSync(going), false);
   // git holds no worktree of either: only the checkout itself is listed.
   assert.equal(git(root, 'worktree', 'list', '--porcelain').split('\n').filter((line) => line.startsWith('worktree ')).length, 1);
@@ -191,5 +192,193 @@ test('a turn worktree older than a turn can last is removed though a process of 
   const young = addTurnWorktree(root, merge, { commonGitDir, pid: 444, now: () => made + TURN_WORKTREE_MAX_AGE_MS });
   sweepTurnWorktrees(root, { commonGitDir, running: () => true, now: () => made + TURN_WORKTREE_MAX_AGE_MS + 1 });
   assert.deepEqual([fs.existsSync(old), fs.existsSync(young)], [false, true]);
-  removeTurnWorktree(root, young);
+  removeTurnWorktree(root, young, { commonGitDir });
+});
+
+// --- the snapshot of the head a review reads (odd/tasks/codex-spend.md, spec 1) ---
+
+/** A folder outside every repository with one file in it, which no removal or sweep may touch. */
+function outsideWithSentinel() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-turns-outside-'));
+  made.push(dir);
+  fs.writeFileSync(path.join(dir, 'sentinel.txt'), 'keep me\n', 'utf8');
+  return dir;
+}
+
+/** Makes `link` point at the folder `target` as `type` (`junction` or `dir`), or says why this OS cannot. */
+function linkTo(target, link, type) {
+  try {
+    fs.symlinkSync(target, link, type);
+    return null;
+  } catch (err) {
+    return `${type} links cannot be made here (${err.code})`;
+  }
+}
+
+// The link types a test tries: a junction needs no privilege on Windows; a directory symlink may need one.
+const LINK_TYPES = ['junction', 'dir'];
+
+test('reads a snapshot of the head: the snapshot is a worktree of its own name beside a turn of the same run, and the sweep finds it once its run is gone', () => {
+  const { root, merge, c2 } = branchWithMerge();
+  const commonGitDir = path.join(root, '.git');
+  // The same pid and the same time, as a run that makes its snapshot and then the worktree of a turn.
+  const snapshot = addTurnWorktree(root, c2, { commonGitDir, pid: 555, now: () => 7, kind: 'head' });
+  const turn = addTurnWorktree(root, merge, { commonGitDir, pid: 555, now: () => 7 });
+  assert.ok(snapshot !== null && turn !== null && snapshot !== turn, `${snapshot} and ${turn}`);
+  assert.match(path.basename(snapshot), /^review-head-555-7$/);
+  assert.equal(git(snapshot, 'rev-parse', 'HEAD'), c2);
+  sweepTurnWorktrees(root, { commonGitDir, running: () => true, now: () => 8 });
+  assert.deepEqual([fs.existsSync(snapshot), fs.existsSync(turn)], [true, true], 'a run still going keeps both');
+  sweepTurnWorktrees(root, { commonGitDir, running: () => false, now: () => 8 });
+  assert.deepEqual([fs.existsSync(snapshot), fs.existsSync(turn)], [false, false]);
+});
+
+test('reads a snapshot of the head: a removal says what it left, and says nothing when the folder is gone', () => {
+  const { root, c2 } = branchWithMerge();
+  const commonGitDir = path.join(root, '.git');
+  const place = addTurnWorktree(root, c2, { commonGitDir, kind: 'head' });
+  const spawnNoRemove = (command, args, opts) => (args[0] === 'worktree' && args[1] === 'remove' ? { status: 128, stdout: '', stderr: 'fatal: no' } : spawnSync(command, args, opts));
+  const left = removeTurnWorktree(root, place, { commonGitDir, spawn: spawnNoRemove, rm: () => { throw new Error('EBUSY: resource busy'); } });
+  assert.match(String(left), /EBUSY/);
+  assert.equal(fs.existsSync(place), true);
+  assert.equal(removeTurnWorktree(root, place, { commonGitDir }), null);
+  assert.equal(fs.existsSync(place), false);
+  // Without the folder it may delete in, nothing is deleted.
+  const again = addTurnWorktree(root, c2, { commonGitDir, kind: 'head' });
+  assert.match(String(removeTurnWorktree(root, again, {})), /git directory/);
+  assert.equal(fs.existsSync(again), true);
+  removeTurnWorktree(root, again, { commonGitDir });
+});
+
+for (const type of LINK_TYPES) {
+  test(`reads a snapshot of the head: a file behind a ${type} link inside a snapshot survives its removal and the sweep`, (t) => {
+    const { root, c2 } = branchWithMerge();
+    const commonGitDir = path.join(root, '.git');
+    const outside = outsideWithSentinel();
+    const removed = addTurnWorktree(root, c2, { commonGitDir, pid: 666, now: () => 1, kind: 'head' });
+    const swept = addTurnWorktree(root, c2, { commonGitDir, pid: 777, now: () => 2, kind: 'head' });
+    const cannot = linkTo(outside, path.join(removed, 'link'), type);
+    if (cannot !== null) {
+      removeTurnWorktree(root, removed, { commonGitDir });
+      removeTurnWorktree(root, swept, { commonGitDir });
+      t.skip(cannot);
+      return;
+    }
+    fs.mkdirSync(path.join(swept, 'deep'));
+    assert.equal(linkTo(outside, path.join(swept, 'deep', 'link'), type), null);
+    assert.equal(removeTurnWorktree(root, removed, { commonGitDir }), null);
+    sweepTurnWorktrees(root, { commonGitDir, running: () => false, now: () => 3 });
+    assert.deepEqual([fs.existsSync(removed), fs.existsSync(swept)], [false, false]);
+    assert.equal(fs.readFileSync(path.join(outside, 'sentinel.txt'), 'utf8'), 'keep me\n');
+  });
+
+  test(`reads a snapshot of the head: a snapshot name that is a ${type} link out of the area, or an area that is one, is refused by removal and the sweep`, (t) => {
+    const { root } = branchWithMerge();
+    const commonGitDir = path.join(root, '.git');
+    // In the area, a name the sweep matches that leads out of it.
+    const outside = outsideWithSentinel();
+    const area = path.join(commonGitDir, 'js-harness');
+    fs.mkdirSync(area, { recursive: true });
+    const named = path.join(area, 'review-head-888-1');
+    const cannot = linkTo(outside, named, type);
+    if (cannot !== null) {
+      t.skip(cannot);
+      return;
+    }
+    assert.match(String(removeTurnWorktree(root, named, { commonGitDir })), /outside|link/);
+    sweepTurnWorktrees(root, { commonGitDir, running: () => false, now: () => 2 });
+    assert.equal(fs.readFileSync(path.join(outside, 'sentinel.txt'), 'utf8'), 'keep me\n');
+    fs.unlinkSync(named);
+    // Above it: the area itself a link to a folder that holds what looks like a stale snapshot.
+    const elsewhere = outsideWithSentinel();
+    fs.mkdirSync(path.join(elsewhere, 'review-head-999-1'));
+    fs.writeFileSync(path.join(elsewhere, 'review-head-999-1', 'sentinel.txt'), 'keep me\n', 'utf8');
+    fs.rmSync(area, { recursive: true, force: true });
+    assert.equal(linkTo(elsewhere, area, type), null);
+    assert.match(String(removeTurnWorktree(root, path.join(area, 'review-head-999-1'), { commonGitDir })), /outside|link/);
+    sweepTurnWorktrees(root, { commonGitDir, running: () => false, now: () => 2 });
+    assert.deepEqual([fs.existsSync(path.join(elsewhere, 'sentinel.txt')), fs.existsSync(path.join(elsewhere, 'review-head-999-1', 'sentinel.txt'))], [true, true]);
+    fs.unlinkSync(area);
+  });
+}
+
+test('reads a snapshot of the head: a folder is a turn worktree only where it is one of the area, by name', () => {
+  const { root, c2 } = branchWithMerge();
+  const commonGitDir = path.join(root, '.git');
+  const place = addTurnWorktree(root, c2, { commonGitDir, kind: 'head' });
+  const turn = addTurnWorktree(root, c2, { commonGitDir, now: () => 5 });
+  assert.deepEqual([inTurnWorktree(place, commonGitDir), inTurnWorktree(turn, commonGitDir), inTurnWorktree(root, commonGitDir), inTurnWorktree(place, null)], [true, true, false, false]);
+  removeTurnWorktree(root, place, { commonGitDir });
+  removeTurnWorktree(root, turn, { commonGitDir });
+});
+
+test('reads a snapshot of the head: a gate turn\'s test command gives in the snapshot what it gives in the live folder', () => {
+  const { root } = branchWithMerge();
+  const commonGitDir = path.join(root, '.git');
+  fs.writeFileSync(path.join(root, 'package.json'), `${JSON.stringify({ name: 'fixture', type: 'module' })}\n`, 'utf8');
+  fs.writeFileSync(path.join(root, 'm.test.mjs'), [
+    "import { test } from 'node:test';",
+    "import assert from 'node:assert/strict';",
+    "import fs from 'node:fs';",
+    "test('m.js holds what the merge wrote', () => assert.equal(fs.readFileSync(new URL('./m.js', import.meta.url), 'utf8').trim(), 'both'));",
+    "test('n.js holds what came after', () => assert.equal(fs.readFileSync(new URL('./n.js', import.meta.url), 'utf8').trim(), 'after'));",
+    '',
+  ].join('\n'), 'utf8');
+  git(root, 'add', '.');
+  git(root, 'commit', '-q', '-m', 'test: a fixture test');
+  const head = git(root, 'rev-parse', 'HEAD');
+  // In a turn of the gate lock with nothing installed, the run reads a snapshot: the tests run there.
+  const read = snapshotOfHead(root, head, { commonGitDir, gateHeld: true });
+  assert.equal(read.snapshot, true, JSON.stringify(read));
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  const outcome = (cwd) => {
+    const result = spawnSync(process.execPath, ['--test', '--test-reporter=tap', 'm.test.mjs'], { cwd, encoding: 'utf8', env });
+    return { status: result.status, summary: result.stdout.split('\n').filter((line) => /^# (tests|pass|fail) /.test(line)) };
+  };
+  const live = outcome(root);
+  assert.deepEqual(live, { status: 0, summary: ['# tests 2', '# pass 2', '# fail 0'] });
+  assert.deepEqual(outcome(read.place), live);
+  assert.equal(removeTurnWorktree(root, read.place, { commonGitDir }), null);
+});
+
+test('reads a snapshot of the head: a snapshot that is not the head clean as soon as it is made is removed and refuses the run before Codex starts', () => {
+  const { root, c2 } = branchWithMerge();
+  const commonGitDir = path.join(root, '.git');
+  // As a checkout filter or an end-of-line rule leaves a fresh checkout: a tracked file reads as changed there.
+  const dirtyThere = (command, args, opts) => (args[0] === 'status' && /review-head-/.test(String(opts?.cwd)) ? { status: 0, stdout: ' M m.js\n', stderr: '' } : spawnSync(command, args, opts));
+  const warned = [];
+  const read = snapshotOfHead(root, c2, { commonGitDir, spawn: dirtyThere, warn: (line) => warned.push(line) });
+  assert.match(String(read?.refused), /^The snapshot of [0-9a-f]{7} that Codex would read is not the head clean as soon as it is made \(its tracked files differ from its HEAD\)/);
+  assert.deepEqual(warned, []);
+  assert.deepEqual(fs.readdirSync(path.join(commonGitDir, 'js-harness')).filter((name) => name.startsWith('review-')), [], 'the snapshot is gone');
+  // A snapshot whose tracked files git cannot say is refused the same way.
+  const silent = (command, args, opts) => (args[0] === 'status' && /review-head-/.test(String(opts?.cwd)) ? { status: 128, stdout: '', stderr: 'fatal: no' } : spawnSync(command, args, opts));
+  assert.match(String(snapshotOfHead(root, c2, { commonGitDir, spawn: silent })?.refused), /could not be read/);
+});
+
+test('reads a snapshot of the head: removal refuses a path that is not absolute, and the sweep says what it left, which a run warns of', () => {
+  const { root, c2 } = branchWithMerge();
+  const commonGitDir = path.join(root, '.git');
+  const place = addTurnWorktree(root, c2, { commonGitDir, pid: 888, now: () => 1, kind: 'head' });
+  // git would resolve a relative path against `root` and fs against this process's folder: neither is taken.
+  assert.match(String(removeTurnWorktree(root, path.join('.git', 'js-harness', path.basename(place)), { commonGitDir })), /is not an absolute path/);
+  assert.match(String(removeTurnWorktree(root, place, { commonGitDir: '.git' })), /not both absolute paths/);
+  assert.equal(fs.existsSync(place), true);
+  removeTurnWorktree(root, place, { commonGitDir });
+  // A junction named as a snapshot is never followed: the sweep leaves it and says so.
+  const outside = outsideWithSentinel();
+  const cannot = linkTo(outside, path.join(commonGitDir, 'js-harness', 'review-head-1-1'), 'junction');
+  if (cannot !== null) return;
+  const left = sweepTurnWorktrees(root, { commonGitDir, running: () => false, now: () => 2 });
+  assert.equal(left.length, 1, JSON.stringify(left));
+  assert.match(left[0], /is a link, which is never followed/);
+  const warned = [];
+  const read = snapshotOfHead(root, c2, { commonGitDir, warn: (line) => warned.push(line) });
+  assert.equal(read.snapshot, true);
+  assert.equal(warned.length, 1, JSON.stringify(warned));
+  assert.match(warned[0], /^Warning: the sweep of the review worktrees left one: .*is a link/);
+  assert.equal(fs.existsSync(path.join(outside, 'sentinel.txt')), true);
+  removeTurnWorktree(root, read.place, { commonGitDir });
+  fs.unlinkSync(path.join(commonGitDir, 'js-harness', 'review-head-1-1'));
 });
