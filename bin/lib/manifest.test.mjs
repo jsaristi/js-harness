@@ -3038,6 +3038,11 @@ test('the orchestrator skill describes the senior session and asks for the closi
   for (const phrase of ['`rule:senior-model`', '`rule:senior-effort`', 'runs nothing until you send it a task', 'never inherit the senior\'s']) {
     assert.ok(senior.includes(phrase), phrase);
   }
+  // T6 of odd/tasks/senior-orchestrator.md: the lead starts it visibly, never as a background job.
+  for (const phrase of ['`start_session` with that title', '`set_session_model` to `rule:senior-model`', '`set_session_effort` to `rule:senior-effort`', '`detach_session` to top level', 'its `local_…` id']) {
+    assert.ok(senior.includes(phrase), phrase);
+  }
+  assert.ok(!senior.includes('js-harness sessions start'), 'no background start of the senior');
   assert.ok(text.includes('Before the `ready` of your last pull request, write your summary and commit and push it as the closing steps below say, keeping only their `closed` notice for after that `ready`'), 'the ready bullet');
 });
 
