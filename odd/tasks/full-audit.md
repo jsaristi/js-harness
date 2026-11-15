@@ -6,8 +6,9 @@ Delivery: findings only, no code, rule or roadmap change. Opened 2026-11-14 by J
 lead's brief (`~/.js-harness/background/briefs/2026-11-15T02-10-23-626Z-2a6b0f77.md`).
 
 ## State
-T1-T4 done: 13 part files, the coverage run, the verifier and the Synthesis below. Next: the page
-`auditoria-2026-11-14.html` in the notes folder (T5), commit, push, the gate, `notify --kind ready` or `closed`.
+T1-T5 done: 13 part files, the coverage run, the verifier, the Synthesis below and the page
+`auditoria-2026-11-14.html` in the notes folder (not published). Last: the gate and `notify --kind closed` with the
+summary `docs/sessions/2026-11-15-jh-203-auditoria-completa-de-lo-construido.md`.
 
 ## Goal
 Tell, part by part with evidence, what of js-harness to keep, fix, shrink or remove so the harness matures.
@@ -317,7 +318,7 @@ fix (C-11). Status line: remove (A3-4) vs keep and test (E1). F8 share: main's 1
 - [x] T2 (kind: verify) After the go: one opus sub-agent per part of the chosen tier, findings in files.
 - [x] T3 (kind: verify) One adversarial verifier over every remove, merge, done or broken finding.
 - [x] T4 (kind: docs) Synthesis here: findings by severity, keep / fix / shrink / remove, what moves maturity.
-- [ ] T5 (kind: docs) The page `auditoria-2026-11-14.html` in the notes folder, not published.
+- [x] T5 (kind: docs) The page `auditoria-2026-11-14.html` in the notes folder, not published.
 
 ## Notes folder
 `NOTES=C:/Users/Oficina/AppData/Local/Claude-Data/claude_pzs8sxrjxfjjc/side-session-notes/local_4096ade6-b204-4ba7-8cb1-aae81ba3bb49`
