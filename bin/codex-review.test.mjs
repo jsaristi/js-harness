@@ -3789,8 +3789,9 @@ test('when the tokens are not known the summary says so plainly, with no zeros a
  * then a merge of its remote's default branch at HEAD: `{ root, base, mine, gap, main, head }`. With `written` both
  * sides changed `m.txt` and the merge resolves it by hand; without, main changed `s.txt` alone and the merge writes
  * no line. `offAtGap`: the gap turns the Codex review off, and the merge turns it on again. `mainRecorded`: main's
- * commit has a record of its own, as it has where it was made. */
-function mergeAboveGap({ written = true, offAtGap = false, mainRecorded = false } = {}) {
+ * commit has a record of its own, as it has where it was made. `busyMain`: main gained that many commits more before
+ * it, each dated after the gap, as a busy default branch does (`git fast-import`, which makes them in one process). */
+function mergeAboveGap({ written = true, offAtGap = false, mainRecorded = false, busyMain = 0 } = {}) {
   const { root, base } = makeRepoWith({ 'a.txt': 'a1\n', 's.txt': 's1\n', 'm.txt': 'm1\n' }, { 'a.txt': 'A1 changed\n' });
   const trunk = git(root, 'rev-parse', '--abbrev-ref', 'HEAD');
   fs.writeFileSync(path.join(root, 'm.txt'), 'M1 mine\n', 'utf8');
@@ -3801,13 +3802,23 @@ function mergeAboveGap({ written = true, offAtGap = false, mainRecorded = false 
   git(root, 'add', '.');
   git(root, 'commit', '-qm', 'the gap');
   const gap = git(root, 'rev-parse', 'HEAD');
-  git(root, 'checkout', '--quiet', '-b', 'side', base);
-  fs.writeFileSync(path.join(root, written ? 'm.txt' : 's.txt'), 'changed on main\n', 'utf8');
-  git(root, 'commit', '-qam', 'main moves');
-  const main = git(root, 'rev-parse', 'HEAD');
+  if (busyMain > 0) {
+    // Its last commit is main's move as below; every one is dated an hour on, so a list by date puts them all first.
+    const later = Math.floor(Date.now() / 1000) + 3600;
+    const data = (text) => `data ${Buffer.byteLength(text)}\n${text}\n`;
+    const change = (at) => (at === busyMain ? [written ? 'm.txt' : 's.txt', 'changed on main\n'] : ['s.txt', `s${at}\n`]);
+    const commits = Array.from({ length: busyMain }, (_, at) => `commit refs/heads/side\ncommitter T <t@example.invalid> ${later + at} +0000\n${data(`main ${at + 1}`)}${at === 0 ? `from ${base}\n` : ''}M 100644 inline ${change(at + 1)[0]}\n${data(change(at + 1)[1])}`);
+    const imported = spawnSync('git', ['fast-import', '--quiet'], { cwd: root, input: commits.join(''), encoding: 'utf8' });
+    assert.equal(imported.status, 0, imported.stderr);
+  } else {
+    git(root, 'checkout', '--quiet', '-b', 'side', base);
+    fs.writeFileSync(path.join(root, written ? 'm.txt' : 's.txt'), 'changed on main\n', 'utf8');
+    git(root, 'commit', '-qam', 'main moves');
+    git(root, 'checkout', '--quiet', trunk);
+  }
+  const main = git(root, 'rev-parse', 'side');
   git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
   git(root, 'update-ref', 'refs/remotes/origin/main', main);
-  git(root, 'checkout', '--quiet', trunk);
   spawnSync('git', ['merge', '--no-ff', '--no-commit', '--quiet', 'side'], { cwd: root });
   if (written) fs.writeFileSync(path.join(root, 'm.txt'), 'M1 both\n', 'utf8');
   if (offAtGap) fs.writeFileSync(path.join(root, 'harness.json'), '{ "functions": { "codexReview": "on" } }\n', 'utf8');
@@ -4051,7 +4062,7 @@ test('a correction owed below a merge: two turns, the push row names the fix to 
 async function correctedInTwoTurns(options, baseOf) {
   const repo = await owedBelowMerge(options);
   const fixed = correctAbove(repo);
-  assert.equal(checkCodexReviews(repo.root).pass, false);
+  rowOwes(repo);
   const fake = fakeCodexInParts(mergeAfterGap(repo), recheckAbove(repo, fixed));
   const result = await run(['--base', baseOf(repo), '--cwd', repo.root], { ...fake, randomUUID: idsFrom(6) });
   assert.equal(result.code, 0, result.err);
@@ -4068,7 +4079,7 @@ async function correctedInTwoTurns(options, baseOf) {
 async function correctedFromMerge(options, baseOf) {
   const repo = await owedBelowMerge({ written: false, ...options });
   const fixed = correctAbove(repo);
-  assert.equal(checkCodexReviews(repo.root).pass, false);
+  rowOwes(repo);
   const fake = fakeCodexInParts(recheckAbove(repo, fixed));
   const result = await run(['--base', baseOf(repo), '--cwd', repo.root], { ...fake, randomUUID: idsFrom(6) });
   assert.equal(result.code, 0, result.err);
@@ -4116,11 +4127,10 @@ test('a correction owed below a merge: two turns, run from the merge\'s first pa
   await correctedFromFirstParent();
 });
 
-test('a correction owed below a merge: one turn, a rerun at the same HEAD starts no session and records nothing, and the push row says the correction is owed', async () => {
+test('a correction owed below a merge: one turn, a rerun at the same HEAD is refused as the two turns\' is, starts no session and records nothing, and the push row says the correction is owed (codex-spend L24, V5)', async () => {
   const repo = await owedBelowMerge({ written: false });
   const fake = fakeCodexInParts();
-  const result = await run(['--base', repo.main, '--cwd', repo.root], { ...fake, randomUUID: idsFrom(6) });
-  assert.deepEqual([result.code, fake.calls.length, addedRecords(repo)], [0, 0, []], result.out);
+  refusedBeforeMerge(repo, await run(['--base', repo.main, '--cwd', repo.root], { ...fake, randomUUID: idsFrom(6) }), fake);
   rowOwes(repo);
 });
 
@@ -4143,9 +4153,11 @@ test('a correction owed below a merge: one turn, run from the merge\'s first par
   await correctedFromFirstParent({ written: false });
 });
 
-test('a correction owed below a merge: the clean record of a merge of main above a review that owes a correction does not clear it, and the correction above the merge is its recheck', async () => {
-  // As main has it with no gap turn: the review of the branch found something, and a run then read the merge at HEAD.
-  const repo = mergeAboveGap();
+/** As main has it with no gap turn, `mergeAboveGap` with `options`: the review of the branch found something, and a
+ * run then read the merge at HEAD and found it clean. That record does not clear the debt: the push row says it is
+ * owed, and the correction above the merge is its recheck. */
+async function cleanMergeOverOwing(options) {
+  const repo = mergeAboveGap(options);
   const where = { where: whereOf(repo.root) };
   reviewRuns.appendCodexReviewRun(repo.root, { schema: reviewRuns.CODEX_REVIEW_RUN_SCHEMA, id: idOf(5), outcome: 'reviewed', answer: { findings: [{ title: '[P1] The gap drops a line', severity: 'P1', file: 'g.txt', start: 1, end: 1 }], verdict: 'incorrect' } }, where);
   appendCodexReview(repo.root, { ...reviewedRecord(repo.mine, repo.gap), run: idOf(5) });
@@ -4160,6 +4172,125 @@ test('a correction owed below a merge: the clean record of a merge of main above
   assert.equal(fake.calls.length, 1);
   assert.deepEqual(addedRecords(owed), [[owed.head, fixed, owed.gap, undefined]]);
   assert.equal(checkCodexReviews(owed.root).pass, true);
+}
+
+test('a correction owed below a merge: the clean record of a merge of main above a review that owes a correction does not clear it, and the correction above the merge is its recheck', async () => {
+  await cleanMergeOverOwing();
+});
+
+test('a correction owed below a merge: two turns, main 600 commits busier than the gap, a correction above the merge run from main is still the recheck of the gap\'s findings (codex-spend L24, V1)', async () => {
+  await correctedInTwoTurns({ busyMain: 600 }, (repo) => repo.main);
+});
+
+test('a correction owed below a merge: one turn, main 600 commits busier than the gap, a correction above the merge run from main is still the recheck of the gap\'s findings (codex-spend L24, V1)', async () => {
+  await correctedFromMerge({ busyMain: 600 }, (repo) => repo.main);
+});
+
+test('a correction owed below a merge: main\'s shape, a clean record of the merge over a review owing a correction, main 600 commits busier: the push row still says it is owed (codex-spend L24, V1)', async () => {
+  await cleanMergeOverOwing({ busyMain: 600 });
+});
+
+test('a correction owed below a merge: two turns whose merge\'s own review owes a correction too: the recheck after the merge carries the findings of both, and the push row says owed until it is recorded (codex-spend L24, V2)', async () => {
+  const repo = await owedBelowMerge();
+  correctAbove(repo);
+  const lost = { findings: [found('m.txt', 1, 1, { title: '[P1] The merge drops a line' })], overall_correctness: 'patch is incorrect', overall_explanation: 'Lost.', overall_confidence_score: 0.7 };
+  const first = fakeCodexInParts(mergeTurnSession({ root: repo.root, mine: repo.gap, main: repo.main, merge: repo.head }, lost));
+  const stopped = await run(['--base', repo.main, '--cwd', repo.root], { ...first, randomUUID: idsFrom(6) });
+  assert.deepEqual([stopped.code, first.calls.length, addedRecords(repo)], [0, 1, [[repo.gap, repo.head, undefined, 'remerge']]], stopped.err);
+  // Both debts are owed, the merge's and the gap's below it, which the merge's review did not clear.
+  const owed = checkCodexReviews(repo.root);
+  assert.equal(owed.pass, false);
+  assert.match(owed.detail, new RegExp(`^the Codex review that ended at ${repo.head.slice(0, 7)} owes a correction: 2 findings open, not rechecked`), owed.detail);
+  assert.deepEqual(owed.lines.slice(0, 2).map((line) => line.replace(/^.*\] /, '')), ['The merge drops a line', 'The gap drops a line']);
+  fs.writeFileSync(path.join(repo.root, 'm.txt'), 'M1 both, fixed\n', 'utf8');
+  git(repo.root, 'commit', '-qam', 'fix the merge');
+  const fixed = git(repo.root, 'rev-parse', 'HEAD');
+  const second = fakeCodexInParts(recheckAbove(repo, fixed));
+  const result = await run(['--base', repo.main, '--cwd', repo.root], { ...second, randomUUID: idsFrom(8) });
+  assert.equal(result.code, 0, result.err);
+  assert.equal(second.calls.length, 1);
+  const asked = second.calls[0].child.received.text;
+  assert.ok(asked.includes('## A recheck of earlier findings') && asked.includes('The merge drops a line') && asked.includes('The gap drops a line'), asked);
+  // The recheck names the merge's head, as a recheck of the merge's findings did: the record keeps its shape.
+  assert.deepEqual(addedRecords(repo).at(-1), [repo.head, fixed, repo.head, undefined]);
+  assert.equal(checkCodexReviews(repo.root).pass, true);
+});
+
+/** `mergeAboveGap` whose three reviews of one change were spent at the gap's head: the review, its recheck, and the
+ * second recheck there, which left the finding open; `records` counts the records. */
+function spentAtGap() {
+  const repo = mergeAboveGap();
+  const where = { where: whereOf(repo.root) };
+  const before = git(repo.root, 'rev-parse', `${repo.mine}^`);
+  const lost = { title: '[P1] The gap drops a line', severity: 'P1', file: 'g.txt', start: 1, end: 1 };
+  const open = { title: '[not fixed] 1 The gap drops a line', severity: 'P1', file: 'g.txt', start: 1, end: 1 };
+  const counts = { findings: 1, fixed: 0, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 };
+  // The review, its recheck, and the second recheck at the gap's head, which left the finding open.
+  reviewRuns.appendCodexReviewRun(repo.root, { schema: reviewRuns.CODEX_REVIEW_RUN_SCHEMA, id: idOf(5), outcome: 'reviewed', answer: { findings: [lost], verdict: 'incorrect' } }, where);
+  appendCodexReview(repo.root, { ...reviewedRecord(repo.base, before), run: idOf(5) });
+  reviewRuns.appendCodexReviewRun(repo.root, { schema: reviewRuns.CODEX_REVIEW_RUN_SCHEMA, id: idOf(6), outcome: 'reviewed', answer: { findings: [open], verdict: 'incorrect' }, recheck: { of: before, ...counts } }, where);
+  appendCodexReview(repo.root, { ...reviewedRecord(before, repo.mine), run: idOf(6), recheckOf: before });
+  reviewRuns.appendCodexReviewRun(repo.root, { schema: reviewRuns.CODEX_REVIEW_RUN_SCHEMA, id: idOf(7), outcome: 'reviewed', answer: { findings: [open], verdict: 'incorrect' }, recheck: { of: repo.mine, ...counts } }, where);
+  appendCodexReview(repo.root, { ...reviewedRecord(repo.mine, repo.gap), run: idOf(7), recheckOf: repo.mine });
+  return { ...repo, records: readCodexReviews(repo.root).length };
+}
+
+test('a correction owed below a merge: two turns, three reviews spent at the merge\'s first parent, a correction above the merge run from main is refused, never a review as any other (codex-spend L24, gap c)', async () => {
+  const spent = spentAtGap();
+  correctAbove(spent);
+  const fake = fakeCodexInParts();
+  const result = await run(['--base', spent.main, '--cwd', spent.root], { ...fake, randomUUID: idsFrom(8) });
+  assert.deepEqual([result.code, fake.calls.length, addedRecords(spent)], [1, 0, []], result.out);
+  assert.match(result.err, /^Three reviews of this change did not settle it/m);
+});
+
+test('a correction owed below a merge: the merge\'s own review at HEAD owes a correction over three reviews spent at its first parent: the run is refused, and the push row still says the merge\'s correction is owed (codex-spend L24, V2)', async () => {
+  const spent = spentAtGap();
+  const where = { where: whereOf(spent.root) };
+  reviewRuns.appendCodexReviewRun(spent.root, { schema: reviewRuns.CODEX_REVIEW_RUN_SCHEMA, id: idOf(8), outcome: 'reviewed', answer: { findings: [found('m.txt', 1, 1, { title: '[P1] The merge drops a line' })], verdict: 'incorrect' } }, where);
+  appendCodexReview(spent.root, { ...reviewedRecord(spent.gap, spent.head), run: idOf(8), diff: 'remerge' });
+  const row = checkCodexReviews(spent.root);
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`^the Codex review that ended at ${spent.head.slice(0, 7)} owes a correction: 1 finding open, not rechecked`), row.detail);
+  correctAbove(spent);
+  const fake = fakeCodexInParts();
+  const result = await run(['--base', spent.main, '--cwd', spent.root], { ...fake, randomUUID: idsFrom(9) });
+  assert.deepEqual([result.code, fake.calls.length, readCodexReviews(spent.root).length], [1, 0, spent.records + 1], result.out);
+  assert.match(checkCodexReviews(spent.root).detail, new RegExp(`^the Codex review that ended at ${spent.head.slice(0, 7)} owes a correction`));
+});
+
+test('the push row asks git the first-parent line once where a merge alone at the tip has no record over a review that owes, and never where the run log holds no line (codex-spend L24)', async () => {
+  const line = (asked) => asked.filter((args) => args[0] === 'rev-list' && args.includes('--first-parent') && args.includes('--parents')).length;
+  const counting = () => {
+    const asked = [];
+    const spawn = (command, args, opts) => {
+      if (command === 'git') asked.push(args);
+      return spawnSync(command, args, opts);
+    };
+    return { asked, spawn };
+  };
+  const repo = await owedBelowMerge();
+  const owing = counting();
+  assert.equal(checkCodexReviews(repo.root, 'HEAD', { spawn: owing.spawn }).pass, false);
+  assert.equal(line(owing.asked), 1);
+  const plain = mergeAboveGap();
+  const quiet = counting();
+  assert.equal(checkCodexReviews(plain.root, 'HEAD', { spawn: quiet.spawn }).pass, false);
+  assert.equal(line(quiet.asked), 0);
+});
+
+test('a range covered whole asks git the first-parent line once where the run log holds a line, to tell a correction owed below a merge at HEAD, and never where it holds none (codex-spend L24, V5)', async () => {
+  const line = (asked) => asked.filter(({ args }) => args[0] === 'rev-list' && args.includes('--first-parent') && args.includes('--parents')).length;
+  const { root, base, head } = makeRepo();
+  appendCodexReview(root, reviewedRecord(base, head));
+  const none = countingGit(startsNothing(root).deps);
+  const quiet = await run(['--base', base, '--cwd', root], none.deps);
+  assert.deepEqual([quiet.code, line(none.asked)], [0, 0], quiet.err);
+  reviewRuns.appendCodexReviewRun(root, { schema: reviewRuns.CODEX_REVIEW_RUN_SCHEMA, id: idOf(5), outcome: 'reviewed', answer: { findings: [], verdict: 'correct' } }, { where: whereOf(root) });
+  const logged = countingGit(startsNothing(root).deps);
+  const covered = await run(['--base', base, '--cwd', root], logged.deps);
+  assert.deepEqual([covered.code, line(logged.asked)], [0, 1], covered.err);
+  assert.match(covered.out, /^Nothing to review: /);
 });
 
 // Half of this file's test time is above this line, by the durations of a run of it alone (2026-10-12).

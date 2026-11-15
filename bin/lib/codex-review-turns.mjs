@@ -13,7 +13,7 @@ import path from 'node:path';
 import { normalizeAnswer } from './codex-review-answer.mjs';
 import { defaultBranch, gitAnswer, mergeStart, writtenInMerge } from './codex-review-coverage.mjs';
 import { counted, planLines, thousands } from './codex-review-plan.mjs';
-import { RECHECK_LOOK_BACK, recheckState, recheckThrough, runsLogged } from './codex-review-recheck.mjs';
+import { RECHECK_LOOK_BACK, recheckState, recheckThrough, runsLogged, secondRecheckRefused } from './codex-review-recheck.mjs';
 import { readCodexReviewRuns } from './codex-review-runs.mjs';
 import { readCodexReviews } from './codex-reviews.mjs';
 import { leftOutOf } from './codex-review-scope.mjs';
@@ -64,11 +64,17 @@ const gitText = (cwd, spawn, args) => {
 };
 
 /** What a range from `from` up to `tip` is (`recheckThrough`), read against `records` and `runs` (`holds` as
- * `recheckState` takes it), with git asked in `cwd`: the commits behind `from` with their parents, in the one
- * `rev-list` a run asked before; the files two commits differ by; and whether a merge writes a line a review reads
- * (`writtenInMerge`, by the marks at `tip`, as the push counts it). The records are read here when not given.
- * `null` when they cannot be read, or git cannot list the commits behind `from`. The one rule a run, the cut at a
- * merge below HEAD and the push row read a correction owed by (L21). */
+ * `recheckState` takes it), with git asked in `cwd`: the commits of the first-parent line behind `from` with their
+ * parents, in the one `rev-list` a run asked before; the files two commits differ by; and whether a merge writes a
+ * line a review reads (`writtenInMerge`, by the marks at `tip`, as the push counts it). The records are read here when
+ * not given. `null` when they cannot be read, or git cannot list the commits behind `from`. The one rule a run, the
+ * cut at a merge below HEAD and the push row read a correction owed by (L21).
+ *
+ * The first-parent line, and not every commit behind `from` by date (codex-spend L24, V1): a merge of a busy default
+ * branch brought in hundreds of commits newer than the review that owes, and a list by date cut at
+ * `RECHECK_LOOK_BACK` ended before it, so the debt was lost. `--parents` still names both parents of a merge on that
+ * line, which the walk reads. `recheckAnchor` takes the same list: the review a range's findings ended at is on the
+ * line the range continues, and a record on a merged branch, which a list by date could put nearest, is no anchor. */
 export function recheckAt(cwd, { from, tip, records: given, runs, holds, spawn = spawnSync, where }) {
   let records;
   try {
@@ -76,7 +82,7 @@ export function recheckAt(cwd, { from, tip, records: given, runs, holds, spawn =
   } catch {
     return null;
   }
-  const listed = gitText(cwd, spawn, ['rev-list', '--parents', `--max-count=${RECHECK_LOOK_BACK}`, from]);
+  const listed = gitText(cwd, spawn, ['rev-list', '--first-parent', '--parents', `--max-count=${RECHECK_LOOK_BACK}`, from]);
   if (listed === null) return null;
   const rows = listed.split('\n').map((row) => row.trim()).filter(Boolean).map((row) => row.split(' '));
   const changedBetween = (older, newer) => gitText(cwd, spawn, ['diff', '--no-renames', '--name-only', '-z', older, newer])?.split('\0').filter(Boolean) ?? null;
@@ -245,11 +251,15 @@ export function owedBelowMergeSaid({ merge, of, cut = false }) {
  * a merge below `head` that is no turn (`turnsAt` gave none: its marks differ, or it is no longer read by what was
  * written in it), while the review that ended at its first parent owes a correction (`stateOf`, a run's
  * `recheckThrough`) and the range does not `start` there: from that start the range would be a review as any other,
- * and the findings never rechecked (codex-spend L21). `null` otherwise, and the range is taken as it is. */
+ * and the findings never rechecked (codex-spend L21). So too where three reviews of that change were spent and left
+ * something open (`refused`), which `mergeTurn` cuts no turn for: from that start the range was a review as any other
+ * of the change no more review may take (codex-spend L24, gap c); the refusal says so as a run from the first parent
+ * does (`secondRecheckRefused`), with no commit named to review from. `null` otherwise, and the range is taken as it is. */
 export function owedBelowUncut({ uncovered, start, head, stateOf }) {
   const oldest = uncovered.at(-1);
   if (oldest === undefined || oldest.parentCount !== 2 || oldest.id === head || start === oldest.parent) return null;
   const state = stateOf(oldest.parent);
+  if (state.kind === 'refused' && state.open !== 0) return { refused: secondRecheckRefused({ ...state, base: oldest.parent, uncovered: uncovered.map((commit) => commit.id.slice(0, 7)) }) };
   return state.kind === 'recheck' ? { refused: owedBelowMergeSaid({ merge: oldest.id, of: state.of, cut: true }) } : null;
 }
 

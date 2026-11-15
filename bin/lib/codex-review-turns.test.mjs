@@ -7,8 +7,8 @@ import path from 'node:path';
 import { reviewCoverage } from './codex-review-coverage.mjs';
 import { leftOutSaid } from './codex-review-scope.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './codex-reviews.mjs';
-import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } from './codex-review-runs.mjs';
-import { addTurnWorktree, gapBelowMerge, inTurnWorktree, mergeTurn,PART_AS_CHANGED_LINES, plansAsOne, removeTurnWorktree, snapshotOfHead, sweepTurnWorktrees, TURN_WORKTREE_MAX_AGE_MS, turnsCheaper } from './codex-review-turns.mjs';
+import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, readCodexReviewRuns } from './codex-review-runs.mjs';
+import { addTurnWorktree, gapBelowMerge, inTurnWorktree, mergeTurn,PART_AS_CHANGED_LINES, plansAsOne, recheckAt, removeTurnWorktree, snapshotOfHead, sweepTurnWorktrees, TURN_WORKTREE_MAX_AGE_MS, turnsCheaper } from './codex-review-turns.mjs';
 
 // Real git in every test, isolated from the host's config: where a review of a range holding a merge of
 // the default branch below HEAD is cut into turns (odd/tasks/merge-below-head.md, S1).
@@ -137,6 +137,23 @@ test('a correction owed below a merge: a merge after a document commit that foll
   const finding = { file: 'm.js', start: 1, end: 1, severity: 'P1', title: 'The line is lost.', body: 'It is.', confidence: 0.9 };
   appendCodexReviewRun(root, { schema: CODEX_REVIEW_RUN_SCHEMA, id: 'r1', outcome: 'reviewed', answer: { findings: [finding], verdict: 'incorrect' } });
   assert.equal(turnOf(root, side, c2)?.owes, c1);
+});
+
+test('a correction owed below a merge: the line it is read along is the first-parent line, in the one rev-list git is asked, so the commits a merge brought in never push the review that owes out of it (codex-spend L24, V1)', () => {
+  const { root, first, c1, merge, c2 } = branchWithMerge();
+  record(root, first, c1, { run: 'r1' });
+  const finding = { file: 'm.js', start: 1, end: 1, severity: 'P1', title: 'The line is lost.', body: 'It is.', confidence: 0.9 };
+  appendCodexReviewRun(root, { schema: CODEX_REVIEW_RUN_SCHEMA, id: 'r1', outcome: 'reviewed', answer: { findings: [finding], verdict: 'incorrect' } });
+  record(root, c1, merge, { run: 'r2', diff: 'remerge' });
+  appendCodexReviewRun(root, { schema: CODEX_REVIEW_RUN_SCHEMA, id: 'r2', outcome: 'reviewed', answer: { findings: [], verdict: 'correct' } });
+  const asked = [];
+  const spawn = (command, args, opts) => {
+    if (command === 'git') asked.push(args);
+    return spawnSync(command, args, opts);
+  };
+  const state = recheckAt(root, { from: merge, tip: c2, runs: readCodexReviewRuns(root), spawn });
+  assert.deepEqual(state && [state.kind, state.of, state.at], ['recheck', c1, c1]);
+  assert.deepEqual(asked.filter((args) => args[0] === 'rev-list'), [['rev-list', '--first-parent', '--parents', '--max-count=500', merge]]);
 });
 
 test('a merge whose written file is marked at the merge and not at HEAD is no cut: its lines would be in neither turn', () => {

@@ -194,42 +194,75 @@ export function recheckState({ from, records, runs, holds = () => null }) {
  * (`changedBetween(older, newer)`). Any other record on the way, a merge that writes lines with no record of its
  * own, or a commit of more than two parents, stops it, and the range is what `recheckState` said.
  *
- * `rows` are the commits behind `from` as `git rev-list --parents` gives them, `from` first, each `[id, ...parents]`;
- * `records`, `runs` and `holds` as `recheckState` takes them. The line is walked in `rows` alone, and git is asked
- * (`changedBetween`, `writesNothing`) only once a review that owes something is found below a merge, so a range with
- * none pays nothing for this. The state found below a merge carries `at`, the head it is that of. */
+ * A merge's own record that owes a first recheck does not stop it either (codex-spend L24, V2): the merge's turn found
+ * something, the run stopped, and the review after the merge is the recheck of those findings; ended there, the debt
+ * below the merge was never rechecked, and the push, which reads only that last recheck, passed. So the walk goes on
+ * below such a merge as below a clean one, and a debt found below joins it: the state is the recheck of the merge's own
+ * record (`of` names its head, as it did, so its record keeps its shape), and its findings are the merge's, then those
+ * owed below. The run is refused where the debt below is refused (three reviews spent), and where it is a second
+ * recheck: joined, the recheck would be the third review of the findings below, and its record, which names the merge,
+ * would let a fourth follow it. A debt below that is settled (a refusal with nothing open) adds nothing. No clean
+ * record is written above the merge while either is owed: the one record after it is the recheck of both. A refusal
+ * met so carries `owed`, the merges' debt, which is still owed: the push row refuses on it, as it did before the walk
+ * went below the merge. It is in this state alone, never in a record.
+ *
+ * `rows` are the commits behind `from` as `git rev-list --first-parent --parents` gives them, `from` first, each
+ * `[id, ...parents]`; `records`, `runs` and `holds` as `recheckState` takes them. The line is walked in `rows` alone,
+ * and git is asked (`changedBetween`, `writesNothing`) only once a review that owes something is found below a merge,
+ * so a range with none pays nothing for this. The state found below a merge, or joined there, carries `at`, the head
+ * of the newest record that owes it. */
 export function recheckThrough({ from, rows, records, runs, holds = () => null, changedBetween, writesNothing }) {
   const today = recheckState({ from: recheckAnchor({ from, records, back: rows.map(([id]) => id), changedBetween }), records, runs, holds });
-  if (today.kind !== 'review') return today;
   const parentsOf = new Map(rows.map(([id, ...parents]) => [id, parents]));
   const reviewed = records.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed');
-  // The merges passed, `{ id, own }` (`own`: by its clean record), and the stretches `[older, newer]` between them,
-  // which must change only documents.
-  const merges = [];
-  const stretches = [];
-  let newer = from;
-  for (let at = from, steps = 0; parentsOf.has(at) && steps < rows.length; steps += 1) {
+  const lastAt = (id) => reviewed.filter((one) => one.head === id).at(-1);
+  // Whether the last record at `id` is a merge's own: what was written in it, from its first parent, and no recheck.
+  const mergeOwn = (id) => {
+    const [rec, parents] = [lastAt(id), parentsOf.get(id) ?? []];
+    return rec !== undefined && parents.length === 2 && rec.diff === 'remerge' && rec.base === parents[0] && typeof rec.recheckOf !== 'string';
+  };
+  const firstOfMerge = (state) => state.kind === 'recheck' && state.second !== true && mergeOwn(state.of);
+  if (today.kind !== 'review' && !firstOfMerge(today)) return today;
+  // `owed`, what the merges' own records met so far owe, joined; `merges` and `stretches`, those passed since the last
+  // record met, not yet read: each merge `{ id, own }` (`own`: by its clean record), each stretch `[older, newer]`
+  // between them, which must change only documents. `passed`: a merge lies between `from` and where the walk is.
+  let owed = today.kind === 'recheck' ? today : null;
+  let passed = owed !== null;
+  let [merges, stretches] = [[], []];
+  let at = owed === null ? from : parentsOf.get(owed.of)[0];
+  let newer = at;
+  const join = (state) => ({ ...owed, findings: [...owed.findings, ...state.findings], at: owed.at ?? owed.of });
+  const reached = () => stretches.every(([older, upTo]) => older === upTo || (changedBetween(older, upTo)?.every(isDocument) ?? false)) && merges.every((merge) => merge.own || writesNothing(merge.id));
+  for (let steps = 0; parentsOf.has(at) && steps < rows.length; steps += 1) {
     const parents = parentsOf.get(at);
-    const rec = reviewed.filter((one) => one.head === at).at(-1);
+    const rec = lastAt(at);
     if (rec !== undefined) {
       const state = recheckState({ from: at, records, runs, holds });
       if (state.kind !== 'review') {
-        if (merges.length === 0) return today;
+        if (!passed) return today;
         stretches.push([at, newer]);
-        const documentsOnly = ([older, upTo]) => older === upTo || (changedBetween(older, upTo)?.every(isDocument) ?? false);
-        return stretches.every(documentsOnly) && merges.every((merge) => merge.own || writesNothing(merge.id)) ? { ...state, at } : today;
+        if (!reached()) return owed ?? today;
+        if (firstOfMerge(state)) {
+          owed = owed === null ? { ...state, at } : join(state);
+          [merges, stretches, at, newer] = [[], [], parents[0], parents[0]];
+          continue;
+        }
+        if (owed === null) return { ...state, at };
+        if (state.kind === 'refused') return state.open === 0 ? owed : { ...state, at, owed };
+        return state.second === true ? { kind: 'refused', of: rec.recheckOf, open: state.findings.length, at, owed } : join(state);
       }
-      if (parents.length !== 2 || rec.diff !== 'remerge' || rec.base !== parents[0]) return today;
+      if (parents.length !== 2 || rec.diff !== 'remerge' || rec.base !== parents[0]) return owed ?? today;
     } else if (parents.length !== 2) {
-      if (parents.length !== 1) return today;
+      if (parents.length !== 1) return owed ?? today;
       at = parents[0];
       continue;
     }
     merges.push({ id: at, own: rec !== undefined });
     stretches.push([at, newer]);
+    passed = true;
     [at, newer] = [parents[0], parents[0]];
   }
-  return today;
+  return owed ?? today;
 }
 
 /** Whether a run with `--again` reviews a fourth time a change that three reviews did not settle (spec 8 of

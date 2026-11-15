@@ -104,7 +104,10 @@ function coveredDetail({ codeCommits, base }) {
  * A merge does not clear what the review below it owes (`recheckThrough`, codex-spend L21): where that last record is
  * the clean one of what was written in a merge, what is owed is read from the merge's first parent, as `codex-review`
  * reads it. `below`, a commit, asks it of the review that ended at or behind that commit instead: the first parent of
- * a merge at the tip that no record covers, which `codex-review` does not review while that correction is owed. */
+ * a merge at the tip that no record covers, which `codex-review` does not review while that correction is owed, or
+ * the commit the review of the commits no record covers starts at. Read past a merge, a merge's own record that owes
+ * joins the debt below it (`recheckThrough`, codex-spend L24): the review after it is the recheck of both. `through`
+ * says the debt was read past a merge, or joined there. */
 function correctionOwed(cwd, { codeCommits, covers, tip }, { spawn, below = null }) {
   let from = below;
   if (below === null) {
@@ -125,9 +128,14 @@ function correctionOwed(cwd, { codeCommits, covers, tip }, { spawn, below = null
   } catch {
     return null;
   }
+  // A run log with no line holds no finding: nothing is owed, and git is asked nothing more.
+  if (runs.length === 0) return null;
   // Git is asked more only past a merge: most pushes end on a record of no merge, and pay nothing for this.
   let state = recheckState({ from, records, runs });
-  if (state.kind === 'review' && below !== null) state = recheckAt(cwd, { from, tip, records, runs, spawn }) ?? state;
+  if (below !== null) state = recheckAt(cwd, { from, tip, records, runs, spawn }) ?? state;
+  const through = state.at !== undefined;
+  // A run refused below a merge whose own review owes a correction: that correction is still owed (`recheckThrough`).
+  if (state.kind === 'refused' && state.owed !== undefined) state = state.owed;
   // The head whose review owes it: found past a merge (`at`), or past documents, where a recheck names it (`of`).
   if (state.at !== undefined || state.kind === 'recheck') from = state.at ?? state.of;
   if (state.kind === 'review' || (state.kind === 'refused' && state.open === 0)) return null;
@@ -138,6 +146,7 @@ function correctionOwed(cwd, { codeCommits, covers, tip }, { spawn, below = null
     // The step is the commit: the next run of the push names the recheck's command, at the head the commit makes.
     return {
       refuse: true,
+      through,
       detail: `the Codex review that ended at ${at} owes a correction: ${findings(state.findings.length)} open, not rechecked`,
       lines: state.findings.map(priorLine),
       next: firstStep('fix the open findings above in code and commit the fix'),
@@ -285,7 +294,8 @@ function codexCoverageRow(cwd, head, { spawn, remote }) {
     const oldest = uncovered[uncovered.length - 1];
     // A merge at the tip alone uncovered, below which a review owes a correction: the fix comes first, since
     // `codex-review` reviews no such merge before the recheck, which only commits after it can be (codex-spend L21).
-    const owedBelow = uncovered.length === 1 && oldest.id === tip && oldest.parentCount === 2 ? correctionOwed(cwd, state, { spawn, below: oldest.parent }) : null;
+    const tipMerge = uncovered.length === 1 && oldest.id === tip && oldest.parentCount === 2;
+    const owedBelow = tipMerge ? correctionOwed(cwd, state, { spawn, below: oldest.parent }) : null;
     if (owedBelow?.refuse) return fail(`${owedBelow.detail}${note}`, owedBelow.lines, owedBelow.next);
     // A root commit has no `<id>^` to use as a base; a range from the unrelated default branch does
     // reach it, and `--unavailable` records a skip instead of a review. The command "makes the record",
@@ -303,12 +313,18 @@ function codexCoverageRow(cwd, head, { spawn, remote }) {
     const review = { tool: 'codex-review', base: before === null ? gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${baseRef}^{commit}`]) : `${before.shortId}^` };
     const lines = [...uncoveredNames(uncovered), ...beyondLines(uncovered, state.beyond, tip)];
     if (oldest.isRoot) lines.push(`${oldest.shortId} is a root commit, so ${oldest.shortId}^ does not exist: a range from the default branch reaches it (--unavailable <reason> records a skip instead)`);
-    return fail(
-      `${uncovered.length} of ${codeCommits.length} code commit${codeCommits.length === 1 ? '' : 's'} since ${base} have no Codex review record (${codexReviewsPath(cwd, { spawn }) ?? 'no record file'})${note}`,
-      lines,
-      reviewStep(cwd, { spawn, ...review, tip }),
-      review,
-    );
+    const missing = `${uncovered.length} of ${codeCommits.length} code commit${codeCommits.length === 1 ? '' : 's'} since ${base} have no Codex review record (${codexReviewsPath(cwd, { spawn }) ?? 'no record file'})`;
+    // Their review starts below a merge, or reads past one, to a review that owes a correction: it is that recheck,
+    // and the row says the correction is owed until it is recorded, as it does once they are covered (codex-spend
+    // L24, V6). The command is still the review of them, which holds the correction already committed. Where the
+    // range is taken as given, an oldest uncovered merge is still cut at its first parent (`mergeTurn`).
+    const first = before ?? (oldest.parentCount === 2 ? oldest : null);
+    // Asked once: a merge alone at the tip was asked it above, from the same commit.
+    const owedFirst = first === null ? null : tipMerge && first === oldest ? owedBelow : correctionOwed(cwd, state, { spawn, below: first.parent });
+    if (owedFirst?.refuse && (first.parentCount === 2 || owedFirst.through)) {
+      return fail(`${owedFirst.detail}; ${missing}, and their review is that recheck${note}`, [...owedFirst.lines, ...lines], reviewStep(cwd, { spawn, ...review, tip }), review);
+    }
+    return fail(`${missing}${note}`, lines, reviewStep(cwd, { spawn, ...review, tip }), review);
   }
 
   const owed = correctionOwed(cwd, state, { spawn });

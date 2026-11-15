@@ -996,7 +996,6 @@ function planParts(spawn, root, { from, head, groups, intent, paths, why, merge 
   return { parts };
 }
 
-
 /** What the Codex review records leave of `from..head` for a run to do (both full commit ids, `from` the
  * commit the range starts at), by the definition `check --push` reads them with
  * (`bin/lib/codex-review-coverage.mjs`); `given` is the range as the run names it, for what is said.
@@ -1045,7 +1044,6 @@ function leftByRecords(spawn, root, { from, head, given, where }) {
       `this run starts at ${start.slice(0, 7)}, the commit before the oldest one no record covers. \`--again\` takes the range as it was given.`,
   };
 }
-
 
 /** Runs the command; returns the process exit code. `deps` (all optional) injects `spawn` (git and
  * the `codex --version` probe, sync), `spawnAsync` (the review), `killTree`, `timeoutMs`,
@@ -1360,8 +1358,7 @@ async function reviewRun(argv, env, deps, snapshot) {
     return null;
   };
   const startingAt = (given) => {
-    merge = null;
-    turns = null;
+    [merge, turns] = [null, null];
     if (args.again || everyFile || given === head) return given;
     // A merge of the default branch at HEAD, after a branch whose every code commit has a record: the review
     // starts at the first parent of the merge and reads what was written in it (`mergeStart`). Not while the review
@@ -1382,6 +1379,9 @@ async function reviewRun(argv, env, deps, snapshot) {
     if (leftOut !== null) log(baseLeftOutSaid(leftOut));
     const left = leftByRecords(spawn, root, { from: given, head, given: `${base.slice(0, 7)}..${head.slice(0, 7)}`, where });
     if (left.covered !== undefined) {
+      // Covered whole, above a merge whose review, or none, did not clear what is owed below it: refused as above (V5).
+      const owed = mergeTurnOnly || args.unavailable !== undefined ? null : recheckFor(head);
+      if (owed?.kind === 'recheck' && owed.at !== undefined) return refusedAt(owedBelowMergeSaid({ merge: head, of: owed.of }), firstStep('fix the open findings in code and commit the fix above the merge'));
       log(left.covered);
       return null;
     }
