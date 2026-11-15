@@ -931,19 +931,20 @@ of the first version.
 - [ ] The task-progress page made by hand (https://claude.ai/artifact/EUJsxQcNpLEoqgut5sqmpz) becomes a rendered
   page. Its home is spec 8 of `odd/tasks/stretch-protocol.md`, held; its state is on the pushed branch
   `docs/stretch-state-after-879`. Owner: the next stretch-protocol session, JH 201 having closed (2026-11-14, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
-- [x] The advisor-gate sequence "consult, one other call, then act". Settled by JH 206 (`odd/tasks/advisor-use.md`,
-  L26): not a workaround but the rule. The gate asks for the consult in a response of its own, and the host has often
-  not written the act's own response when the hook reads, so a consult there is not counted (replayed on the
-  2026-11-14T23:00:17Z refusal); a consult in an earlier response is (12 covered acts follow the sequence). The
-  sequence stays in the briefs. The refusals seen after a consult came from a compaction between, which is his to
-  decide.
-- [x] The lead re-added by hand a worktree that a land removed while its session still worked. Done by JH 204
-  (`odd/tasks/land-live-worktree.md`): a land and `--prune` keep a worktree a session of `claude agents` stands in,
-  and the `- Seen:` line is `land-removed-live-worktree` in `docs/FAILURES.md`. Left: a session whose listed cwd is
-  elsewhere, or that enters after the listing, is not seen; and a notice from a session whose folder vanished still
-  goes to a record no lead reads (follow-up F1 there, under "notices that are never lost", question 287) (2026-11-14, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
 - [ ] The plan review with a verifier pass, run on Opus because the guard refused Fable for sub-agents: if it
   proves useful, it becomes a plan-review command. Owner: this entry, until a session takes it (2026-11-14, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
+- [ ] `merge-queue --dry-run` passed on a stale installed copy while `--land` refused it (the 882 land, 2026-11-15
+  06:29 local): the dry-run checks copy == origin/main's bin too. Owner: the next merge-queue session (2026-11-15, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
+- [ ] `sessions start` takes a base: the lead made JH 207's worktree by hand on PR 883's head
+  (`git worktree add -b feat/review-gate ... 08653f93`) because start has no base option; and a brief template, since
+  the review-gate brief was patched four times and three briefs carried a stale gate step. Owner: the next
+  sessions-tool session (2026-11-15, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
+- [ ] The contracts row reads `trunk..HEAD` whole (`bin/contract.mjs` `branchOf`), so a branch stacked on another
+  session's code can commit no depth pass: JH 207's S1 was refused on 2026-11-15 and waited until PR 883 landed.
+  Owner: the next contract-row session (2026-11-15, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
+- [ ] A stretch's lost time counts only failed gates: the 2026-11-15 return showed 0.16 h lost while JH 199 and
+  JH 207 sat about 3 h each waiting on the lead and the owner. Idle time read from `waiting` notices counts too.
+  Owner: JH 208 (`odd/tasks/consistent-orders.md`), which reads the same signal (2026-11-15).
 - [ ] Stalled-session detection: the board, the lead's watch and its heartbeat name a work session that holds
   handed work and has made no commit, notice or gate for an hour. On 2026-10-16 three sessions sat five to six
   hours before anyone noticed. Tracked in `odd/tasks/stalled-sessions.md`.
