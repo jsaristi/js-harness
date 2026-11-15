@@ -55,7 +55,17 @@ const unquoted = (command) => command.replace(/(--kind\s+|\b(?:bash|sh|zsh|pwsh|
 /** The first words of commands that cannot run what a heredoc holds, nor a file it was written to, nor another
  * command: their heredocs are data (a commit message, a file written, a pull request's body). A list of what is inert,
  * not of what runs, since three review rounds each found a runner the other list missed (L29). */
-const INERT = new Set(['git', 'gh', 'cat', 'tee', 'cd', 'echo', 'printf', 'mkdir', 'chmod', 'ls', 'grep', 'wc', 'head', 'tail', 'true']);
+const INERT = new Set(['cat', 'tee', 'cd', 'echo', 'printf', 'mkdir', 'chmod', 'ls', 'grep', 'wc', 'head', 'tail', 'true']);
+/** git and gh run a shell alias or an extension, so they are inert only with a built-in subcommand that reads a heredoc
+ * as data, and with no `-c` (`git -c alias.x='!bash' x`). */
+const INERT_SUBCOMMANDS = { git: new Set(['commit', 'tag', 'notes', 'add', 'status', 'log', 'diff', 'show', 'fetch', 'push', 'apply', 'hash-object']), gh: new Set(['pr', 'issue', 'release', 'api']) };
+/** Whether a simple command's words start an inert command. */
+const inertCommand = (words) => {
+  const [first, ...rest] = words.split(/[\s<>]+/);
+  if (INERT.has(first)) return true;
+  if (!(first in INERT_SUBCOMMANDS) || rest.includes('-c')) return false;
+  return INERT_SUBCOMMANDS[first].has(rest.find((word) => !word.startsWith('-')) ?? '');
+};
 /** Whether `text` (the command with its heredoc bodies dropped) may run one of them: unless every simple command in it
  * starts with an inert word, it may. Quoted text is blanked first, so a quoted first word, like a variable, a path, a
  * wrapper or any word off the list, keeps the bodies, as do a `(` or a backtick outside quotes. */
@@ -64,7 +74,7 @@ const mayRunBodies = (text) => {
   if (/[(`]/.test(bare)) return true;
   return bare.split(/\n|;|&&|\|\||\|&?|(?<![<>])&(?![>&])/).some((simple) => {
     const words = simple.trim().replace(/^(?:\w+=\S*\s+)+/, '');
-    return words !== '' && !INERT.has(words.split(/[\s<>]/)[0]);
+    return words !== '' && !inertCommand(words);
   });
 };
 /** A body an unquoted heredoc expands, running a command: a `$(` or a backtick, on any of its lines. */
@@ -78,6 +88,7 @@ const OPENER = /(?<!<)<<(?!<)(-?)\s*(?:'([^']+)'|"([^"]+)"|([^\s<>|;&()'"]+))/g;
 function withoutHeredocText(command) {
   const lines = command.split('\n');
   const kept = [];
+  const bodies = [];
   for (let i = 0; i < lines.length; i++) {
     // A command line ended by a backslash goes on with the next, and a heredoc's body starts after that whole line;
     // a body's lines are never joined, since they are skipped below.
@@ -93,20 +104,26 @@ function withoutHeredocText(command) {
     if (/(?:^|[\s;&|(])\$\(/.test(bare.slice(0, opens[0].index))) continue;
     let at = i + 1;
     let expands = false;
+    const body = [];
     for (const [, dash, single, double, word] of opens) {
       const end = single ?? double ?? word;
       while (at < lines.length && (dash ? lines[at].replace(/^\t+/, '') : lines[at]).replace(/\r$/, '') !== end) {
         if (word !== undefined && EXPANDS.test(lines[at])) expands = true;
+        body.push(lines[at]);
         at++;
       }
       at++;
     }
     // Unterminated, or an unquoted body that expands a command: its text stays.
-    if (at <= lines.length && !expands) i = at - 1;
+    if (at <= lines.length && !expands) {
+      bodies.push(body.join('\n'));
+      i = at - 1;
+    }
   }
-  // A command off the inert list may run a body, now or from a file it was written to: then every body stays.
+  // A command off the inert list may run a body, now or from a file it was written to: then every body stays, as its
+  // own part, so a lone quote in it cannot pair with the quotes of the command after it.
   const left = kept.join('\n');
-  return left !== command && mayRunBodies(left) ? command : left;
+  return bodies.length > 0 && mayRunBodies(left) ? [left, ...bodies] : [left];
 }
 /** The value of `--kind` in an unquoted command. */
 const kindOf = (command) => /--kind\s+(\w+)/.exec(command)?.[1] ?? null;
@@ -125,7 +142,7 @@ export function gatedAct(tool, input, cwd) {
   }
   if (tool !== 'Bash' || typeof input?.command !== 'string') return null;
   if (!/js-harness/.test(input.command)) return null;
-  const command = unquoted(withoutHeredocText(input.command));
+  const command = withoutHeredocText(input.command).map(unquoted).join('\n');
   if (runs(command, 'notify')) {
     const kind = kindOf(command);
     if (kind === 'question') return 'question';
