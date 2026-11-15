@@ -1,8 +1,7 @@
-# codex-T2 at d1c152a6 (local only): NOT to be reviewed or pushed. Its verifier found a blocker (L21): a gap turn with
-findings leaves them unenforced across runs. Next: probe whether main already leaks (a merge at HEAD over a record
-owing a correction), report that to the lead first if so; ask the lead whether the chain fix rides T2's PR; write the
-acceptance matrix (L21) as tests first; then the fix with F3, F4, F6, F7 in one round, the verifier again, then
-Codex and lenses. Then T3, T5, T4 last.
+# codex-T2 at d1c152a6 (local, not pushed). The chain fix (L21, L22) is with a writer (opus, background, uncommitted):
+the acceptance matrix as tests first, then the fix in codex-review-recheck.mjs / codex-review-rows.mjs, plus F3, F4,
+F6, F7. When it returns: check, commit the fix as its own commit, verifier on it, then Codex and the lenses on T2's
+commit d1c152a6 and on the fix as their own slices, PR, advisor, ready --pr. Main's hole is in docs/FAILURES.md.
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
@@ -321,3 +320,7 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   after a gap turn with findings, one turn and two turns, each with a rerun at the same HEAD, the push row's printed
   command, a correction above the merge with --base on main, and with base M^: each ends in a recheck naming the gap
   record, or a refusal with no session and no record, and the row says owed until then.
+- L22 2026-11-15T02:40Z, the lead: the chain fix rides T2's PR as its own commit, its tests first. T2's surface
+  grows by `bin/lib/codex-review-recheck.mjs` and `bin/lib/codex-review-rows.mjs` (+ tests). A `- Seen:` line in
+  docs/FAILURES.md for main's hole (entry open-findings-escape-merge). Its review: Codex and the lenses on that
+  commit as its own slice, no rerun of commits already reviewed. Ready --pr after the gate sequence; the lead lands.
