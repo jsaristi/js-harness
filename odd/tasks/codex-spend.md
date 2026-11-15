@@ -1,6 +1,7 @@
-# codex-T2 at d1c152a6, the chain fix at 74256214 and 457bb1c9 (local, not pushed). The second verifier pass found a
-major, W1 (L26): not clean. A third writer round (opus, background) fixes W1, W3, W5 and W6 as a new commit; then a
-third verifier pass on that delta, then Codex and the lenses, push, PR, advisor, ready --pr.
+# codex-T2 at d1c152a6, the chain fix at 74256214, 457bb1c9 and a5d528dc (local, not pushed; worktree locked "JH 199 live" at
+the lead's ask). The third verifier pass (opus, background) is on a5d528dc (L27). Clean: Codex and the lenses on
+d1c152a6 and on the fix commits as their own slices, push, PR (body: B1-1/B1-2 per L25), advisor, ready --pr with
+`git worktree list`. Another major: to the lead as a problem, no fourth round.
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
@@ -375,3 +376,13 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   refusing is W1, so neither stays. Every refusal test runs the command the refusal prints. W3 only as the
   one-condition change with a failing test; W5 and W6 taken. W2, W4 and W7 are follow-ups. A third pass that finds
   another major goes to the lead as a problem, not a fourth round.
+- L27 2026-11-15T10:30Z, the third writer round committed as a5d528dc (its run of the 16 files: 912 pass, 0 fail). W1
+  shape (3): the merge's own recheck runs alone wherever the state below is refused. Shape (2): joined, with a cap
+  read from the records alone: from a recheck of a merge's own record the walk runs again from the merge's first
+  parent, and where it joins a second recheck still due, the joined one was the third review, so the run is
+  refused as three reviews; the cap refusal prints no review command and says to raise it with the user. W3:
+  `recheckOrAgain` holds `--again` to three on any refused state, and `againPastThreeReviews` refuses a state
+  carrying `merge`. W5 pinned, W6 names the merge. Put to the third pass: the cap's missing command, the push row
+  passing with no three-reviews warning for the debt below after shape (3)'s recheck, the wider
+  `againPastThreeReviews`, the removal of `owed`. The lead (2026-11-15) asked to lock the worktree before ready,
+  since a land skips a locked one: locked, "JH 199 live".
