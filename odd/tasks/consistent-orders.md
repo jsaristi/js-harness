@@ -1,13 +1,11 @@
 # consistent-orders — orders that hold over a long run (JH 208)
 
 ## State
-Depth pass committed (039902d9, branch feat/consistent-orders); item 4's S2 replay corrected by
-`replay-lead.mjs` (job tmp): over all 62 lead ends, predicate A (a consult after the notice, by time) turns back 3
-(10:51Z, 12:38Z, 12:48Z), not 5, and misses the 13:08Z idle close (JH 207 had sent a later non-waiting notice);
-predicate B (inside the lead's stretch) turns back 19, mostly from 8 stale `waiting` notices of dead sessions
-(JH 101 ... JH SR), so S2 needs A plus a liveness bound. Still to do before the waiting notice: S3 against S1,
-whether any sub-agent ever sent `waiting`, the advisor's wording fixes; then a second docs commit, push, consult,
-notify. Open for the lead: the
+Depth pass done and corrected (item 4 replayed over all 62 lead ends; S3 folded into S1). Sent to the lead with a
+`waiting` notice; no source until it answers (the brief's STOP). With S4 left out, this plan builds nothing for
+sub-agents: no sub-agent has ever sent `waiting` (0 of 973), and line 15682 names them, so that is the lead's first
+decision. The plan's double review (one Claude read, one Codex read) runs once the lead's answer fixes the plan, so a
+plan that changes is not read twice. Open for the lead: the
 slice order, S4's sub-agent refusal (it changes what his yes to question 282 left apart), and whether the gentle-ai
 block question goes to him. Next, on the lead's answer: S1 tests first.
 
@@ -96,7 +94,8 @@ brief was skipped at least once with nothing to say so.
 
     Not checked: tests first and decisions written to the feature document (no record was read for them). The
     consult-on-block order was written for a session only in this brief (`grep -l "every time you are blocked"` over
-    the four briefs of 2026-11-15: this one), so JH 206 and JH 207 skipped no harness order, only the host's advisor
+    the four briefs of 2026-11-15, JH 201, JH 203, JH 207 and JH 208: this one; JH 206's and JH 199's briefs are not
+    in that day's folder), so JH 206 and JH 207 skipped no harness order, only the host's advisor
     text ("When stuck"). The lead's 10:51 notes add: the Stop hook was the only thing that caught a skip today; the
     context hook read 99-120% while the host said 65% and drove about 4 state-save rounds; a wait must always run yet
     the reply hook refuses a decision while background work runs; `stretch` counts only failed gates as lost time
@@ -116,8 +115,8 @@ brief was skipped at least once with nothing to say so.
 
 - 3. The bar:
   spec 1: `node --test bin/advisor-gate.test.mjs`: none, new behaviour (`notify --kind waiting` with no consult in its stretch is refused)
-  spec 2: `node --test bin/lib/stop-consult.test.mjs`: none, new behaviour (the lead's idle close is turned back while a session's newest notice to it is `waiting` and no consult came after it)
-  spec 3: `node --test bin/lib/stop-consult.test.mjs`: none, new behaviour (a work session's idle close is turned back while its own newest notice is `waiting` and no consult covers it)
+  spec 2: `node --test bin/lib/stop-consult.test.mjs`: none, new behaviour (the lead's idle close is turned back while a live session's newest notice to it is `waiting` and no consult came after it; replayed today: 3 of 62 ends)
+  spec 3: left out because with S1 in place a work session's `waiting` cannot be sent unconsulted, and on today's record S3 catches nothing S1 does not (JH 207's closes at 12:49Z and 14:53Z follow the two notices S1 refuses); folded into S1
   spec 4: left out because a sub-agent end refused changes what his yes to question 282 left apart (bin/advisor-gate.mjs:8-9) and the exemption of the senior's sub-agents is his; the records show 2 flagged of 27 readable ends today, so the lead takes it to him with that figure
   spec 5: `node --test bin/stretch.test.mjs`: none, new behaviour (a stretch plan carries 2-4 forks with a proposed answer, shown at open and in the question that approves them)
   Excellent here means: each check refuses the case it was built for on today's record, and nothing else; its
@@ -128,25 +127,32 @@ brief was skipped at least once with nothing to say so.
   - S1, the gate on `waiting` under policy R, replayed with the gate's own `readStretch` cut at each notify call
     (`node C:/Users/Oficina/.claude/jobs/b8e90a0a/tmp/replay.mjs <JH 207 transcript> <JH 206 transcript>`): of the 4
     `waiting` notices, 2 refused (JH 207 12:46Z and 14:53Z: calls 0, broken at 60 tool calls) and 2 covered (JH 207
-    12:34Z by its 12:26Z consult; JH 206 10:46Z by its 10:25Z consult). It catches the two that held JH 207 about
-    2 h 40 min.
-  - S2, the lead's close, replayed on the lead's turn ends (`stop_hook_summary` entries, 62 since 05:00Z) inside the
-    windows from each `waiting` to the lead's next consult: 5 turn ends (10:51Z; 12:48Z, 12:50Z, 12:56Z, 13:08Z)
-    would have been turned back; the first of each window forces the consult, so 2 consults, and 13:08Z, the close
-    before the 1 h 40 min idle, is among them. 0 of the other 57 ends would have fired.
+    12:34Z by its 12:26Z consult; JH 206 10:46Z by its 10:25Z consult). It forces a consult before the two notices
+    that preceded JH 207's 2 h 40 min wait; whether that consult would have unblocked it stays the brief's assumption.
+    No sub-agent has ever sent `waiting` (`node C:/Users/Oficina/.claude/jobs/b8e90a0a/tmp/subs.mjs`: 0 of 973
+    sub-agent transcripts), so S1 builds nothing for sub-agents.
+  - S2, the lead's close, replayed with its real predicate at each of the lead's 62 turn ends since 05:00Z (channel
+    state at that moment, gate stretch on the transcript cut there:
+    `node C:/Users/Oficina/.claude/jobs/b8e90a0a/tmp/replay-lead.mjs`). Predicate A, no lead consult after the
+    notice: 3 turned back (10:51Z, 12:38Z, 12:48Z), 3 consults forced. It misses the 13:08Z close before the
+    1 h 40 min idle: JH 207 had sent a later notice that was not `waiting`. Predicate B, no consult after it inside
+    the lead's stretch: 19 turned back, most of them from 8 stale `waiting` notices of sessions long gone (JH 101,
+    JH 137, JH 138, JH 160, JH 166, JH 193, JH SR). Chosen: A, bounded to notices of live sessions (a liveness
+    bound, as stop-wake bounds a handing by the transcript's start), so B's stretch is not reused here.
   - Its limits, measured: it acts at a close, never while the lead sits idle (at 14:49Z the lead was woken by
     JH 199, not by JH 207's notice), and once per close (the host's contract).
   Verdict: supports
 
 - 5. Request: hold the orders the record shows skipped to a check at their act, reusing the advisor gate and the reply
   Stop hook as gentle-ai held its own (code decides, the next step is handed as data), and copy none of its per-turn
-  block. S1: the advisor gate holds `notify --kind waiting` to a consult in its stretch, for work sessions and
-  sub-agents alike. S2: the reply Stop hook turns back the lead's idle close while a session's newest notice to it is
-  `waiting` and no consult in the lead's stretch came after it. S3: the same for a work session whose own newest notice
-  is `waiting`. S4, a sub-agent's unconsulted end refused, goes to him through the lead. S5: the departure plan of
-  `stretch open` carries 2-4 forks with the lead's proposed answer, approved once, acted on while he is away and
-  nothing outside them, cemented as a rule on a `rule/` branch. Each with tests that fail on main, its two reviews,
-  and one verifier before ready.
+  block. S1: the advisor gate holds `notify --kind waiting` to a consult in its stretch (work sessions; it also
+  covers S3). S2: the reply Stop hook turns back the lead's idle close while a live session's newest notice to it is
+  `waiting` and no lead consult came after that notice. S4, a sub-agent's unconsulted end refused, goes to him through
+  the lead: without it this plan builds nothing for sub-agents. S5: the departure plan of `stretch open` carries 2-4
+  forks with the lead's proposed answer; his one approval is recorded as his answer to the question that shows them
+  (the channel, as every answer is); "nothing outside them" is held by the lead's protocol and the rule, not by a
+  check (open: a check would need to read acts against forks). Cemented as a rule on a `rule/` branch. Each with tests
+  that fail on main, its two reviews, and one verifier before ready.
   Adds: departure pre-decisions in the stretch plan, S5 (question 290)
 
 ## Specs
@@ -159,7 +165,7 @@ brief was skipped at least once with nothing to say so.
 ## Tasks
 - [ ] T1 (kind: build) S1, spec 1: `waiting` a gated act in `gatedAct`; tests first in bin/advisor-gate.test.mjs; route inline; commit `feat(advisor-gate): hold a waiting notice to a consult`
 - [ ] T2 (kind: build) S2, spec 2: bin/lib/stop-consult.mjs, the lead's case, wired in bin/reply.mjs as stop-wake is; route inline; commit `feat(reply): turn back the lead's idle close while a session waits unconsulted`
-- [ ] T3 (kind: build) S3, spec 3: the work session's case in the same module; route inline; commit `feat(reply): turn back a waiting session's idle close with no consult`
+- [ ] T3 (kind: build) S3, spec 3: left out, folded into S1 (Depth pass item 3)
 - [ ] T4 (kind: design) S4, spec 4: the lead asks him; build nothing until then
 - [ ] T5 (kind: build) S5, spec 5: `forks` in the stretch plan, shown at open; rule via `rules change` on a `rule/` branch; route inline; commit `feat(stretch): pre-decided forks in the departure plan`
 - [ ] T6 (kind: verify) one independent verifier (opus) over T1-T3 and T5
@@ -167,6 +173,9 @@ brief was skipped at least once with nothing to say so.
 - [ ] F2 follow-up, owner: the lead — the context hook's 99-120% against the host's 65%
 - [ ] F3 follow-up, owner: the lead — the clash between an armed wait and the decision close
 - [ ] F4 follow-up, owner: the lead — `stretch` lost time counts only failed gates
+- [ ] F5 follow-up, owner: the lead — the lead's unconsulted `note` answering a block (10:50Z): a `note` to a waiting session is not gated; S2 forces the consult at the next close, not before the note
+- [ ] F6 follow-up, owner: the lead — JH 199's and JH 204's long stretches of commits and verifier launches with no consult: those acts are not gated by his yes to question 282; widening the gated acts is his call
+- [ ] F7 follow-up, owner: the lead — 8 stale `waiting` notices from sessions long gone stay newest in the channel
 
 ## Log
 - L1 (2026-11-15, lead transcript 69918425 line 15446, 15:22:46Z, queued) his words: "veo que casi no consultaste al senior y ademas casi no avanzamos debe haber una forma de mitigar esto"
