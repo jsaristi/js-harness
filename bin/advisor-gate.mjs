@@ -25,6 +25,8 @@ export const ESTIMATED_DAILY_TOKENS = 2_400_000;
 export const MODE = 'refuse';
 /** How much of a transcript's end is read: R needs at most STRETCH_TOOL_CALLS tool calls back, and the hook has 5 s. */
 const TAIL_BYTES = 4 * 1024 * 1024;
+/** How much of the decision log's end is read for an earlier turn-back: 357 ends took 235 kB in four days. */
+const DECISIONS_TAIL_BYTES = 1024 * 1024;
 const SCHEMA = 'js-harness.advisor-gate/v1';
 const ADVISOR_TOOL_TYPE = 'advisor_20260301';
 
@@ -227,16 +229,46 @@ function record(home, decision, stderr) {
   }
 }
 
-/** The reason a refused PreToolUse act is given; a sub-agent's end is never refused, so it has none. */
+/** The reason a refused PreToolUse act is given; a sub-agent's end is turned back with its own, END_NOTICE. */
 const NOTICE = (act) => [
   advisorSay('missed', { act: `act (${act})`, calls: STRETCH_TOOL_CALLS }), advisorSay('how'), advisorSay('refused'),
 ].join(' ');
 
-/** What a sub-agent hears when its end is turned back: consult, then end; it is turned back once. */
+/** What a sub-agent hears when its end is turned back: consult, then end with its whole result, since its caller reads
+ * only its last message; it is turned back once. */
 const END_NOTICE = [
   advisorSay('missed', { act: 'act (end)', calls: STRETCH_TOOL_CALLS }), advisorSay('how'),
-  'Your end is turned back once: consult the advisor, then end; the next stop goes through.',
+  'Your end is turned back once: consult the advisor, then end by giving your whole result again, as your caller reads only your last message; the next stop goes through.',
 ].join(' ');
+
+/** Whether the log under `home` already holds a turn-back of the sub-agent `agent` of `session`: its tail, which a
+ * stop's turn-back and its next stop sit close in. A log that cannot be read holds none. */
+function turnedBackBefore(home, session, agent) {
+  let text;
+  try {
+    const file = path.join(home, '.js-harness', 'advisor-gate', 'decisions.jsonl');
+    const size = fs.statSync(file).size;
+    const fd = fs.openSync(file, 'r');
+    try {
+      const length = Math.min(size, DECISIONS_TAIL_BYTES);
+      const buffer = Buffer.alloc(length);
+      fs.readSync(fd, buffer, 0, length, size - length);
+      text = buffer.toString('utf8');
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return false;
+  }
+  return text.split('\n').some((line) => {
+    try {
+      const entry = JSON.parse(line);
+      return entry.act === 'end' && entry.turnedBack === true && entry.agent === agent && entry.session === session;
+    } catch {
+      return false;
+    }
+  });
+}
 
 /** Whether `file` does not exist: only ENOENT, so a transcript there but unreadable stays unchecked. */
 function missing(file) {
@@ -283,9 +315,12 @@ function decide(mode, payload, seams) {
   }
   if (stretch.calls > 0) return record(home, { ...base, ...facts, decision: 'covered' }, stderr), {};
   if (stretch.errors >= 2) return record(home, { ...base, ...facts, decision: 'outage' }, stderr), {};
-  record(home, { ...base, ...facts, decision: 'flagged', mode: MODE }, stderr);
-  // A sub-agent's end is turned back once (his answer to question 294): the second stop goes through, as the reply hook's.
-  if (mode === '--stop') return base.secondStop ? {} : { decision: 'block', reason: END_NOTICE };
+  // A sub-agent's end is turned back once (his answer to question 294): the second stop goes through, as the reply
+  // hook's. Once rests on the host's flag and on this log's own record of the turn-back, so a payload without the flag
+  // never loops.
+  const turnBack = mode === '--stop' && !base.secondStop && !turnedBackBefore(home, base.session, agent);
+  record(home, { ...base, ...facts, decision: 'flagged', mode: MODE, ...(turnBack ? { turnedBack: true } : {}) }, stderr);
+  if (mode === '--stop') return turnBack ? { decision: 'block', reason: END_NOTICE } : {};
   return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: NOTICE(act) } };
 }
 
@@ -437,17 +472,19 @@ export function advisorGateReport({ home, since = null, projects = path.join(hom
     if (!days.has(day)) days.set(day, { day, decisions: {}, acts: {}, flagged: 0, followed: 0, addedTokens: 0 });
     return days.get(day);
   };
+  // A turned-back end flagged again at its second stop is the same end: one flag, so the share stays one per act.
+  const isFlag = (d) => d.decision === 'flagged' && !(d.act === 'end' && d.secondStop === true);
   const shown = all.filter((d) => inRange(d.at));
   for (const d of shown) {
     const row = dayOf(d.at);
     row.decisions[d.decision] = (row.decisions[d.decision] ?? 0) + 1;
     row.acts[d.act] = (row.acts[d.act] ?? 0) + 1;
-    if (d.decision === 'flagged') row.flagged++;
+    if (isFlag(d)) row.flagged++;
   }
   // Every flag is read, in range or not: one before midnight can prompt a call after it, whose tokens are that day's.
   const flagsByTranscript = new Map();
   let untraced = 0;
-  for (const d of all.filter((x) => x.decision === 'flagged')) {
+  for (const d of all.filter(isFlag)) {
     if (typeof d.transcript !== 'string') {
       if (inRange(d.at)) untraced++;
       continue;

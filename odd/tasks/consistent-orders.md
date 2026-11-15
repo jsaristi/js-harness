@@ -1,9 +1,10 @@
 # consistent-orders — orders that hold over a long run (JH 208)
 
 ## State
-PR 886 sent ready (S1, S5); the lead lands it. S4 built on feat/consistent-orders-s4 (87b1c568, stacked): an
-unconsulted sub-agent end is turned back once; Codex clean; lenses, the verifier and its PR follow. The S2 and S6
-designs are written (L13, L14) and wait for their double review and the lead's approval; nothing of them is built.
+PR 886 re-sent ready at head 8402785b (L15); the lead lands it. S4 built on feat/consistent-orders-s4, stacked:
+an unconsulted sub-agent end is turned back once, asked to give its whole result again, once resting on the host's
+flag and on the gate's own record; reviews of the fix, the verifier and its PR follow. The S2 and S6 designs are
+written (L13, L14); S2 waits for its replay with the new predicate, both for their double review and the lead.
 
 ## Goal
 An order the harness gives a session, a work session or a sub-agent (first: consult the advisor when blocked) is held
@@ -185,6 +186,7 @@ answering a block, while a session waits) were missed with nothing to say so; on
 - [ ] F8 follow-up, owner: the lead — the gate's report will count `waiting` notices sent before S1 was installed as acts with no decision (bin/advisor-gate.mjs, the reconciliation)
 - [ ] F9 follow-up, owner: the lead — inherited false refusals: an `echo`, a shell comment or an unquoted heredoc commit body that names a gated notify reads as that act (JH 206's T8, odd/tasks/advisor-use.md); also a non-js-harness tool chained after a notice whose own `--kind` is a gated word (L11)
 - [ ] F10 follow-up, owner: the lead — README and the gate's usage text describe the stretch without the compaction break
+- [ ] F11 follow-up, owner: the lead — `notify --kind ready --pr` refuses while the pull request's head is not the sender's HEAD
 - [ ] F7 follow-up, owner: the lead — 8 stale `waiting` notices from sessions long gone stay newest in the channel
 
 ## Log
@@ -259,3 +261,14 @@ answering a block, while a session waits) were missed with nothing to say so; on
     message; it fails open. Sessions that only report through `notify` are held already: a close carries its summary,
     whose page `js-harness report feature` makes.
   - The lead decides: the line bound, and whether a `working` close with a long report is held too.
+- L15 (2026-11-15) a mistake, told in five parts. What happened: my first `ready --pr 886` went out while the PR's
+  branch held 039902d9; the verified 2d9d8f0d sat on the local `worktree-consistent-orders`, pushed only inside the
+  later `feat/consistent-orders-s4`; the lead caught it (13:31 local). The fix now, checked: fast-forward, no force,
+  039902d9..8402785b (`gh pr view 886 --json headRefOid`: 8402785b), ready re-sent at 13:35 local. What stops it
+  recurring: a check before a line, F11 (`notify --kind ready --pr` refuses while the PR's head is not HEAD). Where
+  and when: notify's ready path, the lead's to assign. The proof: `js-harness failures` lists ready-head-not-pushed
+  with no second `- Seen:` line. The advisor, before the re-send, also found two S4 gaps the reviews missed: a
+  turned-back sub-agent might end with "consulted, done" and lose its result for the caller (the reason now asks for
+  the whole result again), and once rested only on `stop_hook_active`, which no record shows the host sending true
+  (357 of 357 ends recorded false; it is now also read from the gate's own turn-back record); both pinned by tests
+  that failed first.

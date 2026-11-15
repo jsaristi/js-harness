@@ -268,11 +268,23 @@ test('an unconsulted sub-agent end is turned back once (his answer to question 2
   const first = stop(false);
   assert.equal(first.answer?.decision, 'block');
   assert.match(first.answer.reason, /consult the advisor/);
+  assert.match(first.answer.reason, /whole result again/, 'the caller reads only the last message, so the result is given again');
   const again = stop(true);
   assert.deepEqual(again.answer, {}, 'the second stop is let through, never a loop');
   writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall(), advisorCall()]);
   assert.deepEqual(stop(false).answer, {}, 'a consulted end passes');
   assert.deepEqual(decisions(home).map((d) => [d.act, d.decision, d.secondStop]), [['end', 'flagged', false], ['end', 'flagged', true], ['end', 'covered', false]]);
+});
+
+test('once rests on the gate\'s own record too: a second stop without stop_hook_active goes through; another sub-agent is still turned back', () => {
+  const { home, project } = scratch();
+  const t = path.join(home, 'projects', 'p', 'agent.jsonl');
+  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
+  const stop = (agent) => run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: agent, agent_transcript_path: t }, home);
+  assert.equal(stop('a3').answer?.decision, 'block');
+  assert.deepEqual(stop('a3').answer, {}, 'a payload with no stop_hook_active is not blocked twice');
+  assert.equal(stop('a4').answer?.decision, 'block');
+  assert.deepEqual(decisions(home).map((d) => [d.agent, d.decision, d.turnedBack ?? false]), [['a3', 'flagged', true], ['a3', 'flagged', false], ['a4', 'flagged', true]]);
 });
 
 test('a sub-agent of the senior session consults too (his answer to question 295); a Fable sub-agent stays exempt', () => {
@@ -365,6 +377,18 @@ function splitCall(timestamp, msg, tokens, { result = true } = {}) {
   if (result) entries.push({ type: 'assistant', timestamp, advisorModel: FABLE, message: { id: msg, model: OPUS, content: [{ type: 'advisor_tool_result', tool_use_id: callId, content: { type: 'advisor_redacted_result', encrypted_content: 'x' } }], usage: usage(tokens) } });
   return entries;
 }
+
+test('report: a turned-back end flagged again at its second stop is one flag, not two', () => {
+  const { home } = scratch();
+  const t = path.join(home, 'projects', 'p', 'end.jsonl');
+  writeTranscript(t, splitCall('2026-11-15T10:05:00.000Z', 'e1', 1000));
+  writeDecisions(home, [
+    { at: '2026-11-15T10:01:00.000Z', act: 'end', agent: 'a1', decision: 'flagged', turnedBack: true, secondStop: false, transcript: t },
+    { at: '2026-11-15T10:02:00.000Z', act: 'end', agent: 'a1', decision: 'flagged', secondStop: true, transcript: t },
+  ]);
+  const r = advisorGateReport({ home });
+  assert.deepEqual(r.days.map((d) => [d.day, d.flagged, d.followed]), [['2026-11-15', 1, 1]]);
+});
 
 test('report: decisions by day, and the Fable input tokens of the calls with a result that followed a flag in its stretch', () => {
   const { home } = scratch();

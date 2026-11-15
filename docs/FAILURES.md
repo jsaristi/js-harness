@@ -1520,6 +1520,15 @@ skipped no duty.
   through the orchestrator" — replaced on 2026-10-16: T17 was found delivered and checked off
   (odd/tasks/session-channel.md, Progress of 2026-10-15)
 
+### ready-head-not-pushed
+A session said a pull request ready while the work it had verified sat on a local branch never
+pushed to that pull request's branch, so the land would have taken an older head.
+- Class: delivery
+- Seen: 2026-11-15 — odd/tasks/consistent-orders.md, L15 — JH 208 sent `ready --pr 886` with the PR's
+  head at 039902d9 while the verified 2d9d8f0d sat on the local `worktree-consistent-orders`; the lead
+  caught it (13:31 local) and the branch was fast-forwarded to 8402785b
+- Control: owed — odd/tasks/consistent-orders.md — "F11 follow-up, owner: the lead — `notify --kind ready --pr` refuses while the pull request's head is not the sender's HEAD"
+
 ### record-order-over-time
 The board read a session's state and place by the order of the channel record, and `sessions start`
 appends a session's first row with the time of its launch, after a notice the session may have
