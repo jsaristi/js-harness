@@ -299,7 +299,7 @@ test('a plan the stretch does not touch says so in one line, with no tiles of th
   assert.doesNotMatch(planBlock(renderDeparture({ ...departure, map: MAP, forecast: { ...still, phases: two } })), /fase «/);
 });
 
-test('the departure marks where it is listed the step the stretch closes, and says closing a step marks no phase row', () => {
+test('the departure marks where it is listed each step the stretch names, with its own when, and says closing a step marks no phase row', () => {
   const block = planBlock(renderDeparture({ ...departure, map: MAP, forecast: PLAN_FORECAST }));
   assert.match(block, /Por hacer \(2\)[\s\S]*S8 Certification <em>\(este tramo: cierra si va como se estimó\)<\/em>/);
   // Codex, P2: the mark keeps the row's when, so a step that ends after the return is not promised in the stretch.

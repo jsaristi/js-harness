@@ -182,7 +182,7 @@ function planBlock(plan, { forecast, measured }) {
   const moves = !gone && movesOf(plan, now);
   const steps = now?.steps ?? plan.steps;
   // On the departure, a step the stretch names is marked where it is listed with its own when, so "por hacer" is not
-  // read as untouched and a step that ends after the return is not promised.
+  // read as untouched and a step that ends after the return is not promised. Raw text: `stepsByState` escapes a mark.
   const marks = new Map(measured ? [] : rows.map((row) => [row.text, `este tramo: ${WHEN_WORDS[row.when] ?? row.when}`]));
   return `<p><strong>${escapeHtml(plan.name)}</strong></p>
 <p>Qué es: ${what}. Cada paso lleva su estado escrito a mano y el plan se cuenta por pasos. ${count}</p>${versus}
