@@ -251,6 +251,34 @@ test('SubagentStop never blocks (outside his yes to 285); a second stop is recor
   assert.deepEqual(decisions(home).map((d) => [d.act, d.decision, d.secondStop]), [['end', 'flagged', false], ['end', 'covered', true]]);
 });
 
+test('an end whose transcript does not exist is recorded apart with its agent type, not unchecked (T7)', () => {
+  const { home, project } = scratch();
+  const gone = path.join(home, 'projects', 'p', 'm', 'subagents', 'agent-a9.jsonl');
+  const r = run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a9', agent_type: 'made-up-type', agent_transcript_path: gone, stop_hook_active: false }, home);
+  assert.deepEqual(r.answer, {});
+  const [d] = decisions(home);
+  assert.deepEqual([d.act, d.decision, d.agentType, d.transcript], ['end', 'no-transcript', 'made-up-type', gone]);
+  const t = path.join(home, 'projects', 'p', 'agent.jsonl');
+  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
+  run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a2', agent_type: 'general-purpose', agent_transcript_path: t, stop_hook_active: false }, home);
+  assert.equal(decisions(home)[1].agentType, 'general-purpose', 'every decision records the agent type');
+  const gonePre = run(['--hook'], { tool_name: 'ExitPlanMode', tool_input: {}, cwd: project, session_id: 's', transcript_path: path.join(home, 'gone.jsonl') }, home);
+  assert.deepEqual(gonePre.answer, {});
+  assert.equal(decisions(home)[2].decision, 'unchecked', 'a PreToolUse act with no transcript is still unchecked');
+  const report = advisorGateReport({ home });
+  assert.equal(report.unchecked, 1, 'an end with no transcript is not counted unchecked');
+  assert.deepEqual(report.noTranscript, { 'made-up-type': 1 });
+  const out = [];
+  advisorGateMain(['report'], { stdout: (s) => out.push(s), stderr: () => {}, home });
+  assert.match(out.join(''), /sub-agent ends with no transcript: 1 \(made-up-type 1\)/);
+  writeDecisions(home, [
+    { at: '2026-11-14T11:02:07.496Z', act: 'end', decision: 'unchecked', reason: `cannot read the transcript ${gone}: ENOENT; the act goes through unchecked` },
+    { at: '2026-11-14T11:03:00.000Z', act: 'end', decision: 'unchecked', reason: `cannot read the transcript ${gone}: EACCES; the act goes through unchecked` },
+  ]);
+  const old = advisorGateReport({ home });
+  assert.deepEqual([old.unchecked, old.decisions, old.noTranscript], [1, 1, { unknown: 1 }], 'an end recorded before T7 as unchecked for ENOENT is read as one with no transcript');
+});
+
 test('readStretch reads only the tail of a long transcript', () => {
   const { home } = scratch();
   const t = path.join(home, 'projects', 'p', 'long.jsonl');
