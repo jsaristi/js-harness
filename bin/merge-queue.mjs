@@ -110,7 +110,7 @@ the rule): those whose work it landed and any an earlier land left; the record n
 kept is said with why, and nothing of it changes the exit.
 --prune fetches origin and removes, by the same rule, every worktree on a branch origin's default branch holds, whatever
 landed it; it asks about no pull request, moves nothing, writes no record and exits 0 unless git cannot fetch or
-list the worktrees.`;
+list the worktrees, or claude agents cannot be read when one could be removed.`;
 
 const TIMEOUT_MS = 60_000;
 // The open pull requests one landed branch has based on it that a land retargets; gh pages up to this many itself.
