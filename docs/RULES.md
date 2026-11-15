@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `86f92c535e02`. In force: 74 (46 of Sebastián, 28 of the project). Retired: 8.
+Hash `3f6b5274446e`. In force: 74 (46 of Sebastián, 28 of the project). Retired: 8.
 
 ## Sebastián's
 
@@ -180,9 +180,9 @@ About how many changed lines a commit that will be reviewed stays under, a file 
 - Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by the command on 2026-11-05.
 
 ### rules-live-in-the-harness
-A rule he gives is cemented in the harness where something acts on it, never only in memory; an output he sees again and again, as a template of five parts: "- A rule is recorded only where something acts on it, in this order of preference: a check a command runs, a line of \`CLAUDE.md\` or \`AGENTS.md\`, a protocol."
+A rule he gives is cemented in the harness where something acts on it, never only in memory; an output he sees again and again, as a template of five parts; a manual workaround made while working, as a follow-up that builds it into bin/, a template or a check, owned by a session or a roadmap entry named in the same reply: "- A rule is recorded only where something acts on it, in this order of preference: a check a command runs, a line of \`CLAUDE.md\` or \`AGENTS.md\`, a protocol."
 - Home: `bin/lib/protocols-skill.mjs`.
-- Since 2026-10-29. Row: reports. Source: his words of 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-15, 2026-10-26, 2026-10-26, 2026-10-26, 2026-10-28, 2026-10-28, checked by the command on 2026-10-29.
+- Since 2026-11-15. Row: reports. Source: his words of 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-15, 2026-10-26, 2026-10-26, 2026-10-26, 2026-10-28, 2026-10-28, 2026-11-14, 2026-11-14, checked by the command on 2026-11-15.
 
 ### senior-effort
 The effort a senior session runs at, titled <code> SR · <purpose>; its model is rule:senior-model: high.

@@ -625,15 +625,18 @@ export const RULES = [
   },
   {
     "id": "rules-live-in-the-harness",
-    "subject": "a rule he gives is cemented in the harness where something acts on it, never only in memory; an output he sees again and again, as a template of five parts",
+    "subject": "a rule he gives is cemented in the harness where something acts on it, never only in memory; an output he sees again and again, as a template of five parts; a manual workaround made while working, as a follow-up that builds it into bin/, a template or a check, owned by a session or a roadmap entry named in the same reply",
     "owner": "sebastian",
-    "since": "2026-10-29",
+    "since": "2026-11-15",
     "path": "bin/lib/protocols-skill.mjs",
     "phrases": [
       "A rule is recorded only where something acts on it",
       "A memory note is never its home.",
       "An output the user sees again and again is cemented the same way, as a template of five parts",
-      "and asks for a missing field alone."
+      "and asks for a missing field alone.",
+      "A manual workaround the lead or a session makes while working",
+      "gets a follow-up that builds it into",
+      "named in the same reply that tells of the workaround"
     ]
   },
   {
