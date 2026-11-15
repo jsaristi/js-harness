@@ -389,6 +389,9 @@ forbids: the host's reminder asks for them, and its own text says the user's ins
 - Seen: 2026-10-31 — JH 116, its first commit of worktree-reply-hook-latency, branched before the
   `commit-msg` hook landed — the message carried `Co-Authored-By`; amended before any push (f91cbcc1),
   and the next commits carry neither
+- Seen: 2026-11-15 — JH 210, its first commit of docs/fanout-tree — the message carried `Co-Authored-By`
+  from the host's reminder; the session stopped the commit while its pre-commit gate ran, so none was
+  made, and made it again without it (f84f460b); the `commit-msg` hook would have stripped it anyway
 - Control: check — bin/commit-msg.test.mjs — "commit-msg hook makes the commit without the host's lines" — since
   2026-10-31
 - Was: protocol — bin/lib/rules-block.mjs — "or AI attribution to commits. Use conventional

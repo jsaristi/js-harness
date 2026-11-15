@@ -9,8 +9,8 @@ L7): this version is not re-read, and the read is not rerun without being asked.
 answers: T1 (synthetic fixture and terms), then the build of whichever lines he approved.
 
 ## Goal
-In round one a session reads with several readers launched together, writers of disjoint declared units go out
-together, and the verifier loop has a bound. Each order is held at the act where a hook can judge it, and the rest
+In round one a session reads with several readers launched together, every writer carries its edit surfaces, and
+the verifier loop has a bound. Each order is held at the act where a hook can judge it, and the rest
 is named as audit-only, never presented as held.
 
 ## Why
@@ -137,14 +137,21 @@ Line 45 follows from the three answers (spec 4), its whole text given for the ca
   - Spec 1's checks, replayed after the review (`node C:\Users\Oficina\.claude\jobs\c0430b6d\tmp\replay.mjs`):
     background sessions have one user message and then only notification wakes (JH 199 60, JH 207 19, this one
     8), so a "user turn" unit does not fit them; a 10-call read threshold would have fired in 9, 6, 6 and 2 wakes
-    (JH 199, 206, 207, 210), mostly gate, commit and test wakes; `roleOf` misclassified 4 of 25 launches (JH 199's
-    3 untyped general-purpose as other, this session's cost reader as verifier, from its first verb "Measure").
-    JH 208's transcript was no longer at its path: not replayed.
-  Verdict: refutes (option C of block 3, and spec 1's read threshold as drafted). Block 2's readers rule supports on
-  one session's round. Question 3 puts the change or drop first; the threshold leaves question 1's yes.
+    (JH 199, 206, 207, 210), wakes not classified (gate, commit or reading); in each of JH 199, 206 and 207 one of
+    them was the opening user wake. `roleOf` misclassified 4 of 25 launches: JH 199's "Second verifier pass", "Third
+    verifier pass" and blind plan read as other (the very passes spec 2 bounds), and this session's cost reader as
+    verifier, from its first verb "Measure". JH 208's transcript was no longer at its path: not replayed.
+  - Spec 1's serial-reader refusal over the record: 0 hits. The only past readers were JH 208's 2 Explore,
+    launched together. The record's failure is reading with no reader at all (JH 207), which no act-check here
+    holds. So a yes to line 46 is mostly a wording change, the failure this plan exists to end. A narrower
+    candidate, outside the yes: once per session, before its first Edit or Write, past 10 read calls with no reader,
+    refuse once; it fired 3 of 3 opening wakes (JH 199, 206, 207), false positives not classified.
+  Verdict: refutes (option C of block 3; spec 1's read threshold as drafted; spec 1's refusal holds nothing on the
+  record). Question 1 says this first; question 3 puts option B first.
 - 5. Request: let a session read in parallel in round one (3-4 readers launched together when the questions are
   independent, then one correction and one recheck), bound the verifier loop by slice under a risk the feature
-  document must declare, and launch writers together when the document declares disjoint ready units of real size.
+  document must declare, and require every writer to carry its surfaces (option B), the obligation to launch
+  writers together left to his choice.
   Hold each at launch where a hook can judge it, refusing once and naming the line; say plainly what is audit-only
   (a lone first launch; whether questions were truly independent).
   Adds: none
@@ -182,7 +189,7 @@ Line 45 follows from the three answers (spec 4), its whole text given for the ca
      checks, as rarely as possible"
    - Drafted: "only a change that names a Task Size high-risk item, in its feature document's `risk:` line or in
      the request, gets an independent verifier after the change's own checks, and for each slice at most one
-     correction batch and one recheck, then his decision"
+     correction batch and one recheck, then the user's decision"
    - Review on every code slice is not restated here: it has its home in the project's `CLAUDE.md` and
      `docs/SPEC.md:345`, and this line is read in projects with no reviews.
    - A yes covers: every new feature document declares `risk: high (<items>)` or `risk: medium`, and a missing line
