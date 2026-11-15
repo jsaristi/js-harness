@@ -1273,6 +1273,20 @@ as in force, beside the new one.
   a reader would take as in force and that said something no longer true
 - Control: owed — odd/tasks/rule-hierarchy.md — "T16 One home for every rule"
 
+### open-findings-escape-merge
+A review's open findings stopped being owed once a merge of the default branch above it got a
+clean record: the merge, read by what was written in it, was reviewed as a fresh review, and the
+push read only that last record, so a finding was never rechecked.
+- Class: rule-not-acting
+- Seen: 2026-11-15 — odd/tasks/codex-spend.md, L21 — on main c472dcb, `startingAt` reads a merge at
+  HEAD as a review with no recheck state asked (`bin/codex-review.mjs:1597`), and the push's
+  `correctionOwed` reads only the last record covering the newest code commit
+  (`bin/lib/codex-review-rows.mjs:108`); a probe with a finding open below a merge of main showed
+  the merge read from main with no guard. Found by T2's verifier before any such push was seen. The
+  check that would have caught it: a test at the push row's level that a merge-own record leaves the
+  debt of the record at its first parent owed
+- Control: owed — odd/tasks/codex-spend.md — "T2 (kind: build) spec 2"
+
 ### opening-pasted-no-line
 The opening of a session reached it as pasted text with no typed line of his, so the session waited
 for a yes or went on by its own judgment.

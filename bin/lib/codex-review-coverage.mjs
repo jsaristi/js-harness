@@ -40,7 +40,7 @@ function gitYes(spawn, cwd, args) {
 /** Whether `git <args>` answers yes (exit 0) or no (exit 1), for the yes/no commands where a non-zero exit is
  * an answer; `null` when git did not say: it failed, it could not be started, or it threw. Unlike `gitYes`,
  * a git that fails is no "no", which is what a caller needs when a "no" is the one answer it acts on. */
-function gitAnswer(spawn, cwd, args) {
+export function gitAnswer(spawn, cwd, args) {
   try {
     const result = spawn('git', args, { cwd, encoding: 'utf8' });
     if (!result || result.error) return null;
@@ -142,7 +142,7 @@ export function loggedCommits(log) {
  * names, which is what git writes for a merge of more than two parents, a warning that it merges none of
  * them again. `--no-relative` and `--no-renames` for the reasons the log has them (`reviewCoverage`): the
  * names are compared with its names. */
-function writtenInMerge(spawn, cwd, id) {
+export function writtenInMerge(spawn, cwd, id) {
   const shown = gitOut(spawn, cwd, ['show', '-z', '--remerge-diff', '--no-show-signature', '--no-relative', '--no-renames', '--no-ext-diff', '--name-only', '--format=%H', id]);
   const fields = shown?.split('\0') ?? [];
   if (fields.pop() !== '' || fields.shift() !== id) return null;

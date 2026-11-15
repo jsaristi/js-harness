@@ -1,9 +1,10 @@
 # codex-spend: no Codex waste, no review weakened
 
 ## State
-T1 done: PR 878 open at its head; Codex and lens records cover bc87ce6..fc1c9f0 (L16-L18). Next: ready notice
---pr 878 (advisor consulted), then Q1+Q2 drafts to the lead's folder; T2 commits stay local (or a stacked branch)
-until 878 lands; unbind 878 on land; then T2, T3, T5, and T4 last. Two spec-1 departures await the lead (L18).
+PR 883 (T2 and the chain fix, head 08653f93) is a draft held for the owner: the lead's narrow verifier pass on
+6e6adbf..1336742 found Y1, which fails open (L32), and by the lead's rule a fail-open fault does not land. Do not edit
+or un-draft 883 until the owner or the lead says. Then: Y1's decision, the land, unbind 883; then T3, T5, T4 last, T6.
+Worktree locked "JH 199 live".
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
@@ -298,3 +299,146 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   the lead with the ready, not settled by this log: measuring runs make no snapshot (L14), and the sweep runs before
   the first Codex session rather than at every start (L17). Not tested: snapshot removal after a throw, and the
   Ctrl-C test asserting the snapshot is gone; a test of either costs another review round, offered to the lead.
+- L19 2026-11-15T01:05Z, the lead: PR 878 landed (main c472dcb, green local and Actions); L18 accepted (measuring
+  runs make no snapshot; the sweep runs before the first Codex session). Inside T2: a test of snapshot removal after
+  a throw, and the Ctrl-C test asserting the snapshot is gone. The land removed this worktree (empty at 19:55 local);
+  the lead re-added it on feat/codex-spend-t2 at c472dcb. A leftover snapshot is a registered git worktree, which
+  the next sweep removes with `worktree remove --force` and `worktree prune`.
+- L20 2026-11-15T02:30Z, T2 written by a js-harness-writer (opus), Covered: S2, with the two L19 tests (both pass on
+  T1's `finally` and fail with the removal off). Measured on the incident (scratchpad probe-gap.mjs, today's records):
+  cc54678..af986f0 leaves 1de6ed6 alone uncovered and `turnsAt` cuts it as the gap cc54678..1de6ed6, the merge
+  needing no read, so main's code is not read again. Left as today: a range where a commit of main has no record
+  (off the first-parent line, no gap). Follow-up outside the surface: `bin/lib/codex-review-rows.mjs` sizes the
+  push's debt with `mergeTurn` alone. `--plan` does not say when the gap turn is a recheck.
+- L21 2026-11-15T03:00Z, T2's verifier (opus) on d1c152a6: no record covers code Codex did not read, but open findings
+  escape across runs (probe: scratchpad probe-gap-findings.mjs). F1 blocker: after a gap turn with findings, a rerun
+  at the same HEAD reads the merge through `mergeStart`, which asks no recheck state (`mergeTurn` does), and the
+  clean merge record then discharges the push's `correctionOwed`. F2 major: the correction, which can only go above
+  the merge, is a plain review (`recheckAnchor` passes only documents), so the findings are never rechecked, while
+  `turnStopped` promises a recheck. Minor: F3 a one-turn gap makes a snapshot it never reads; F4 in a gate turn with
+  installed dependencies the gap turn reads a worktree with no node_modules; F5 `gapLeftMerge` lasts one run; F6 the
+  new rev-list runs on ordinary runs, untested by the counting tests; F7 the HEAD-is-a-merge guard has no failing
+  test. The advisor: F1 and F2 are one defect (an owed correction is enforced only at the head of the last covering
+  record, and nothing chains from a merge back to it); rewording is no fix. Acceptance matrix, at the push row's level:
+  after a gap turn with findings, one turn and two turns, each with a rerun at the same HEAD, the push row's printed
+  command, a correction above the merge with --base on main, and with base M^: each ends in a recheck naming the gap
+  record, or a refusal with no session and no record, and the row says owed until then.
+- L22 2026-11-15T02:40Z, the lead: the chain fix rides T2's PR as its own commit, its tests first. T2's surface
+  grows by `bin/lib/codex-review-recheck.mjs` and `bin/lib/codex-review-rows.mjs` (+ tests). A `- Seen:` line in
+  docs/FAILURES.md for main's hole (entry open-findings-escape-merge). Its review: Codex and the lenses on that
+  commit as its own slice, no rerun of commits already reviewed. Ready --pr after the gate sequence; the lead lands.
+- L23 2026-11-15T04:10Z, the chain fix (writer, opus) committed as 74256214: `recheckThrough` walks the first-parent
+  line from a plain review through clean merge-own records and merges that write nothing, over documents-only
+  stretches, to the record that owes; `recheckAt` alone asks git; mergeTurn, the startingAt guard, recheckFor and the
+  push row's correctionOwed read it. The 12 matrix cells pass (7 failed before), and F3, F4, F6 and F7 have tests.
+  The writer's declared gaps, outside the matrix: both turns owe; `--unavailable` on the merge; a 'refused' state
+  at the first parent; plain check's debt row base; the second-recheck warning's base; exit codes differ, one turn
+  against two. Put to the verifier.
+- L24 2026-11-15T04:40Z, the verifier (opus) on 74256214: the 12 matrix cells pass, but two default-command shapes
+  still lose the debt, the push row ending on pass. V1 blocker: `recheckAt` lists `rev-list --parents
+  --max-count=500` without `--first-parent`, by date, so a merge of a busy main pushes the owing record out of the
+  window (n=600 probes, two turns, one turn and main's own shape; in this repo merge fa8e650 has its first parent at
+  507). `git rev-list --first-parent --parents` still prints both parents of a merge (checked on c472dcb). V2 major:
+  where the merge's own record also owes, `recheckThrough` returns at once and the gap's finding is never rechecked
+  (probe PA). Minor: V3 `--unavailable` drops a debt, as before this commit; V4 plain check's debt row prints a
+  base the guard refuses; V5 the one-turn rerun exits 0 as covered where L21 asks for a refusal; V6 two correction
+  tests assert only pass false. The advisor: no review on 74256214; one more round as a new commit; V2's rule
+  written before code and checked against the push row, which reads only the last covering record; a fix that
+  changes the record shape or the three-review count goes to the lead first. The gate at 74256214 ran no tests
+  locally (gate.yml sends them to CI at push); the writer's own run of every file is what holds them; nothing was
+  pushed (ls-remote empty). V3 and V4 are follow-ups.
+- L25 2026-11-15T07:00Z, the second writer round committed as 457bb1c9 (its own run of the 16 codex-review test files:
+  904 pass, 0 fail; the gate runs none locally). V1: `recheckAt` lists `--first-parent --parents`, one git call,
+  tests with 600 main commits by `git fast-import`. V2: below a merge whose own record owes a first recheck the walk
+  goes on, and a debt found below joins it, one recheck carrying both findings, `recheckOf` still the merge; refused
+  where the debt below is refused or would reach a third review, the merge's debt kept in memory (`owed`) for the
+  push row. Gap c, V5 and V6 have tests. Left open by the writer, put to the verifier: after a joined recheck no
+  record names the gap's head, so `--again --base <gap head>` could reach a fourth review (needs a record-shape
+  change, out of scope); the debt below at its second recheck refuses rather than joins; a merge's debt over three
+  reviews spent below refuses until escalated; older merge-recheck records read as covering the debt below. The
+  lead asked (2026-11-15) for a clean second verifier pass before ready, and for the PR body to say whether the rule
+  decides the full audit's B1-1 and B1-2: it decides neither. B1-1 (removing a `-codex-review` mark leaves code
+  covered) is coverage by marks in `reviewCoverage`, a mechanism the rule does not touch; B1-2 (an `--unavailable`
+  skip over a later code commit erases an owed correction) is V3 of L24, there before this work: `correctionOwed`
+  reads only reviewed records, so a skip covering the newest code commit hides the debt. Neither is fixed in T2.
+- L26 2026-11-15T08:00Z, the second verifier pass (opus) on 457bb1c9: V1, V2, gap c, V5 and V6 closed by probe; the five
+  test files pass on its own run (26, 26, 112, 211, 164). Not clean: W1 major, where the merge's own record owes a first
+  recheck over a gap at its second recheck, or with three reviews spent, `recheckThrough` refuses the run
+  (codex-review-recheck.mjs:251-252), and the refusal prints `--base <far back> --again`, a plain review whose
+  record clears the merge's finding unrechecked and reads main's diff (probes N1, N2, Z1); on 74256214 that merge got
+  its first recheck, so this is a regression. Minor: W2 `--again --base <gap>` rechecks the gap's finding alone
+  (an override, V3's class, older); W3 a fourth review is reachable, since `recheckOrAgain` checks
+  `againPastThreeReviews` only on a plain review; W4 an octopus merge of main loses the debt (documented stop,
+  older); W5 one extra first-parent rev-list on the push row with uncovered plain commits and a run log, unpinned;
+  W6 the V5 refusal names the docs commit above the merge as the merge; W7 older merge-recheck records read as
+  covering the debt below. The anchor scan of the real records: 143 of 2,060 range starts moved anchor, none changed
+  the recheck state. Taken (advisor): W1 shape (3), three reviews spent below: the merge's own recheck runs alone, as on
+  74256214. W1 shape (2), the debt below at its second recheck: join only if the next run can tell from the records
+  that the debt below had its three after a joined recheck that still owes (a cap, test first); if not, the writer
+  stops there and the lead is asked, with an uncapped join as the default and its cost. Merge-alone is V2 again and
+  refusing is W1, so neither stays. Every refusal test runs the command the refusal prints. W3 only as the
+  one-condition change with a failing test; W5 and W6 taken. W2, W4 and W7 are follow-ups. A third pass that finds
+  another major goes to the lead as a problem, not a fourth round.
+- L27 2026-11-15T10:30Z, the third writer round committed as a5d528dc (its run of the 16 files: 912 pass, 0 fail). W1
+  shape (3): the merge's own recheck runs alone wherever the state below is refused. Shape (2): joined, with a cap
+  read from the records alone: from a recheck of a merge's own record the walk runs again from the merge's first
+  parent, and where it joins a second recheck still due, the joined one was the third review, so the run is
+  refused as three reviews; the cap refusal prints no review command and says to raise it with the user. W3:
+  `recheckOrAgain` holds `--again` to three on any refused state, and `againPastThreeReviews` refuses a state
+  carrying `merge`. W5 pinned, W6 names the merge. Put to the third pass: the cap's missing command, the push row
+  passing with no three-reviews warning for the debt below after shape (3)'s recheck, the wider
+  `againPastThreeReviews`, the removal of `owed`. The lead (2026-11-15) asked to lock the worktree before ready,
+  since a land skips a locked one: locked, "JH 199 live".
+- L28 2026-11-15T11:20Z, the third verifier pass (opus) on a5d528dc: W1 (both shapes), W3, W5 and W6 closed by probe; its
+  own run of the five codex-review test files passes (29, 26, 112, 216, 164). Not clean: X1 major, introduced by
+  a5d528dc: in `walk`, `capped` is asked only while nothing is owed (codex-review-recheck.mjs:261), so with a
+  merge's debt in hand a second-recheck state below joins at :263 uncapped; a second merge of main above a joined
+  third review, whose own turn finds something, makes the default run review the gap's finding a fourth time
+  (probe X-c(true); a third such merge, by reading, a fifth). Nothing goes unreviewed or unrechecked; the three-review
+  limit is what breaks. Likely fix: at :263 a state `capped` refuses is refused, and the merge's recheck runs alone.
+  Minor: X2 after the cap only `--unavailable` gets a push through and the row then shows nothing (B1-2's class);
+  X3 `againPastThreeReviews` refuses an `--again` after a clean merge that works without one, and the wording
+  names the merge's findings (`merge` is set past any merge); X4 shape (3)'s three-reviews warning disappears after
+  the merge's recheck; X5 the row after shape (3)'s fix drops "owes a correction" (rows.mjs:326 needs `at`), still
+  refusing; X6 two printed routes are dead ends. W2 and N6d unchanged; W7 has no live instance (0 of 1,425 records).
+  Third pass with another major: to the lead as a problem (L26).
+- L29 2026-11-15T09:50Z, the lead's answer to L28 (cross-session, JH ORQ): "B. Open the PR now. X1 errs toward a review
+  too many, not a review skipped, and it needs a rare shape. Each round so far has brought a new regression, so a
+  fourth round costs more than X1 does." X1 is not a FAILURES entry, since it has not happened. Follow-up X1, for
+  JH 205 (the honest review gate, after T2 lands): in `recheckThrough`'s `walk`, `capped` is asked only while
+  nothing is owed (bin/lib/codex-review-recheck.mjs:261), so a second-recheck state below joins at :263 uncapped; a
+  second merge of main above a joined third review, whose own turn finds something, buys a fourth review of the
+  gap's finding. Proof: probe X-c(true) in the JH 199 scratchpad verify4probes7.part.mjs (out7-X-c.txt). Likely
+  fix: at :263 a state `capped` refuses is refused, and the merge's recheck runs alone; a test of X-c first. The
+  minor X2 to X6, W2, W4 and W7 ride with it as candidates. Codex and the lenses: the code commits not yet reviewed
+  (d1c152a6, 74256214, 457bb1c9, a5d528dc) as one range from c472dcb, no rerun of what is reviewed.
+- L30 2026-11-15T10:00Z, the reviews of c472dcb..3ddfd3e (d1c152a6, 74256214, 457bb1c9, a5d528dc as one range, the
+  lead's ask): lenses risk and reliability complete, 0 findings; Codex, 5 parts, 1,016,226 input tokens, three P2:
+  an empty gap (a change and its revert) writes a nothing-to-review record that `afterTurn` rejects, exit 1 with the
+  merge unreviewed (codex-review.mjs:1503); X1 itself (codex-review-recheck.mjs:261-263); `recheckAt`'s
+  `writesNothing` (codex-review-turns.mjs:90-93) counts a conflict resolved by one side's version as code where
+  coverage does not, so the walk stops and a debt is lost. The push refuses an owed correction, so the lead's B
+  (PR now, X1 a follow-up) cannot ship without them: all three fixed in one commit, tests first, then Codex's
+  recheck and the lenses on it, no fourth verifier pass; the lead told so (notify 04:58 local). X1 leaves the
+  follow-up list of L29 once the fix lands; X2 to X6, W2, W4 and W7 stay on it.
+- L31 2026-11-15T11:40Z, the fix of L30's three P2 at 13367429 (writer 4, tests first; each new test failed before
+  its fix; 917 pass, 0 fail across the 16 touched or neighbouring test files): `afterTurn` takes a gap's valid
+  nothing-to-review record as owing nothing; `recheckThrough` leaves a merge's recheck alone where `capped` refuses
+  the state below (X1, which leaves L29's follow-up list); `writesNothing` asks `reviewCoverage`, as `mergeStart`
+  does. Codex's recheck of 6e6adbf..1336742: 3 of 3 fixed, correct at 0.95, 126,887 input tokens; lenses risk and
+  reliability: 0 findings. Not covered: a third merge only by a unit test. The title and `## State` header, lost
+  to a state script at d1c152a6, are restored. Follow-ups that stay: X2 to X6, W2, W4, W7, V3/B1-2, V4.
+- L32 2026-11-15T12:15Z, PR 883 opened at 08653f93 and sent ready (06:36 local); the lead held its land for one
+  narrow verifier pass (opus) on 6e6adbf..1336742, with the outcome fixed beforehand: clean lands, fail-safe lands
+  with JH 205 owning it, fail-open does not land and is held for the owner. Verdict: fails open, Y1. Y1: a review
+  owes a correction, a commit and its revert follow, the default run records nothing-to-review over them (the range
+  changes no file), and the push row passes while `recheckAt(HEAD)` still says the finding is owed. The class is
+  older than 13367429: it holds with no merge at all (C1f) and on the same records at 6e6adbf. 13367429's part: in
+  a one-turn merge that writes nothing above such a gap (C1e) the run exited 1 and printed a refused rerun; now
+  `afterTurn`'s nothing-to-review branch returns owing nothing without asking whether the gap starts at a record
+  that owes, so it exits 0 silently. Two turns still refuse the merge (C1d); the debt returns at the next code
+  commit. Evidence: scratchpad verify5, out-C1d.txt:20-30 (read by JH 199), out-C1g.txt, out-C1g-pre.txt; the
+  lead's folder, jh199-verify5-883.md. The three fixes hold (V1, V2, W1 shape 3, X-c, a third merge, Codex's
+  cases 1 and 3 clean). Fail-safe and older: X6, X-b, and the three-reviews refusal's `--base <start> --again`
+  route to a fourth review (since 2026-10-19). Not covered: the real check --push, hook and merge door; real
+  Codex; W2, W4, W7, --unavailable. The lead set 883 to draft and holds it for the owner (07:12 local).
