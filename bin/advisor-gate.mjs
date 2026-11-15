@@ -52,11 +52,21 @@ const unquoted = (command) => command.replace(/(--kind\s+|\b(?:bash|sh|zsh|pwsh|
   if (before || /(?:^|[\\/])js-harness(?:\.mjs)?$/.test(inner)) return (before ?? '') + inner;
   return '""';
 });
-/** Text that names, as a word anywhere, something that may run what a heredoc holds: a shell, an interpreter, `ssh`,
- * `source`, `eval`, `.`, `xargs`, a loop's `done`, or a command in a variable (`bash <<EOF`, `cat <<EOF | bash`,
- * `env bash <<EOF`, a script written by a heredoc then run by `bash s.sh`, `$SH <<EOF`). Matched loosely, since a miss
- * lets an act through and a match only keeps the text. */
-const SHELL_READS = /(?:^|[\s|;&(])(?:(?:\S*[\\/])?(?:bash|sh|zsh|dash|ksh|pwsh|powershell|node|deno|bun|python[\d.]*|perl|ruby|ssh|source|eval|xargs|done)(?:\.exe)?|\.|\$\{?\w+\}?)(?=[\s;|&)"']|$)/;
+/** A shell or an interpreter named as a word anywhere outside quoted text, which may run what a heredoc holds, now or
+ * from a file it was written to (`bash <<EOF`, `cat <<EOF | bash`, `env bash <<EOF`, `bash s.sh`, `ssh host <<EOF`). */
+const RUNNER = /(?:^|[\s|;&(])(?:[^\s<>|;&()]*[\\/])?(?:bash|sh|zsh|dash|ksh|pwsh|powershell|node|deno|bun|python[\d.]*|perl|ruby|awk|gawk|mawk|ssh|xargs)(?:\.exe)?(?=[\s;|&)<>]|$)/;
+/** What runs lines only in a command's place: `source`, `eval`, `.`, a loop's `done`, a command in a variable (`$SH`),
+ * a script run by its path (`./land.sh`). As an argument (`git add .`, `push origin $BRANCH`) it runs nothing. */
+const RUNS_AT_COMMAND = /(?:^|[;&|(\n]|\$\()\s*(?:\w+=\S*\s+)*(?:source|eval|done|\.|\$(?:\w+|\{[^}]*\})|\.{0,2}\/[^\s<>|;&()]+)(?=[\s;|&)<>]|$)/;
+/** Whether `text` (the command with its heredoc bodies dropped) may run one of them. Quoted text is blanked first,
+ * but a quoted path to a shell (`"C:/Program Files/Git/bin/bash.exe"`) keeps its text. Matched loosely: a miss lets
+ * an act through, a match only keeps the text. */
+const mayRunBodies = (text) => {
+  const shellPath = /(?:^|[\\/])(?:bash|sh|zsh|dash|ksh|pwsh|powershell|node|python[\d.]*)(?:\.exe)?$/;
+  // A quoted variable (`"$SHELL"`) keeps its text too: in a command's place it is a command.
+  const bare = text.replace(/"([^"]*)"|'([^']*)'/g, (quoted, double, single) => (shellPath.test(double ?? single) ? 'bash' : /^\$(?:\w+|\{[^}]*\})$/.test(double ?? '') ? double : '""'));
+  return RUNNER.test(bare) || RUNS_AT_COMMAND.test(bare);
+};
 /** A body an unquoted heredoc expands, running a command: a `$(` or a backtick, on any of its lines. */
 const EXPANDS = /\$\(|`/;
 /** A heredoc's opener: `<<` or `<<-`, then its delimiter, quoted (its body is not expanded) or bare. */
@@ -66,7 +76,8 @@ const OPENER = /(?<!<)<<(?!<)(-?)\s*(?:'([^']+)'|"([^"]+)"|([^\s<>|;&()'"]+))/g;
  * what is not sure stays an act. Run before `unquoted`, since a quoted delimiter (`<<'EOF'`) and a lone quote in a
  * body would otherwise be read as quoted text. `<<<`, a here-string, is no heredoc. */
 function withoutHeredocText(command) {
-  const lines = command.split('\n');
+  // A line ended by a backslash goes on with the next, and a heredoc's body starts after that whole line.
+  const lines = command.replace(/\\\r?\n/g, ' ').split('\n');
   const kept = [];
   for (let i = 0; i < lines.length; i++) {
     kept.push(lines[i]);
@@ -92,7 +103,7 @@ function withoutHeredocText(command) {
   }
   // A shell anywhere in what is left may run a body, now or from a file it was written to: then every body stays.
   const left = kept.join('\n');
-  return left !== command && SHELL_READS.test(left) ? command : left;
+  return left !== command && mayRunBodies(left) ? command : left;
 }
 /** The value of `--kind` in an unquoted command. */
 const kindOf = (command) => /--kind\s+(\w+)/.exec(command)?.[1] ?? null;

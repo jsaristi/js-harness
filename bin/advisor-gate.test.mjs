@@ -113,6 +113,16 @@ test('a heredoc\'s text that names an act is not that act, unless a shell reads 
   assert.equal(act('$SH <<EOF\njs-harness merge-queue --land\nEOF'), 'land', 'a command in a variable');
   assert.equal(act('while read c; do $c; done <<EOF\njs-harness merge-queue --land\nEOF'), 'land', 'a loop that reads it');
   assert.equal(act('git commit -m "$(cat <<\'EOF\'\nfix: js-harness merge-queue --land\nEOF\n)"'), null, 'a quoted substitution is an argument, as a commit message');
+  assert.equal(act('cat > land.sh <<EOF\njs-harness merge-queue --land\nEOF\nchmod +x land.sh && ./land.sh'), 'land', 'a script run by its path');
+  assert.equal(act("bash<<'EOF'\njs-harness merge-queue --land\nEOF"), 'land', 'a shell with no space before <<');
+  assert.equal(act("cat > s.sh <<'EOF'\njs-harness merge-queue --land\nEOF\nbash<s.sh"), 'land', 'a script fed to a shell by <');
+  assert.equal(act("\"$SHELL\" <<'EOF'\njs-harness merge-queue --land\nEOF"), 'land', 'a quoted variable as the command');
+  assert.equal(act("${SHELL:-sh} <<'EOF'\njs-harness merge-queue --land\nEOF"), 'land', 'a variable with a default');
+  assert.equal(act("cat <<'EOF' \\\n  | bash\njs-harness merge-queue --land\nEOF"), 'land', 'a pipe to a shell on a continued line');
+  assert.equal(act("awk '{system($0)}' <<'EOF'\njs-harness merge-queue --land\nEOF"), 'land', 'awk runs its lines');
+  assert.equal(act('git add . && git commit -F - <<EOF\nfix: js-harness merge-queue --land\nEOF\ngit push origin $BRANCH'), null, 'a lone . or a $VAR as an argument runs nothing');
+  assert.equal(act('cat > $OUT <<\'EOF\'\nthen js-harness sessions start\nEOF'), null, 'a redirect to a variable');
+  assert.equal(act('git commit -F - -m "bash done" <<\'EOF\'\njs-harness merge-queue --land\nEOF'), null, 'a shell word inside quotes');
   assert.equal(act('"C:/Program Files/Git/bin/bash.exe" <<EOF\njs-harness merge-queue --land 12\nEOF'), 'land', 'a quoted path to a shell');
 });
 
