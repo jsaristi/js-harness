@@ -1,11 +1,13 @@
 # consistent-orders — orders that hold over a long run (JH 208)
 
 ## State
-S1 built (1a4ec235) and hardened (a compaction breaks the stretch by its own mark, L8). The plan's double review ran
-(L8): what goes now (S1, S5) covers 1 of the 6 uncaught rows of the inventory; the lead's own consult (S2) and the
-sub-agents (S4) wait, so his "también sesiones y sub-agentes" is not yet met, and the lead is told so. Next: S5 tests
-first; S2 replanned as a design, on a blocked-state signal (readStalled treats `waiting` as work given back, so it
-cannot be the signal as it is: L8, codex 3).
+S1 (1a4ec235, 8c3644f6) and S5 (617f6386, 1acb3306) built, tests first, each reviewed by Codex and the Claude
+lenses: S1 clean; S5's P2 (forks missing from the departure page) fixed and re-reviewed clean; the reliability lens's
+ask to refuse a plan with no forks rebutted with evidence (a stretch is also opened with no absence,
+bin/lib/manifest.mjs:213). The independent verifier (opus) runs over S1 and S5. S5's rule (`rules change
+away-autonomy` on a `rule/` branch) waits until this pull request lands: a rule branch is cut from origin/main, and
+the rule names forks main does not hold yet. Still open, as designs for the lead: S2 (T2), S6 (T7); S4 is his.
+What goes covers 1 of the 6 uncaught rows; the lead's own consult (S2) and sub-agents (S4) wait.
 
 ## Goal
 An order the harness gives a session, a work session or a sub-agent (first: consult the advisor when blocked) is held
@@ -175,7 +177,7 @@ answering a block, while a session waits) were missed with nothing to say so; on
 - [ ] T2 (kind: design) S2, spec 2: replan on a blocked-state signal that survives a later `note` (the waiting, note, idle case first), with liveness and resolution rules, without changing readStalled's contract; define the idle close; the lead approves before a build
 - [ ] T3 (kind: build) S3, spec 3: left out, folded into S1 (Depth pass item 3)
 - [ ] T4 (kind: design) S4, spec 4: the lead asks him; build nothing until then
-- [x] T5 (kind: build) S5, spec 5 (code built, two tests failed on main, 67 of 67 pass; the rule's `rule/` branch next): `forks` in the stretch plan, shown at open; rule via `rules change` on a `rule/` branch; route inline; commit `feat(stretch): pre-decided forks in the departure plan`
+- [x] T5 (kind: build) S5, spec 5 (code built, two tests failed on main, 67 of 67 pass; the rule's `rule/` branch after this pull request lands): `forks` in the stretch plan, shown at open; rule via `rules change` on a `rule/` branch; route inline; commit `feat(stretch): pre-decided forks in the departure plan`
 - [ ] T7 (kind: design) S6, spec 6: amend `rule:reports-spanish-visual` with his quote (`rules change` on a `rule/` branch) and design the check that acts on it (a candidate: the reply hook turns back a report close with no Artifact published in the turn); the lead approves before a build
 - [ ] T6 (kind: verify) one independent verifier (opus) over T1 and T5
 - [ ] F1 follow-up, owner: the lead — JH 199's ready without its verifier: a ready notice could require a verifier record (not built here)
