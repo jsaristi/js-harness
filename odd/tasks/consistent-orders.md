@@ -1,13 +1,10 @@
 # consistent-orders — orders that hold over a long run (JH 208)
 
 ## State
-S1 (1a4ec235, 8c3644f6) and S5 (617f6386, 1acb3306) built, tests first, each reviewed by Codex and the Claude
-lenses: S1 clean; S5's P2 (forks missing from the departure page) fixed and re-reviewed clean; the reliability lens's
-ask to refuse a plan with no forks rebutted with evidence (a stretch is also opened with no absence,
-bin/lib/manifest.mjs:213). The independent verifier (opus) passed S1 and S5 (L10); its two fixes (2d9d8f0d) reviewed clean. S5's rule (`rules change
-away-autonomy` on a `rule/` branch) waits until this pull request lands: a rule branch is cut from origin/main, and
-the rule names forks main does not hold yet. Still open, as designs for the lead: S2 (T2), S6 (T7); S4 is his.
-What goes covers 1 of the 6 uncaught rows; the lead's own consult (S2) and sub-agents (S4) wait.
+PR 886 open: S1 and S5 built tests-first, reviewed by Codex and the Claude lenses, verified by the independent
+verifier (PASS, and PASS again on 2d9d8f0d, L11). It covers 1 of the 6 uncaught rows; the lead's own consult (S2) and
+sub-agents (S4) wait. Open as designs for the lead: S2 (T2), S6 (T7); S4 is his. S5's rule (`rules change
+away-autonomy`, a `rule/` branch) comes after the land: until then S5 is a capability, not a check.
 
 ## Goal
 An order the harness gives a session, a work session or a sub-agent (first: consult the advisor when blocked) is held
@@ -187,7 +184,8 @@ answering a block, while a session waits) were missed with nothing to say so; on
 - [ ] F5 follow-up, owner: the lead — the lead's unconsulted `note` answering a block (10:50Z): a `note` to a waiting session is not gated; S2 forces the consult at the next close, not before the note
 - [ ] F6 follow-up, owner: the lead — JH 199's and JH 204's long stretches of commits and verifier launches with no consult: those acts are not gated by his yes to question 282; widening the gated acts is his call
 - [ ] F8 follow-up, owner: the lead — the gate's report will count `waiting` notices sent before S1 was installed as acts with no decision (bin/advisor-gate.mjs, the reconciliation)
-- [ ] F9 follow-up, owner: the lead — inherited false refusals: an `echo`, a shell comment or an unquoted heredoc commit body that names a gated notify reads as that act (JH 206's T8, odd/tasks/advisor-use.md)
+- [ ] F9 follow-up, owner: the lead — inherited false refusals: an `echo`, a shell comment or an unquoted heredoc commit body that names a gated notify reads as that act (JH 206's T8, odd/tasks/advisor-use.md); also a non-js-harness tool chained after a notice whose own `--kind` is a gated word (L11)
+- [ ] F10 follow-up, owner: the lead — README and the gate's usage text describe the stretch without the compaction break
 - [ ] F7 follow-up, owner: the lead — 8 stale `waiting` notices from sessions long gone stay newest in the channel
 
 ## Log
@@ -217,3 +215,5 @@ answering a block, while a session waits) were missed with nothing to say so; on
   Fixed (2d9d8f0d, Codex and the risk and reliability lenses clean): `kindsOf` reads every `--kind`, so a chained
   or repeated-flag notice is gated for every kind; `forks: []` reads as none. Left as follow-ups: F8 and F9. Not
   checked by it: the host's real compaction entry (the fixture follows transcript 69918425's isCompactSummary lines).
+- L11 (2026-11-15) the verifier again, on 2d9d8f0d: PASS, 60 of 60 tests; only `clean` and `template new` take another
+  `--kind`, with no gated value; one new low false refusal (another tool's `--kind ready` chained after a notice), F9.
