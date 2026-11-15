@@ -37,6 +37,6 @@ None in this session: the request came from the orchestrator's brief, which rela
 - A half-removed worktree is printed, not recorded in the land's record.
 
 ## Cost
-- Codex: three reviews, 113,291, 74,553 input tokens and the last range's (L7 to L9).
-- Lenses: four on each range, about 15,800 then 11,000 input tokens each.
+- Codex: three reviews, 113,291, 74,553 and 62,848 input tokens (L7, L8, L10).
+- Lenses: four on each of three ranges, about 15,800, 11,000 and 6,700 input tokens each.
 - Verifier (opus): two passes, 86,085 and 97,471 tokens.
