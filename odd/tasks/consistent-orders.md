@@ -120,6 +120,7 @@ answering a block, while a session waits) were missed with nothing to say so; on
   spec 3: left out because with S1 in place a work session's `waiting` cannot be sent unconsulted, and on today's record S3 catches nothing S1 does not (JH 207's closes at 12:49Z and 14:53Z follow the two notices S1 refuses); folded into S1, with two limits the double review found (L8): policy R lets an earlier unrelated consult cover a new block, and a refused session can send a `note` or end its turn instead, which S1 does not hold; S2's replan carries that case
   spec 4: left out because a sub-agent end refused changes what his yes to question 282 left apart (bin/advisor-gate.mjs:8-9) and the exemption of the senior's sub-agents is his; the records show 2 flagged of 27 readable ends today and 66 of 93 with no transcript, so the lead takes it to him with that figure
   spec 5: `node --test bin/stretch.test.mjs`: none, new behaviour (a stretch plan carries 2-4 forks with a proposed answer, shown at open; a plan with 1 or 5 forks is refused; a plan with none opens as today; what open prints says the forks grant no spend and no publishing)
+  spec 6: left out because its check is designed in T7 and the lead approves its shape before a build: `rule:reports-spanish-visual` reads "Read by: none" today, and what makes a reply a report a hook can tell is the open question
   Excellent here means: each check refuses the case it was built for on today's record, and nothing else; its
   refusal names the next act (consult, then retry); it reuses the gate's stretch, exemption and fail-open.
 
@@ -167,6 +168,7 @@ answering a block, while a session waits) were missed with nothing to say so; on
 3. "lo mismo le debe estar pasando a las sesiones" (line 15682): a work session's idle close while its own newest notice is `waiting` and no consult covers it.
 4. "y a los sub agentes" (line 15682): a sub-agent that stops on a block is checked as a session is (the lead's reading); refusing its end is his call.
 5. "al abrir un tramo, el plan lleva 2 a 4 casos con mi respuesta propuesta ... los apruebas o corriges de una vez y durante tu ausencia actúo según ellos. Es un cambio de protocolo; no autoriza nada fuera de esos casos, ni gasto, ni publicar" (question 290, yes).
+6. "siempre dame informes en artefactos visuales bien explicados con colores y de forma dinamica o didactica en vez de escribirme en el chat ... como si yo no supiera absolutamente nada, recuerda que esto no es solo una solucion para mi sino para una persona que no tiene conocimiento de nada" (lead transcript 69918425 line 16680): `rule:reports-spanish-visual` widened to always, for any user, and held by a check.
 
 ## Tasks
 - [x] T1 (kind: build) S1, spec 1 (two cases failed on main, 26 of 26 pass after): `waiting` a gated act in `gatedAct`; tests first in bin/advisor-gate.test.mjs; route inline; commit `feat(advisor-gate): hold a waiting notice to a consult`
@@ -174,6 +176,7 @@ answering a block, while a session waits) were missed with nothing to say so; on
 - [ ] T3 (kind: build) S3, spec 3: left out, folded into S1 (Depth pass item 3)
 - [ ] T4 (kind: design) S4, spec 4: the lead asks him; build nothing until then
 - [ ] T5 (kind: build) S5, spec 5: `forks` in the stretch plan, shown at open; rule via `rules change` on a `rule/` branch; route inline; commit `feat(stretch): pre-decided forks in the departure plan`
+- [ ] T7 (kind: design) S6, spec 6: amend `rule:reports-spanish-visual` with his quote (`rules change` on a `rule/` branch) and design the check that acts on it (a candidate: the reply hook turns back a report close with no Artifact published in the turn); the lead approves before a build
 - [ ] T6 (kind: verify) one independent verifier (opus) over T1 and T5
 - [ ] F1 follow-up, owner: the lead — JH 199's ready without its verifier: a ready notice could require a verifier record (not built here)
 - [ ] F2 follow-up, owner: the lead — the context hook's 99-120% against the host's 65%
@@ -203,3 +206,6 @@ answering a block, while a session waits) were missed with nothing to say so; on
   mark, with a test that failed on main for an isMeta summary. Not taken: replaying S1 over every earlier day (claude
   9; today's record is the bar, earlier days a sample the verifier may add); the gentle-ai block stays the lead's
   ruling, its question to him the lead's to send (claude 7).
+- L9 (2026-11-15 11:36 local, the lead's note) his new order, line 16680 (16:36:08Z): reports always as visual,
+  didactic artifacts instead of chat text, explained as for someone who knows nothing, for any user of the harness.
+  Planned as S6 (T7, design first).
