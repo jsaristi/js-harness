@@ -15,10 +15,15 @@ bin/clean-home.test.mjs independent of the machine's tools. Follow-ups: the lead
 spans need coverage), the rule texts of session-model, session-effort and advisor-model ("every session but a
 senior"). "No advisor" is claimed only after the first senior's transcript shows it.
 
+T6 (2026-11-15, specs 3 and 4): the lead starts the senior as a visible app session with `start_session`, then sets
+its model and level with its session tools and detaches it; the guard lets that start through and holds the senior to
+its rules where the lead sends it work. `sessions start --title "<code> SR · …"` stays, unused by the protocol.
+
 ## Goal
-The lead starts a senior session, titled `<code> SR · <purpose>`, with `js-harness sessions start`, and every start
-and resume of it runs on the senior's model and level, read from two rules, with no advisor; every other session
-stays on the home, and no reporter calls the senior off it.
+The lead starts a senior session, titled `<code> SR · <purpose>`, as a visible app session with `start_session`
+(then `set_session_model`, `set_session_effort` and `detach_session`), and no task reaches it while its app record
+is off the senior's model and level, read from two rules; every other session stays on the home, and no reporter
+calls the senior off it.
 
 ## Why
 His words (S1, S2): a senior orchestrator on Fable 5.2 high that the orchestrator sends specific tasks needing more
@@ -35,8 +40,14 @@ intelligence or complexity. Today a start on Fable is refused (the guard and `se
 - The tests name each case: `sessions start --title "JH SR · x"` passes `--model claude-fable-5-2 --effort high` and no
   `--advisor`; its resume does the same whatever its record holds; `JH 7 · x` on `claude-fable-5-2` is refused; an SR
   start naming `--advisor`, another model or another level is refused; an SR start from a session not titled as the
-  lead is refused; a second live senior is refused; `start_session` with an SR title is refused, naming
-  `sessions start`; an SR session on Fable at high is on its home for `doctor`, `rules applied` and the board.
+  lead is refused; a second live senior is refused; an SR session on Fable at high is on its home for `doctor`,
+  `rules applied` and the board.
+- T6's tests name each case: `start_session` with an SR title from the lead, at `rule:senior-effort`, naming no model,
+  in its own worktree, passes; the same from a session not titled as the lead, from no session, or from one with no
+  readable record is refused, a title-only offer too; naming no effort, another level, any model, or
+  `use_worktree: false` is refused; a second live (not archived) senior of the code is refused; a message
+  (`SendMessage`, `send_message`) to an SR session whose app record holds another model or level than the senior's
+  is refused, naming `set_session_model` and `set_session_effort`, and one on Fable at high passes.
 
 ## In scope / Out of scope
 - In: two rules, `senior-model` and `senior-effort`, joined to the Claude home (`CLAUDE_HOME`, `claudeHome`,
@@ -48,7 +59,8 @@ intelligence or complexity. Today a start on Fable is refused (the guard and `se
   the reporters' hold by role (`heldOf(title)` in `bin/lib/home-sessions.mjs`, `bin/lib/home-doctor.mjs`,
   `bin/rules.mjs`, the switch's `outsideLines`, `bin/lib/roster-home.mjs`); the texts of `rule:session-model`,
   `rule:session-effort` and `rule:advisor-model` by `rules change` ("every session but a senior"); the orchestrator's
-  protocol, `bin/lib/lead-protocols.mjs`.
+  protocol, `bin/lib/lead-protocols.mjs`. T6: the guard's start of a senior by `start_session` and its message check;
+  `appSessions` giving each record's app id (`sessionId`); the lead protocol's senior paragraph.
 - Out: the values of the other rules of the home; a senior that starts sessions of its own (it is a session the lead
   sends tasks to, S2 "que le manden tareas", not a second lead; the lead's own role stays the lead's).
 
@@ -124,3 +136,19 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   model (his Fable 5.2), so `rules switch` takes no flag for it and `rules change` alone moves it.
 - D5 When: the lead's judgment that the task needs more intelligence or complexity is the condition; a design, a
   depth pass of high-risk work or a failure seen twice are examples, not triggers.
+- L3 2026-11-15, his words S3 and S4 (lead transcript 69918425): every session visible, started by the lead, none
+  nested; the guard's refusal of `start_session` for an SR title was the one thing that kept the senior invisible.
+- D8 The guard's other reason, the advisor: `start_session` takes no advisor, and both ways his settings'
+  `advisorModel` gives the senior one (D2), so it does not tell the two ways apart; nothing in code answers it.
+- D9 The check that runs is `seniorMessageRefusal` (`bin/lib/session-title-guard.mjs`), called by the guard's
+  PreToolUse hook on `SendMessage` and `send_message`: a message to a session whose app record is titled SR and holds
+  another model or level than `rule:senior-model` and `rule:senior-effort` is refused. The start itself names no
+  model (the tool caps one at the caller's, so a named Fable would be silently Opus) and names `rule:senior-effort`;
+  its first turn runs on the caller's model, so its brief is only to wait for the lead's first task. A target the
+  guard cannot match to a record (a short name, no record) passes: the protocol sends by the `local_…` id. If the
+  record's `model` changed only at the next turn, the first message would be refused until a turn ran; the first
+  senior start checks it.
+- D10 Lead only, fail closed: no caller id, no readable record or a caller not titled as the lead refuses an SR
+  start, a title-only offer too, as `seniorStarterRefusal` does for the command. One live senior counts the app's
+  records not archived with an SR title of the code, since a `start_session` senior writes nothing to the command's
+  record. `use_worktree: false` is refused, since `detach_session` refuses a session that shares a worktree.
