@@ -303,6 +303,11 @@ itself is not limited to an absence: the skill text names it for any stretch.
   este tramo"), and a plan gone from now says so with no tiles. Not taken, with the reason: "igual que al abrir" beside
   "ningún paso cambió de estado" (one says the count, the other the states); "parte de la fase" without which part
   (the code cannot know which rows a plan details); the English step titles and plan name (the roadmap's words).
+- L13. 2026-11-14, JH 201, the third round. Codex over 0c35bde..2b2d539 correct (0.87), no findings, 90,298 input
+  tokens; the lenses over a690647..2b2d539: reliability 0, its earlier warning rechecked fixed; readability 2
+  suggestions: the mark's fallback left unescaped (answered: on purpose, `stepsByState` escapes every mark, so
+  escaping it here would escape it twice; a comment now says so) and a stale test title (renamed), in 728daf57.
+  Codex over 2b2d539..728daf5 correct (0.99), 32,818 input tokens; readability over it 0 findings, 2 of 2 fixed.
 
 ## Next step
 NOW (2026-11-14, JH 201, worktree `D:\js-harness\.claude\worktrees\f8-plan-block`, branch `feat/stretch-plan-block`):
