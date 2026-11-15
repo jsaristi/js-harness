@@ -1,11 +1,9 @@
 # consistent-orders — orders that hold over a long run (JH 208)
 
 ## State
-PR 886 sent ready (S1, S5); the lead lands it. S4 is a go (L12): a sub-agent's end with no consult in its stretch is
-turned back once (SubagentStop `decision: block`, the second stop let through, as the reply hook does), an unreadable
-transcript fails open; exempt only the senior session and Fable-model sub-agents (the senior's Opus sub-agents
-consult). Built on a branch stacked on feat/consistent-orders, tests first in bin/advisor-gate.test.mjs (today the test
-'SubagentStop never blocks' pins the old behaviour and changes with it). Then S2 and S6 designs.
+PR 886 sent ready (S1, S5); the lead lands it. S4 built on feat/consistent-orders-s4 (87b1c568, stacked): an
+unconsulted sub-agent end is turned back once; Codex clean; lenses, the verifier and its PR follow. The S2 and S6
+designs are written (L13, L14) and wait for their double review and the lead's approval; nothing of them is built.
 
 ## Goal
 An order the harness gives a session, a work session or a sub-agent (first: consult the advisor when blocked) is held
@@ -174,7 +172,7 @@ answering a block, while a session waits) were missed with nothing to say so; on
 - [x] T1 (kind: build) S1, spec 1 (two cases failed on main, 26 of 26 pass after): `waiting` a gated act in `gatedAct`; tests first in bin/advisor-gate.test.mjs; route inline; commit `feat(advisor-gate): hold a waiting notice to a consult`
 - [ ] T2 (kind: design) S2, spec 2: replan on a blocked-state signal that survives a later `note` (the waiting, note, idle case first), with liveness and resolution rules, without changing readStalled's contract; define the idle close; the lead approves before a build
 - [ ] T3 (kind: build) S3, spec 3: left out, folded into S1 (Depth pass item 3)
-- [ ] T4 (kind: build) S4, spec 4: his yes (L12); turn back an unconsulted sub-agent end once; tests first; commit `feat(advisor-gate): turn back an unconsulted sub-agent end once`
+- [x] T4 (kind: build) S4, spec 4: his yes (L12); turn back an unconsulted sub-agent end once; tests first; commit `feat(advisor-gate): turn back an unconsulted sub-agent end once`
 - [x] T5 (kind: build) S5, spec 5 (code built, two tests failed on main, 67 of 67 pass; the rule's `rule/` branch after this pull request lands): `forks` in the stretch plan, shown at open; rule via `rules change` on a `rule/` branch; route inline; commit `feat(stretch): pre-decided forks in the departure plan`
 - [ ] T7 (kind: design) S6, spec 6: amend `rule:reports-spanish-visual` with his quote (`rules change` on a `rule/` branch) and design the check that acts on it (a candidate: the reply hook turns back a report close with no Artifact published in the turn); the lead approves before a build
 - [x] T6 (kind: verify) one independent verifier (opus) over T1 and T5: PASS (L10)
@@ -223,3 +221,41 @@ answering a block, while a session waits) were missed with nothing to say so; on
   no se puede leer, pasa sin bloquear ... No cubre bloquear más de una vez ni tocar otras órdenes"; question 295, line
   17459 (18:03:39Z), "Sí, también consultan (Recomendada)": only the senior session and Fable-model sub-agents stay
   exempt. For S6, line 17216 (the lead's note): "la idea es seguir haciendo todas las cosas así".
+- L13 (2026-11-15) S2's design, replanned (T2). Measured first: at the 13:08Z close the lead had already answered
+  JH 207's 12:46:11Z `waiting` with a note (12:47:47Z, channel line 3124), and JH 207, still blocked, sent three
+  notes (lines 3125-3127). So no rule on the kinds of notices alone catches 13:08Z, the lead's answer included.
+  - Signal, a new pure function beside `readStalled`, whose contract does not change: a work session is blocked from
+    its newest `waiting` to the orchestrator until it sends `ready`, `closed`, `relieved` or `question` (a question
+    moves the block to the owner), or its branch gets a commit after the notice (`branchCommitAt`, bin/lib/stall.mjs).
+    Neither its own later `note` nor the lead's answer clears it: the blocked session's next act does.
+  - Liveness: a block is live while the session has not given its work back, its background job was not removed
+    (`removed` in background/sessions.jsonl) and its newest own notice is under a bound the lead sets (proposed 6 h,
+    a constant). Probe at 13:08Z (`node C:/Users/Oficina/.claude/jobs/b8e90a0a/tmp/blocked.mjs`): of the 5 stale
+    unresolved `waiting` notices, 2 sent `ready` later (JH 58, JH 142), 2 had their job removed (JH 101, JH 134) and
+    1 is 39 h old with no job record (JH 193); all 5 are out under these rules.
+  - The check, at the lead's idle close: a lead stop whose reply closes in the `working` state ("Sigo solo"), with
+    or without a wait running in the background (13:08Z had one), is turned back once while a live session is
+    blocked and the lead has no advisor call with a result after that session's newest notice. Each note of a blocked
+    session asks a new consult, so a block cannot sit behind one early consult. The second stop goes through
+    (`stop_hook_active`); an unreadable record or transcript lets the close through, said on standard error.
+  - Where: `bin/lib/stop-consult.mjs`, called from bin/reply.mjs beside the wake check, reading the record and the
+    transcript through the stop's shared `io`; the consult is read with the advisor gate's parsing, exported.
+  - Limits: it acts at a close, never while the lead sits idle; a blocked session that commits something unrelated
+    clears its block. To measure at the build: the full replay of the lead's 62 ends with this predicate, 13:08Z
+    turned back expected.
+  - The lead decides: the 6 h bound, and whether a `question` clears the block.
+- L14 (2026-11-15) S6's design (T7). `rule:reports-spanish-visual` (bin/lib/protocols-skill.mjs:106) already sends what
+  the user reads to understand or decide as a visual, didactic page. His orders add three things: always ("siempre
+  dame informes en artefactos visuales", line 16680), for someone who knows nothing ("como si yo no supiera
+  absolutamente nada"), for any user of the harness, not only him ("no es solo una solucion para mi sino para una
+  persona que no tiene conocimiento de nada"), and to keep doing it ("la idea es seguir haciendo todas las cosas
+  así", line 17216).
+  - The rule change (`js-harness rules change reports-spanish-visual`, a `rule/` branch, his quotes with their
+    date): every report reaches the user as that page; it assumes no prior knowledge (each term said in everyday words
+    at its first use, a diagram for each mechanism, what a decision covers and does not); it is written for any user
+    of the harness, so no page leans on what one owner already knows.
+  - The check: the reply Stop hook turns back once a reply that closes in `decision`, `cut` or `finished` with a
+    body over a bound in lines (proposed 25) when the turn made no Artifact publish or open since the user's last
+    message; it fails open. Sessions that only report through `notify` are held already: a close carries its summary,
+    whose page `js-harness report feature` makes.
+  - The lead decides: the line bound, and whether a `working` close with a long report is held too.
