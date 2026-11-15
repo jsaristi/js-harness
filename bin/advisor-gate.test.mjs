@@ -93,6 +93,18 @@ test('a heredoc\'s text that names an act is not that act, unless a shell reads 
   assert.equal(act('js-harness notify --to orchestrator --kind ready --pr 3 "$(cat <<EOF\nr\nEOF\n)"'), 'done', 'an act whose argument holds one');
   assert.equal(act('cat <<EOF\njs-harness merge-queue --land'), 'land', 'an unterminated heredoc keeps its text');
   assert.equal(act('grep x <<< "js-harness merge-queue --land"'), null, 'a here-string is quoted text, as before');
+  assert.equal(act('echo "a <<EOF"\njs-harness merge-queue --land\nEOF'), 'land', 'a << inside quotes opens nothing');
+  assert.equal(act('x=1 # <<EOF\njs-harness merge-queue --land\nEOF'), 'land', 'a << in a comment opens nothing');
+  assert.equal(act('cat <<EOF\n$(js-harness sessions start --title x)\nEOF'), 'session', 'an unquoted heredoc runs its $( )');
+  assert.equal(act('cat <<EOF\n`js-harness merge-queue --land`\nEOF'), 'land', 'and its backticks');
+  assert.equal(act("cat <<'EOF'\n$(js-harness sessions start --title x)\nEOF"), null, 'a quoted delimiter runs nothing');
+  assert.equal(act('env bash <<EOF\njs-harness merge-queue --land 12\nEOF'), 'land', 'a shell behind a wrapper');
+  assert.equal(act('sudo -u x sh -s <<EOF\njs-harness merge-queue --land 12\nEOF'), 'land');
+  assert.equal(act('source /dev/stdin <<EOF\njs-harness merge-queue --land 12\nEOF'), 'land', 'source reads it');
+  assert.equal(act('cat > land.sh <<EOF\njs-harness merge-queue --land\nEOF\nbash land.sh'), 'land', 'a script written then run by a later line');
+  assert.equal(act('cat > land.sh <<EOF\njs-harness merge-queue --land\nEOF\n. ./land.sh'), 'land', 'or sourced with .');
+  assert.equal(act('. /dev/stdin <<EOF\njs-harness merge-queue --land\nEOF'), 'land', 'the . builtin reads it');
+  assert.equal(act('"C:/Program Files/Git/bin/bash.exe" <<EOF\njs-harness merge-queue --land 12\nEOF'), 'land', 'a quoted path to a shell');
 });
 
 test('a Write gates only the creation of a task document', () => {

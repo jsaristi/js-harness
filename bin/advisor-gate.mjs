@@ -52,8 +52,12 @@ const unquoted = (command) => command.replace(/(--kind\s+|\b(?:bash|sh|zsh|pwsh|
   if (before || /(?:^|[\\/])js-harness(?:\.mjs)?$/.test(inner)) return (before ?? '') + inner;
   return '""';
 });
-/** A line that names a shell as a command (`bash <<EOF`, `cat <<EOF | bash`), which runs what a heredoc feeds it. */
-const SHELL_READS = /(?:^|[|;&(]|\$\()\s*(?:\w+=\S*\s+)*(?:\S*[\\/])?(?:bash|sh|zsh|pwsh|powershell)(?:\.exe)?(?=\s|$)/;
+/** Text that names a shell, `source`, `eval` or `.` as a word anywhere (`bash <<EOF`, `cat <<EOF | bash`, `env bash
+ * <<EOF`, `sudo sh -s <<EOF`, a script written by a heredoc then run by `bash s.sh`), which may run what a heredoc
+ * holds: matched loosely, since a miss lets an act through. */
+const SHELL_READS = /(?:^|[\s|;&(])(?:(?:\S*[\\/])?(?:bash|sh|zsh|dash|ksh|pwsh|powershell|source|eval)(?:\.exe)?|\.)(?=[\s;|&)"']|$)/;
+/** A body line an unquoted heredoc expands, running its command: a `$(` or a backtick. */
+const EXPANDS = /\$\(|`/;
 /** The command with each heredoc's body and terminator dropped, so a commit message or a file written by `cat <<EOF`
  * that names a gated command is not one (L25). A body a shell reads keeps its text, as an unterminated heredoc does:
  * what is not sure stays an act. Run before `unquoted`, since a quoted delimiter (`<<'EOF'`) and a lone quote in a
@@ -63,16 +67,27 @@ function withoutHeredocText(command) {
   const kept = [];
   for (let i = 0; i < lines.length; i++) {
     kept.push(lines[i]);
-    const opens = [...lines[i].matchAll(/(?<!<)<<(?!<)(-?)\s*(['"]?)([A-Za-z_][\w-]*)\2/g)];
-    if (opens.length === 0 || SHELL_READS.test(lines[i])) continue;
+    // A `<<` inside quoted text or a comment opens nothing; a quoted delimiter right after `<<` is kept.
+    const bare = lines[i].replace(/(<<-?\s*)?("[^"]*"|'[^']*')/g, (text, opener) => (opener ? text : '""')).replace(/(^|\s)#.*$/, '$1');
+    const opens = [...bare.matchAll(/(?<!<)<<(?!<)(-?)\s*(['"]?)([A-Za-z_][\w-]*)\2/g)];
+    if (opens.length === 0) continue;
     let at = i + 1;
-    for (const [, dash, , word] of opens) {
-      while (at < lines.length && (dash ? lines[at].replace(/^\t+/, '') : lines[at]).replace(/\r$/, '') !== word) at++;
+    const expanded = [];
+    for (const [, dash, quote, word] of opens) {
+      while (at < lines.length && (dash ? lines[at].replace(/^\t+/, '') : lines[at]).replace(/\r$/, '') !== word) {
+        if (quote === '' && EXPANDS.test(lines[at])) expanded.push(lines[at].replace(/`/g, ' '));
+        at++;
+      }
       at++;
     }
-    if (at <= lines.length) i = at - 1;
+    if (at <= lines.length) {
+      kept.push(...expanded);
+      i = at - 1;
+    }
   }
-  return kept.join('\n');
+  // A shell anywhere in what is left may run a body, now or from a file it was written to: then every body stays.
+  const left = kept.join('\n');
+  return left !== command && SHELL_READS.test(left) ? command : left;
 }
 /** The value of `--kind` in an unquoted command. */
 const kindOf = (command) => /--kind\s+(\w+)/.exec(command)?.[1] ?? null;
@@ -478,10 +493,10 @@ export function advisorGateReport({ home, since = null, projects = path.join(hom
   const acts = from === null ? { found: 0, decided: 0, missing: [], unread: 0 } : reconcile(projects, from, all);
   // An end recorded before T7 as unchecked because its transcript did not exist (ENOENT) is read as one with no
   // transcript, so the share covers the past too; decisions.jsonl itself is not rewritten.
-  const endless = (d) => d.decision === 'no-transcript' || (d.act === 'end' && d.decision === 'unchecked' && /: ENOENT;/.test(d.reason ?? ''));
+  const noTranscriptEnd = (d) => d.decision === 'no-transcript' || (d.act === 'end' && d.decision === 'unchecked' && /: ENOENT;/.test(d.reason ?? ''));
   const noTranscript = {};
-  for (const d of shown.filter(endless)) noTranscript[d.agentType ?? 'unknown'] = (noTranscript[d.agentType ?? 'unknown'] ?? 0) + 1;
-  const decided = shown.filter((d) => !endless(d));
+  for (const d of shown.filter(noTranscriptEnd)) noTranscript[d.agentType ?? 'unknown'] = (noTranscript[d.agentType ?? 'unknown'] ?? 0) + 1;
+  const decided = shown.filter((d) => !noTranscriptEnd(d));
   return {
     days: [...days.values()].sort((a, b) => a.day.localeCompare(b.day)),
     acts, unchecked: decided.filter((d) => d.decision === 'unchecked').length, decisions: decided.length, noTranscript,
