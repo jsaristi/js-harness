@@ -1,7 +1,6 @@
-# codex-T2 at d1c152a6 (local, not pushed). The chain fix (L21, L22) is with a writer (opus, background, uncommitted):
-the acceptance matrix as tests first, then the fix in codex-review-recheck.mjs / codex-review-rows.mjs, plus F3, F4,
-F6, F7. When it returns: check, commit the fix as its own commit, verifier on it, then Codex and the lenses on T2's
-commit d1c152a6 and on the fix as their own slices, PR, advisor, ready --pr. Main's hole is in docs/FAILURES.md.
+# codex-T2 at d1c152a6 and the chain fix at 74256214 (local, not pushed; gate passed at commit). A verifier (opus,
+background) is on 74256214, judging the matrix and the writer's declared gaps (L23). Next: take its findings, then
+Codex and the lenses on d1c152a6 and on 74256214 as their own slices, push, PR, advisor, ready --pr.
 
 ## Goal
 Codex spends only on reading code it has not read, while every review the push and the merge door ask for still runs.
@@ -324,3 +323,10 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   grows by `bin/lib/codex-review-recheck.mjs` and `bin/lib/codex-review-rows.mjs` (+ tests). A `- Seen:` line in
   docs/FAILURES.md for main's hole (entry open-findings-escape-merge). Its review: Codex and the lenses on that
   commit as its own slice, no rerun of commits already reviewed. Ready --pr after the gate sequence; the lead lands.
+- L23 2026-11-15T04:10Z, the chain fix (writer, opus) committed as 74256214: `recheckThrough` walks the first-parent
+  line from a plain review through clean merge-own records and merges that write nothing, over documents-only
+  stretches, to the record that owes; `recheckAt` alone asks git; mergeTurn, the startingAt guard, recheckFor and the
+  push row's correctionOwed read it. The 12 matrix cells pass (7 failed before), and F3, F4, F6 and F7 have tests.
+  The writer's declared gaps, outside the matrix: both turns owe; `--unavailable` on the merge; a 'refused' state
+  at the first parent; plain check's debt row base; the second-recheck warning's base; exit codes differ, one turn
+  against two. Put to the verifier.
