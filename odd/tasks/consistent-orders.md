@@ -4,7 +4,7 @@
 S1 (1a4ec235, 8c3644f6) and S5 (617f6386, 1acb3306) built, tests first, each reviewed by Codex and the Claude
 lenses: S1 clean; S5's P2 (forks missing from the departure page) fixed and re-reviewed clean; the reliability lens's
 ask to refuse a plan with no forks rebutted with evidence (a stretch is also opened with no absence,
-bin/lib/manifest.mjs:213). The independent verifier (opus) runs over S1 and S5. S5's rule (`rules change
+bin/lib/manifest.mjs:213). The independent verifier (opus) passed S1 and S5 (L10); its two fixes (2d9d8f0d) reviewed clean. S5's rule (`rules change
 away-autonomy` on a `rule/` branch) waits until this pull request lands: a rule branch is cut from origin/main, and
 the rule names forks main does not hold yet. Still open, as designs for the lead: S2 (T2), S6 (T7); S4 is his.
 What goes covers 1 of the 6 uncaught rows; the lead's own consult (S2) and sub-agents (S4) wait.
@@ -179,13 +179,15 @@ answering a block, while a session waits) were missed with nothing to say so; on
 - [ ] T4 (kind: design) S4, spec 4: the lead asks him; build nothing until then
 - [x] T5 (kind: build) S5, spec 5 (code built, two tests failed on main, 67 of 67 pass; the rule's `rule/` branch after this pull request lands): `forks` in the stretch plan, shown at open; rule via `rules change` on a `rule/` branch; route inline; commit `feat(stretch): pre-decided forks in the departure plan`
 - [ ] T7 (kind: design) S6, spec 6: amend `rule:reports-spanish-visual` with his quote (`rules change` on a `rule/` branch) and design the check that acts on it (a candidate: the reply hook turns back a report close with no Artifact published in the turn); the lead approves before a build
-- [ ] T6 (kind: verify) one independent verifier (opus) over T1 and T5
+- [x] T6 (kind: verify) one independent verifier (opus) over T1 and T5: PASS (L10)
 - [ ] F1 follow-up, owner: the lead — JH 199's ready without its verifier: a ready notice could require a verifier record (not built here)
 - [ ] F2 follow-up, owner: the lead — the context hook's 99-120% against the host's 65%
 - [ ] F3 follow-up, owner: the lead — the clash between an armed wait and the decision close
 - [ ] F4 follow-up, owner: the lead — `stretch` lost time counts only failed gates
 - [ ] F5 follow-up, owner: the lead — the lead's unconsulted `note` answering a block (10:50Z): a `note` to a waiting session is not gated; S2 forces the consult at the next close, not before the note
 - [ ] F6 follow-up, owner: the lead — JH 199's and JH 204's long stretches of commits and verifier launches with no consult: those acts are not gated by his yes to question 282; widening the gated acts is his call
+- [ ] F8 follow-up, owner: the lead — the gate's report will count `waiting` notices sent before S1 was installed as acts with no decision (bin/advisor-gate.mjs, the reconciliation)
+- [ ] F9 follow-up, owner: the lead — inherited false refusals: an `echo`, a shell comment or an unquoted heredoc commit body that names a gated notify reads as that act (JH 206's T8, odd/tasks/advisor-use.md)
 - [ ] F7 follow-up, owner: the lead — 8 stale `waiting` notices from sessions long gone stay newest in the channel
 
 ## Log
@@ -211,3 +213,7 @@ answering a block, while a session waits) were missed with nothing to say so; on
 - L9 (2026-11-15 11:36 local, the lead's note) his new order, line 16680 (16:36:08Z): reports always as visual,
   didactic artifacts instead of chat text, explained as for someone who knows nothing, for any user of the harness.
   Planned as S6 (T7, design first).
+- L10 (2026-11-15) the independent verifier (opus) over S1 and S5: PASS, 115 of 115 tests, `npm run check` green.
+  Fixed (2d9d8f0d, Codex and the risk and reliability lenses clean): `kindsOf` reads every `--kind`, so a chained
+  or repeated-flag notice is gated for every kind; `forks: []` reads as none. Left as follow-ups: F8 and F9. Not
+  checked by it: the host's real compaction entry (the fixture follows transcript 69918425's isCompactSummary lines).
