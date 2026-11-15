@@ -2,7 +2,9 @@
 
 ## State
 Design only, no code. Depth pass done; the four Delegation lines drafted (Specs); a double review ran (read
-f0835fa1: Claude 13 findings, Codex 7; all taken, Log L5) and this version answers it. It waits for his three answers
+f0835fa1: Claude 13 findings, Codex 7; all taken, Log L5), the spec 1 checks were replayed over the record (Depth
+pass item 4). The confirming read of this version was stopped by the host for low memory before any finding (Log
+L7): this version is not re-read, and the read is not rerun without being asked. It waits for his three answers
 (Ask me before), carried by the lead; question 292 covered opening this document, not building. Next, once he
 answers: T1 (synthetic fixture and terms), then the build of whichever lines he approved.
 
@@ -31,7 +33,7 @@ lento"; so each refuses once and names the line, and the retry passes.
 ## In scope / Out of scope
 - In: this document. After his answers, in a build session: `bin/lib/rules-block.mjs` lines 45-48 and its test,
   `docs/proposals/harness-diet.md` A.1, `bin/lib/rules-coverage-data.mjs` (refresh); `bin/guard.mjs` and
-  `bin/lib/guard.mjs` (the Agent branch, and the Read/Grep/Bash branch for spec 1); `bin/lib/subagent-count.mjs`
+  `bin/lib/guard.mjs` (the Agent branch); `bin/lib/subagent-count.mjs`
   (`callsOf` keeps `message.id`, `roleOf` reused); `bin/lib/contract.mjs` (`risk:` and `surfaces:` fields);
   `bin/check.mjs` (the launched-together column of `check --subagents`); `bin/notify.mjs` (the ready notice).
 - Out: JH 207's surfaces (codex-review*, check-codex-reviews, lens rows, check's quiet line). JH 208's
@@ -65,7 +67,8 @@ lento"; so each refuses once and names the line, and the retry passes.
 Three questions, one at a time, each his (the Rules block is his kept text, `bin/lib/rules-block.mjs:12-14`, :27-32):
 1. Line 46, readers launched together (spec 1).
 2. Line 48, a declared risk and a bounded verifier loop (spec 2).
-3. Line 47, writers launched together when the document declares disjoint units (spec 3), three options.
+3. Line 47, writers (spec 3), three options. The verdict refutes the obligation (C), so the first option is B: keep
+   the line and add the two writer refusals.
 Line 45 follows from the three answers (spec 4), its whole text given for the case where all three are approved.
 
 ## Depth pass
@@ -111,9 +114,8 @@ Line 45 follows from the three answers (spec 4), its whole text given for the ca
     background-close text. The merge door is `check --door` (`bin/check.mjs:385-403`), run by
     `bin/merge-queue.mjs:338-361`, and it reads no feature document (`bin/lib/merge-queue-reviews.mjs:83-91`).
 - 3. The bar:
-  spec 1: `node --test bin/guard.test.mjs`: none, new behaviour (a reader in a later message of the same user turn is
-  refused once unless marked as the correction or the recheck; reading past the threshold with no reader is refused
-  once)
+  spec 1: `node --test bin/guard.test.mjs`: none, new behaviour (a reader in a later message of the same wake is
+  refused once unless marked as the correction or the recheck)
   spec 2: `node --test bin/guard.test.mjs bin/lib/contract.test.mjs`: none, new behaviour (a third verifier launch for
   one slice is refused; a feature document with no `risk:` is refused by `contract check`; a ready notice of a high
   feature with no passing verifier record of its head is refused)
@@ -129,9 +131,17 @@ Line 45 follows from the three answers (spec 4), its whole text given for the ca
     read), about 640k weighted, 4.2 min of clock against 12.9 min summed. This session fanned out because the brief
     said so: how many past rounds held 3 or more independent questions is not measured.
   - Block 3 (writers): would the obligation have changed the record? JH 199: 0 of 7. JH 208: 1 pair (S1 and S5),
-    qualifying only by file count, each under 50 changed lines, so splitting would have cost each writer its one to
-    two minutes of reading for a small unit. The obligation can fire, but on today's record its gain is small.
-  Verdict: supports (block 2 on one session's round; block 3 on one small pair). Question 3 says so.
+    qualifying only by file count under today's floor, each under 50 changed lines. Under option C's narrowed floor
+    (roughly 100+ lines), that pair does not qualify either: 0 cases in the record. Per option: A and B, one small
+    pair; C, none.
+  - Spec 1's checks, replayed after the review (`node C:\Users\Oficina\.claude\jobs\c0430b6d\tmp\replay.mjs`):
+    background sessions have one user message and then only notification wakes (JH 199 60, JH 207 19, this one
+    8), so a "user turn" unit does not fit them; a 10-call read threshold would have fired in 9, 6, 6 and 2 wakes
+    (JH 199, 206, 207, 210), mostly gate, commit and test wakes; `roleOf` misclassified 4 of 25 launches (JH 199's
+    3 untyped general-purpose as other, this session's cost reader as verifier, from its first verb "Measure").
+    JH 208's transcript was no longer at its path: not replayed.
+  Verdict: refutes (option C of block 3, and spec 1's read threshold as drafted). Block 2's readers rule supports on
+  one session's round. Question 3 puts the change or drop first; the threshold leaves question 1's yes.
 - 5. Request: let a session read in parallel in round one (3-4 readers launched together when the questions are
   independent, then one correction and one recheck), bound the verifier loop by slice under a risk the feature
   document must declare, and launch writers together when the document declares disjoint ready units of real size.
@@ -148,34 +158,38 @@ Line 45 follows from the three answers (spec 4), its whole text given for the ca
      split, one when they do not), then at most one correction batch and one recheck of what they left open or
      contradict"
    - A yes covers: reading round one in parallel; the guard refusing once a reader launched in a later message of
-     the same user turn that is not marked as the correction or the recheck, including a new question found
-     mid-round (it waits for the correction batch); the guard refusing once the first read past the threshold in a
-     turn of a session with a feature document when no reader was launched.
-   - It does not cover: the readers' model or effort (decision 6), writers, the verifier.
+     the same wake that is not marked as the correction or the recheck, including a new question found mid-round
+     (it waits for the correction batch); every Agent call naming its role in its prompt.
+   - It does not cover: the readers' model or effort (decision 6), writers, the verifier, and a read-threshold
+     refusal (inline reading past N calls with no reader). The replay refutes that one as drafted (Depth pass item
+     4): it would fire on gate and commit wakes. It stays an untested idea, not asked now.
    - The other option: keep one explorer. The questions then run one after another and the clock is longer (12.9
      against 4.2 min here, summed against measured). That the tokens per question would be similar is assumed: no
      serial run of the same questions exists.
-   - Check, at the act: in the guard's Agent branch, a reader whose user turn already holds a reader in an earlier
+   - Check, at the act: in the guard's Agent branch, a reader whose wake already holds a reader in an earlier
      message is refused once, whatever that reader's state, unless its prompt opens `## Correction of the round` or
-     `## Recheck of the round`, each allowed once per round. In the Read/Grep/Bash branch, the first call past a
-     threshold (a constant in code, starting at 10) in a user turn with no reader is refused once, only in a
-     session with an open feature document. Audit only: whether the questions really split; a lone first reader
-     (Constraints); the `check --subagents` column counting launched-together groups per session.
-   - Terms, fixed in T1: a user turn runs from a message the user sent to the next stop, and a reader still running
-     from an earlier turn does not make the new turn's first reader serial; a call a hook refused does not count as
-     launched, and a message that relaunches the refused calls of the message before it repairs the same round (the
-     fixture models this session's refused and relaunched calls); a role is `roleOf`'s (writer, explorer, reviewer,
-     verifier, other), so verifiers and reviewers are not counted as readers.
+     `## Recheck of the round`, each allowed once per round. Audit only: whether the questions really split; a lone
+     first reader (Constraints); inline reading with no reader; the `check --subagents` column counting
+     launched-together groups per session.
+   - Terms, fixed in T1: a wake runs from a message the user sent or a task notification to the next stop, and a
+     reader still running from an earlier wake does not make the new wake's first reader serial; a call a hook
+     refused does not count as launched, and a message that relaunches the refused calls of the message before it
+     repairs the same round (the fixture models this session's refused and relaunched calls); the role is the one
+     the prompt names (`## Role: reader`, `writer`, `verifier` or `reviewer`), with `roleOf` only as the fallback
+     for a call that names none, since `roleOf` alone misclassified 4 of 25 replayed launches.
 2. Line 48, a declared risk and a bounded verifier loop (block 2). Brief: "weigh one risk tier".
    - Today: "only a change that names a Task Size high-risk item gets an independent verifier after the change's own
      checks, as rarely as possible"
-   - Drafted: "a change that names a Task Size high-risk item, in its feature document's `risk:` line or in the
-     request, gets an independent verifier after the change's own checks, for each slice at most one correction batch
-     and one recheck, then his decision; review stays due on every code slice whatever its risk"
+   - Drafted: "only a change that names a Task Size high-risk item, in its feature document's `risk:` line or in
+     the request, gets an independent verifier after the change's own checks, and for each slice at most one
+     correction batch and one recheck, then his decision"
+   - Review on every code slice is not restated here: it has its home in the project's `CLAUDE.md` and
+     `docs/SPEC.md:345`, and this line is read in projects with no reviews.
    - A yes covers: every new feature document declares `risk: high (<items>)` or `risk: medium`, and a missing line
      is refused, so omission is not a silent medium; without a document a named item still calls the verifier; the
      guard refuses a third verifier launch for one slice; a ready notice of a high feature needs a passing verifier
-     record of its head.
+     record of its head. That record is consistent-orders F1, a follow-up the lead owns; spec 2 proposes taking it
+     over, in `bin/notify.mjs`.
    - It does not cover: when review is due (`SPEC.md:345` stays); lens count by risk; a floor from touched paths.
      A floor (guard paths raise to item 2, installer paths to item 5, the document may only raise) is the stronger
      form; it is left out because a path list is a second home for the high-risk list, and is a separate question
@@ -198,15 +212,19 @@ Line 45 follows from the three answers (spec 4), its whole text given for the ca
      keeps, because a subagent spends one to two minutes reading before it writes) or the context backstop; when a
      feature document's Tasks declare such units ready with their `surfaces:`, their writers are launched together in
      one turn and the session keeps git, the feature document and the seam check."
-   - Option A, keep line 47 as it is: no new text, no new check.
-   - Option B, keep line 47 and add the two guard refusals below: holds today's permission, adds no obligation.
-   - Option C, the drafted text: an obligation that fires only on declared units, and the size floor narrowed to
-     lines (JH 208's S1 and S5 would then stay inline, as their size suggests).
+   - The verdict refutes C (Depth pass item 4): under C's floor the record holds 0 cases. So the order of the options
+     puts the change first.
+   - Option B, first: keep line 47 and add the two guard refusals below. This holds today's permission and adds no
+     obligation. On the record it changes no past launch, and it closes the gap a writer with no surfaces leaves.
+   - Option A: keep line 47 as it is, with no new text and no new check.
+   - Option C, the drafted text: an obligation that fires only on declared units, with the size floor narrowed to
+     lines. The two go together on purpose. With today's floor the obligation would have forced JH 208's S1 and S5
+     (23 and 42 lines) into two writers, each paying one to two minutes of reading for a unit smaller than that cost.
    - A yes to C covers: the obligation, the narrowed floor, and the refusals. It does not cover a writer cap, writers
      touching `docs/ROADMAP.md` (the session writes it), or models. Without a feature document it reads as today.
    - Check, at the act: the guard refuses any call that `roleOf` marks a writer, or that carries `## Allowed edit
      surfaces`, unless it carries that heading and names a role (an unrecognized role with surfaces is refused as
-     ambiguous); under C, a writer of a user turn that already holds a writer in an earlier message is refused once.
+     ambiguous); under C, a writer of a wake that already holds a writer in an earlier message is refused once.
      `contract check` refuses two ready tasks declared parallel whose `surfaces:` overlap. Audit only: a turn that
      launched one writer while two declared units were ready (a Stop reminder, once).
 4. Line 45, follows from 1-3. Today: "Delegate through the runtime's subagent/delegation mechanism, when available,
@@ -227,10 +245,10 @@ Line 45 follows from the three answers (spec 4), its whole text given for the ca
 ## Tasks
 - [ ] T1 (kind: design) after his answers: a synthetic fixture (types, ids, timestamps, headings only; no prompt text
   from a real transcript) of a turn with 4 Agent calls, 3 refused and relaunched together, a serial foreground pair,
-  a zero-launch turn past the threshold, a background reader crossing user turns, a general-purpose writer without
-  surfaces, and a verifier; spec 1's terms; the reach of today's Agent refusals in a project without rules-data —
+  a background reader crossing wakes, a general-purpose writer without surfaces, a call with no role heading,
+  and a verifier; spec 1's terms; the reach of today's Agent refusals in a project without rules-data —
   route: inline — commit `test(guard): fixture of parallel, serial and repaired Agent launches`
-- [ ] T2 (kind: build) spec 1 — guard Agent and Read/Grep/Bash branches, `callsOf` keeps `message.id`;
+- [ ] T2 (kind: build) spec 1 — guard Agent branch, `callsOf` keeps `message.id`;
   `check --subagents` column after JH 208 releases subagent-check — high risk 2, independent verifier — commit
   `feat(guard): readers of a round launch together`
 - [ ] T3 (kind: build) spec 2 — `contract.mjs` `risk:`, guard verifier bound, verifier record, ready notice — fixture
@@ -276,3 +294,8 @@ Line 45 follows from the three answers (spec 4), its whole text given for the ca
   (omitted risk).
 - L6 A slip, told: the first commit attempt carried an AI attribution line that his global CLAUDE.md forbids; the
   harness's commit reminder asks for it in every session. Stopped before the commit existed and redone without it.
+- L7 After the advisor's second consult: the spec 1 checks replayed over the record (Depth pass item 4), which moved
+  the read threshold out of question 1 and the obligation (option C) behind option B; line 48 keeps "only" and drops
+  its review clause (one home). The confirming read (`rule:double-review`, a correction gets one) started and was
+  stopped by the host for low memory before any finding, together with this session's `wait --notice-to 210`.
+  Neither is rerun without being asked: this version is not re-read.
