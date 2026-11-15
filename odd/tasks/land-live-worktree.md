@@ -5,7 +5,8 @@ Delivery: one pull request, landed by the lead · Test runner: `node --test`
 
 ## State
 Done: the reproduction (L2, L3), the tests and the fix (T2, T3 in one commit, L5), the failures and roadmap entries
-(T4). Next: T5, the reviews, the verifier, the pull request. Open: nothing of his.
+(T4), the reviews and the verifier (L7, L8). Next: the pull request and its ready notice; the lead lands it.
+Open: nothing of his.
 
 ## Goal
 `js-harness merge-queue --land` and `--prune` never run `git worktree remove` on a worktree a session listed by
@@ -95,7 +96,7 @@ Nothing: the brief settles the direction.
 - [x] T3 (kind: build) the shared reading, the land and `--prune` keep a live session's worktree, the true failure line
   (spec 1; inline; one commit with T2)
 - [x] T4 (kind: docs) the `- Seen:` entry and the roadmap entry (specs 2, 4; inline; its own commit)
-- [ ] T5 (kind: verify) Codex, the lenses, the verifier, the pull request and the ready notice
+- [x] T5 (kind: verify) Codex, the lenses, the verifier, the pull request and the ready notice
 
 ## Follow-up F1 (not built here): a notice from a session whose folder vanished
 What the audit says (finding A2-2, partly verified; its file in the lead's side-session notes, `full-audit/A2.md`):
@@ -140,3 +141,9 @@ other than a listed session, or a session that enters after the listing, can sti
   shared reading for the close (now `standingIn`'s own test in `bin/lib/background.test.mjs`), the `--prune` exit
   and stream (above), and a removal git fails part-way is printed but not recorded in the land's record (left: no
   spec asks for it; the line says what git left).
+- L8: the fix of L7 in 1b5ee401, and 08d96657 for what the verifier's second pass found (167 s, 97,471 tokens; no
+  blocker): the help and a test name still said "a job not done". Reviews of 930410c..08d9665: Codex "the patch is
+  correct", confidence 0.92, 74,553 input tokens (44,416 cached) in 24 s; the four lenses 0 findings each, about
+  11,000 input tokens each, and the three earlier findings rechecked as fixed. Left open from the verifier: the
+  close's guest check has no test of its own in `bin/lib/background-close.test.mjs` (the shared `standingIn` has
+  one), and a half-removed worktree is printed, not recorded.
