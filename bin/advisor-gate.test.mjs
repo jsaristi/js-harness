@@ -141,6 +141,20 @@ test('a queued message of his breaks the stretch as a typed one does', () => {
   assert.equal(decisions(home)[0].decision, 'flagged');
 });
 
+test('a compaction breaks the stretch, marked isMeta or not, so a consult before it covers no waiting after it', () => {
+  const { home, project } = scratch();
+  const t = path.join(home, 'projects', 'p', 'w.jsonl');
+  const waiting = bash('js-harness notify --to orchestrator --kind waiting "blocked"');
+  for (const isMeta of [false, true]) {
+    const summary = { type: 'user', isCompactSummary: true, isVisibleInTranscriptOnly: true, ...(isMeta && { isMeta }), message: { role: 'user', content: 'This session is being continued from a previous conversation.' } };
+    writeTranscript(t, [advisorCall(), summary, toolCall()]);
+    const r = run(['--hook'], { ...waiting, cwd: project, session_id: 's', transcript_path: t }, home);
+    assert.equal(r.answer?.hookSpecificOutput?.permissionDecision, 'deny', `isMeta ${isMeta}`);
+    assert.match(r.answer.hookSpecificOutput.permissionDecisionReason, /consult the advisor, then retry it/);
+  }
+  assert.deepEqual(decisions(home).map((d) => d.broken), ['compaction', 'compaction']);
+});
+
 test('a session event breaks the stretch; a task notification does not', () => {
   const { home, project } = scratch();
   const t = path.join(home, 'projects', 'p', 'w.jsonl');

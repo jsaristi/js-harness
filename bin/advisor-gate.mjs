@@ -110,6 +110,9 @@ function tailLines(file, tailBytes) {
 
 /** What breaks a stretch, or `null`: his message (typed, or queued while the session worked) or a session event. */
 function breakOf(entry) {
+  // A compaction's summary ends the stretch by its own mark, not only by reading as his message, so a host that someday
+  // marks it `isMeta` does not let a consult made before the compaction cover acts after it (odd/tasks/consistent-orders.md, L8).
+  if (entry.isCompactSummary === true) return 'compaction';
   if (entry.type === 'attachment' && entry.attachment?.type === 'queued_command' && entry.attachment?.origin?.kind === 'human') return 'his message';
   if (entry.type !== 'user' || entry.isMeta || entry.toolUseResult) return null;
   const content = entry.message?.content;
