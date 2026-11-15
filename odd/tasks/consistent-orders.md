@@ -21,7 +21,7 @@ brief was skipped at least once with nothing to say so.
 
 ## Done when
 - `node --test bin/advisor-gate.test.mjs` exits 0, with S1's cases failing on main first
-- `node --test bin/lib/stop-consult.test.mjs` exits 0, with S2's and S3's cases failing on main first
+- `node --test bin/lib/stop-consult.test.mjs` exits 0, with S2's cases failing on main first
 - `node --test bin/stretch.test.mjs` exits 0, with S5's cases failing on main first
 - `npm run check` exits 0
 - Codex and the Claude lenses reviewed each code slice; one independent verifier (opus) passed clean before ready
@@ -35,10 +35,12 @@ brief was skipped at least once with nothing to say so.
 - Out, his decisions (the brief): whether a compaction keeps the consult; whether the senior's own sub-agents are
   exempt; what happens when the advisor tool is unavailable. Each check below reuses the gate's existing behaviour
   for these (a compaction's summary breaks the stretch, `breakOf` at `bin/advisor-gate.mjs:107-117`; the senior is
-  exempt, `:246`; an outage or no advisor tool lets the act through, `:262-267`), so none of them is decided anew.
+  exempt, `:246`; an outage or no advisor tool lets the act through, `:264-269`). S1 reuses all three. S2 takes
+  the gate's `hadAdvisor` and outage rule, but its predicate A (a consult after the notice, by time) lets a consult
+  made before a compaction count: that touches his compaction decision, so the lead rules on it before S2 is built.
 
 ## Constraints
-- A Stop hook turns a stop back once (`stop_hook_active`, `bin/reply.mjs:224,262`) — the host's contract, so a lead
+- A Stop hook turns a stop back once (`stop_hook_active`, `bin/reply.mjs:229,267`) — the host's contract, so a lead
   that ignores the warning stops anyway; the PreToolUse refusal (S1) holds every time.
 - Fail open — the gate's rule (`bin/advisor-gate.mjs:9-10`): an unreadable record lets the act through, recorded.
 - The reply hook's time budget (odd/tasks/reply-hook-latency.md) — S2 reads the tail as stop-wake does.
@@ -52,7 +54,7 @@ brief was skipped at least once with nothing to say so.
   the act it governs (a poka-yoke), not remembered. Its best practitioner here is gentle-ai's own design as this repo
   reverse-engineered it: "What must be right is decided by code, and the model is handed the next step as data"
   (docs/proposals/gentle-ai-reverse-engineering.md:764), with prose kept consistent by tests (:778) and "a strong
-  model carries the rest, and that costs context" (:792). The smallest change that meets it: add the missing acts to
+  model carries the rest, and that costs context" (:789). The smallest change that meets it: add the missing acts to
   the gates that already exist (the advisor gate, the reply Stop hook), whose refusals already carry the next step;
   no new mechanism and no per-turn text. Searched first (`rule:reuse-first`): `gatedAct` (bin/advisor-gate.mjs:61-81)
   gates question, land, session, plan, done, never `waiting`; `wakeWarning` (bin/lib/stop-wake.mjs) is the neighbour
@@ -137,8 +139,13 @@ brief was skipped at least once with nothing to say so.
     notice: 3 turned back (10:51Z, 12:38Z, 12:48Z), 3 consults forced. It misses the 13:08Z close before the
     1 h 40 min idle: JH 207 had sent a later notice that was not `waiting`. Predicate B, no consult after it inside
     the lead's stretch: 19 turned back, most of them from 8 stale `waiting` notices of sessions long gone (JH 101,
-    JH 137, JH 138, JH 160, JH 166, JH 193, JH SR). Chosen: A, bounded to notices of live sessions (a liveness
-    bound, as stop-wake bounds a handing by the transcript's start), so B's stretch is not reused here.
+    JH 137, JH 138, JH 160, JH 166, JH 193, JH SR). With those dropped, every end with a live `waiting` shows a
+    stretch call, so B also comes to 3: the count does not separate them. Chosen: A, because it is question 289's
+    own wording. "Live" is open: the lead's transcript predates those 8 notices, so stop-wake's transcript-start bound
+    would not drop them; `bin/lib/sessions-running.mjs` (`readRunning`) is the candidate. The replay did not filter
+    for idle closes, so 3 is an upper bound. The 13:08Z miss: JH 207 was still blocked and sent `note`s at 12:48Z,
+    12:53Z and 13:06Z (channel lines 3125-3127), so "newest notice is `waiting`" misses a blocked session that then
+    sends a note; the lead rules whether that matters.
   - Its limits, measured: it acts at a close, never while the lead sits idle (at 14:49Z the lead was woken by
     JH 199, not by JH 207's notice), and once per close (the host's contract).
   Verdict: supports
