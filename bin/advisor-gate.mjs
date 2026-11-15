@@ -6,8 +6,8 @@
 // already asks (M2, Depth pass 1). Policy R: one advisor call with a result covers every gated act after it until his
 // next message (typed or queued), the next session event, or STRETCH_TOOL_CALLS tool calls.
 // It refuses an uncovered act (his answer to question 285, which moved refusal ahead of the warning week of P3): the
-// reason says how to consult and retry, and the decision is recorded either way. A sub-agent's end is recorded and never
-// blocked, which his yes left apart. It fails open: an unreadable transcript or payload lets the act through, recorded
+// reason says how to consult and retry, and the decision is recorded either way. A sub-agent's uncovered end is turned
+// back once and its next stop let through (his answer to question 294, odd/tasks/consistent-orders.md S4). It fails open: an unreadable transcript or payload lets the act through, recorded
 // unchecked. It acts only in a js-harness project
 // (a `harness.json` at or above the cwd), since the entry is in the user's settings and runs everywhere.
 import fs from 'node:fs';
@@ -33,7 +33,7 @@ const USAGE = `Usage: js-harness advisor-gate --hook    (PreToolUse: the hook pa
        js-harness advisor-gate report [--since <YYYY-MM-DD>]
   Holds the acts that decide to an advisor call with a result in the caller's stretch (policy R): since his last
   message or the last session event, within ${STRETCH_TOOL_CALLS} tool calls. Mode ${MODE}: an uncovered act is refused, its reason
-  saying how to consult and retry; a sub-agent's end (--stop) is recorded, never blocked, and one whose transcript does not exist is recorded
+  saying how to consult and retry; a sub-agent's uncovered end (--stop) is turned back once, its next stop let through, and one whose transcript does not exist is recorded
   no-transcript with its agent type. Every decision is appended to <home>/.js-harness/advisor-gate/decisions.jsonl. It prints {} outside a
   project with a harness.json, and fails open: what it cannot read lets the act through, recorded unchecked.
   report: the decisions by day, kind and act, and the Fable input tokens of the advisor calls that followed a flag in
@@ -232,6 +232,12 @@ const NOTICE = (act) => [
   advisorSay('missed', { act: `act (${act})`, calls: STRETCH_TOOL_CALLS }), advisorSay('how'), advisorSay('refused'),
 ].join(' ');
 
+/** What a sub-agent hears when its end is turned back: consult, then end; it is turned back once. */
+const END_NOTICE = [
+  advisorSay('missed', { act: 'act (end)', calls: STRETCH_TOOL_CALLS }), advisorSay('how'),
+  'Your end is turned back once: consult the advisor, then end; the next stop goes through.',
+].join(' ');
+
 /** Whether `file` does not exist: only ENOENT, so a transcript there but unreadable stays unchecked. */
 function missing(file) {
   try {
@@ -278,7 +284,8 @@ function decide(mode, payload, seams) {
   if (stretch.calls > 0) return record(home, { ...base, ...facts, decision: 'covered' }, stderr), {};
   if (stretch.errors >= 2) return record(home, { ...base, ...facts, decision: 'outage' }, stderr), {};
   record(home, { ...base, ...facts, decision: 'flagged', mode: MODE }, stderr);
-  if (mode === '--stop') return {};
+  // A sub-agent's end is turned back once (his answer to question 294): the second stop goes through, as the reply hook's.
+  if (mode === '--stop') return base.secondStop ? {} : { decision: 'block', reason: END_NOTICE };
   return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: NOTICE(act) } };
 }
 

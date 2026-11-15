@@ -260,16 +260,32 @@ test('a sub-agent\'s act is read from its own transcript', () => {
   assert.equal(r.answer.hookSpecificOutput.permissionDecision, 'deny', 'a sub-agent act is refused as a session act is');
 });
 
-test('SubagentStop never blocks (outside his yes to 285); a second stop is recorded as such', () => {
+test('an unconsulted sub-agent end is turned back once (his answer to question 294); its second stop is let through', () => {
   const { home, project } = scratch();
   const t = path.join(home, 'projects', 'p', 'agent.jsonl');
+  const stop = (active) => run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a2', agent_transcript_path: t, stop_hook_active: active }, home);
   writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
-  const first = run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a2', agent_transcript_path: t, stop_hook_active: false }, home);
-  assert.deepEqual(first.answer, {});
+  const first = stop(false);
+  assert.equal(first.answer?.decision, 'block');
+  assert.match(first.answer.reason, /consult the advisor/);
+  const again = stop(true);
+  assert.deepEqual(again.answer, {}, 'the second stop is let through, never a loop');
   writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall(), advisorCall()]);
-  const second = run(['--stop'], { hook_event_name: 'SubagentStop', cwd: project, session_id: 'm', agent_id: 'a2', agent_transcript_path: t, stop_hook_active: true }, home);
-  assert.deepEqual(second.answer, {});
-  assert.deepEqual(decisions(home).map((d) => [d.act, d.decision, d.secondStop]), [['end', 'flagged', false], ['end', 'covered', true]]);
+  assert.deepEqual(stop(false).answer, {}, 'a consulted end passes');
+  assert.deepEqual(decisions(home).map((d) => [d.act, d.decision, d.secondStop]), [['end', 'flagged', false], ['end', 'flagged', true], ['end', 'covered', false]]);
+});
+
+test('a sub-agent of the senior session consults too (his answer to question 295); a Fable sub-agent stays exempt', () => {
+  const { home, project } = scratch();
+  const t = path.join(home, 'projects', 'p', 'agent.jsonl');
+  const record = path.join(home, '.js-harness', 'background');
+  fs.mkdirSync(record, { recursive: true });
+  fs.writeFileSync(path.join(record, 'sessions.jsonl'), `${JSON.stringify({ event: 'started', sessionId: 'senior', title: 'JH SR · the senior for the hardest work' })}\n`);
+  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall()]);
+  const payload = { hook_event_name: 'SubagentStop', cwd: project, session_id: 'senior', agent_id: 'a5', agent_transcript_path: t, stop_hook_active: false };
+  assert.equal(run(['--stop'], payload, home).answer?.decision, 'block');
+  writeTranscript(t, [{ type: 'user', message: { content: 'brief' } }, toolCall(FABLE, FABLE)]);
+  assert.deepEqual(run(['--stop'], payload, home).answer, {});
 });
 
 test('an end whose transcript does not exist is recorded apart with its agent type, not unchecked (T7)', () => {
