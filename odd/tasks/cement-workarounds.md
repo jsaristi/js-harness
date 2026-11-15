@@ -5,8 +5,8 @@ Delivery: one pull request, landed by the lead · Test runner: `node --test`
 
 ## State
 Done: T1 (4c419173), T2 (fcdc884a, the rule amended through `rules change`), T3 (the four follow-ups in the
-roadmap's Later list). Next: T4, the Claude lenses on the slice, Codex only if `check` counts code, the pull request
-and its ready notice. Open: nothing of his.
+roadmap's Later list), T4 (reviews recorded, L4). Next: the pull request and its ready notice; the lead lands it.
+Open: nothing of his.
 
 ## Goal
 A manual workaround the lead or a session makes while working is never left in memory: it gets a follow-up, owned by
