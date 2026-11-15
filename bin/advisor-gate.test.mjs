@@ -104,6 +104,15 @@ test('a heredoc\'s text that names an act is not that act, unless a shell reads 
   assert.equal(act('cat > land.sh <<EOF\njs-harness merge-queue --land\nEOF\nbash land.sh'), 'land', 'a script written then run by a later line');
   assert.equal(act('cat > land.sh <<EOF\njs-harness merge-queue --land\nEOF\n. ./land.sh'), 'land', 'or sourced with .');
   assert.equal(act('. /dev/stdin <<EOF\njs-harness merge-queue --land\nEOF'), 'land', 'the . builtin reads it');
+  assert.equal(act('cat <<EOF\nx=$(\njs-harness merge-queue --land\n)\nEOF'), 'land', 'a substitution over several body lines');
+  assert.equal(act('cat <<A.b > f\nbody\nA.b\njs-harness merge-queue --land\ncat <<A > g\nx\nA'), 'land', 'a delimiter with a dot is read whole');
+  assert.equal(act('$(cat <<EOF\njs-harness merge-queue --land\nEOF\n)'), 'land', 'a bare substitution runs its output');
+  assert.equal(act("node <<'EOF'\nrun(`js-harness merge-queue --land`)\nEOF"), 'land', 'an interpreter reads it');
+  assert.equal(act('echo $((1<<X))\njs-harness merge-queue --land\nX'), 'land', 'an arithmetic shift is no heredoc');
+  assert.equal(act('ssh host <<EOF\njs-harness merge-queue --land\nEOF'), 'land', 'ssh runs it');
+  assert.equal(act('$SH <<EOF\njs-harness merge-queue --land\nEOF'), 'land', 'a command in a variable');
+  assert.equal(act('while read c; do $c; done <<EOF\njs-harness merge-queue --land\nEOF'), 'land', 'a loop that reads it');
+  assert.equal(act('git commit -m "$(cat <<\'EOF\'\nfix: js-harness merge-queue --land\nEOF\n)"'), null, 'a quoted substitution is an argument, as a commit message');
   assert.equal(act('"C:/Program Files/Git/bin/bash.exe" <<EOF\njs-harness merge-queue --land 12\nEOF'), 'land', 'a quoted path to a shell');
 });
 

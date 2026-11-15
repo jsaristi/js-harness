@@ -52,12 +52,15 @@ const unquoted = (command) => command.replace(/(--kind\s+|\b(?:bash|sh|zsh|pwsh|
   if (before || /(?:^|[\\/])js-harness(?:\.mjs)?$/.test(inner)) return (before ?? '') + inner;
   return '""';
 });
-/** Text that names a shell, `source`, `eval` or `.` as a word anywhere (`bash <<EOF`, `cat <<EOF | bash`, `env bash
- * <<EOF`, `sudo sh -s <<EOF`, a script written by a heredoc then run by `bash s.sh`), which may run what a heredoc
- * holds: matched loosely, since a miss lets an act through. */
-const SHELL_READS = /(?:^|[\s|;&(])(?:(?:\S*[\\/])?(?:bash|sh|zsh|dash|ksh|pwsh|powershell|source|eval)(?:\.exe)?|\.)(?=[\s;|&)"']|$)/;
-/** A body line an unquoted heredoc expands, running its command: a `$(` or a backtick. */
+/** Text that names, as a word anywhere, something that may run what a heredoc holds: a shell, an interpreter, `ssh`,
+ * `source`, `eval`, `.`, `xargs`, a loop's `done`, or a command in a variable (`bash <<EOF`, `cat <<EOF | bash`,
+ * `env bash <<EOF`, a script written by a heredoc then run by `bash s.sh`, `$SH <<EOF`). Matched loosely, since a miss
+ * lets an act through and a match only keeps the text. */
+const SHELL_READS = /(?:^|[\s|;&(])(?:(?:\S*[\\/])?(?:bash|sh|zsh|dash|ksh|pwsh|powershell|node|deno|bun|python[\d.]*|perl|ruby|ssh|source|eval|xargs|done)(?:\.exe)?|\.|\$\{?\w+\}?)(?=[\s;|&)"']|$)/;
+/** A body an unquoted heredoc expands, running a command: a `$(` or a backtick, on any of its lines. */
 const EXPANDS = /\$\(|`/;
+/** A heredoc's opener: `<<` or `<<-`, then its delimiter, quoted (its body is not expanded) or bare. */
+const OPENER = /(?<!<)<<(?!<)(-?)\s*(?:'([^']+)'|"([^"]+)"|([^\s<>|;&()'"]+))/g;
 /** The command with each heredoc's body and terminator dropped, so a commit message or a file written by `cat <<EOF`
  * that names a gated command is not one (L25). A body a shell reads keeps its text, as an unterminated heredoc does:
  * what is not sure stays an act. Run before `unquoted`, since a quoted delimiter (`<<'EOF'`) and a lone quote in a
@@ -69,21 +72,23 @@ function withoutHeredocText(command) {
     kept.push(lines[i]);
     // A `<<` inside quoted text or a comment opens nothing; a quoted delimiter right after `<<` is kept.
     const bare = lines[i].replace(/(<<-?\s*)?("[^"]*"|'[^']*')/g, (text, opener) => (opener ? text : '""')).replace(/(^|\s)#.*$/, '$1');
-    const opens = [...bare.matchAll(/(?<!<)<<(?!<)(-?)\s*(['"]?)([A-Za-z_][\w-]*)\2/g)];
+    // A `<<` inside `((` is an arithmetic shift, not an opener.
+    const opens = [...bare.matchAll(OPENER)].filter((m) => !/\(\([^)]*$/.test(bare.slice(0, m.index)));
     if (opens.length === 0) continue;
+    // A bare `$(` before the opener runs what the heredoc's command prints (`$(cat <<EOF`); a quoted one is an argument.
+    if (/(?:^|[\s;&|(])\$\(/.test(bare.slice(0, opens[0].index))) continue;
     let at = i + 1;
-    const expanded = [];
-    for (const [, dash, quote, word] of opens) {
-      while (at < lines.length && (dash ? lines[at].replace(/^\t+/, '') : lines[at]).replace(/\r$/, '') !== word) {
-        if (quote === '' && EXPANDS.test(lines[at])) expanded.push(lines[at].replace(/`/g, ' '));
+    let expands = false;
+    for (const [, dash, single, double, word] of opens) {
+      const end = single ?? double ?? word;
+      while (at < lines.length && (dash ? lines[at].replace(/^\t+/, '') : lines[at]).replace(/\r$/, '') !== end) {
+        if (word !== undefined && EXPANDS.test(lines[at])) expands = true;
         at++;
       }
       at++;
     }
-    if (at <= lines.length) {
-      kept.push(...expanded);
-      i = at - 1;
-    }
+    // Unterminated, or an unquoted body that expands a command: its text stays.
+    if (at <= lines.length && !expands) i = at - 1;
   }
   // A shell anywhere in what is left may run a body, now or from a file it was written to: then every body stays.
   const left = kept.join('\n');
@@ -259,6 +264,16 @@ const NOTICE = (act) => [
   advisorSay('missed', { act: `act (${act})`, calls: STRETCH_TOOL_CALLS }), advisorSay('how'), advisorSay('refused'),
 ].join(' ');
 
+/** Whether `file` does not exist: only ENOENT, so a transcript there but unreadable stays unchecked. */
+function missing(file) {
+  try {
+    fs.statSync(file);
+    return false;
+  } catch (err) {
+    return err.code === 'ENOENT';
+  }
+}
+
 /** Decides one act of `payload` and records it; returns the hook's answer object. */
 function decide(mode, payload, seams) {
   const { home, stderr } = seams;
@@ -277,7 +292,7 @@ function decide(mode, payload, seams) {
   }
   // An end whose transcript does not exist is no sub-agent the gate can read: the host's own agents after a turn write
   // none (L24). It is recorded apart, by its agent type, so the unchecked share counts only acts a read failed for.
-  if (mode === '--stop' && typeof file === 'string' && !fs.existsSync(file)) return record(home, { ...base, transcript: file, decision: 'no-transcript' }, stderr), {};
+  if (mode === '--stop' && typeof file === 'string' && missing(file)) return record(home, { ...base, transcript: file, decision: 'no-transcript' }, stderr), {};
   let stretch;
   try {
     if (typeof file !== 'string') throw new Error('no transcript path in the payload');
