@@ -928,6 +928,17 @@ Each step's state is under [F8 plan](#f8-plan).
 line each with its day and its source; before it, what was found after the freeze of 2026-10-16 and kept out
 of the first version.
 
+- [ ] The task-progress page made by hand (https://claude.ai/artifact/EUJsxQcNpLEoqgut5sqmpz) becomes a rendered
+  page. Its home is spec 8 of `odd/tasks/stretch-protocol.md`, held; its state is on the pushed branch
+  `docs/stretch-state-after-879`. Owner: the next stretch-protocol session, JH 201 having closed (2026-11-14, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
+- [ ] The advisor-gate sequence "consult, one other call, then act", a workaround for the gate not seeing a consult
+  made in the same response: the gate sees it, and the sequence leaves the briefs. Owner: the gate-defects
+  session (2026-11-14, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
+- [ ] The lead re-added by hand a worktree that a land removed while its session still worked. A fix is queued: a
+  land never removes a live session's worktree. Its `- Seen:` line in `docs/FAILURES.md` is still to write, from
+  the lead's transcript lines. Owner: this entry, until the fix's session takes it (2026-11-14, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
+- [ ] The plan review with a verifier pass, run on Opus because the guard refused Fable for sub-agents: if it
+  proves useful, it becomes a plan-review command. Owner: this entry, until a session takes it (2026-11-14, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
 - [ ] Stalled-session detection: the board, the lead's watch and its heartbeat name a work session that holds
   handed work and has made no commit, notice or gate for an hour. On 2026-10-16 three sessions sat five to six
   hours before anyone noticed. Tracked in `odd/tasks/stalled-sessions.md`.

@@ -4,8 +4,9 @@ Locator: `odd/tasks/cement-workarounds.md` · Branch: `rule/cement-workarounds`,
 Delivery: one pull request, landed by the lead · Test runner: `node --test`
 
 ## State
-Done: T1 (this document). Next: T2, the rule amended through `rules change`; T3, the four follow-ups in the
-roadmap's Later list; the reviews; the pull request and its ready notice. Open: nothing of his.
+Done: T1 (4c419173), T2 (fcdc884a, the rule amended through `rules change`), T3 (the four follow-ups in the
+roadmap's Later list). Next: T4, the Claude lenses on the slice, Codex only if `check` counts code, the pull request
+and its ready notice. Open: nothing of his.
 
 ## Goal
 A manual workaround the lead or a session makes while working is never left in memory: it gets a follow-up, owned by
@@ -104,8 +105,8 @@ Nothing: the brief settles the direction and the default for the check.
 
 ## Tasks
 - [x] T1 (kind: docs) this document (spec 1, 2, 3; inline; its own commit)
-- [ ] T2 (kind: docs) amend `rule:rules-live-in-the-harness` through `rules change` (spec 1; inline; its own commit)
-- [ ] T3 (kind: docs) the four follow-ups in the roadmap's Later list (spec 2; inline; its own commit)
+- [x] T2 (kind: docs) amend `rule:rules-live-in-the-harness` through `rules change` (spec 1; inline; its own commit)
+- [x] T3 (kind: docs) the four follow-ups in the roadmap's Later list (spec 2; inline; its own commit)
 - [ ] T4 (kind: verify) the reviews, the pull request and the ready notice
 
 ## Log
