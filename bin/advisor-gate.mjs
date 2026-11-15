@@ -241,8 +241,9 @@ const END_NOTICE = [
   'Your end is turned back once: consult the advisor, then end by giving your whole result again, as your caller reads only your last message; the next stop goes through.',
 ].join(' ');
 
-/** Whether the log under `home` already holds a turn-back of the sub-agent `agent` of `session`: its tail, which a
- * stop's turn-back and its next stop sit close in. A log that cannot be read holds none. */
+/** Whether the newest end the log under `home` holds of the sub-agent `agent` of `session` is a turn-back, so this
+ * stop is that end's repeat: its tail, which a turn-back and its next stop sit close in. A log that cannot be read
+ * holds none. */
 function turnedBackBefore(home, session, agent) {
   let text;
   try {
@@ -260,14 +261,19 @@ function turnedBackBefore(home, session, agent) {
   } catch {
     return false;
   }
-  return text.split('\n').some((line) => {
+  // Once is per end (his words, "ese final"): only when this sub-agent's newest end is the turn-back is this stop its
+  // repeat; a later end of the same sub-agent, resumed say, is its own.
+  const lines = text.split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    let entry;
     try {
-      const entry = JSON.parse(line);
-      return entry.act === 'end' && entry.turnedBack === true && entry.agent === agent && entry.session === session;
+      entry = JSON.parse(lines[i]);
     } catch {
-      return false;
+      continue;
     }
-  });
+    if (entry.act === 'end' && entry.agent === agent && entry.session === session) return entry.turnedBack === true;
+  }
+  return false;
 }
 
 /** Whether `file` does not exist: only ENOENT, so a transcript there but unreadable stays unchecked. */

@@ -1,9 +1,9 @@
 # consistent-orders — orders that hold over a long run (JH 208)
 
 ## State
-PR 886 re-sent ready at head 8402785b (L15); the lead lands it. S4 built and reviewed on feat/consistent-orders-s4
-(87b1c568, 53b2038d, 64883e5f, 89b4948b; L18), its PR stacked on feat/consistent-orders. The S2 and S6 designs are
-written (L13, L14, S2's replay L17) and wait for their double review and the lead; nothing of them is built.
+PR 886 landed (19:08Z). S4 is PR 887 on main, from feat/consistent-orders-s4: once is per end (L19); its fix's
+reviews and the verifier on the final head come before its ready. The S2 and S6 designs are written (L13, L14, S2's
+replay L17) and wait for their double review and the lead; nothing of them is built. S5's rule is unblocked.
 
 ## Goal
 An order the harness gives a session, a work session or a sub-agent (first: consult the advisor when blocked) is held
@@ -293,3 +293,11 @@ answering a block, while a session waits) were missed with nothing to say so; on
   (the key only when true) would be misread. None exists: the hook runs the installed js-harness from main
   (`~/.claude/settings.json` line 218, `js-harness advisor-gate --stop`), and the real log holds 0 records with
   `afterTurnBack` or `turnedBack` and 0 with `"secondStop":true` (`grep -c` on decisions.jsonl); 64883e5f never ships.
+- L19 (2026-11-15) the advisor, before S4's ready: since 53b2038d once was per sub-agent id, not per end: a sub-agent
+  turned back once let every later end through uncounted, and his words are "ese final" (a sub-agent resumed with
+  SendMessage keeps its id). Fixed: a stop is a repeat only when that sub-agent's newest recorded end is the
+  turn-back; a test (a later unconsulted end of the same id is turned back again) failed first. L17's figure,
+  checked against local branches: JH 208 committed from 16:25:54Z after its 16:11:19Z `waiting`
+  (`git log worktree-consistent-orders`), and JH 207 from 15:32Z after its 14:53:30Z one (`git log feat/review-gate`),
+  so 16:35Z, 16:37Z and 16:50Z drop: S2 turns back 6 of the lead's 70 idle closes, 13:08:52Z among them, 3 of them
+  from a blocked session's later notes.

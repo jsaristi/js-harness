@@ -286,6 +286,9 @@ test('once rests on the gate\'s own record too: a second stop without stop_hook_
   assert.equal(stop('a4').answer?.decision, 'block');
   assert.deepEqual(decisions(home).map((d) => [d.agent, d.decision, d.turnedBack ?? false, d.afterTurnBack ?? false]), [['a3', 'flagged', true, false], ['a3', 'flagged', false, true], ['a4', 'flagged', true, false]]);
   assert.deepEqual(advisorGateReport({ home }).days.map((d) => d.flagged), [2], 'the end let through by the log is the same end, one flag');
+  // His words are "ese final": a later end of the same sub-agent (resumed, say) is its own end, turned back again.
+  assert.equal(stop('a3').answer?.decision, 'block', 'once is per end, not per sub-agent');
+  assert.deepEqual(advisorGateReport({ home }).days.map((d) => d.flagged), [3]);
 });
 
 test('an end another hook turned back first goes through and is still a flag of its own', () => {
