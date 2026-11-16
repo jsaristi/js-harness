@@ -526,6 +526,19 @@ test('a clean --again over part of the range of a recheck does not hide that a s
   assert.deepEqual(recheckState({ from: D, records, runs, atOrBefore }), { kind: 'refused', of: D, open: 1, reviews: 3, findings: [open] });
 });
 
+test('a clean review at a merge from its second parent, after the record of what was written in the merge that owes, reads less: the merge still passes the debt below it on (L71 A)', () => {
+  // S, the merge's second parent, is not at or before G, its first: the clean record read less than the one that owes.
+  const atOrBefore = (older, newer) => older === newer || older === A;
+  const records = [record(A, G, { run: 'r1' }), record(G, M, { run: 'r3', diff: 'remerge' }), record(S, M, { run: 'r2' })];
+  assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records, runs: bothRuns, atOrBefore, changedBetween: never('a diff'), writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: [...lost, ...owing], at: M, merge: M });
+  // Above the joined recheck that left a finding open over a second recheck due at G, the cap still reads it as the third review.
+  const C2 = '7'.repeat(40);
+  const left = [finding('[not fixed] 2 Still drops a record')];
+  const joined = [...secondDue, record(S, M, { run: 'r2' }), record(M, C2, { run: 'r4', recheckOf: M })];
+  const joinedRuns = [...secondDueRuns, runLine('r4', { answer: { findings: left, verdict: 'incorrect' }, recheck: { of: M, findings: 2, fixed: 1, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 } })];
+  assert.deepEqual(recheckThrough({ from: C2, rows: [[C2, M], ...ROWS], records: joined, runs: joinedRuns, atOrBefore, changedBetween: never('a diff'), writesNothing: never('what the merge writes') }), { kind: 'refused', of: C2, open: 1, reviews: 3, findings: left, merge: M });
+});
+
 test('records whose rechecks name each other, or their own head, give a state, not a stack overflow (lens on 420b76c)', () => {
   const open = finding('[not fixed] 1 Still drops the last line');
   const counts = { findings: 1, fixed: 0, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 };
