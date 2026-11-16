@@ -337,7 +337,7 @@ test('B2-2: a recheck that leaves the finding open passes with a warning that na
   record(head, fix, { recheckOf: run, ...found('risk', [finding('CRITICAL', '[not fixed] 1 still passes')]) });
   const said = row();
   assert.equal(said.pass, true);
-  assert.match(said.lines.join('\n'), /warning: the lens recheck that ended at [0-9a-f]{7} left 1 BLOCKER or CRITICAL finding open/);
+  assert.match(said.lines.join('\n'), /warning: the lens recheck that ended at [0-9a-f]{7} left 1 BLOCKER or CRITICAL or blocking finding open/);
   assert.equal(lensDoor(dir, 'HEAD'), null);
 });
 
@@ -349,4 +349,41 @@ test('B2-2: a recheck by another lens, or one no run line names, pays nothing', 
   const { subjectHash } = lensCandidate(dir, { base: head, head: fix });
   appendLensReview(dir, { schema: LENS_REVIEW_SCHEMA, base: head, head: fix, subjectHash, run: 'e'.repeat(36), reviewedAt: new Date().toISOString(), outcome: 'reviewed', recheckOf: run, ...found('risk', []) });
   assert.equal(row().pass, false, 'a forged recheck pays nothing');
+});
+
+// Codex and the lenses on S6: each lens of a record is read alone.
+test('B2-2: in a recheck, a lens that rechecks nothing reviews afresh, and its CRITICAL is owed', () => {
+  const run = record(base, head, found('risk', [finding('CRITICAL')]));
+  const fix = commit('a.mjs', 'export const a = 3;\n', 'fix: the critical');
+  record(head, fix, { recheckOf: run, rechecked: { risk: [run] }, results: [{ lens: 'risk', outcome: 'complete', findings: [] }, { lens: 'reliability', outcome: 'complete', findings: [finding('CRITICAL', 'a new hole')] }] });
+  const said = row();
+  assert.equal(said.pass, false);
+  assert.match(said.lines.join('\n'), /reliability CRITICAL a\.mjs:1 a new hole/);
+});
+
+test('B2-2: a recheck of WARNINGs that finds a CRITICAL owes it', () => {
+  const run = record(base, head, found('risk', [finding('WARNING', 'an edge')]));
+  const fix = commit('a.mjs', 'export const a = 3;\n', 'fix: the edge');
+  record(head, fix, { recheckOf: run, rechecked: { risk: [run] }, ...found('risk', [finding('CRITICAL', '[blocks] a regression')]) });
+  assert.equal(row().pass, false);
+});
+
+test('B2-2: two reviews that end at one head are both paid by the one recheck that names both runs', () => {
+  const first = record(base, head, found('risk', [finding('CRITICAL')]));
+  const second = record(base, head, { results: [{ lens: 'risk', outcome: 'complete', findings: [finding('BLOCKER', 'another')] }, { lens: 'reliability', outcome: 'complete', findings: [finding('CRITICAL', 'a third')] }] });
+  const fix = commit('a.mjs', 'export const a = 3;\n', 'fix: all three');
+  record(head, fix, { recheckOf: second, rechecked: { risk: [first] }, ...found('risk', []) });
+  assert.equal(row().pass, false, 'the second run is owed while no recheck names it');
+  record(head, fix, { recheckOf: second, rechecked: { risk: [first, second], reliability: [second] }, results: [{ lens: 'risk', outcome: 'complete', findings: [] }, { lens: 'reliability', outcome: 'complete', findings: [] }] });
+  assert.equal(row().pass, true);
+});
+
+test('B2-2: a recheck that fixes the finding but marks a new one blocking passes with a warning that names it', () => {
+  const run = record(base, head, found('risk', [finding('CRITICAL')]));
+  const fix = commit('a.mjs', 'export const a = 3;\n', 'fix: the critical');
+  record(head, fix, { recheckOf: run, rechecked: { risk: [run] }, ...found('risk', [finding('WARNING', '[blocks] the fix exposes a token')]) });
+  const said = row();
+  assert.equal(said.pass, true);
+  assert.match(said.lines.join('\n'), /left 1 BLOCKER or CRITICAL or blocking finding open/);
+  assert.match(said.lines.join('\n'), /risk WARNING a\.mjs:1 \[blocks\] the fix exposes a token/);
 });

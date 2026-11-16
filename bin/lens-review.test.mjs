@@ -473,3 +473,24 @@ test('each refusal that ends a run prints its next step as its last line, the on
     git('reset', '-q', '--hard', 'HEAD~1');
   }
 });
+
+// Codex on S6: two runs that end at one head both owe; the recheck takes up the findings of both, oldest first, and
+// names both runs, so the gate can see each paid.
+test('B2-2: a range that starts where two lens reviews ended rechecks the findings of both, and names both runs', () => {
+  const second = git('log', '--format=%H', '--grep=^second$');
+  const first = git('rev-parse', `${second}~1`);
+  const finding = (claim) => ({ severity: 'CRITICAL', location: 'a.mjs:1', claim, evidence_class: 'deterministic', causal_disposition: 'introduced', proof_refs: ['a.mjs:1'] });
+  const runs = ['the first hole', 'the second hole'].map((claim, at) => {
+    const subjectHash = String(at + 1).repeat(64);
+    const id = startLensRun(dir, { base: first, head: first, subjectHash });
+    appendLensReview(dir, { schema: LENS_REVIEW_SCHEMA, base: first, head: first, subjectHash, reviewedAt: '2026-11-16T00:00:00.000Z', outcome: 'reviewed', run: id, lenses: ['risk'], results: [{ lens: 'risk', outcome: 'complete', findings: [finding(claim)] }] });
+    return id;
+  });
+  const clean = (lens, subject) => JSON.stringify({ subject_hash: subject.subject_hash, inspection: { status: 'completed', paths: ['a.mjs'] }, findings: [], evidence: [`${lens}: read a.mjs`] });
+  const claude = fakeClaude(clean);
+  const { code, out } = run(['--base', first, '--head', second, '--lenses', 'risk', '--reason', 'a constant', '--request', 'explain the constant'], { runLens: claude.runLens });
+  assert.equal(code, 0, out);
+  assert.ok(claude.calls[0].prompt.includes('1. a.mjs:1 CRITICAL the first hole'), claude.calls[0].prompt);
+  assert.ok(claude.calls[0].prompt.includes('2. a.mjs:1 CRITICAL the second hole'), claude.calls[0].prompt);
+  assert.deepEqual(readLensReviews(dir).at(-1).rechecked, { risk: runs });
+});

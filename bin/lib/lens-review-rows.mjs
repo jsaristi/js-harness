@@ -29,33 +29,56 @@ export function reviewStep(cwd, { spawn = spawnSync, tool, base, tip }) {
  * block"), the two the lens prompt holds to proof of introduced harm (`./lens-prompts.mjs`). */
 const OWED = new Set(['BLOCKER', 'CRITICAL']);
 
+/** The runs whose findings of `lens` the record `rec` rechecked, oldest first: its `rechecked` map, or, for a record
+ * written before it, the one run `recheckOf` names where that run's record holds findings of `lens` (`byRun`). */
+export function recheckedRuns(rec, lens, byRun) {
+  // A lens the record holds no complete answer of rechecked nothing (the reliability lens on S6).
+  if (!rec.results?.some((one) => one?.lens === lens && one.outcome === 'complete')) return [];
+  if (rec.rechecked && typeof rec.rechecked === 'object') return Array.isArray(rec.rechecked[lens]) ? rec.rechecked[lens].filter((run) => typeof run === 'string') : [];
+  if (typeof rec.recheckOf !== 'string') return [];
+  return findingsOf(byRun.get(rec.recheckOf), lens).length > 0 ? [rec.recheckOf] : [];
+}
+
+/** The findings of `lens` in the record `rec`, `[]` when it holds none or no complete result of it. */
+const findingsOf = (rec, lens) => {
+  const result = rec?.results?.find((one) => one?.lens === lens && one.outcome === 'complete');
+  return Array.isArray(result?.findings) ? result.findings : [];
+};
+
 /** What the admitted lens reviews of `covers` owe, as a Codex review owes a correction (`correctionOwed` in
- * ./codex-review-rows.mjs), read from the records themselves, where a lens keeps its findings: `owed`, each lens of a
- * review that is no recheck whose BLOCKER or CRITICAL findings no recheck of that run by that lens took up, and
- * `open`, those a recheck took up and left not fixed by its marks (`classifyRecheck`, as `lens-review` counts them).
- * Only a recheck pays: a later review that is no recheck of that run, as one run from below a document commit before
- * the fix, leaves the debt where it was. Owed refuses; open warns and passes, the Codex rule of 2026-10-15 (no waiver,
- * the warning is enough). A recheck owes nothing of its own: what it finds is a follow-up, or open as above. */
-function lensCorrections(covers) {
+ * ./codex-review-rows.mjs), read from the records themselves, where a lens keeps its findings. Each lens of each record
+ * is read alone (Codex on S6): it is a round of correction when what it rechecked (`recheckedRuns`) held a BLOCKER or
+ * CRITICAL finding; else it reviewed afresh, a recheck of WARNINGs among them, and its own BLOCKER and CRITICAL findings
+ * are `owed` until a later recheck by that lens names its run and marks them fixed (`classifyRecheck`, as
+ * `lens-review` counts them, each finding at its place in the findings of every run that recheck took up). A round of
+ * correction owes nothing more: what it left not fixed, and any new finding it marked blocking, are `open`, which
+ * warns and passes, the Codex rule of 2026-10-15 (no waiver, the warning is enough). Only a recheck pays: a later
+ * review that is no recheck of that run, as one run from below a document commit before the fix, leaves the debt.
+ * `admitted` is every admitted lens record, where the runs a recheck names are looked up. */
+function lensCorrections(covers, admitted) {
+  const byRun = new Map(admitted.filter((rec) => typeof rec.run === 'string').map((rec) => [rec.run, rec]));
   const reviewed = covers.map(({ rec }) => rec).filter((rec) => rec.outcome === 'reviewed' && Array.isArray(rec.results));
   const owed = [];
   const open = [];
-  for (const rec of reviewed) {
-    if (typeof rec.recheckOf === 'string') continue;
+  for (const [index, rec] of reviewed.entries()) {
     for (const result of rec.results) {
-      const findings = Array.isArray(result?.findings) ? result.findings : [];
-      const severe = findings.map((finding, at) => ({ finding, at })).filter(({ finding }) => OWED.has(finding?.severity));
-      if (severe.length === 0) continue;
-      const answerOf = (one) => one.results.find((other) => other?.lens === result.lens);
-      const recheck = reviewed.findLast((one) => one.recheckOf === rec.run && answerOf(one) !== undefined);
-      if (recheck === undefined) {
-        owed.push({ rec, lens: result.lens, findings: severe.map(({ finding }) => finding) });
+      if (result?.outcome !== 'complete') continue;
+      const { lens } = result;
+      const findings = findingsOf(rec, lens);
+      const runs = recheckedRuns(rec, lens, byRun);
+      const prior = runs.flatMap((run) => findingsOf(byRun.get(run), lens));
+      if (prior.some((finding) => OWED.has(finding?.severity))) {
+        const asked = findings.map((finding) => ({ title: finding?.claim ?? '' }));
+        const read = classifyRecheck({ findings: asked }, prior.length);
+        const blocking = findings.filter((finding, at) => read.blocking.includes(asked[at]));
+        const left = [...prior.filter((finding, at) => OWED.has(finding?.severity) && read.status[at] !== 'fixed'), ...blocking];
+        if (left.length > 0) open.push({ rec, lens, findings: left });
         continue;
       }
-      const answer = (answerOf(recheck).findings ?? []).map((finding) => ({ title: finding?.claim ?? '' }));
-      const { status } = classifyRecheck({ findings: answer }, findings.length);
-      const left = severe.filter(({ at }) => status[at] !== 'fixed').map(({ finding }) => finding);
-      if (left.length > 0) open.push({ rec: recheck, lens: result.lens, findings: left });
+      const severe = findings.filter((finding) => OWED.has(finding?.severity));
+      if (severe.length === 0) continue;
+      const paid = reviewed.slice(index + 1).some((later) => recheckedRuns(later, lens, byRun).includes(rec.run));
+      if (!paid) owed.push({ rec, lens, findings: severe });
     }
   }
   return { owed, open };
@@ -83,7 +106,7 @@ function correctionRefusal(cwd, state, spawn) {
 
 /** The warning lines of each lens recheck that left a BLOCKER or CRITICAL finding open, from `lensCoverage`'s state. */
 const openLines = (state) => state.corrections.open.flatMap(({ rec, lens, findings }) => [
-  `warning: the lens recheck that ended at ${rec.head.slice(0, 7)} left ${findings.length} BLOCKER or CRITICAL finding${findings.length === 1 ? '' : 's'} open`,
+  `warning: the lens recheck that ended at ${rec.head.slice(0, 7)} left ${findings.length} BLOCKER or CRITICAL or blocking finding${findings.length === 1 ? '' : 's'} open`,
   ...findings.map((finding) => findingLine(lens, finding)),
   'the push passes; the user decides whether they are waived, or a correction is committed as code and reviewed',
 ]);
@@ -134,7 +157,7 @@ export function lensCoverage(cwd, head, { spawn = spawnSync, remote = 'origin', 
   ].filter(Boolean);
   // The hash of the default branch, which a command names as its base where the oldest uncovered commit is a root.
   const baseHash = uncovered.length ? gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${branch.ref}^{commit}`]) : null;
-  return { tip, baseRef: branch.ref, baseHash, base: branch.label, codeCommits, uncovered, beyond: coverage.beyond, skips: owedSkips(coverage, codeCommits), corrections: lensCorrections(coverage.covers), note: noteParts.length ? `; ${noteParts.join('; ')} ignored` : '' };
+  return { tip, baseRef: branch.ref, baseHash, base: branch.label, codeCommits, uncovered, beyond: coverage.beyond, skips: owedSkips(coverage, codeCommits), corrections: lensCorrections(coverage.covers, lens.records.filter(lens.admitted)), note: noteParts.length ? `; ${noteParts.join('; ')} ignored` : '' };
 }
 
 /** The skips (`--unavailable`) among `coverage`'s records that still owe a review: a skip is debt only while a code
