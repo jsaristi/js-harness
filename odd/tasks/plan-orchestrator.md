@@ -3,7 +3,7 @@
 ## State
 Design only, no code. Version 3, read three times (reads 2a17bbe1, 5eed176c, b88ea402). The first two reads' 48
 findings are taken (L9, L10). The third still finds real failures: its 21 findings are open and listed in L11,
-to be told to him as problems; no fourth round. Draft PR 894, branch `claude/dreamy-nash-50fa03`, worktree
+to be told to him as problems; no fourth round. His line 1598 is Spec 8 since L12, added after the last read. Draft PR 894, branch `claude/dreamy-nash-50fa03`, worktree
 `rule-lead-effort-split-aac740`. Next, in order: the page (`orquestador-plan.html` in this session's scratchpad,
 written from version 2) brought to version 3 with L11's problems first, previewed and published as an Artifact;
 the four questions recorded with `notify --to orchestrator --kind question`; `notify --kind ready --pr 894`,
@@ -144,6 +144,7 @@ steps, and until question 1 is answered it runs under today's rules.
   spec 5: `node --test bin/guard.test.mjs`: none, new behaviour (the Plan opens visible; a PLAN start by `sessions start` is refused once T7 lands)
   spec 6: `node --test bin/guard.test.mjs`: none, new behaviour (a Plan start is held to one live Plan, its own worktree, then detached)
   spec 7: `node --test bin/lib/host-update.test.mjs`: none, new behaviour (the host-update step names the orchestrator session alone today, `bin/lib/host-update.mjs:194-205`)
+  spec 8: `js-harness sessions`: none, new behaviour (no session holds a Plan title today; done when a Plan is working and the lead has told him, by a push notification and a line in its chat, that he can try it and how)
 - 4. Refutation: his complaint is the planning (Spec 2), so the request fails if the project's plan is being worked
   through. Run 2026-11-15: the roadmap's checkboxes at cb539ba8, its last commit before 2026-11-09, against
   `origin/main`. Result: 0 of the 15 steps open then are closed, 7 were added, and the done count stayed at 100,
@@ -176,7 +177,9 @@ steps, and until question 1 is answered it runs under today's rules.
 6. "vuelve a abrir el JH SR y nunca anides la sesiones ademas de que ya ninguna va con remote control solo el
    Orquestador" (2026-11-15T22:16Z, 69918425 line 20757)
 7. "El orquestador plan debe tener Remote control osea este y el Plan" (2026-11-16T02:22Z, 699d7c29 line 1389)
-The times are UTC; in his local time all seven fall on 2026-11-15, between 17:16 and 21:22.
+8. "Me avisas cuando el orquestador plan este funcionando para comenzarlo a probar" (2026-11-16T03:02Z, 699d7c29
+   line 1598)
+The times are UTC; in his local time all eight fall on 2026-11-15, between 17:16 and 22:02.
 
 ## The design
 - **The role.** A session titled `<code> PLAN · <purpose>`, role `plan`: the onboarding's plan orchestrator, which
@@ -263,7 +266,8 @@ The times are UTC; in his local time all seven fall on 2026-11-15, between 17:16
 ## Phase 0, today, no code
 In order (Spec 3):
 1. The lead lands this document's docs PR, so the Plan can read it on main, and stores the Plan's opening with
-   `js-harness notify --opening`.
+   `js-harness notify --opening`. Then it tells him, by a push notification and a line in its chat, that the Plan
+   is ready for him to open and try, with steps 2 to 4 as what he does (Spec 8).
 2. He opens a session in the app on Fable 5.2 at high (question 3), names it `JH PLAN · planes`, turns Remote
    Control on in it (Spec 7) and sends it the opening's first message.
 3. He tells it what he wants. It writes the plan (a stretch plan, and a roadmap PR where the order changes), passes
@@ -320,6 +324,10 @@ while the next task's design is read. The board is checked before each task star
   request goes through plan, lead, sessions and clock. Fourteen days later, from the records: the plan's figure
   against its target, the roadmap's open steps against 0 of 15, the lead-stall lines, what became of items with no
   session, the launched-together count (1 pair of 23). Route: the lead.
+- [ ] T10 (kind: verify) (8) The notice he asked for, twice, each a push notification and a line in the lead's chat
+  that says what works, what does not yet and how he tries it: when phase 0's step 1 is done, and when the built
+  Plan has passed T8's one real request. Proof: the line in the lead's transcript, read with `sessions --quote`,
+  written in this Log. Route: the lead.
 - [ ] T9 (kind: docs) (1) His answer to each of the four questions in this Log with its transcript line, on a docs
   branch. Route: the lead, or the Plan once phase 0 runs.
 
@@ -391,3 +399,11 @@ while the next task's design is read. The board is checked before each task star
   `lead-stall`'s scope; a wrong line for the skill text; in phase 0 Remote Control goes off at each app restart;
   Spec 7's Remote Control part should not wait behind T4; proposal 2's question half read unevenly; Spec 4
   stretched to the Plan; small inaccuracies (Claude 10 to 16).
+- L12 The line Claude 3 of L11 names, read: `js-harness sessions --quote 699d7c29-54c4-460e-a5e8-700b114eb251
+  1598`, typed 2026-11-15 22:02 local, "Me avisas cuando el orquestador plan este funcionando para comenzarlo a
+  probar". He typed it in the lead's chat six minutes before version 3 was committed (22:08); this session did not
+  search his later lines before the third read, so the version the readers read lacks it. At the lead's word
+  (its message of 22:27 local) it is now Spec 8, with its bar line, a sentence in phase 0's step 1 and T10: the
+  done condition is a Plan working and him told, by a push notification and a line in the lead's chat, so he can
+  try it. These lines were added after the third read and no reader has read them; nothing else of L11 is
+  corrected.
