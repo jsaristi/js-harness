@@ -9,7 +9,8 @@ questions are recorded as 307 to 310 for the lead to put to him one at a time. D
 `claude/dreamy-nash-50fa03`, worktree `rule-lead-effort-split-aac740`. Left, all the lead's: whether a new session
 on a fresh context corrects L11 before he reads the page; landing this PR and the notice of Spec 8 (phase 0's step
 1, T10); his four answers (T9); opening session X for T3. His line of L14 (try it, watch the Fable usage, take
-the advisor off the swarms if it is excessive) is recorded and changes nothing of the design. The measures:
+the advisor off the swarms if it is excessive) is recorded and changes nothing of the design. Question 2 (308) is
+answered A, the lead opens the work sessions (L15); 309, 310 and 307 are still open. The measures:
 `odd/tasks/plan-orchestrator-evidence/measures.md`.
 
 ## Goal
@@ -78,7 +79,7 @@ steps, and until question 1 is answered it runs under today's rules.
    needs from him is one gesture where the sessions open: (A) the lead opens them, and he taps a card for each in
    the lead's chat or types one line there (his design as he said it; recommended), or (B) the Plan opens them in
    the turn he approves the plan and the lead supervises them (no second chat to visit; the Plan executes a
-   little).
+   little). Answered 2026-11-16, tapped: A, the lead opens them (L15).
 3. The Plan's model: Fable 5.2 (his "el modelo que organiza todo de entrada"). Its level is high by Spec 4, which
    says the orchestrating session; if he means only the lead there, the level is his to say. The cost is a guess
    that phase 0 measures (The design, "Cost").
@@ -240,7 +241,7 @@ The times are UTC; in his local time all eight fall on 2026-11-15, between 17:16
   time. The host then opens a session only on his gesture: with A, each session the lead starts is a card he taps
   in the lead's chat, or he types one line there and the lead opens that wave in that turn; with B, the Plan opens
   them in the turn he approves. Not checked: whether a turn that follows his typed turn can open one more session;
-  phase 0 shows it.
+  phase 0 shows it. His answer is A (L15): B is dropped and the Plan opens no work session.
 - **What runs at the same time** (proposal 4). The plan's `together` and `surfaces` are the declared units
   `fanout-tree.md` spec 3 waits for. Sub-agent swarms inside a session stay that document's, under his three
   pending answers; the reading of "enjambres de sesiones" is question 4.
@@ -274,7 +275,7 @@ In order (Spec 3):
 3. He tells it what he wants. It writes the plan (a stretch plan, and a roadmap PR where the order changes), passes
    the double review and shows him the page.
 4. He approves. The Plan sends the plan's path to the lead; the lead's sessions open on his tap or his line there
-   (question 2).
+   (question 2, answered A: L15).
 What it cannot do until the build. `notify --to plan` throws, so sessions report to the lead and the lead forwards
 by message. `rule:questions-one-place` stays in force: he talks to the Plan because he opens that chat and types
 there (Spec 1), but a decision asked of him is still recorded and put to him by the lead until his typed line
@@ -312,7 +313,7 @@ while the next task's design is read. The board is checked before each task star
   3: a verifier. Surfaces: `bin/lib/sessions.mjs`, `bin/lib/session-title-guard.mjs`, `bin/lib/hook-entries.mjs`,
   `bin/lib/inbox.mjs`, `bin/lib/channel.mjs`, `bin/lib/model-shape.mjs`, `bin/lib/model-home.mjs`,
   `bin/lib/rules-data.mjs`, `bin/lib/rules-coverage-data.mjs`, `bin/guard.mjs`, `bin/lib/guard.mjs`, the five
-  reporters, their tests.
+  reporters, their tests. The role opens no work session: the lead does (question 2, answered A, L15).
 - [ ] T6 (kind: build) (1, 7) His desk: Remote Control on both orchestrators (`bin/lib/host-update.mjs`,
   `rule:remote-control-yes` and `rule:sessions-open-in-sidebar` by `rules change`, source line 1389); and, only on
   his typed line (question 1), a question addressed to the session that holds his chat (`bin/lib/channel.mjs:131`,
@@ -331,7 +332,7 @@ while the next task's design is read. The board is checked before each task star
   Plan has passed T8's one real request. Proof: the line in the lead's transcript, read with `sessions --quote`,
   written in this Log. Route: the lead.
 - [ ] T9 (kind: docs) (1) His answer to each of the four questions in this Log with its transcript line, on a docs
-  branch. Route: the lead, or the Plan once phase 0 runs.
+  branch. Route: the lead, or the Plan once phase 0 runs. Question 2: L15, entered by JH SR at the lead's word.
 
 ## Log
 - L1 2026-11-15 local, his words: Specs 1 to 7, each read with `sessions --quote` by this session.
@@ -436,3 +437,12 @@ while the next task's design is read. The board is checked before each task star
   and a sub-agent inherits it (`odd/tasks/advisor-home.md:118-121`), not checked. The reading to compare against,
   from the app's usage tool at 01:00 local on 2026-11-16: Fable 17% of the week, all models 38%, reset
   2026-11-20T14:00Z. Nothing of the design changes with this line, and no reader has read it.
+- L15 His answer to question 2, recorded as 308, on 2026-11-16 at 01:47 local (06:47Z): `js-harness sessions
+  --quote 699d7c29-54c4-460e-a5e8-700b114eb251 3167`, an answer to the lead's question tool, which showed A as the
+  recommended option: "A: las abre el orquestador (Recomendada)". Tapped, not quoted, so it carries no rule change,
+  and A needs none: the lead opens the work sessions, each on his tap of a card in the lead's chat or on a line he
+  types there, and the Plan opens none. The question said what a yes covers: how the design is written and phase
+  0's step 4, not the build. The channel holds it as a verified answer (kind `answer`, question 308, line 3167).
+  Entered at the lead's word in "Ask me before" 2, "The hand-off and the start", phase 0's step 4, T5 and T9;
+  those lines were added after the last read and no reader has read them. Still not checked: whether a turn that
+  follows his typed turn can open one more session. Questions 309, 310 and 307 are open.
