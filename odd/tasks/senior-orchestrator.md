@@ -16,8 +16,12 @@ NOT resolve it (`roleHolders` filters `row.role`, line 1495), against L6's note.
 Built (~04:00Z): 95fe8178 board, `rules applied` and doctor (Codex correct 0.88; reliability 0; readability 2,
 fixed in b9bc0106: `driftedLeadTitle` in `bin/lib/session-title-guard.mjs` as not `leadTitle`, `rowHome` reads the
 title); 542c8059 the heartbeat's HOME line once per value (`leadHomeLines`, `bin/loop.mjs`, mark
-`loops/<slug>/home/<session>.json`). Review of 95fe8178..542c8059 running. Then: PR of this branch, `notify --kind
-ready`; T7 still waits on JH 208's branch.
+`loops/<slug>/home/<session>.json`); its review (Codex P2 stale ending reading; reliability: non-array fix; readability:
+clock flag) fixed in 872baee2, recheck clean (Codex correct 0.96, both lenses 0). Checked before the PR: the lead's
+start is `js-harness doctor --hook` (SessionStart, `bin/lib/hook-entries.mjs:11`), which announces a stale row
+(`bin/doctor.mjs:288`), the `modelHomeHealth` row; `lead-effort`'s subject names no title (`bin/lib/rules-data.mjs:332`);
+real runs with the branch: `node bin/js-harness.mjs sessions` loads (the lead row, titled again); `modelHomeHealth` for
+the lead 699d7c29 in D:/js-harness: ok (it is back on its shape and level). Next: push, PR, `notify --kind ready`.
 
 Committed: fd309617 senior-model; 8fc7a92b senior-effort; e25ab304 the reporters hold a senior by role (heldOfRole);
 a258b450 only the lead starts a senior, one at a time. Reviewed 1a5061d..a258b45 (Codex 2 parts, lenses risk and
@@ -155,10 +159,10 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   the messages to it. Route: inline, then one verifier. Commits: cb830c3e, the D11 fix.
 - [ ] T7 (kind: build) (5) The guard refuses `js-harness sessions start` for every title; `rule:sessions-open-in-sidebar`
   drops its exception by `rules change`, his to approve. Route: inline.
-- [ ] T8 (kind: build) (6) The lead held to `rule:lead-effort`: a lead whose title drifts off `<code> ORQ · …` keeps
+- [x] T8 (kind: build) (6) The lead held to `rule:lead-effort`: a lead whose title drifts off `<code> ORQ · …` keeps
   its role or is named (channel `--address orchestrator` still resolves it, `heldOfRole` does not), and the board,
   the heartbeat and the lead's start say a lead off `rule:lead-effort`, with the act that corrects it (his menu).
-  Route: inline.
+  Route: inline. Commits 95fe8178, b9bc0106, 542c8059, 872baee2.
 
 ## Log
 - L1 2026-11-12, his words at 93b72703:775 (S2); his "aplica todos los cambios ya" at 93b72703:896.
