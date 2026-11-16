@@ -600,7 +600,10 @@ test('two rechecks at one head, the later reading less, both keep what they left
     runLine('r3', { answer: { findings: [narrow], verdict: 'incorrect' }, recheck: counts }),
   ];
   const state = recheckState({ from: D, records, runs, atOrBefore });
+  // The last recheck decides: its second recheck, the third review, takes up what the wider one left open as well,
+  // so neither is dropped (the reliability lens on d445505 asked whether this was meant: it is, and fails closed).
   assert.equal(state.kind, 'recheck', JSON.stringify(state));
+  assert.equal(state.second, true, JSON.stringify(state));
   assert.deepEqual(new Set(state.findings.map((one) => one.title)), new Set([narrow.title, wide.title]));
 });
 
