@@ -2301,3 +2301,18 @@ test('an --again of a sub-range that ends at the head owing a correction does no
   assert.equal(row.pass, false, row.detail);
   assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
 });
+
+test('a clean --again over part of a recheck that left a finding open keeps the warning that names it', () => {
+  // Codex's P2 on 33bc9e98 (odd/tasks/again-subrange.md L13): the warning read the raw last record at the recheck's
+  // head, which was the narrow clean one, found no recheck and said nothing.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const middle = commit(root, 'b.js', 'two, half fixed', 'fix: read the right field, once');
+  const fix = commit(root, 'e.js', 'five', 'feat: five');
+  const left = { ...finding, title: '[not fixed] 1 The guard reads the wrong field' };
+  run(root, { id: 'run-2', answer: { verdict: 'incorrect', findings: [left] }, recheck: { of: head, findings: 1, fixed: 0, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 } });
+  record(root, head, fix, { run: 'run-2', recheckOf: head });
+  run(root, { id: 'run-3', answer: { verdict: 'correct', findings: [] } });
+  record(root, middle, fix, { run: 'run-3' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.ok((row.lines ?? []).join('\n').includes(`warning: the Codex recheck that ended at ${short(root, fix)} left 1 finding open`), JSON.stringify(row));
+});

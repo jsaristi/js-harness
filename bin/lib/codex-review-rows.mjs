@@ -11,7 +11,7 @@ import { beyondLines, defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REV
 import { atOrBeforeIn, mergeTurn, recheckAt, turnsCheaper } from './codex-review-turns.mjs';
 import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './codex-reviews.mjs';
 import { readCodexReviewRuns } from './codex-review-runs.mjs';
-import { classifyRecheck, ESCALATION_SAID, priorLine, recheckState, runAnswerFindings } from './codex-review-recheck.mjs';
+import { classifyRecheck, decidingRecord, ESCALATION_SAID, priorLine, recheckState, runAnswerFindings } from './codex-review-recheck.mjs';
 import { counted, leftOutOf, rangeFiles, reviewScope } from './codex-review-scope.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit, harnessOfTree, workingTree } from './project-functions.mjs';
 import { commandStep, firstStep, noStep, reviewCommand } from './next-step.mjs';
@@ -141,7 +141,7 @@ function correctionOwed(cwd, { codeCommits, covers, tip, where }, { spawn, below
   // the head of a recheck of a merge's own record, which may have been the third review of a debt below the merge
   // (`recheckThrough`, codex-spend L26): read alone, it would name a second recheck the run then refuses.
   const atOrBefore = atOrBeforeIn(cwd, spawn);
-  const mergeOwnAt = (head) => records.findLast((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed' && rec.head === head)?.diff === 'remerge';
+  const mergeOwnAt = (head) => decidingRecord({ from: head, records, runs, atOrBefore }).kept?.diff === 'remerge';
   if (last !== undefined && (last.diff === 'remerge' || (typeof last.recheckOf === 'string' && mergeOwnAt(last.recheckOf)))) below = from;
   let state = recheckState({ from, records, runs, atOrBefore });
   if (below !== null) state = recheckAt(cwd, { from, tip, records, runs, spawn }) ?? state;
@@ -167,7 +167,7 @@ function correctionOwed(cwd, { codeCommits, covers, tip, where }, { spawn, below
   // A recheck that left findings open, which a second recheck may not take up: the recheck is the last
   // reviewed record that ends at `from` when it is one, else the last one of the findings that ended there.
   const reviewed = records.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed');
-  const atFrom = reviewed.filter((rec) => rec.head === from).at(-1);
+  const atFrom = decidingRecord({ from, records, runs, atOrBefore }).kept;
   const recheck = typeof atFrom?.recheckOf === 'string' ? atFrom : reviewed.filter((rec) => rec.recheckOf === from).at(-1);
   // Asked below a merge no record covers, the state may be read past documents from a head that is none of them.
   if (recheck === undefined) return null;
