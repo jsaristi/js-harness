@@ -4353,6 +4353,23 @@ test('a correction owed below a merge: after that one recheck of both left the g
   assert.match(end.detail, /^1 of \d+ code commits since origin\/main have no Codex review record/, end.detail);
 });
 
+test('a correction owed below a merge: a clean review of the merge from main, after the record of what was written in it that owes, read less, so the push row still says the recheck above the merge was the third review of the gap (L71 A)', () => {
+  const due = mergeOwes(secondDueAtGap(), 7);
+  const where = { where: whereOf(due.root) };
+  // Main is no ancestor of the gap: the clean review from it read less than the merge's own record, which owes.
+  reviewRuns.appendCodexReviewRun(due.root, { schema: reviewRuns.CODEX_REVIEW_RUN_SCHEMA, id: idOf(8), outcome: 'reviewed', answer: { findings: [], verdict: 'correct' } }, where);
+  appendCodexReview(due.root, { ...reviewedRecord(due.main, due.head), run: idOf(8) });
+  const fixed = fixAbove(due, { gap: true });
+  // The recheck of both above the merge left the gap's finding open.
+  const open = { title: '[not fixed] 2 The gap drops a line', severity: 'P1', file: 'g.txt', start: 1, end: 1 };
+  reviewRuns.appendCodexReviewRun(due.root, { schema: reviewRuns.CODEX_REVIEW_RUN_SCHEMA, id: idOf(9), outcome: 'reviewed', answer: { findings: [open], verdict: 'incorrect' }, recheck: { of: due.head, findings: 2, fixed: 1, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 } }, where);
+  appendCodexReview(due.root, { ...reviewedRecord(due.head, fixed), run: idOf(9), recheckOf: due.head });
+  const warned = checkCodexReviews(due.root);
+  assert.equal(warned.pass, true, warned.detail);
+  assert.ok(warned.lines.some((line) => line.startsWith('three reviews did not settle this change')) && warned.lines.some((line) => line.includes('The gap drops a line')), warned.lines.join('\n'));
+  assert.ok(!warned.lines.some((line) => line.includes('a second recheck')), warned.lines.join('\n'));
+});
+
 test('a correction owed below a merge: after one recheck of both and a second recheck that left the gap\'s finding open, --again from the gap\'s head is refused as a fourth review (codex-spend L26, W3)', async () => {
   const repo = await owedBelowMerge();
   correctAbove(repo);

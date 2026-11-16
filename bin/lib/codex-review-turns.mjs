@@ -55,6 +55,9 @@ export function mergeTurn(cwd, { given, tip, uncovered, spawn = spawnSync, where
 }
 
 /** What git prints in `cwd` as it prints it, or `null` when it fails: for output whose spaces may be a name's. */
+/** Whether `older` is at or before `newer` on its line, for `recheckState`: `true`, `false`, or `null` when git cannot say. */
+export const atOrBeforeIn = (cwd, spawn) => (older, newer) => gitAnswer(spawn, cwd, ['merge-base', '--is-ancestor', older, newer]);
+
 const gitText = (cwd, spawn, args) => {
   try {
     const result = spawn('git', args, { cwd, encoding: 'utf8' });
@@ -94,7 +97,7 @@ export function recheckAt(cwd, { from, tip, records: given, runs, holds, spawn =
     const coverage = reviewCoverage(cwd, { from: `${merge}^`, tip, spawn, where, read: () => [] });
     return coverage.unknown === undefined && !coverage.codeCommits.some((commit) => commit.id === merge);
   };
-  return recheckThrough({ from, rows, records, runs, holds, changedBetween, writesNothing });
+  return recheckThrough({ from, rows, records, runs, holds, atOrBefore: atOrBeforeIn(cwd, spawn), changedBetween, writesNothing });
 }
 
 /** The turns of the review of `given..tip` when HEAD, `tip`, is a merge of the default branch and every other code
@@ -370,7 +373,7 @@ export function afterTurn(cwd, turns, { spawn = spawnSync, where } = {}) {
   }
   if (!runsLogged(written, runs)) return { refused: `The run line of ${named} is not in the run log, so whether it owes a correction cannot be said and ${notReviewed}: run the review again.` };
   if (written.outcome === 'reviewed' && !codex.admitted(written)) return { refused: `The run line of ${named} does not state the range its record covers, so it is no review and ${notReviewed}: run the review again.` };
-  return { stopped: recheckState({ from: turns.at, records, runs }).kind !== 'review' };
+  return { stopped: recheckState({ from: turns.at, records, runs, atOrBefore: atOrBeforeIn(cwd, spawn) }).kind !== 'review' };
 }
 
 // The worktree a turn below HEAD is reviewed in: `<common git dir>/js-harness/review-turn-<pid>-<time>` (S7);
