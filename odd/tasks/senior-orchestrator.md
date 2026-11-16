@@ -312,3 +312,6 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   `$C`, `${IFS}`, `bash -c`, backticks, `Start-Process`). Added from the verifier: a wrapper named by its path
   (`/usr/bin/env`, in `programOf`, so the chained-step guard gains it too), `xargs` and its options, an option's value
   after `=` (`--bg=true`), `claude respawn` and `claude --cloud` (refused as "in the cloud").
+- L9 2026-11-16, the lead: the app record of JH SR showed claude-fable-5-2 at high right after `set_session_model`, so the
+  record changes at the call, not at the next turn (the open point of D9/D11). T8 is at PR 895, which the lead lands; T7
+  waits only on JH 208's `rule/away-autonomy`, which JH 208 is bringing to a PR.
