@@ -22,7 +22,21 @@ cb830c3e built it; Codex's review (7619fc9..25e7f82, verdict incorrect at 0.92) 
 task in it ran on the lead's model before `set_session_model`. The next commit holds the brief to `SENIOR_WAIT_BRIEF`
 (D11). Lenses: risk and reliability 0, resilience 1 warning, answered (D12). Codex recheck: fixed (0.98). The
 verifier's findings are fixed in a95fd076 (D13), reviewed clean (Codex 0.94, lenses 0); the background is held in
-the next commit (D14). Left: its reviews, the PR. Then T7 (question 306, yes), then T8.
+the next commit (D14). T6 is PR 893 at fba1966b (branch claude/senior-visible-72d504), every code commit reviewed
+clean, `ready` sent 2026-11-16 00:41Z; it lands after the lead opens JH SR visibly through it.
+T7 (next, branch `rule/sessions-visible-only` cut from fba1966b, stacked on PR 893; origin/main's rules files unchanged
+since cf5bd6fd): tests first for a guard refusal of `js-harness sessions start` (start and `--resume`) matched per
+step, not as a substring (plain, after `cd x &&`, `;`, newline, `node bin/js-harness.mjs sessions start`, absolute path,
+env prefix, behind `js-harness gate --` refused; grep, commit message, heredoc, `sessions stop`, `sessions --opening`, no
+rule pass); map other routes (TERMINAL_TOOL, `bin/lib/hook-entries.mjs` matcher, in-process callers of
+`bin/sessions-background.mjs`, raw `claude --bg`) and note the lead before widening; fix the texts that send to it
+(`bin/lib/guard.mjs:151`, `bin/lib/manifest.mjs:157`, `bin/lib/home-sessions.mjs:29`, `bin/lib/background-close.mjs:95`,
+the guard's header and usage); then `rules change sessions-open-in-sidebar --with ...` and `rules change senior-model`
+(subject drops `sessions start`), stdin shape from `bin/lib/rules-change-run.mjs:176`, quotes 699d7c29:402 and
+69918425:21275, the tap of 306 (699d7c29:505) in `accepted`, the reading saying his 2026-10-24 words are superseded;
+`--dry-run` first, one commit a rule. Check the background record for jobs a refused `--resume` strands; name them to
+the lead. Then gate, Codex and lenses (risk, reliability, readability), a verifier on the matcher, a stacked PR, a
+note (not `ready`) until T6 lands. Then T8.
 
 ## Goal
 The lead starts a senior session, titled `<code> SR · <purpose>`, as a visible app session with `start_session`
