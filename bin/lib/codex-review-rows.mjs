@@ -140,9 +140,9 @@ function correctionOwed(cwd, { codeCommits, covers, tip, where }, { spawn, below
   // Git is asked more only past a merge: most pushes end on a record of no merge, and pay nothing for this. So too
   // the head of a recheck of a merge's own record, which may have been the third review of a debt below the merge
   // (`recheckThrough`, codex-spend L26): read alone, it would name a second recheck the run then refuses.
-  const mergeOwnAt = (head) => records.findLast((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed' && rec.head === head)?.diff === 'remerge';
-  if (last !== undefined && (last.diff === 'remerge' || (typeof last.recheckOf === 'string' && mergeOwnAt(last.recheckOf)))) below = from;
   const atOrBefore = atOrBeforeIn(cwd, spawn);
+  const mergeOwnAt = (head) => decidingRecord({ from: head, records, runs, atOrBefore }).kept?.diff === 'remerge';
+  if (last !== undefined && (last.diff === 'remerge' || (typeof last.recheckOf === 'string' && mergeOwnAt(last.recheckOf)))) below = from;
   let state = recheckState({ from, records, runs, atOrBefore });
   if (below !== null) state = recheckAt(cwd, { from, tip, records, runs, spawn }) ?? state;
   const through = state.at !== undefined;

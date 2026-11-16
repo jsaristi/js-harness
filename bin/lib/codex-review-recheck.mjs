@@ -188,12 +188,24 @@ export function decidingRecord({ from, records, runs, holds = () => null, atOrBe
     const read = classifyRecheck(answer, 0);
     return [...read.notFixed, ...read.blocking, ...read.unmarked];
   };
+  // What a review that is no recheck found that owes a correction: `[]` where it owes none or its lines are not all kept.
+  const plainFindings = (rec) => {
+    const lines = linesOf(rec);
+    if (lines.length === 0 || lines.includes(null)) return [];
+    const answers = lines.map(runAnswer);
+    if (answers.includes(null) || !answers.some(owesCorrection)) return [];
+    return answers.flatMap((answer) => answer.findings);
+  };
+  // Whether a record itself owes something: a review that found what owes a correction, or a recheck that left some open.
+  const ownDebt = (rec) => (typeof rec.recheckOf === 'string' ? openOf(rec) !== 0 : plainFindings(rec).length > 0);
   const rechecked = reviewed.filter((rec) => rec.recheckOf === from).at(-1);
   const stateOf = (prior) => {
     if (typeof prior.recheckOf === 'string') {
       const open = openOf(prior);
       if (open === 0) return { kind: 'review' };
-      const second = typeof reviewed.filter((rec) => rec.head === prior.recheckOf).at(-1)?.recheckOf === 'string';
+      // The record that decides at the head it rechecked, read by the same rule: a clean --again over part of it
+      // hides no recheck (L71 A).
+      const second = typeof decidingRecord({ from: prior.recheckOf, records, runs, holds, atOrBefore }).kept?.recheckOf === 'string';
       if (second) return { kind: 'refused', of: from, open, reviews: 3, findings: openFindings(prior) };
       if (rechecked !== undefined) {
         if (holds(rechecked.head) === false) return { kind: 'review' };
@@ -207,37 +219,28 @@ export function decidingRecord({ from, records, runs, holds = () => null, atOrBe
     // the recheck holds none of the correction it read: its commits are new code, a review as any other
     // (L8 of odd/tasks/merge-queue.md, pull request 167). Unknown is refused, as before.
     if (rechecked !== undefined) return holds(rechecked.head) === false ? { kind: 'review' } : { kind: 'refused', of: from, open: openOf(rechecked) };
-    const lines = linesOf(prior);
-    if (lines.length === 0 || lines.includes(null)) return { kind: 'review' };
-    const answers = lines.map(runAnswer);
-    if (answers.includes(null)) return { kind: 'review' };
-    if (!answers.some(owesCorrection)) return { kind: 'review' };
-    const findings = answers.flatMap((answer) => answer.findings);
-    if (findings.length === 0) return { kind: 'review' };
-    return { kind: 'recheck', of: from, findings };
+    const findings = plainFindings(prior);
+    return findings.length === 0 ? { kind: 'review' } : { kind: 'recheck', of: from, findings };
   };
+  // A later record at `from` replaces the one kept unless that one owes something itself and the later one read less.
+  // What a narrower review found is then owed beside it, and a first recheck takes up both (Codex's P2 on b78093fe).
   let kept;
-  let state = { kind: 'review' };
+  const also = [];
   for (const rec of reviewed) {
     if (rec.head !== from) continue;
     const reads = kept === undefined || rec.base === kept.base || atOrBefore(rec.base, kept.base) === true;
-    if (!reads && owes(state)) {
-      // What the narrower review found is owed beside what the wider one owes: a first recheck takes up both (Codex's P2
-      // on b78093fe). Any other pair keeps the wider debt alone.
-      const also = stateOf(rec);
-      if (state.kind === 'recheck' && state.second !== true && also.kind === 'recheck' && also.second !== true) {
-        state = { ...state, findings: [...state.findings, ...also.findings] };
-      }
+    if (!reads && ownDebt(kept)) {
+      if (typeof kept.recheckOf !== 'string' && typeof rec.recheckOf !== 'string') also.push(...plainFindings(rec));
       continue;
     }
     kept = rec;
-    state = stateOf(rec);
+    also.length = 0;
   }
+  if (kept === undefined) return { kept, state: { kind: 'review' } };
+  const state = stateOf(kept);
+  if (also.length > 0 && state.kind === 'recheck' && state.second !== true) return { kept, state: { ...state, findings: [...state.findings, ...also] } };
   return { kept, state };
 }
-
-/** Whether a state still owes something: a recheck, or a refusal that left findings open. */
-const owes = (state) => state.kind === 'recheck' || (state.kind === 'refused' && state.open !== 0);
 
 /** What a range from `from` is, as `recheckState` says from where `recheckAnchor` puts its findings, and read past a
  * merge on the first-parent line as well: what a review owes is owed until a recheck names it, and a merge above it
@@ -287,8 +290,7 @@ const owes = (state) => state.kind === 'recheck' || (state.kind === 'refused' &&
 export function recheckThrough({ from, rows, records, runs, holds = () => null, atOrBefore = () => null, changedBetween, writesNothing }) {
   const today = recheckState({ from: recheckAnchor({ from, records, back: rows.map(([id]) => id), changedBetween }), records, runs, holds, atOrBefore });
   const parentsOf = new Map(rows.map(([id, ...parents]) => [id, parents]));
-  const reviewed = records.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed');
-  const lastAt = (id) => reviewed.filter((one) => one.head === id).at(-1);
+  const lastAt = (id) => decidingRecord({ from: id, records, runs, holds, atOrBefore }).kept;
   // Whether the last record at `id` is a merge's own: what was written in it, from its first parent, and no recheck.
   const mergeOwn = (id) => {
     const [rec, parents] = [lastAt(id), parentsOf.get(id) ?? []];

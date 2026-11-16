@@ -509,3 +509,19 @@ test('a later review at a head that owes settles it only where its base is at or
   const withMore = [...runs, runLine('r3', { answer: { findings: more, verdict: 'incorrect' } })];
   assert.deepEqual(recheckState({ from: D, records: both, runs: withMore, atOrBefore }), { kind: 'recheck', of: D, findings: [...found, ...more] });
 });
+
+test('a clean --again over part of the range of a recheck does not hide that a second recheck was its third review (L71 A)', () => {
+  const M = 'f'.repeat(40);
+  const order = [A, B, M, C, D];
+  const atOrBefore = (older, newer) => order.indexOf(older) <= order.indexOf(newer);
+  const open = finding('[not fixed] 1 Still drops the last line');
+  const counts = { findings: 1, fixed: 0, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 };
+  const records = [record(A, B, { run: 'r1' }), record(B, C, { run: 'r2', recheckOf: B }), record(M, C, { run: 'r3' }), record(C, D, { run: 'r4', recheckOf: C })];
+  const runs = [
+    runLine('r1', { answer: { findings: [finding('[P2] Drops the last line')], verdict: 'incorrect' } }),
+    runLine('r2', { answer: { findings: [open], verdict: 'incorrect' }, recheck: counts }),
+    runLine('r3', { answer: { findings: [], verdict: 'correct' } }),
+    runLine('r4', { answer: { findings: [open], verdict: 'incorrect' }, recheck: counts }),
+  ];
+  assert.deepEqual(recheckState({ from: D, records, runs, atOrBefore }), { kind: 'refused', of: D, open: 1, reviews: 3, findings: [open] });
+});
