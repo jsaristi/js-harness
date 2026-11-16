@@ -1490,3 +1490,19 @@ test('sessions start and --resume refuse every title where the rule sessions-ope
   assert.deepEqual(actions(world), [], 'no claude ran');
   assert.deepEqual(recordLines(world), [], 'nothing recorded');
 }, { rules: 'all' }));
+
+// Codex, on 5dc8d1ab: a resume is held by the rules of the project the session was recorded in, wherever it runs.
+test('sessions start --resume run from another project is refused by the resumed session\'s own project rule', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
+  patchState(world, { agents: readState(world).agents.map((agent) => ({ ...agent, status: undefined, state: 'failed', pid: undefined })) });
+  fs.mkdirSync(path.join(world.project, 'bin', 'lib'), { recursive: true });
+  fs.writeFileSync(path.join(world.project, 'bin', 'lib', 'rules-data.mjs'), writeRules(RULES));
+  const other = path.join(world.dir, 'other');
+  fs.mkdirSync(other);
+  assert.equal(spawnSync('git', ['init', '-q'], { cwd: other }).status, 0);
+  const before = actions(world).length;
+  const result = spawnSync(process.execPath, [BIN, 'sessions', 'start', '--resume', '0db8bc5e'], { cwd: other, env: envOf(world), encoding: 'utf8', timeout: 60000 });
+  assert.equal(result.status, 2, result.stderr);
+  assert.match(result.stderr, /rule sessions-open-in-sidebar/);
+  assert.equal(actions(world).length, before, 'no claude ran');
+}));

@@ -388,6 +388,12 @@ function resumeStart(parsed, deps) {
   if (entry === null || typeof entry.sessionId !== 'string') {
     return refuse(`no session js-harness sessions start recorded with its conversation is named by ${JSON.stringify(parsed.resume)}, so nothing was resumed`);
   }
+  // The resumed session's own project holds it to its rules, wherever the command runs (Codex, on 5dc8d1ab).
+  const own = typeof entry.root === 'string' ? backgroundStartRefusal(rulesText(entry.root, deps.readFile)) : null;
+  if (own !== null) {
+    deps.stderr(own);
+    return 2;
+  }
   const name = `${entry.id} · ${entry.title}`;
   const claude = deps.claude === undefined ? claudeRunner({ env }) : deps.claude;
   if (claude === null) return refuse('claude is not on PATH: install the Claude Code CLI, then run this again');

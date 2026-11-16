@@ -265,3 +265,22 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   `sessions start`). A background session off its home is corrected by closing it once committed and opening it with
   `start_session` (`resumeOf`), which keeps `bin/lib/manifest.mjs:202` (never stop to restart by `sessions start`).
   Not done: coverage controls for the two refusals.
+- L7 2026-11-16, T7's code committed as 5dc8d1ab. Codex (17626fd..5dc8d1a, incorrect 0.97) P2: the `--resume` refusal
+  reads the caller's cwd rules, not the resumed record's project (`bin/sessions-background.mjs:210-215`): fix by reading
+  the record's root for a resume. Lenses (b3a7324..5dc8d1a): risk 0; reliability and readability: `rules switch` still
+  prints "a resume starts a background session again on the home's model" (`bin/lib/rules-switch.mjs`, test line 234),
+  contradicting the new `resumeOf`; `bin/lib/guard.mjs:73-80` `sidebarRule` split `openingRefusal` from its doc, says
+  "three refusals below" (two are in background-launch.mjs), two stray blank lines; `bin/lib/home-sessions.mjs:28-31`
+  `resumeOf` name and doc say resume (rename to `correctionOf`, rewrite doc). Next: fix these test first, commit, Codex
+  recheck and lenses (reliability, readability) from 5dc8d1ab, then a verifier, then a note to the lead (no PR before
+  the rule-change commit).
+  Done since, uncommitted: `resumeStart` also refuses by the record's `entry.root` rules (`bin/sessions-background.mjs`,
+  before `const name`); its test is still to write (a world with no rule whose recorded entry's root declares it; see the
+  test at `bin/sessions-background.test.mjs:856` for how a record is made). Then the three lens fixes.
+  Also done, uncommitted: `rules switch` text (`bin/lib/rules-switch.mjs:362`, test line 234) and `resumeOf` renamed
+  `correctionOf` with its doc (`bin/lib/home-sessions.mjs`). Left: the resume-root test, the `sidebarRule` doc placement
+  in `bin/lib/guard.mjs:73-80` (move it above `openingRefusal`'s doc, say "the three refusals" live here and in
+  background-launch.mjs, drop the blank lines), gate the touched suites, commit, recheck from 5dc8d1ab.
+  Then: the resume-root test written (fails without the fix, passes with it), `sidebarRule` placed above
+  `openingRefusal`'s doc; 187 tests of the touched files green, `rules check` PASS. Committed next as the fix of L7;
+  then Codex recheck and lenses (reliability, readability) from 5dc8d1ab, the verifier, a note to the lead.

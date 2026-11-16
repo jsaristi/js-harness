@@ -67,16 +67,17 @@ export const OPENING_TOOLS = Object.freeze([
   'RemoteTrigger',
 ]);
 
+/** The rule sessions-open-in-sidebar as the project whose rules file has the text `projectData` declares it, held
+ * behind a copy that declares it (`guardHeld`), or null: the one read of
+ * `openingRefusal` below and of the two refusals of ./background-launch.mjs. */
+export const sidebarRule = (projectData) => guardHeld('sessions-open-in-sidebar', ruleHere('sessions-open-in-sidebar', undefined, projectData));
+
 /** Why the call of the tool `toolName` is refused, or null. The four tools of `OPENING_TOOLS` are refused in the project
  * whose rules file has the text `projectData`, where the rule `sessions-open-in-sidebar` gives a value (his answers of
  * 2026-10-15: only where the rule is declared, and even when he asked for the session): the reason names the tool, the
  * rule and the value to open a session with instead. In a project that does not declare the rule nothing is refused;
  * behind one that declares it, the copy's value is held (`guardHeld`). The rule is read with `ruleHere`, by its id
  * written out so that `rules check` lists this file as its reader. */
-/** The rule sessions-open-in-sidebar as the project whose rules file has the text `projectData` declares it, held
- * behind a copy that declares it (`guardHeld`), or null: the one read of the three refusals below. */
-export const sidebarRule = (projectData) => guardHeld('sessions-open-in-sidebar', ruleHere('sessions-open-in-sidebar', undefined, projectData));
-
 export function openingRefusal(toolName, projectData) {
   if (!OPENING_TOOLS.includes(toolName)) return null;
   const rule = sidebarRule(projectData);
