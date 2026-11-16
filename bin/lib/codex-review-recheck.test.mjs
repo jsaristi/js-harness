@@ -503,4 +503,9 @@ test('a later review at a head that owes settles it only where its base is at or
   // A later narrower review that owes, after a clean one, is the later word: nothing earlier is owed.
   const later = [record(A, D, { run: 'r2' }), record(C, D, { run: 'r1' })];
   assert.deepEqual(recheckState({ from: D, records: later, runs, atOrBefore }), { kind: 'recheck', of: D, findings: found });
+  // A narrower review that owes too, after one that owes: the recheck is of both (Codex's P2 on b78093fe).
+  const more = [finding('[P2] Loses a line', { start: 9, end: 9 })];
+  const both = [owes, record(C, D, { run: 'r3' })];
+  const withMore = [...runs, runLine('r3', { answer: { findings: more, verdict: 'incorrect' } })];
+  assert.deepEqual(recheckState({ from: D, records: both, runs: withMore, atOrBefore }), { kind: 'recheck', of: D, findings: [...found, ...more] });
 });

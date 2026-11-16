@@ -165,7 +165,8 @@ function throughNoReview({ from, nearest, records, at, documentsOnly }) {
  * thing: a later record settles a correction an earlier one owes there only where it read all that one read, its base at
  * or before the earlier base (`atOrBefore(older, newer)`: `true`, `false`, or `null` when git cannot say; equal
  * bases need no git). A clean `--again` over a part of the range read only that part, and cleared what the rest owed
- * (odd/tasks/again-subrange.md, L71 A of review-gate). Unknown keeps what is owed. */
+ * (odd/tasks/again-subrange.md, L71 A of review-gate). Unknown keeps what is owed. One that read less and owes a first
+ * recheck too adds its findings to the recheck the earlier one owes. */
 export function recheckState(given) {
   return decidingRecord(given).state;
 }
@@ -220,7 +221,15 @@ export function decidingRecord({ from, records, runs, holds = () => null, atOrBe
   for (const rec of reviewed) {
     if (rec.head !== from) continue;
     const reads = kept === undefined || rec.base === kept.base || atOrBefore(rec.base, kept.base) === true;
-    if (!reads && owes(state)) continue;
+    if (!reads && owes(state)) {
+      // What the narrower review found is owed beside what the wider one owes: a first recheck takes up both (Codex's P2
+      // on b78093fe). Any other pair keeps the wider debt alone.
+      const also = stateOf(rec);
+      if (state.kind === 'recheck' && state.second !== true && also.kind === 'recheck' && also.second !== true) {
+        state = { ...state, findings: [...state.findings, ...also.findings] };
+      }
+      continue;
+    }
     kept = rec;
     state = stateOf(rec);
   }
