@@ -68,3 +68,4 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
 - L2 2026-11-16, counted read-only with main's code (scratchpad t10count.mjs): 1,401 admitted reviewed Codex records
   over 1,398 heads; 2 heads hold more than one; 0 later records there have a base that is not at or before the earlier
   one's. The rule of spec 1 changes what no real record means today. Next: the red test of spec 1.
+- L3 2026-11-16, spec 1's red test written (uncommitted) at the end of bin/check-codex-reviews.test.mjs, 'an --again of a sub-range that ends at the head owing a correction does not settle it': red for its reason, the push row passes ('3 code commits since origin/main, all covered'). Next: the fix where the last reviewed record at a head decides (bin/lib/codex-review-recheck.mjs:180): a later record settles only where its base is at or before the earlier one's.
