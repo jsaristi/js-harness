@@ -549,3 +549,35 @@ test('records whose rechecks name each other, or their own head, give a state, n
   assert.doesNotThrow(() => recheckState({ from: D, records: pair, runs }));
   assert.doesNotThrow(() => recheckState({ from: C, records: pair, runs }));
 });
+
+test('a narrower review that owes, after a recheck that left a finding open at the same head, is not dropped (verifier V1 on 7e5d6772)', () => {
+  const order = [A, B, C, D];
+  const atOrBefore = (older, newer) => order.indexOf(older) <= order.indexOf(newer);
+  const open = finding('[not fixed] 1 Still drops the last line');
+  const fresh = finding('[P2] Loses a line', { start: 9, end: 9 });
+  const counts = { findings: 1, fixed: 0, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 };
+  const records = [record(A, B, { run: 'r1' }), record(B, D, { run: 'r2', recheckOf: B }), record(C, D, { run: 'r3' })];
+  const runs = [
+    runLine('r1', { answer: { findings: [finding('[P2] Drops the last line')], verdict: 'incorrect' } }),
+    runLine('r2', { answer: { findings: [open], verdict: 'incorrect' }, recheck: counts }),
+    runLine('r3', { answer: { findings: [fresh], verdict: 'incorrect' } }),
+  ];
+  assert.deepEqual(recheckState({ from: D, records, runs, atOrBefore }), { kind: 'recheck', of: D, findings: [fresh] });
+});
+
+test('a clean review from main side does not settle what the merge own record owes; a recheck at the merge does (the lead on question 320)', () => {
+  // P is the merge M's first parent, S its second; the merge's own record P..M owes. S..M can miss a resolution equal to
+  // main's text, so it reads less: the known refusal, whose remedy is the recheck at the merge.
+  const [P, S, M, N] = [A, B, C, D];
+  const atOrBefore = (older, newer) => older === newer || (older === P && newer === M) || (older === S && newer === M);
+  const fm = finding('[P2] The merge drops a line');
+  const records = [record(P, M, { run: 'r1', diff: 'remerge' }), record(S, M, { run: 'r2' })];
+  const runs = [
+    runLine('r1', { answer: { findings: [fm], verdict: 'incorrect' } }),
+    runLine('r2', { answer: { findings: [], verdict: 'correct' } }),
+    runLine('r3', { answer: { findings: [], verdict: 'correct' }, recheck: { of: M, findings: 1, fixed: 1, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } }),
+  ];
+  assert.deepEqual(recheckState({ from: M, records, runs, atOrBefore }), { kind: 'recheck', of: M, findings: [fm] });
+  const rechecked = [...records, record(M, N, { run: 'r3', recheckOf: M })];
+  assert.deepEqual(recheckState({ from: N, records: rechecked, runs, atOrBefore }), { kind: 'review' });
+});
