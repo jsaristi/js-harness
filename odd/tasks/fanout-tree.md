@@ -306,3 +306,13 @@ Line 45 follows from the three answers (spec 4), its whole text given for the ca
   its review clause (one home). The confirming read (`rule:double-review`, a correction gets one) started and was
   stopped by the host for low memory before any finding, together with this session's `wait --notice-to 210`.
   Neither is rerun without being asked: this version is not re-read.
+- L8 2026-11-16T00:57:38Z, his words (699d7c29:992, typed), carried here by JH SR from
+  `odd/tasks/plan-orchestrator.md` (his design of a Plan orchestrator above the lead): "ya tu lanzas las sesiones y
+  estas lanzan los enjambres de sesiones". This reopens the reading of "Why": there his "sub sesiones" of L1 were
+  read as sub-agents inside one session, depth one, and the lead read these words the same way (699d7c29 line
+  1043) without his confirming it. He says sessions twice. Against the other reading stand his own "nunca anides la
+  sesiones" (69918425:20757) and the session cap. It is question 4 of `plan-orchestrator.md`, not a fourth question
+  here: until he answers, this document's scope stays sub-agents, and its three questions stand as written. One
+  thing his answer cannot change: the plan file of that design declares, per item, its `surfaces` and what runs
+  `together`, which are the declared units spec 3's option C waits for (Depth pass item 4 found none on the record
+  because nobody declared any); a yes there is a reason to weigh option C again, with a fresh count.
