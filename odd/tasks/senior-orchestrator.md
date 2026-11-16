@@ -69,8 +69,10 @@ header and usage and `START_USAGE`; coverage controls for the two refusals. Open
 lenses (risk, reliability, readability), verifier, a note (no PR or ready before the rule commit). T8 after, own
 branch from origin/main, orient then advisor.
 ~03:00Z: T7 at 9696d60a (docs of the lens findings) plus the verifier's four spellings (D16), green in its three
-test files, committed next. Then one Codex and lens pass (risk, reliability, readability) from 493378a2, a note to the
-lead (no PR or ready before the rule commit); the two `rules change` wait for JH 208's `rule/away-autonomy`. Then T8.
+test files, committed as 9c7f3458; Codex correct 0.87, lenses risk and readability 0, reliability one (BSD xargs
+`-J -R -S`), fixed in 7929b5a5 (Codex correct 0.98, reliability recheck fixed). T7's code is reviewed to 7929b5a5. Next:
+the note to the lead; the two `rules change` when JH 208's `rule/away-autonomy` lands or is dropped (the lead says),
+then gate, the rule commits' reviews, PR, `ready`. Meanwhile T8 on its own branch from origin/main.
 
 ## Goal
 The lead starts a senior session, titled `<code> SR · <purpose>`, as a visible app session with `start_session`
