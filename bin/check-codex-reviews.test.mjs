@@ -2197,3 +2197,41 @@ test('V1: a record mixing a clean part of an older run with the newest part of t
   assert.equal(row.pass, false, row.detail);
   assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
 });
+
+test('V4: a skip recorded while the review was on at its head pays no correction once the review is turned off', () => {
+  // The verifier's second pass on PR 896 and the lead (L56): a skip pays an owed correction only where the review is
+  // off at the pushed commit and at the skip's own head, recorded on the owner's typed no while it was off.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const doc = commit(root, 'docs/NOTES.md', 'notes', 'docs: notes');
+  record(root, head, doc, { outcome: 'unavailable', reason: 'codex was down' });
+  commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('V3: with the review off here, the plain check says the correction a review below owes, which the push refuses', () => {
+  // The verifier's second pass on PR 896: the debt row said "no code waits for one" while the push refused the branch.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  const debt = checkCodexReviewDebt(root);
+  assert.equal(debt.pass, true, debt.detail);
+  assert.match(debt.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('V3: with the review off here, the plain check lists the skip that pays the correction owed', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const tip = commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  record(root, head, tip, { outcome: 'unavailable', reason: 'the owner: "no, leave it"' });
+  const debt = checkCodexReviewDebt(root);
+  assert.equal(debt.pass, true, debt.detail);
+  assert.doesNotMatch(debt.detail, /owes a correction/);
+  assert.ok(debt.lines?.some((line) => line.includes(`${short(root, head)}..${short(root, tip)}`) && line.includes('the owner: "no, leave it"')), debt.lines?.join('\n'));
+});
+
+test('V3: with the review on, the plain check says the correction owed where every code commit has a record', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const debt = checkCodexReviewDebt(root);
+  assert.equal(debt.pass, true, debt.detail);
+  assert.match(debt.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});

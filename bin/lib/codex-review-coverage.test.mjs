@@ -279,7 +279,9 @@ test('a caller that knows where the repository is hands it on: the coverage is t
   assert.equal(asked.started.filter((command) => command === 'rev-parse').length, 2, 'where the top is, and where the git folder is');
   const where = { top: root, commonGitDir: path.join(root, '.git') };
   const told = countingSpawn();
-  assert.deepEqual(reviewCoverage(root, { from: first, tip: three, spawn: told.spawn, where }), whole);
+  // `where` says where the records were read, as given or as git said it (V3): the rest is the same coverage.
+  const bare = ({ where: _read, ...rest }) => rest;
+  assert.deepEqual(bare(reviewCoverage(root, { from: first, tip: three, spawn: told.spawn, where })), bare(whole));
   // Every other question is put as before, in its order.
   assert.deepEqual(told.started, asked.started.filter((command) => command !== 'rev-parse'));
   // A caller that says there is no git folder has no record read, and is asked about by nobody.

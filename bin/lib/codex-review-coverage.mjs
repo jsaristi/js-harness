@@ -305,7 +305,7 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read,
     else (beyondTip || !outside(rec) ? covers : beyond).push({ rec, covered: leftMarkedFilesOut(rec) ? readAtHead(rec, covered) : covered });
   }
   const uncovered = codeCommits.filter((commit) => !covers.some(({ covered }) => covered.has(commit.id)));
-  return { codeCommits, covers, uncovered, invalid: records.length - valid.length, ignored, stale, ...(beyondTip ? {} : { beyond }) };
+  return { codeCommits, covers, uncovered, invalid: records.length - valid.length, ignored, stale, ...(beyondTip ? {} : { beyond }), ...(codex?.where?.commonGitDir !== undefined ? { where: codex.where } : {}) };
 }
 
 /** The Codex review records of the repository at `cwd` and which of them are evidence, as `admittedLensReviews` says
@@ -371,7 +371,8 @@ export function admittedCodexReviews(cwd, { spawn = spawnSync, where } = {}) {
     }
     return asked.get(rec);
   };
-  return { records, admitted: (rec) => admitted.has(rec) || (nothing.includes(rec) && changesNoCode(rec)) };
+  // `where`: where the two files were read, so a caller reads them again without asking git (V3).
+  return { records, admitted: (rec) => admitted.has(rec) || (nothing.includes(rec) && changesNoCode(rec)), where: at };
 }
 
 /** The Codex review records a debt is read from: every record, with a review kept only where a run line admits it
