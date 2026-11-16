@@ -6,6 +6,13 @@
 // ceiling (bin/conventions-structure.test.mjs). It reads no file and prints nothing: a row comes in, lines come out.
 import { heldOfRole, menuLine, offHome } from './model-home.mjs';
 
+/** Whether `title` is a lead's that drifted off `<code> ORQ · <purpose>` (odd/tasks/senior-orchestrator.md, T8): `<code>
+ * ORQ` with no ' · ' and a purpose after it. Such a title holds no role (`roleOfTitle` of ./sessions.mjs reads none),
+ * so the lead was judged at the sessions' level on 2026-11-16 while rule:lead-effort said high; the board judges it at
+ * the lead's and names it. A handover's `ORQ nueva` and `ORQ relevada` hold no role by design and are not drifted. */
+export const driftedLeadTitle = (title) => typeof title === 'string' && /^\S+ ORQ(?:\s|$)/.test(title)
+  && !/^\S+ ORQ · .*\S/.test(title) && !/^\S+ ORQ (?:nueva|relevada)\b/.test(title);
+
 const OPENED_WORDS = { his: 'opened by him', session: 'opened by a session', command: 'opened by a command', scheduled: 'opened by a scheduled task', unknown: 'opened unknown' };
 const WHERE_WORDS = { sessions: 'in Sessions', routines: 'in Routines', archived: 'archived', 'not-in-app': 'not in the app', unknown: 'where unknown' };
 
@@ -16,13 +23,13 @@ const WHERE_WORDS = { sessions: 'in Sessions', routines: 'in Routines', archived
  * holds nothing, since a project that declares none of those rules marks nothing. `off` is what the menu, or with no
  * record the last reply (`replied`, the same shape), holds that `held` does not (`offHome`), with its `source`
  * (`menu` or `last reply`), else null. */
-export function rowHome(home, { lead = false, senior = false, record = null, replied = null } = {}) {
+export function rowHome(home, { lead = false, senior = false, drifted = false, record = null, replied = null } = {}) {
   const inForce = home !== null && typeof home === 'object' && [home.model, home.effort, home.lead].some((value) => typeof value === 'string');
   const menu = record === null ? null : { model: record.model ?? null, effort: record.effort ?? null };
-  const role = inForce ? heldOfRole(home, { lead, senior }) : null;
+  const role = inForce ? heldOfRole(home, { lead: lead || drifted, senior }) : null;
   const held = role === null ? null : { model: role.model, effort: role.effort };
   const differs = held === null ? null : offHome(menu ?? replied, held);
-  return { menu, held, off: differs === null ? null : { source: menu === null ? 'last reply' : 'menu', ...differs } };
+  return { menu, held, off: differs === null ? null : { source: menu === null ? 'last reply' : 'menu', ...differs }, ...(drifted && { drifted: true }) };
 }
 
 /** The line under a row's mode line: how its session was opened, where the app keeps it and its effort (both, where
@@ -39,6 +46,7 @@ export function openerLine(row) {
     const differing = [off.model !== null && [`the model ${off.model}`, held.model], off.effort !== null && [`the level ${off.effort}`, held.effort]].filter(Boolean);
     marks.push(`OFF THE HOME: its ${off.source} holds ${differing.map(([has]) => has).join(' and ')}, the home ${differing.map(([, home]) => home).join(' and ')}`);
   }
+  if (row.drifted === true) marks.push('A LEAD\'S TITLE OFF ITS SHAPE: renamed "<code> ORQ · <purpose>" it holds the lead\'s role, which no reader gives it now (sessions --address orchestrator finds none)');
   const menu = row.menu?.effort ?? null;
   const effort = row.effort === null ? 'effort unknown' : menu !== null && menu !== row.effort ? `effort ${menu} in its menu, ${row.effort} in its last reply` : `effort ${row.effort}`;
   return `    ${[OPENED_WORDS[row.opened] ?? OPENED_WORDS.unknown, WHERE_WORDS[row.where] ?? WHERE_WORDS.unknown, effort, ...marks].join('  ')}`;

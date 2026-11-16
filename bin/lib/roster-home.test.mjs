@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { menuLine } from './model-home.mjs';
-import { forHimLine, openerLine, rowHome } from './roster-home.mjs';
+import { driftedLeadTitle, forHimLine, openerLine, rowHome } from './roster-home.mjs';
 
 // odd/tasks/one-model-home.md, spec 7. The board's own tests (./sessions.test.mjs) hold these through `rosterOf` and
 // `renderBoard`; here each function is held alone, with the shapes a caller may hand it.
@@ -41,4 +41,18 @@ test('forHimLine is the menu line for the reading session\'s own row off the hom
   assert.deepEqual(forHimLine({ self: true }), [], 'a row made before the home was read');
   assert.deepEqual(forHimLine({ self: true, held, off: { ...off, source: 'last reply' } }), [], 'no menu to pick in');
   assert.deepEqual(forHimLine({ self: true, held: { model: null, effort: 'medium' }, off }), [], 'a home that names no model gives no line to read out');
+});
+
+test('a lead whose title drifted off "<code> ORQ · <purpose>" is judged at the lead\'s level and named, never a handover form (odd/tasks/senior-orchestrator.md, T8)', () => {
+  // L6 as written: the lead titled "JH ORQ orquestador F8" ran at medium while rule:lead-effort said high.
+  for (const title of ['JH ORQ orquestador F8', 'JH ORQ', 'JH ORQ ·orquestador']) assert.equal(driftedLeadTitle(title), true, title);
+  for (const title of ['JH ORQ · orquestador F8', 'JH ORQ nueva · relevo', 'JH ORQ relevada · relevo', 'JH 211 · x', 'JH SR · x', 'orquestador', 'JH ORQUESTA x', null, undefined]) {
+    assert.equal(driftedLeadTitle(title), false, String(title));
+  }
+  const menu = { model: HOME.model, effort: 'medium' };
+  const row = rowHome(HOME, { drifted: true, record: menu });
+  assert.deepEqual(row, { menu, held: { model: HOME.model, effort: 'high' }, off: { source: 'menu', model: null, effort: 'medium' }, drifted: true });
+  assert.equal(openerLine({ opened: 'his', where: 'sessions', effort: 'medium', ...row }),
+    '    opened by him  in Sessions  effort medium  OFF THE HOME: its menu holds the level medium, the home high  A LEAD\'S TITLE OFF ITS SHAPE: renamed "<code> ORQ · <purpose>" it holds the lead\'s role, which no reader gives it now (sessions --address orchestrator finds none)');
+  assert.equal('drifted' in rowHome(HOME, { record: menu }), false, 'a row of no drifted title carries no mark');
 });
