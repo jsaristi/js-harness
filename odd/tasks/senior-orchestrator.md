@@ -13,6 +13,11 @@ to `rowHome`, `bin/lib/sessions.mjs:1450`), `rules applied` by `leadTitle`, and 
 NOT resolve it (`roleHolders` filters `row.role`, line 1495), against L6's note. Plan (D17): an additive detector in
 `bin/lib/roster-home.mjs`, never loosening `roleOfTitle`; slice 1 the board (row judged at `lead-effort` and marked), slice
 2 `rules applied`, slice 3 the heartbeat once per value. Tests first, L6's title as written.
+Built (~04:00Z): 95fe8178 board, `rules applied` and doctor (Codex correct 0.88; reliability 0; readability 2,
+fixed in b9bc0106: `driftedLeadTitle` in `bin/lib/session-title-guard.mjs` as not `leadTitle`, `rowHome` reads the
+title); 542c8059 the heartbeat's HOME line once per value (`leadHomeLines`, `bin/loop.mjs`, mark
+`loops/<slug>/home/<session>.json`). Review of 95fe8178..542c8059 running. Then: PR of this branch, `notify --kind
+ready`; T7 still waits on JH 208's branch.
 
 Committed: fd309617 senior-model; 8fc7a92b senior-effort; e25ab304 the reporters hold a senior by role (heldOfRole);
 a258b450 only the lead starts a senior, one at a time. Reviewed 1a5061d..a258b45 (Codex 2 parts, lenses risk and

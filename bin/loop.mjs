@@ -406,17 +406,19 @@ function stalledLine(item) {
   return `STALLED: ${name} — no commit, notice or gate since ${hourOf(Date.parse(item.quietSince))}, holding ${held} of ${hourOf(Date.parse(item.holding.at))}: ${text}`;
 }
 
-/** The HOME lines of the session `session` (`modelHomeHealth`'s fixes, through `ctx.leadHome`), or none: none
- * outside a session, none when they were told last (the mark `markFile` keeps their text), and none when the reading
- * fails, since doctor says it then. */
-function leadHomeLines(ctx, session, markFile) {
+/** The HOME lines of the session `session` to say now (`modelHomeHealth`'s fixes, read again at each call through
+ * `ctx.leadHome`), or none: none outside a session, none when they are what was told last (the mark `markFile` keeps
+ * their text) unless they are `said`, what this loop said at its start, and none when the reading fails or gives no
+ * list of fixes, since doctor says it then. */
+function leadHomeLines(ctx, session, markFile, said = '') {
   if (session === null || !ctx.leadHome) return [];
   let fix;
   try {
-    fix = ctx.leadHome(ctx.env, mainCheckout(ctx.run, path.resolve(ctx.cwd))).fix;
+    fix = ctx.leadHome(ctx.env, mainCheckout(ctx.run, path.resolve(ctx.cwd)))?.fix;
   } catch {
     return [];
   }
+  if (!Array.isArray(fix)) return [];
   const lines = fix.map((line) => `HOME: ${line}`);
   let told = '';
   try {
@@ -424,7 +426,7 @@ function leadHomeLines(ctx, session, markFile) {
   } catch {
     // No mark is nothing told.
   }
-  if (lines.join('\n') === told) return [];
+  if (lines.join('\n') === told) return lines.length > 0 && told === said ? lines : [];
   try {
     ctx.writeFile(markFile, `${JSON.stringify({ told: lines.join('\n') })}\n`);
   } catch (err) {
@@ -630,11 +632,14 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   const tellAway = (found, now) => away.tell(found, now);
   // Every line that ends the loop is followed by the sign-in's line, from its margin on, and by the reviews still due,
   // so whatever wakes the lead names them. The ending's own lines are said first: the sign-in's may wait on a reading.
-  let homeLines = [];
+  // The lead's HOME lines said at the start, and whether the loop has passed its start (`ticking`): an ending at the
+  // start says none again; a later one reads them again, so a menu changed while the loop ran is what it says.
+  let homeSaid = '';
+  let ticking = false;
+  const homeMark = path.join(loopsFolder(home, slug), 'home', `${session}.json`);
   const ending = (lines, dues, code) => {
     for (const line of lines) ctx.out(line);
-    // The lead's HOME lines, said at the start already when the loop ends at its start.
-    const home = ctx.now() === started ? [] : homeLines;
+    const home = ticking ? leadHomeLines(ctx, session, homeMark, homeSaid) : [];
     for (const line of [...signinLines(), ...home, ...dues.map((due) => due.line)]) ctx.out(line);
     return code;
   };
@@ -675,7 +680,8 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   // The lead's own menu against its level (odd/tasks/senior-orchestrator.md, T8): what doctor finds of this session,
   // said at the start and after whatever ends the loop, once per value; it never ends the loop, since the lead does not
   // change its own menu and a line that woke it at each relaunch would be a loop.
-  homeLines = leadHomeLines(ctx, session, path.join(loopsFolder(home, slug), 'home', `${session}.json`));
+  const homeLines = leadHomeLines(ctx, session, homeMark);
+  homeSaid = homeLines.join('\n');
   for (const line of homeLines) ctx.out(line);
   let compactions = compactionsNow();
   for (const item of stalledAt(started)) {
@@ -697,6 +703,7 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   }
   if (awayStartLines.length > 0) return ending(awayStartLines, startDues, 0);
   if (awayAtStart !== null) ctx.out(`already told: the user's absence since ${hourOf(Date.parse(awayAtStart.before))}, with no stretch covering it`);
+  ticking = true;
   for (;;) {
     const last = lastWrite();
     const now = ctx.now();

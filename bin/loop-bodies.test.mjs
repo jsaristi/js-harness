@@ -860,4 +860,19 @@ test('heartbeat says the lead\'s HOME line once per value, at its start and afte
   assert.equal(state.out.filter((line) => line.startsWith('HOME:')).length, 2);
   await run(state, deps, []);
   assert.equal(state.out.filter((line) => line.startsWith('HOME:')).length, 0, 'on the home, nothing');
+  // Codex on 95fe817..542c805: the ending reads it again, so a menu changed while the loop ran is what it says.
+  let reads = 0;
+  deps.leadHome = () => ({ state: 'stale', note: '', fix: reads++ === 0 ? fix : other });
+  state.out = [];
+  state.clock = T0;
+  await loopMain(['heartbeat', '--quiet', '30', '--every', '120'], { CLAUDE_CODE_SESSION_ID: OWNER }, deps);
+  assert.deepEqual(state.out.filter((line) => line.startsWith('HOME:')), [`HOME: ${fix[0]}`, `HOME: ${other[0]}`]);
+  // The reliability lens: a reading whose fix is not a list says nothing and ends nothing.
+  for (const odd of [null, 'a string', { fix: 'a string' }, { fix: null }]) {
+    deps.leadHome = () => odd;
+    state.out = [];
+    state.clock = T0;
+    assert.equal(await loopMain(['heartbeat', '--quiet', '30', '--every', '120'], { CLAUDE_CODE_SESSION_ID: OWNER }, deps), 0, JSON.stringify(odd));
+    assert.equal(state.out.filter((line) => line.startsWith('HOME:')).length, 0);
+  }
 });
