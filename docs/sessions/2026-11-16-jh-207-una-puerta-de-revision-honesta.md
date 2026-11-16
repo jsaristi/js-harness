@@ -51,9 +51,9 @@ L42, L56, L73). The owner was away; no question went to him.
   from the whole record log (L80).
 
 ## Left
-- **T10 (spec 8, L71 A):** built after the land on branch feat/again-subrange (odd/tasks/again-subrange.md, L1-L8):
-  a later record at a head that owes settles it only where it read all the owing one read. Its pull request is the next
-  notice; T3 there (L84) stays open by the lead's word.
+- **T10 (spec 8, L71 A):** pull request 898 (odd/tasks/again-subrange.md, L1-L19): a later record at a head that owes
+  settles it only where it read all the owing one read. Open there: T3 (L84), its own pull request after the land, by
+  the lead's word; T5, a clean review spanning the owing head and ending above it, which predates the branch (L16).
 - **V2's cut:** it has not happened on the real log yet. The 5 old unnamed lens run lines stay nameable until the
   first record from the new writer (L66, L71 D).
 - **The lens note on older writers counts the whole log** (L84): after the cut it may name a record of another range; open for the lead.
