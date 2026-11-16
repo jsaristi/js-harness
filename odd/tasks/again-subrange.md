@@ -1,10 +1,9 @@
 # again-subrange: an --again over part of a range does not clear an owed correction
 
 ## State
-JH 207, worktree D:/js-harness-worktrees/again-subrange, branch feat/again-subrange, PR 898 held for T6 (L28). Plan:
-test first from the verifier's q3: from the head of the joint recheck, a further review is refused when any standing
-recheck at the head it rechecked owes (second counts the standing owing rechecks, not only the deciding record). Then
-targeted files, commit, Codex and lenses, push, draft off, notify ready --pr 898. T3 and T5 as they are. The wait for 207 runs.
+JH 207, worktree D:/js-harness-worktrees/again-subrange, branch feat/again-subrange. T6 fixed in 5d09384a (L29), reviewed
+by Codex and the lenses, pushed; PR 898 ready again, the lead lands it on the ready notice. Next, after the land: T3 (L84)
+in its own PR from main. T5 stays open. The session waits on its notices (rule:wait-for).
 
 ## Goal
 A clean Codex review at a head that owes a correction settles that correction only where it reads the whole range the
@@ -97,3 +96,4 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
 - L27 2026-11-16, corrects L26: Codex in T10 ran 11 times for 955,676 input tokens (12 with cef6ccf7's run, 61,734); lenses 10 runs; the opus verifier 177,496 + 200,268 tokens, the writer 83,861. The verifier's delta pass at f9a8ba72 (scratchpad verify898/, q2-q4): no blocking finding; earlier probes differ only for V1, V3, V6, now fixed; three standing records join right (q2); an owing record below a merge then a clean S..C2 above it passes on main and the branch alike (predates, the T5 shape). Notes: (T6) q3: a plain review that owes plus a narrower recheck at one head lets the recheck's leftover finding get a fourth review, which main stops (by dropping the other finding); where two rechecks join, the row's warning names only the deciding recheck's findings (the state holds both); `also` is dead code on the plain path.
 - L28 2026-11-16, the lead on T6: "I hold PR 898 for it. Main stops that fourth review and the branch allows it, so this PR loosens the three-review limit in its own change. Fix it in 898, tests first: the branch must stop a fourth review wherever main stops one."
 - L29 2026-11-16, T6 fixed tests first: the q3 test was red (a second recheck offered from the joint recheck's head); second now also counts the last record at the head rechecked (as main reads it) and the standing rechecks there that owe. Targeted files 417 tests, 0 failed; the recount over the real records, 1,409 heads, the same state on main and the branch at all of them.
+- L30 2026-11-16, T6 checked further: the verifier's probes rerun on the fixed code through real git; only q3 changed, where the fourth review (A3, B3) is now refused as main refuses A3. The fix also refuses a third review of findings reviewed twice where the last record at the head rechecked is a clean recheck and a plain review there owes: main refuses it the same way, so it is meant (the lead on T6). Codex ea7a235..5d09384 correct (0.87); lenses reliability and risk 0 findings, run without --doc, so they judged the code alone.
