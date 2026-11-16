@@ -153,7 +153,9 @@ export function lensCoverage(cwd, head, { spawn = spawnSync, remote = 'origin', 
   const uncovered = coverage.uncovered.filter(due);
   const noteParts = [
     coverage.stale ? `${plural(coverage.stale, 'record')} whose range no longer hashes as reviewed` : '',
-    coverage.invalid ? `${plural(coverage.invalid, 'record')} that are no evidence (an incomplete run, or a record no run line of lens-review names, among them)` : '',
+    // A record an older js-harness wrote after the first run with a result line is said as that, with what to do (L71 D).
+    lens.olderWriter ? `${plural(lens.olderWriter, 'record')} of a run with no result line, written after the first run that has one, as an older js-harness writes it (review the range again with this one)` : '',
+    coverage.invalid > lens.olderWriter ? `${plural(coverage.invalid - lens.olderWriter, 'record')} that are no evidence (an incomplete run, or a record no run line of lens-review names, among them)` : '',
   ].filter(Boolean);
   // The hash of the default branch, which a command names as its base where the oldest uncovered commit is a root.
   const baseHash = uncovered.length ? gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${branch.ref}^{commit}`]) : null;

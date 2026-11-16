@@ -7,7 +7,7 @@ import path from 'node:path';
 import { checkLensReviews, checkReviewDebt, lensDoor, owedSkipLines } from './lens-review-rows.mjs';
 import { commandStep, firstStep } from './next-step.mjs';
 import { lensCandidate } from './lens-candidate.mjs';
-import { appendLensReview, LENS_REVIEW_SCHEMA, startLensRun } from './lens-reviews.mjs';
+import { appendLensReview, endLensRun, LENS_REVIEW_SCHEMA, startLensRun } from './lens-reviews.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, withSubjectHash } from './codex-reviews.mjs';
 import { withoutAutoMaintenance } from './git-fixture.testkit.mjs';
 import { withRunLine } from './codex-records.testkit.mjs';
@@ -117,6 +117,20 @@ test('a record written while the lenses read renames off still covers its range,
   record(added, moved, { subjectHash: 'f'.repeat(64) });
   assert.match(row().detail, /1 record whose range no longer hashes as reviewed/);
   assert.equal(row().pass, true, row().detail);
+});
+
+// The lead on L71 D (PR 896): a record an older js-harness writes after the first run with a result line is refused,
+// and the push says that is why, not that the run was incomplete or named by no line.
+test('V2: a record whose run has no result line, written after the first that has one, is said as an older writer did it', () => {
+  const { subjectHash } = lensCandidate(dir, { base, head });
+  const now = record(base, head);
+  endLensRun(dir, { id: now, base, head, subjectHash, outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: [] }] });
+  assert.equal(row().pass, true, row().detail);
+  const later = commit('c.mjs', 'export const c = 1;\n', 'feat: c');
+  record(head, later);
+  const said = row();
+  assert.equal(said.pass, false, said.detail);
+  assert.match(said.detail, /1 record of a run with no result line, written after the first run that has one, as an older js-harness writes it/);
 });
 
 // Row 3 of docs/proposals/gentle-ai-reverse-engineering.md, section 13.3: provenance is what refuses a well-shaped forged

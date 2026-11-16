@@ -458,6 +458,12 @@ export function checkCodexReviewDebt(cwd, { spawn = spawnSync, remote = 'origin'
   try {
     // Inside the guard: the switch is read from files and git as the rest is, and fails nothing either.
     const here = codexSwitchHere(cwd, spawn);
+    // Off in the working tree alone, with HEAD on: the push reads HEAD, so this says what it says (e1b, the lead on L76).
+    const atHead = here.value === 'off' ? codexReviewOffAt(cwd, 'HEAD', { spawn }) : false;
+    if (here.value === 'off' && !atHead) {
+      const said = codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell });
+      return { ...said, detail: `the Codex review is off in the working tree (${here.because}) but on at HEAD, which the push reads: ${said.detail}` };
+    }
     if (here.value === 'off') {
       // A correction owed below is still owed with the review off, and the push refuses it: the row says so, and
       // names the skip that pays it where one does (V3, the opus verifier's second pass on pull request 896).

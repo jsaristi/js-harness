@@ -107,6 +107,8 @@ export function admittedLensReviews(root, { spawn = spawnSync, where, ...rest } 
   const claimed = new Set();
   const admitted = new Set();
   let resulted = false;
+  // Records refused only for standing after that first one, as an older js-harness writes them: the rows say so (L71 D).
+  let olderWriter = 0;
   for (const rec of records) {
     const key = runKey({ ...rec, id: rec.run });
     if (typeof rec.run !== 'string' || claimed.has(rec.run) || !runs.has(key)) continue;
@@ -115,6 +117,7 @@ export function admittedLensReviews(root, { spawn = spawnSync, where, ...rest } 
     const ends = endsOf.get(rec.run) ?? [];
     if (ends.length === 0) {
       if (!resulted) admitted.add(rec);
+      else olderWriter += 1;
       continue;
     }
     const [end] = ends;
@@ -123,7 +126,7 @@ export function admittedLensReviews(root, { spawn = spawnSync, where, ...rest } 
     admitted.add(rec);
     resulted = true;
   }
-  return { records, admitted: (rec) => admitted.has(rec) };
+  return { records, admitted: (rec) => admitted.has(rec), olderWriter };
 }
 
 const COMMIT_ID = /^[0-9a-f]{40,64}$/;

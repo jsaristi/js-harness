@@ -2253,3 +2253,18 @@ test('V3: a merge of main at the tip with an edit in it, above a review that owe
   assert.equal(debt.pass, true, debt.detail);
   assert.match(debt.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
 });
+
+test('V3: with the review on at HEAD and off only in the working tree, the plain check says the correction the push refuses, and lists no paying skip', () => {
+  // The lead on L76 (e1b, PR 896): the plain row read the switch from the working tree and listed a skip as paying
+  // while the push, which reads HEAD, refused the branch for the correction.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const off = commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  record(root, head, off, { outcome: 'unavailable', reason: 'the owner: "no"' });
+  const on = commit(root, 'harness.json', `${JSON.stringify({ functions: { codexReview: 'on' } })}\n`, 'chore: turn it on again');
+  record(root, off, on, { outcome: 'unavailable', reason: 'covers the switch' });
+  fs.writeFileSync(path.join(root, 'harness.json'), OFF);
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, false);
+  const debt = checkCodexReviewDebt(root);
+  assert.match(debt.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+  assert.equal((debt.lines ?? []).some((line) => line.includes('pays the correction')), false, (debt.lines ?? []).join('\n'));
+});
