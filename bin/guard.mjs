@@ -129,8 +129,9 @@ async function worktreeLister(cwd) {
  * (`local_…`) is looked up in the app's records, and a senior off its rules gets no task (`seniorMessageRefusal`,
  * odd/tasks/senior-orchestrator.md, T6). A name reads no record and no rules (`rulesOf` gives their text); a reader that
  * fails, or no record, passes. */
-async function seniorMessageOf(input, rulesOf, readApp) {
-  const target = input.to ?? input.session_id;
+async function seniorMessageOf(tool, input, rulesOf, readApp) {
+  // Each tool's own field: a `to` beside send_message's `session_id` must not hide it (D13).
+  const target = tool === 'SendMessage' ? input.to : input.session_id;
   if (typeof target !== 'string' || !target.startsWith('local_')) return null;
   let record = null;
   try {
@@ -222,7 +223,7 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
       ?? (await sessionTitleOf(input, rules, root, harnessHome({ env, homedir }), readFile));
   }
   if (OPENING_TOOLS.includes(tool)) return openingRefusal(tool, rulesTextOf(rootOf(), readFile));
-  if (MESSAGE_TOOLS.has(tool)) return hourRefusal(input.message, now()) ?? (await seniorMessageOf(input, () => rulesTextOf(rootOf(), readFile), readApp));
+  if (MESSAGE_TOOLS.has(tool)) return hourRefusal(input.message, now()) ?? (await seniorMessageOf(tool, input, () => rulesTextOf(rootOf(), readFile), readApp));
   const backticks = backtickRefusal(input.command);
   if (backticks !== null) return backticks;
   const driveRoot = driveRootRemovalRefusal(input.command);

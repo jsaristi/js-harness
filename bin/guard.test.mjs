@@ -740,6 +740,16 @@ test('a start_session of a senior is denied unless the lead starts it as the sen
     assert.ok(why.includes(JSON.stringify(SENIOR_WAIT_BRIEF)), 'the refusal gives the brief to copy');
   }
   assert.deepEqual(await hook({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, prompt: `  ${SENIOR_WAIT_BRIEF}\n` } }, { app: lead }), { code: 0, out: '', err: '' }, 'blanks around it');
+  // The verifier's findings (D13): a card's later start carries no title the guard could hold, so only "user_asked"
+  // starts a senior; another project's lead is not this one's; it starts here, in its own worktree.
+  for (const initiation of ['offer', 'own_initiative', undefined]) {
+    assert.match(await reason({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, initiation } }, lead), /initiation "user_asked"/, String(initiation));
+  }
+  assert.match(await reason(SENIOR_START, appOf(['c-lead', { ...LEAD_RECORD, title: 'XY ORQ · other lead' }])), /a senior is started by the lead.*titled "XY ORQ · other lead"/s);
+  for (const [field, value] of [['target', 'cloud'], ['target', 'ssh'], ['cwd', 'D:/other'], ['preset', 'mine'], ['host', 'box'], ['use_worktree', 'false']]) {
+    assert.match(await reason({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, [field]: value } }, lead), /starts here, in its own worktree/, `${field}: ${value}`);
+  }
+  assert.deepEqual(await hook({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, target: 'local' } }, { app: lead }), { code: 0, out: '', err: '' }, 'target local');
   assert.match(await reason({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, effort: undefined } }, lead), /names no effort.*rule senior-effort/s);
   const other = EFFORTS.find((level) => level !== SENIOR_EFFORT);
   assert.match(await reason({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, effort: other } }, lead), new RegExp(`asks for effort "${other}", not the level of the rule senior-effort`));
@@ -773,6 +783,10 @@ test('a message to a senior whose app record is off rule:senior-model or rule:se
     assert.deepEqual(await hook(call, { app: new Map() }), passes);
     assert.deepEqual(await hook(call, { app: { get: () => null, values: () => { throw new Error('locked'); } } }), passes);
   }
+  // Each tool's own target field is read: a `to` beside send_message's session_id hides nothing (D13).
+  const onOpus = appOf(['c-sr', { ...senior, model: LEAD_RECORD.model }]);
+  assert.match(denied(await hook({ tool_name: 'mcp__ccd_session_mgmt__send_message', cwd: 'D:/project', tool_input: { to: 'someone', session_id: 'local_sr', message: 'x' } }, { app: onOpus })).permissionDecisionReason, /set_session_model/);
+  assert.match(denied(await hook({ tool_name: 'SendMessage', cwd: 'D:/project', tool_input: { to: 'local_sr', session_id: 'someone', message: 'x' } }, { app: onOpus })).permissionDecisionReason, /set_session_model/);
   // A target that is no app id (a name) reads no record.
   let reads = 0;
   const counted = { get: () => null, values: () => { reads += 1; return [].values(); } };

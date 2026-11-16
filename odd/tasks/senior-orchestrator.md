@@ -20,7 +20,8 @@ its model and level with its session tools and detaches it; the guard lets that 
 its rules where the lead sends it work. `sessions start --title "<code> SR · …"` stays, unused by the protocol.
 cb830c3e built it; Codex's review (7619fc9..25e7f82, verdict incorrect at 0.92) found one P2: any brief passed, so a
 task in it ran on the lead's model before `set_session_model`. The next commit holds the brief to `SENIOR_WAIT_BRIEF`
-(D11). Left: the lens review, the Codex recheck, the verifier, the PR. Then T7.
+(D11). Lenses: risk and reliability 0, resilience 1 warning, answered (D12). Codex recheck: fixed (0.98). The
+verifier's findings are fixed in the next commit (D13). Left: its reviews, the PR. Then T7 (question 306).
 
 ## Goal
 The lead starts a senior session, titled `<code> SR · <purpose>`, as a visible app session with `start_session`
@@ -52,6 +53,9 @@ intelligence or complexity. Today a start on Fable is refused (the guard and `se
   (`SendMessage`, `send_message`) to an SR session whose app record holds another model or level than the senior's
   is refused, naming `set_session_model` and `set_session_effort`, and one on Fable at high passes; a start whose
   `prompt` is other than `SENIOR_WAIT_BRIEF` (blanks around it aside) is refused, giving the brief to copy.
+  So is one whose `initiation` is not "user_asked", one from another project's lead, and one naming `target` other
+  than "local", `cwd`, `preset`, `host` or a `use_worktree` other than true; `send_message` is read by its
+  `session_id` and `SendMessage` by its `to`.
 
 ## In scope / Out of scope
 - In: two rules, `senior-model` and `senior-effort`, joined to the Claude home (`CLAUDE_HOME`, `claudeHome`,
@@ -179,3 +183,12 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   senior from a work session without the record, so failing closed would refuse every message the lead sends to any
   `local_…` session while the records are unreadable, stopping the lead's whole channel; what it guards against, one
   task run on the lead's model, costs quality and spend, not security, and the start itself fails closed (D10).
+- D13 2026-11-15, the independent verifier (all run against `guardMain` unless marked): an offer, then its
+  `proposal_id` start, carried any task, since the later call has no title (fixed: only "user_asked"); a `to` beside
+  `send_message`'s `session_id` hid it (fixed: each tool's own field); another project's lead started this code's
+  senior (fixed); `target` "cloud", `cwd`, `preset`, `host` and `use_worktree` "false" passed (fixed: a senior starts
+  here, in its own worktree). Left open, recorded: two "user_asked" starts in one message both pass before either
+  record exists (reasoned; the lead protocol starts one); a session renamed to an ORQ or off an SR title by
+  `set_session_title` escapes the title checks, which nothing guards; a lead whose record writes no effort is not
+  held to senior-effort (the tool still caps the start at the lead's, and the message check holds the senior's); the
+  rule subject of senior-model still names `sessions start` (T7, question 306).

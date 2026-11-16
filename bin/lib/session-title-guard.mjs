@@ -80,12 +80,17 @@ export function seniorStartRefusal(toolInput, projectData, { starter = null, rec
   const who = 'js-harness guard: start_session';
   const home = claudeHeld(projectData);
   if (home.senior === null) return `${who} titles the session ${title}, a senior, and this project declares no rule senior-model, so it has no senior to start.`;
-  if (starter === null || !leadTitle(starter.title ?? '')) {
+  const code = roleOfTitle(toolInput.title)?.code;
+  // The lead of this project: another project's lead starts no senior of this code.
+  if (starter === null || !leadTitle(starter.title ?? '') || roleOfTitle(starter.title)?.code !== code) {
     const caller = starter === null ? 'the session that calls it is not run from a session, or has no app record that can be read' : `the session that calls it is titled ${JSON.stringify(starter.title ?? '')}`;
     return `${who}: a senior is started by the lead (the orchestrator, titled "<code> ORQ · <purpose>"), and ${caller}, so ${title} was not started: the user asks the lead to start it.`;
   }
   if (typeof toolInput.prompt !== 'string' || toolInput.prompt === '') {
     return `${who} offers the senior ${title} with no brief: a senior's start carries its brief (initiation "user_asked", on a turn the user typed), since the brief that follows an offer carries no title the guard could hold to the senior's rules.`;
+  }
+  if (toolInput.initiation !== 'user_asked') {
+    return `${who} starts the senior ${title} with initiation ${JSON.stringify(toolInput.initiation ?? null)}: only initiation "user_asked" starts it, since a card's later start names only its proposal_id and carries no title the guard could hold to the senior's rules.`;
   }
   if (toolInput.prompt.trim() !== SENIOR_WAIT_BRIEF) {
     return `${who} gives the senior ${title} a brief other than the wait: its first turn runs on the lead's model, before set_session_model applies, so a task in it would run off the rule ${SENIOR_HOME.model}. Pass the prompt ${JSON.stringify(SENIOR_WAIT_BRIEF)} and nothing more, then send the task as a message once its model and level are set.`;
@@ -93,14 +98,16 @@ export function seniorStartRefusal(toolInput, projectData, { starter = null, rec
   if (typeof toolInput.model === 'string' && toolInput.model !== '') {
     return `${who} names the model "${toolInput.model}" for the senior ${title}: the tool caps a start at the caller's model, so name none, then set rule ${SENIOR_HOME.model} (${home.senior.value}) with set_session_model once it has started.${home.senior.note}`;
   }
-  if (toolInput.use_worktree === false) {
-    return `${who} starts the senior ${title} with use_worktree false: detach_session refuses a session that shares another's worktree, so leave it out or pass true.`;
+  const elsewhere = ['cwd', 'preset', 'host'].filter((field) => toolInput[field] !== undefined);
+  if (toolInput.target !== undefined && toolInput.target !== 'local') elsewhere.unshift(`target ${JSON.stringify(toolInput.target)}`);
+  if (toolInput.use_worktree !== undefined && toolInput.use_worktree !== true) elsewhere.push(`use_worktree ${JSON.stringify(toolInput.use_worktree)}`);
+  if (elsewhere.length > 0) {
+    return `${who} starts the senior ${title} with ${elsewhere.join(', ')}: a senior starts here, in its own worktree, where the app's records hold its model and level and detach_session can take it to top level (it refuses a session that shares another's worktree), so leave those out (use_worktree may be true).`;
   }
   const level = home.seniorEffort;
   if (level !== null && EFFORTS.includes(starter.effort) && EFFORTS.indexOf(starter.effort) < EFFORTS.indexOf(level.value)) {
     return `${who} is called from a session at the level "${starter.effort}", under the one of the rule ${SENIOR_HOME.effort}: ${level.value}, and a start is capped at the session that makes it: the user sets the lead's level first.${level.note}`;
   }
-  const code = roleOfTitle(toolInput.title)?.code;
   const live = records.find((record) => record?.archived !== true && seniorTitle(record?.title ?? '') && roleOfTitle(record.title)?.code === code);
   if (live !== undefined) {
     return `${who} starts the senior ${title} while ${JSON.stringify(live.title)} is live: one live senior at a time (odd/tasks/senior-orchestrator.md, D4). Send that one the task, or archive it first.`;
