@@ -341,7 +341,9 @@ export function admittedCodexReviews(cwd, { spawn = spawnSync, where } = {}) {
     if (ids.length === 0 || !ids.every((id) => typeof id === 'string' && linesOf.has(id))) continue;
     // The run, with the range it ran over, is claimed once: a second record of the same run and range is a copy.
     const claim = `${ids.at(-1)} ${rec.base} ${rec.head}`;
-    if (claimed.has(claim) || !linesOf.get(ids.at(-1)).some((line) => line.head === rec.head && (line.base === rec.base || line.from === rec.base))) continue;
+    // The line that states the range says the run reviewed: a failed, timed-out or not-inspected run writes its range
+    // too, and a record naming it would cover code no review read (F1, the opus verifier on pull request 896).
+    if (claimed.has(claim) || !linesOf.get(ids.at(-1)).some((line) => line.head === rec.head && (line.base === rec.base || line.from === rec.base) && line.outcome === 'reviewed')) continue;
     claimed.add(claim);
     admitted.add(rec);
   }
@@ -357,6 +359,14 @@ export function admittedCodexReviews(cwd, { spawn = spawnSync, where } = {}) {
     return asked.get(rec);
   };
   return { records, admitted: (rec) => admitted.has(rec) || (nothing.includes(rec) && changesNoCode(rec)) };
+}
+
+/** The Codex review records a debt is read from: every record, with a review kept only where a run line admits it
+ * (`admittedCodexReviews`), so the run and the push read what is owed by one evidence rule (F2, the opus verifier on
+ * pull request 896). Admission is asked of reviews alone, a lookup that starts no git. */
+export function admittedRecords(cwd, { spawn = spawnSync, where } = {}) {
+  const codex = admittedCodexReviews(cwd, { spawn, where });
+  return codex.records.filter((rec) => rec.outcome !== 'reviewed' || codex.admitted(rec));
 }
 
 /** The paths the review of `rec` left out, read from its range with the marks of its head as `js-harness codex-review`

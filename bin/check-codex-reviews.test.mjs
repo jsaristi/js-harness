@@ -1995,3 +1995,23 @@ test('--head or --remote with no value exits 2 with usage and runs no row', asyn
     assert.equal(output, '');
   }
 });
+
+test('F2: a bare record at the head that owes, with no run line, does not cancel the correction', () => {
+  // The opus verifier on PR 896 (P1): correctionOwed read every record, so a forged review at the owing head read as
+  // the review the branch ends on, with nothing owed. The debt is read from admitted records only.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  forged(root, git(root, 'rev-parse', `${head}^`), head);
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('F2: a bare recheckOf record at the head that owes, with no run line, does not turn the correction into a warning', () => {
+  // The opus verifier on PR 896 (P2): recheckState read every record, so a hand-written record at the owing head naming
+  // it in recheckOf read as the last word on that head, a recheck with nothing kept, and the refusal became a warning.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  forged(root, head, head, { run: 'nope', recheckOf: head });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});

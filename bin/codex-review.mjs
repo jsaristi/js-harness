@@ -179,7 +179,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { allowanceLine, readProjectRules, reviewAllowance } from './lib/codex-review-allowance.mjs';
 import { answerFailure, byPlace, findingCounts, findingLine, rolloutAnswer, verdictLine } from './lib/codex-review-answer.mjs';
-import { baseLeftOut, baseLeftOutSaid, gitAnswer, MARKS_UNREAD, mergeStart, notReviewedSaid, rangeDiff, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
+import { admittedRecords, baseLeftOut, baseLeftOutSaid, gitAnswer, MARKS_UNREAD, mergeStart, notReviewedSaid, rangeDiff, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
 import { PART_MAX_CHANGED_LINES, PART_MAX_FILES, RENAMES, reviewParts } from './lib/codex-review-parts.mjs';
 import { counted, MAX_PARTS_WITHOUT_FLAG, methodRecord, methodRecordLine, needsFlagLine, partPlanned, partsBound, planLines, reviewPlan, thousands } from './lib/codex-review-plan.mjs';
@@ -1287,7 +1287,7 @@ async function reviewRun(argv, env, deps, snapshot) {
     const state = recheckFor(from);
     if (!args.again || state.kind === 'refused' || onResult !== null || everyFile) return state;
     // Records that cannot be read leave the range a review, as they do `recheckFor`.
-    const records = (() => { try { return readCodexReviews(root, { spawn, where }); } catch { return []; } })();
+    const records = (() => { try { return admittedRecords(root, { spawn, where }); } catch { return []; } })();
     const held = new Set((git(spawn, root, ['rev-list', `${from}..${head}`]) ?? '').split('\n').filter(Boolean));
     const heads = [...new Set(records.filter((rec) => rec.outcome === 'reviewed' && held.has(rec.head)).map((rec) => rec.head))];
     const left = heads.length === 0 ? null : leftFrom(from);
@@ -1425,8 +1425,8 @@ async function reviewRun(argv, env, deps, snapshot) {
       plan = planOf(split);
       for (const line of planLines(plan)) log(line);
     }
-    // How close the method came on the reviews this machine recorded, said after the estimate it judges. A
-    // plan of no part has no estimate to judge; records that cannot be read are none.
+    // How close the method came on the reviews this machine recorded, said after the estimate it judges: a report of
+    // cost, read from every record as report-feature reads them (F2 leaves it so). A plan of no part has no estimate to judge; records that cannot be read are none.
     if (plan.parts.length > 0) {
       let records;
       try {

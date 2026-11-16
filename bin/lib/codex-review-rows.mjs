@@ -7,9 +7,9 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { reviewParts } from './codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './codex-review-plan.mjs';
-import { beyondLines, defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, remoteHoldsNoBranch, reviewCoverage, reviewStart } from './codex-review-coverage.mjs';
+import { beyondLines, defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, remoteHoldsNoBranch, reviewCoverage, reviewStart, admittedRecords } from './codex-review-coverage.mjs';
 import { mergeTurn, recheckAt, turnsCheaper } from './codex-review-turns.mjs';
-import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './codex-reviews.mjs';
+import { codexReviewsPath, isValidCodexReview } from './codex-reviews.mjs';
 import { readCodexReviewRuns } from './codex-review-runs.mjs';
 import { classifyRecheck, ESCALATION_SAID, priorLine, recheckState, runAnswerFindings } from './codex-review-recheck.mjs';
 import { counted, leftOutOf, rangeFiles, reviewScope } from './codex-review-scope.mjs';
@@ -127,7 +127,9 @@ function correctionOwed(cwd, { codeCommits, covers, tip }, { spawn, below = null
   let records;
   let runs;
   try {
-    records = readCodexReviews(cwd, { spawn });
+    // Only a review a run line admits says what is owed (F2, the opus verifier on pull request 896): a bare record at
+    // the owing head read as the review the branch ends on, with nothing owed. Admission is asked of reviews alone.
+    records = admittedRecords(cwd, { spawn });
     runs = readCodexReviewRuns(cwd, { spawn });
   } catch {
     return null;

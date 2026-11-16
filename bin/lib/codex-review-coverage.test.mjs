@@ -635,3 +635,17 @@ test('C-3: a forged record of nothing to review whose head lies past the tip cov
   assert.deepEqual(ids(coverage.uncovered), [two, one]);
   assert.equal(coverage.covers.length, 0);
 });
+
+test('F1: a record that names the line of a run that did not review covers nothing', async () => {
+  // The opus verifier on PR 896: a failed, timed-out or not-inspected run writes a line with its range, and a
+  // hand-written reviewed record naming it passed. The line that states the range must say reviewed.
+  const { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } = await import('./codex-review-runs.mjs');
+  for (const outcome of ['failed', 'timed-out', 'not-inspected']) {
+    const { root, first, three } = fourCommits();
+    appendCodexReviewRun(root, { schema: CODEX_REVIEW_RUN_SCHEMA, id: `run-${outcome}`, base: first, from: first, head: three, outcome });
+    appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base: first, head: three, reviewedAt: '2026-11-16T00:00:00.000Z', outcome: 'reviewed', run: `run-${outcome}` });
+    const coverage = reviewCoverage(root, { from: first, tip: three });
+    assert.equal(coverage.covers.length, 0, outcome);
+    assert.equal(coverage.uncovered.length, 3, outcome);
+  }
+});

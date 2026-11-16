@@ -11,11 +11,11 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { normalizeAnswer } from './codex-review-answer.mjs';
-import { defaultBranch, gitAnswer, mergeStart, reviewCoverage } from './codex-review-coverage.mjs';
+import { admittedCodexReviews, admittedRecords, defaultBranch, gitAnswer, mergeStart, reviewCoverage } from './codex-review-coverage.mjs';
 import { counted, planLines, thousands } from './codex-review-plan.mjs';
 import { RECHECK_LOOK_BACK, recheckState, recheckThrough, runsLogged, secondRecheckRefused } from './codex-review-recheck.mjs';
 import { readCodexReviewRuns } from './codex-review-runs.mjs';
-import { isValidCodexReview, NOTHING_TO_REVIEW, readCodexReviews } from './codex-reviews.mjs';
+import { isValidCodexReview, NOTHING_TO_REVIEW } from './codex-reviews.mjs';
 import { leftOutOf } from './codex-review-scope.mjs';
 import { firstStep, nextLine } from './next-step.mjs';
 
@@ -46,7 +46,7 @@ export function mergeTurn(cwd, { given, tip, uncovered, spawn = spawnSync, where
   // a correction and the merge would let the cut drop that recheck (verifier B1).
   let state;
   try {
-    state = recheckAt(cwd, { from: atMerge.from, tip, records: readCodexReviews(cwd, { spawn, where }), runs: readCodexReviewRuns(cwd, { spawn, where }), spawn, where });
+    state = recheckAt(cwd, { from: atMerge.from, tip, records: admittedRecords(cwd, { spawn, where }), runs: readCodexReviewRuns(cwd, { spawn, where }), spawn, where });
   } catch {
     return null;
   }
@@ -79,7 +79,7 @@ const gitText = (cwd, spawn, args) => {
 export function recheckAt(cwd, { from, tip, records: given, runs, holds, spawn = spawnSync, where }) {
   let records;
   try {
-    records = given ?? readCodexReviews(cwd, { spawn, where });
+    records = given ?? admittedRecords(cwd, { spawn, where });
   } catch {
     return null;
   }
@@ -344,17 +344,21 @@ export function turnArgv(turns, place, args) {
  * with nothing to review (a change and its revert), which no Codex session made, and which owes nothing. */
 export function afterTurn(cwd, turns, { spawn = spawnSync, where } = {}) {
   const { turn, notReviewed } = turnNamed(turns);
+  let codex;
   let records;
   let runs;
   try {
-    records = readCodexReviews(cwd, { spawn, where });
+    // What is owed is read from the admitted records (F2, the opus verifier on pull request 896); the turn's own record
+    // from them all, so one whose run line is missing or does not state its range is refused as that, not as no record.
+    codex = admittedCodexReviews(cwd, { spawn, where });
+    records = codex.records.filter((rec) => rec.outcome !== 'reviewed' || codex.admitted(rec));
     runs = readCodexReviewRuns(cwd, { spawn, where });
   } catch (err) {
     return { refused: `Could not read the record of ${turn} (${err.message}), so ${notReviewed}.` };
   }
   // The turn at the merge is named by its commit here; that of a gap by its range, which its name holds.
   const named = turns.gap ? turn : `${turn} ${turns.at.slice(0, 7)}`;
-  const written = records.findLast((record) => record.base === turns.from && record.head === turns.at);
+  const written = codex.records.findLast((record) => record.base === turns.from && record.head === turns.at);
   if (written === undefined) return { refused: `T${named.slice(1)} wrote no record, so ${notReviewed}.` };
   // A gap whose change is reverted inside it changes no file: its turn launched no Codex and logged no run, and owes nothing.
   // It pays no correction either: one owed below the gap is still owed, and the merge is no recheck of it (Y1).
@@ -365,6 +369,7 @@ export function afterTurn(cwd, turns, { spawn = spawnSync, where } = {}) {
     return { refused: nothingPaysSaid({ of: owed.at ?? owed.of, range: `${turns.from.slice(0, 7)}..${turns.at.slice(0, 7)}`, merge }) };
   }
   if (!runsLogged(written, runs)) return { refused: `The run line of ${named} is not in the run log, so whether it owes a correction cannot be said and ${notReviewed}: run the review again.` };
+  if (written.outcome === 'reviewed' && !codex.admitted(written)) return { refused: `The run line of ${named} does not state the range its record covers, so it is no review and ${notReviewed}: run the review again.` };
   return { stopped: recheckState({ from: turns.at, records, runs }).kind !== 'review' };
 }
 
