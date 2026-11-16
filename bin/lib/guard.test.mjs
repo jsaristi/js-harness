@@ -824,6 +824,8 @@ test('a script that writes a record, or calls a function that appends one, is re
   for (const command of [
     `node -e "require('fs').appendFileSync('${RECORD}', '{}')"`,
     'node --input-type=module -e "import(\'./bin/lib/lens-reviews.mjs\').then((m) => m.appendLensReview(\'.\', {}))"',
+    // A lens run's result line is evidence too (Codex on 4c8069dd, V2): a second one would discard a review and its debt.
+    'node --input-type=module -e "import(\'./bin/lib/lens-reviews.mjs\').then((m) => m.endLensRun(\'.\', {}))"',
     `python -c "open('${RECORD}', 'a').write('{}')"`,
     'node -e "import(\'./bin/lib/codex-reviews.mjs\').then((m) => m.appendCodexReview(\'.\', {}))"',
     'node -e "fs.appendFileSync(path.join(d, \'js-harness\', \'lens-reviews.jsonl\'), l)"',

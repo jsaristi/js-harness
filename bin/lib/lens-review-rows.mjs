@@ -11,6 +11,7 @@ import { spawnSync } from 'node:child_process';
 import { beyondLines, defaultBranch, gitOut, MARKS_UNREAD, NOT_A_REVIEW, notReviews, remoteHoldsNoBranch, reviewCoverage } from './codex-review-coverage.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit } from './project-functions.mjs';
 import { admittedLensReviews } from './lens-reviews.mjs';
+import { classifyRecheck } from './codex-review-recheck.mjs';
 import { commandStep, firstStep, noStep, reviewCommand } from './next-step.mjs';
 
 const plural = (count, noun) => `${count} ${noun}${count === 1 ? '' : 's'}`;
@@ -23,6 +24,92 @@ export function reviewStep(cwd, { spawn = spawnSync, tool, base, tip }) {
   if (head === tip) return commandStep(reviewCommand(tool, { base, at: tip }));
   return firstStep(`check out ${tip.slice(0, 7)}, the commit the command is bound to; HEAD is ${head ? head.slice(0, 7) : 'unborn'} here`);
 }
+
+/** The severities of a lens finding that owe a correction (B2-2 of the full audit of 2026-11-14: "lens findings never
+ * block"), the two the lens prompt holds to proof of introduced harm (`./lens-prompts.mjs`). */
+const OWED = new Set(['BLOCKER', 'CRITICAL']);
+
+/** The runs whose findings of `lens` the record `rec` rechecked, oldest first: its `rechecked` map, or, for a record
+ * written before it, the one run `recheckOf` names where that run's record holds findings of `lens` (`byRun`). */
+export function recheckedRuns(rec, lens, byRun) {
+  // A lens the record holds no complete answer of rechecked nothing (the reliability lens on S6).
+  if (!rec.results?.some((one) => one?.lens === lens && one.outcome === 'complete')) return [];
+  if (rec.rechecked && typeof rec.rechecked === 'object') return Array.isArray(rec.rechecked[lens]) ? rec.rechecked[lens].filter((run) => typeof run === 'string') : [];
+  if (typeof rec.recheckOf !== 'string') return [];
+  return findingsOf(byRun.get(rec.recheckOf), lens).length > 0 ? [rec.recheckOf] : [];
+}
+
+/** The findings of `lens` in the record `rec`, `[]` when it holds none or no complete result of it. */
+const findingsOf = (rec, lens) => {
+  const result = rec?.results?.find((one) => one?.lens === lens && one.outcome === 'complete');
+  return Array.isArray(result?.findings) ? result.findings : [];
+};
+
+/** What the admitted lens reviews of `covers` owe, as a Codex review owes a correction (`correctionOwed` in
+ * ./codex-review-rows.mjs), read from the records themselves, where a lens keeps its findings. Each lens of each record
+ * is read alone (Codex on S6): it is a round of correction when what it rechecked (`recheckedRuns`) held a BLOCKER or
+ * CRITICAL finding; else it reviewed afresh, a recheck of WARNINGs among them, and its own BLOCKER and CRITICAL findings
+ * are `owed` until a later recheck by that lens names its run and marks them fixed (`classifyRecheck`, as
+ * `lens-review` counts them, each finding at its place in the findings of every run that recheck took up). A round of
+ * correction owes nothing more: what it left not fixed, and any new finding it marked blocking, are `open`, which
+ * warns and passes, the Codex rule of 2026-10-15 (no waiver, the warning is enough). Only a recheck pays: a later
+ * review that is no recheck of that run, as one run from below a document commit before the fix, leaves the debt.
+ * `admitted` is every admitted lens record, where the runs a recheck names are looked up. */
+function lensCorrections(covers, admitted) {
+  const byRun = new Map(admitted.filter((rec) => typeof rec.run === 'string').map((rec) => [rec.run, rec]));
+  const reviewed = covers.map(({ rec }) => rec).filter((rec) => rec.outcome === 'reviewed' && Array.isArray(rec.results));
+  const owed = [];
+  const open = [];
+  for (const [index, rec] of reviewed.entries()) {
+    for (const result of rec.results) {
+      if (result?.outcome !== 'complete') continue;
+      const { lens } = result;
+      const findings = findingsOf(rec, lens);
+      const runs = recheckedRuns(rec, lens, byRun);
+      const prior = runs.flatMap((run) => findingsOf(byRun.get(run), lens));
+      if (prior.some((finding) => OWED.has(finding?.severity))) {
+        const asked = findings.map((finding) => ({ title: finding?.claim ?? '' }));
+        const read = classifyRecheck({ findings: asked }, prior.length);
+        const blocking = findings.filter((finding, at) => read.blocking.includes(asked[at]));
+        const left = [...prior.filter((finding, at) => OWED.has(finding?.severity) && read.status[at] !== 'fixed'), ...blocking];
+        if (left.length > 0) open.push({ rec, lens, findings: left });
+        continue;
+      }
+      const severe = findings.filter((finding) => OWED.has(finding?.severity));
+      if (severe.length === 0) continue;
+      const paid = reviewed.slice(index + 1).some((later) => recheckedRuns(later, lens, byRun).includes(rec.run));
+      if (!paid) owed.push({ rec, lens, findings: severe });
+    }
+  }
+  return { owed, open };
+}
+
+/** The line of an owed or open lens finding. */
+const findingLine = (lens, finding) => `${lens} ${finding.severity} ${finding.location} ${finding.claim}`;
+
+/** What the oldest lens review that owes a correction says, from `lensCoverage`'s state: `null` when none owes, else
+ * `{ detail, lines, next, review }`, the step being its recheck, run from its head, or the fix when the tip is that head. */
+function correctionRefusal(cwd, state, spawn) {
+  const [first] = state.corrections.owed;
+  if (first === undefined) return null;
+  const mine = state.corrections.owed.filter(({ rec }) => rec === first.rec);
+  const count = mine.reduce((sum, { findings }) => sum + findings.length, 0);
+  const at = first.rec.head.slice(0, 7);
+  const review = { tool: 'lens-review', base: at };
+  return {
+    detail: `the lens review that ended at ${at} owes a correction: ${count} BLOCKER or CRITICAL finding${count === 1 ? '' : 's'} open, not rechecked`,
+    lines: mine.flatMap(({ lens, findings }) => findings.map((finding) => findingLine(lens, finding))),
+    next: first.rec.head === state.tip ? firstStep('fix the open findings above in code and commit the fix') : reviewStep(cwd, { spawn, ...review, tip: state.tip }),
+    review,
+  };
+}
+
+/** The warning lines of each lens recheck that left a BLOCKER or CRITICAL finding open, from `lensCoverage`'s state. */
+const openLines = (state) => state.corrections.open.flatMap(({ rec, lens, findings }) => [
+  `warning: the lens recheck that ended at ${rec.head.slice(0, 7)} left ${findings.length} BLOCKER or CRITICAL or blocking finding${findings.length === 1 ? '' : 's'} open`,
+  ...findings.map((finding) => findingLine(lens, finding)),
+  'the push passes; the user decides whether they are waived, or a correction is committed as code and reviewed',
+]);
 
 /** The base a command that makes the record of the oldest uncovered commit is bound to, as its row prints it: that
  * commit's parent (`<id>^`), or, for a root commit, the default branch's hash (`baseHash`). */
@@ -66,11 +153,13 @@ export function lensCoverage(cwd, head, { spawn = spawnSync, remote = 'origin', 
   const uncovered = coverage.uncovered.filter(due);
   const noteParts = [
     coverage.stale ? `${plural(coverage.stale, 'record')} whose range no longer hashes as reviewed` : '',
-    coverage.invalid ? `${plural(coverage.invalid, 'record')} that are no evidence (an incomplete run, or a record no run line of lens-review names, among them)` : '',
+    // A record an older js-harness wrote after the first run with a result line is said as that, with what to do (L71 D).
+    lens.olderWriter ? `${plural(lens.olderWriter, 'record')} of a run with no result line, written after the first run that has one, as an older js-harness writes it (review the range again with this one)` : '',
+    coverage.invalid > lens.olderWriter ? `${plural(coverage.invalid - lens.olderWriter, 'record')} that are no evidence (an incomplete run, or a record no run line of lens-review names, among them)` : '',
   ].filter(Boolean);
   // The hash of the default branch, which a command names as its base where the oldest uncovered commit is a root.
   const baseHash = uncovered.length ? gitOut(spawn, cwd, ['rev-parse', '--verify', '--quiet', `${branch.ref}^{commit}`]) : null;
-  return { tip, baseRef: branch.ref, baseHash, base: branch.label, codeCommits, uncovered, beyond: coverage.beyond, skips: owedSkips(coverage, codeCommits), note: noteParts.length ? `; ${noteParts.join('; ')} ignored` : '' };
+  return { tip, baseRef: branch.ref, baseHash, base: branch.label, codeCommits, uncovered, beyond: coverage.beyond, skips: owedSkips(coverage, codeCommits), corrections: lensCorrections(coverage.covers, lens.records.filter(lens.admitted)), note: noteParts.length ? `; ${noteParts.join('; ')} ignored` : '' };
 }
 
 /** The skips (`--unavailable`) among `coverage`'s records that still owe a review: a skip is debt only while a code
@@ -129,6 +218,9 @@ export function lensDoor(cwd, head, { spawn = spawnSync, remote = 'origin' } = {
   const state = lensCoverage(cwd, head, { spawn, remote, whereCodexOff: true });
   if (state.unknown) return { pass: false, detail: `lens review: ${state.unknown}`, next: state.next };
   // `review` names the review that pays the refusal, by its base, so the merge door can bind it to the head it judges for.
+  // A correction a lens review owes comes first: its recheck, run from that review's head, also covers what is past it.
+  const owed = correctionRefusal(cwd, state, spawn);
+  if (owed) return { pass: false, detail: `lens review: ${owed.detail}`, next: owed.next, review: owed.review };
   if (state.uncovered.length) {
     const review = { tool: 'lens-review', base: commandBase(state) };
     return { pass: false, detail: `lens review: ${uncoveredDetail(state)}`, next: reviewStep(cwd, { spawn, ...review, tip: state.tip }), review };
@@ -167,10 +259,14 @@ export function checkReviewDebt(cwd, { spawn = spawnSync, remote = 'origin' } = 
     const { base, codeCommits, uncovered, note } = state;
     const skipLines = skipLinesOf(cwd, state, spawn);
     const owing = skipLines.length ? `; ${plural(skipLines.length, 'skip')} still owe${skipLines.length === 1 ? 's' : ''} a review` : '';
-    const off = reviewOffAt(cwd, 'HEAD', spawn) ? '; the Codex review is off here, so the lenses are the one review, and no push is refused for it' : '';
-    if (uncovered.length) return row(`no Claude lens record for ${uncovered.length} of ${plural(codeCommits.length, 'code commit')} since ${base}${owing}${off}${note}`, [...uncoveredLines(state), ...skipLines]);
+    const owed = correctionRefusal(cwd, state, spawn);
+    if (owed) skipLines.unshift(...owed.lines);
+    skipLines.push(...openLines(state));
+    const correction = owed ? `; ${owed.detail}` : '';
+    const off = reviewOffAt(cwd, 'HEAD', spawn) ? '; the Codex review is off here, so the lenses are the one review, and no push is refused for a missing record, only for a correction owed' : '';
+    if (uncovered.length) return row(`no Claude lens record for ${uncovered.length} of ${plural(codeCommits.length, 'code commit')} since ${base}${correction}${owing}${off}${note}`, [...uncoveredLines(state), ...skipLines]);
     const said = codeCommits.length ? `every one of ${plural(codeCommits.length, 'code commit')} since ${base} has a Claude lens record` : `no code commits since ${base} that ask for a lens record`;
-    return row(`${said}${owing}${off}${note}`, skipLines);
+    return row(`${said}${correction}${owing}${off}${note}`, skipLines);
   } catch (err) {
     return row(`cannot tell what waits for a review: reading the commits or their records failed (${err instanceof Error ? err.message : String(err)})`);
   }
@@ -180,13 +276,22 @@ export function checkReviewDebt(cwd, { spawn = spawnSync, remote = 'origin' } = 
  * the record; passes with a line for each skip that covers one. A project with its review switched off asks for none. */
 export function checkLensReviews(cwd, head = 'HEAD', { spawn = spawnSync, remote = 'origin' } = {}) {
   const name = 'lens-review';
-  if (reviewOffAt(cwd, head, spawn)) return { name, pass: true, detail: 'the review is off at the pushed commit, so no lens record is asked for' };
+  if (reviewOffAt(cwd, head, spawn)) {
+    // Off at the tip, nothing uncovered is asked for, but a correction a lens review already owes stays owed until a
+    // recheck pays it, as at the door (F3, the lead, L34 of odd/tasks/review-gate.md); `lens-review` records it off.
+    const state = lensCoverage(cwd, head, { spawn, remote });
+    const owed = state.unknown ? null : correctionRefusal(cwd, state, spawn);
+    if (owed) return { name, pass: false, ...owed };
+    return { name, pass: true, detail: 'the review is off at the pushed commit, so no lens record is asked for' };
+  }
   const state = lensCoverage(cwd, head, { spawn, remote });
   if (state.unknown && remoteHoldsNoBranch(cwd, { spawn, remote })) {
     return { name, pass: true, detail: `${remote} holds no branch yet, so this first push passes with no lens record, as the codex-review row says of its own` };
   }
   if (state.unknown) return { name, pass: false, detail: state.unknown, next: state.next };
   const { base, codeCommits, uncovered, skips, note } = state;
+  const owed = correctionRefusal(cwd, state, spawn);
+  if (owed) return { name, pass: false, ...owed };
   if (uncovered.length) {
     const review = { tool: 'lens-review', base: commandBase(state) };
     return {
@@ -199,5 +304,6 @@ export function checkLensReviews(cwd, head = 'HEAD', { spawn = spawnSync, remote
     };
   }
   const detail = codeCommits.length ? `${plural(codeCommits.length, 'code commit')} since ${base}, all covered by a Claude lens record${note}` : `no code commits since ${base} that ask for a lens record${note}`;
-  return { name, pass: true, detail, ...(skips.length ? { lines: skips.map(skipLine) } : {}) };
+  const lines = [...skips.map(skipLine), ...openLines(state)];
+  return { name, pass: true, detail, ...(lines.length ? { lines } : {}) };
 }

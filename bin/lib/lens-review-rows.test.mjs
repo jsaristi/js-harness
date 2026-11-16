@@ -5,11 +5,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { checkLensReviews, checkReviewDebt, lensDoor, owedSkipLines } from './lens-review-rows.mjs';
-import { commandStep } from './next-step.mjs';
+import { commandStep, firstStep } from './next-step.mjs';
 import { lensCandidate } from './lens-candidate.mjs';
-import { appendLensReview, LENS_REVIEW_SCHEMA, startLensRun } from './lens-reviews.mjs';
+import { appendLensReview, endLensRun, LENS_REVIEW_SCHEMA, startLensRun } from './lens-reviews.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, withSubjectHash } from './codex-reviews.mjs';
 import { withoutAutoMaintenance } from './git-fixture.testkit.mjs';
+import { withRunLine } from './codex-records.testkit.mjs';
 
 // The project turns the lens review on in the first commit, so every code commit after it asks for a lens record.
 const LENS_ON = '{ "functions": { "lensReview": "on" } }\n';
@@ -26,11 +27,13 @@ const commit = (file, text, message) => {
   git('commit', '-q', '-m', message);
   return git('rev-parse', 'HEAD');
 };
-/** A lens record of `base..head` as `lens-review` writes it, its run line first, with `over` in place of its fields. */
+/** A lens record of `base..head` as `lens-review` writes it, its run line first, with `over` in place of its fields;
+ * returns its run id. */
 const record = (base, head, over = {}) => {
   const subjectHash = over.subjectHash ?? lensCandidate(dir, { base, head }).subjectHash;
   const run = startLensRun(dir, { base, head, subjectHash });
   appendLensReview(dir, { schema: LENS_REVIEW_SCHEMA, base, head, subjectHash, run, reviewedAt: new Date().toISOString(), outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: [] }], ...over });
+  return run;
 };
 const row = () => checkLensReviews(dir, 'HEAD');
 
@@ -116,6 +119,20 @@ test('a record written while the lenses read renames off still covers its range,
   assert.equal(row().pass, true, row().detail);
 });
 
+// The lead on L71 D (PR 896): a record an older js-harness writes after the first run with a result line is refused,
+// and the push says that is why, not that the run was incomplete or named by no line.
+test('V2: a record whose run has no result line, written after the first that has one, is said as an older writer did it', () => {
+  const { subjectHash } = lensCandidate(dir, { base, head });
+  const now = record(base, head);
+  endLensRun(dir, { id: now, base, head, subjectHash, outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: [] }] });
+  assert.equal(row().pass, true, row().detail);
+  const later = commit('c.mjs', 'export const c = 1;\n', 'feat: c');
+  record(head, later);
+  const said = row();
+  assert.equal(said.pass, false, said.detail);
+  assert.match(said.detail, /1 record of a run with no result line, written after the first run that has one, as an older js-harness writes it/);
+});
+
 // Row 3 of docs/proposals/gentle-ai-reverse-engineering.md, section 13.3: provenance is what refuses a well-shaped forged
 // record, one a session appended by hand, since it names no run line `lens-review` wrote first.
 test('a well-shaped record that names no run line lens-review wrote is refused by the push, and said', () => {
@@ -168,7 +185,7 @@ test('a Codex record gains the subject hash of its range, the same identity a le
 });
 
 const debt = () => checkReviewDebt(dir);
-const codexRecord = (over) => appendCodexReview(dir, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: new Date().toISOString(), ...over });
+const codexRecord = (over) => appendCodexReview(dir, withRunLine(dir, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: new Date().toISOString(), ...over }));
 
 test('the review row informs: a code commit with no lens record is named with the command, and nothing fails', () => {
   const said = debt();
@@ -192,7 +209,7 @@ test('the review row lists the skips of both reviews that still owe one, and dro
 
 test('with the Codex review off, the lenses are the one review: their debt is still said, and no push is refused for it (S9)', () => {
   withoutAutoMaintenance(() => commit('harness.json', '{ "functions": { "codexReview": "off", "lensReview": "on" } }\n', 'chore: codex review off'));
-  assert.equal(debt().detail, 'no Claude lens record for 2 of 2 code commits since origin/main; the Codex review is off here, so the lenses are the one review, and no push is refused for it');
+  assert.equal(debt().detail, 'no Claude lens record for 2 of 2 code commits since origin/main; the Codex review is off here, so the lenses are the one review, and no push is refused for a missing record, only for a correction owed');
   assert.equal(row().pass, true);
 });
 
@@ -285,4 +302,123 @@ test('a code commit asks for a lens record only where its own tree turns the len
   const on = row();
   assert.equal(on.pass, false);
   assert.deepEqual([on.detail.split(' since ')[0], on.lines[0].replace(/^\w+ /, '')], ['1 of 1 code commit', 'feat: four, the lens review on']);
+});
+
+// B2-2 of the full audit of 2026-11-14: "lens findings never block". A BLOCKER or CRITICAL finding of an admitted lens
+// review is owed until an admitted recheck of that run, by that lens, marks it fixed, as a Codex correction is owed.
+const finding = (severity, claim = 'the gate passes unreviewed code') => ({ location: 'a.mjs:1', severity, claim, evidence_class: 'deterministic', causal_disposition: 'introduced', proof_refs: ['a test'] });
+const found = (lens, findings) => ({ results: [{ lens, outcome: 'complete', findings }] });
+
+test('B2-2: a CRITICAL lens finding refuses the push, the door and is said by the review row, with the recheck as the step', () => {
+  record(base, head, found('risk', [finding('CRITICAL')]));
+  const said = row();
+  assert.equal(said.pass, false);
+  assert.match(said.detail, /the lens review that ended at [0-9a-f]{7} owes a correction: 1 BLOCKER or CRITICAL finding open, not rechecked/);
+  assert.match(said.lines.join('\n'), /risk CRITICAL a\.mjs:1 the gate passes unreviewed code/);
+  assert.deepEqual(said.next, firstStep('fix the open findings above in code and commit the fix'));
+  const door = lensDoor(dir, 'HEAD');
+  assert.equal(door.pass, false);
+  assert.match(door.detail, /^lens review: the lens review that ended at [0-9a-f]{7} owes a correction/);
+  assert.deepEqual(door.review, { tool: 'lens-review', base: head.slice(0, 7) });
+  const debt = checkReviewDebt(dir);
+  assert.equal(debt.pass, true);
+  assert.match(debt.detail, /owes a correction/);
+});
+
+test('B2-2: WARNING and SUGGESTION findings owe nothing', () => {
+  record(base, head, found('risk', [finding('WARNING'), finding('SUGGESTION')]));
+  assert.equal(row().pass, true);
+  assert.equal(lensDoor(dir, 'HEAD'), null);
+});
+
+test('B2-2: a fresh review over the fix, after a document, does not pay the correction; a recheck of that run does', () => {
+  const run = record(base, head, found('risk', [finding('WARNING', 'a smaller edge'), finding('BLOCKER')]));
+  commit('notes.md', 'the fix is next\n', 'docs: plan the fix');
+  const fix = commit('a.mjs', 'export const a = 3;\n', 'fix: the blocker');
+  record(git('rev-parse', `${fix}^`), fix);
+  const fresh = row();
+  assert.equal(fresh.pass, false, 'a review that is no recheck of that run leaves the finding owed');
+  assert.match(fresh.detail, /owes a correction: 1 BLOCKER or CRITICAL finding open/);
+  assert.deepEqual(fresh.next, commandStep(`js-harness lens-review --base ${head.slice(0, 7)} --at ${fix.slice(0, 12)} --lenses <lens,...> --reason "<what it touched and how>"`), 'the recheck runs from the head that owes, past the document');
+  record(head, fix, { recheckOf: run, ...found('risk', []) });
+  assert.equal(row().pass, true);
+  assert.equal(lensDoor(dir, 'HEAD'), null);
+});
+
+test('B2-2: a recheck that leaves the finding open passes with a warning that names it', () => {
+  const run = record(base, head, found('risk', [finding('CRITICAL')]));
+  const fix = commit('a.mjs', 'export const a = 3;\n', 'fix: try');
+  record(head, fix, { recheckOf: run, ...found('risk', [finding('CRITICAL', '[not fixed] 1 still passes')]) });
+  const said = row();
+  assert.equal(said.pass, true);
+  assert.match(said.lines.join('\n'), /warning: the lens recheck that ended at [0-9a-f]{7} left 1 BLOCKER or CRITICAL or blocking finding open/);
+  assert.equal(lensDoor(dir, 'HEAD'), null);
+});
+
+test('B2-2: a recheck by another lens, or one no run line names, pays nothing', () => {
+  const run = record(base, head, found('risk', [finding('CRITICAL')]));
+  const fix = commit('a.mjs', 'export const a = 3;\n', 'fix: the critical');
+  record(head, fix, { recheckOf: run, ...found('reliability', []) });
+  assert.equal(row().pass, false, 'a recheck that did not pick risk pays nothing for it');
+  const { subjectHash } = lensCandidate(dir, { base: head, head: fix });
+  appendLensReview(dir, { schema: LENS_REVIEW_SCHEMA, base: head, head: fix, subjectHash, run: 'e'.repeat(36), reviewedAt: new Date().toISOString(), outcome: 'reviewed', recheckOf: run, ...found('risk', []) });
+  assert.equal(row().pass, false, 'a forged recheck pays nothing');
+});
+
+// Codex and the lenses on S6: each lens of a record is read alone.
+test('B2-2: in a recheck, a lens that rechecks nothing reviews afresh, and its CRITICAL is owed', () => {
+  const run = record(base, head, found('risk', [finding('CRITICAL')]));
+  const fix = commit('a.mjs', 'export const a = 3;\n', 'fix: the critical');
+  record(head, fix, { recheckOf: run, rechecked: { risk: [run] }, results: [{ lens: 'risk', outcome: 'complete', findings: [] }, { lens: 'reliability', outcome: 'complete', findings: [finding('CRITICAL', 'a new hole')] }] });
+  const said = row();
+  assert.equal(said.pass, false);
+  assert.match(said.lines.join('\n'), /reliability CRITICAL a\.mjs:1 a new hole/);
+});
+
+test('B2-2: a recheck of WARNINGs that finds a CRITICAL owes it', () => {
+  const run = record(base, head, found('risk', [finding('WARNING', 'an edge')]));
+  const fix = commit('a.mjs', 'export const a = 3;\n', 'fix: the edge');
+  record(head, fix, { recheckOf: run, rechecked: { risk: [run] }, ...found('risk', [finding('CRITICAL', '[blocks] a regression')]) });
+  assert.equal(row().pass, false);
+});
+
+test('B2-2: two reviews that end at one head are both paid by the one recheck that names both runs', () => {
+  const first = record(base, head, found('risk', [finding('CRITICAL')]));
+  const second = record(base, head, { results: [{ lens: 'risk', outcome: 'complete', findings: [finding('BLOCKER', 'another')] }, { lens: 'reliability', outcome: 'complete', findings: [finding('CRITICAL', 'a third')] }] });
+  const fix = commit('a.mjs', 'export const a = 3;\n', 'fix: all three');
+  record(head, fix, { recheckOf: second, rechecked: { risk: [first] }, ...found('risk', []) });
+  assert.equal(row().pass, false, 'the second run is owed while no recheck names it');
+  record(head, fix, { recheckOf: second, rechecked: { risk: [first, second], reliability: [second] }, results: [{ lens: 'risk', outcome: 'complete', findings: [] }, { lens: 'reliability', outcome: 'complete', findings: [] }] });
+  assert.equal(row().pass, true);
+});
+
+test('B2-2: a recheck that fixes the finding but marks a new one blocking passes with a warning that names it', () => {
+  const run = record(base, head, found('risk', [finding('CRITICAL')]));
+  const fix = commit('a.mjs', 'export const a = 3;\n', 'fix: the critical');
+  record(head, fix, { recheckOf: run, rechecked: { risk: [run] }, ...found('risk', [finding('WARNING', '[blocks] the fix exposes a token')]) });
+  const said = row();
+  assert.equal(said.pass, true);
+  assert.match(said.lines.join('\n'), /left 1 BLOCKER or CRITICAL or blocking finding open/);
+  assert.match(said.lines.join('\n'), /risk WARNING a\.mjs:1 \[blocks\] the fix exposes a token/);
+});
+
+// F3 (the opus verifier on PR 896; the lead, L34 of odd/tasks/review-gate.md): turning the Codex review off at the tip
+// asks no lens record of what is uncovered, as before, but does not drop a correction a lens review already owes,
+// as the door does not; `lens-review` records the recheck with the review off.
+const CODEX_OFF = '{ "functions": { "codexReview": "off", "lensReview": "on" } }\n';
+
+test('F3: turning the Codex review off at the tip keeps the lens correction owed until a recheck pays it', () => {
+  const run = record(base, head, found('risk', [finding('CRITICAL')]));
+  let off;
+  withoutAutoMaintenance(() => {
+    fs.writeFileSync(path.join(dir, 'harness.json'), CODEX_OFF);
+    off = commit('a.mjs', 'export const a = 3;\n', 'fix: the finding, with the Codex review off');
+  });
+  const said = row();
+  assert.equal(said.pass, false, said.detail);
+  assert.match(said.detail, /the lens review that ended at [0-9a-f]{7} owes a correction: 1 BLOCKER or CRITICAL finding open, not rechecked/);
+  record(head, off, { recheckOf: run, rechecked: { risk: [run] }, ...found('risk', []) });
+  const paid = row();
+  assert.equal(paid.pass, true, paid.detail);
+  assert.equal(paid.detail, 'the review is off at the pushed commit, so no lens record is asked for');
 });

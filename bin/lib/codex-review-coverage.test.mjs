@@ -7,6 +7,7 @@ import path from 'node:path';
 import { baseLeftOut, COMMITS_UNREAD, MARKS_UNREAD, mergeStart, notReviews, rangeStart, reviewCoverage, reviewStart } from './codex-review-coverage.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW } from './codex-reviews.mjs';
 import { repoTemplate } from './git-fixture.testkit.mjs';
+import { withRunLine } from './codex-records.testkit.mjs';
 
 // Real git in every test, isolated from the host's config. What `check` says of the records over the range
 // of a push is in `bin/check-codex-reviews.test.mjs`, which is the net of the definition itself; here are
@@ -58,7 +59,7 @@ function makeRepo() {
 }
 
 function record(root, base, head, extra = {}) {
-  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-10-08T00:00:00.000Z', outcome: 'reviewed', ...extra });
+  appendCodexReview(root, withRunLine(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-10-08T00:00:00.000Z', outcome: 'reviewed', ...extra }));
 }
 
 /** A `spawn` that runs git for real and keeps, in `started`, the git command of each process it starts. */
@@ -254,8 +255,10 @@ test('the records that cover a code commit and are no review are told apart from
   // A skip of the commit of the document alone covers no code commit, and is not counted.
   record(root, one, doc, { outcome: 'unavailable', reason: 'nothing but words' });
   const coverage = reviewCoverage(root, { from: first, tip: three });
-  assert.deepEqual(coverage.uncovered, []);
-  assert.deepEqual(notReviews(coverage).map((rec) => [rec.outcome, rec.head]), [['unavailable', two], [NOTHING_TO_REVIEW, three]]);
+  // The range with nothing to review holds a code commit, so git refuses the record (S5, JH 207): its commit is not
+  // covered, and the skip is the one record that covers code without being a review.
+  assert.deepEqual(coverage.uncovered.map((commit) => commit.id), [three]);
+  assert.deepEqual(notReviews(coverage).map((rec) => [rec.outcome, rec.head]), [['unavailable', two]]);
 });
 
 test('a coverage that cannot be told says what could not be read, and never reads as nothing uncovered', () => {
@@ -276,7 +279,9 @@ test('a caller that knows where the repository is hands it on: the coverage is t
   assert.equal(asked.started.filter((command) => command === 'rev-parse').length, 2, 'where the top is, and where the git folder is');
   const where = { top: root, commonGitDir: path.join(root, '.git') };
   const told = countingSpawn();
-  assert.deepEqual(reviewCoverage(root, { from: first, tip: three, spawn: told.spawn, where }), whole);
+  // `where` says where the records were read, as given or as git said it (V3): the rest is the same coverage.
+  const bare = ({ where: _read, ...rest }) => rest;
+  assert.deepEqual(bare(reviewCoverage(root, { from: first, tip: three, spawn: told.spawn, where })), bare(whole));
   // Every other question is put as before, in its order.
   assert.deepEqual(told.started, asked.started.filter((command) => command !== 'rev-parse'));
   // A caller that says there is no git folder has no record read, and is asked about by nobody.
@@ -597,4 +602,52 @@ test('a spawn that fails every merge-base call gives no base left out, and throw
   };
   assert.equal(baseLeftOut(root, { from: one, spawn: failing }), null);
   assert.equal(baseLeftOut(root, { from: one, spawn: throwing }), null);
+});
+
+test('C-3: a record of nothing to review whose base moved past the fork point is admitted by the range the review read', () => {
+  // Codex on S5: `codex-review` reviews from the merge base when the base it was given has moved on, and keeps the
+  // given base in the record. The branch's commit and its revert change nothing from there, though the two ends differ.
+  const { root, first } = makeRepo();
+  git(root, 'checkout', '-q', '-b', 'feat');
+  const added = commit(root, 'x.js', 'x', 'feat: x');
+  git(root, 'revert', '--no-edit', 'HEAD');
+  const reverted = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '-q', 'main');
+  const moved = commit(root, 'c.js', 'c', 'feat: c on main');
+  record(root, moved, reverted, { outcome: NOTHING_TO_REVIEW, reason: 'the range changes no file' });
+  const coverage = reviewCoverage(root, { from: first, tip: reverted });
+  assert.deepEqual(ids(coverage.uncovered), [], `the commit ${added.slice(0, 7)} and its revert are covered`);
+});
+
+test('C-3: a record of nothing to review whose head lies outside the range asks git nothing', () => {
+  // The lens reliability on S5: admission asked git of every such record ever written, and history grows.
+  const { root, first, one, three } = fourCommits();
+  record(root, first, one, { outcome: NOTHING_TO_REVIEW, reason: 'the range changes no file' });
+  const { spawn, started } = countingSpawn();
+  reviewCoverage(root, { from: one, tip: three, spawn });
+  assert.equal(started.filter((name) => name === 'diff').length, 0, started.join(' '));
+});
+
+test('C-3: a forged record of nothing to review whose head lies past the tip covers nothing', () => {
+  // The lens reliability on S5's fix: such a record is taken by its shape, so what keeps it out is that a record of
+  // nothing to review covers only where the range holds its head (`onlyWhole`). No run line names this one.
+  const { root, first, one, two, three } = fourCommits();
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base: first, head: three, reviewedAt: '2026-10-08T00:00:00.000Z', outcome: NOTHING_TO_REVIEW, reason: 'forged' });
+  const coverage = reviewCoverage(root, { from: first, tip: two });
+  assert.deepEqual(ids(coverage.uncovered), [two, one]);
+  assert.equal(coverage.covers.length, 0);
+});
+
+test('F1: a record that names the line of a run that did not review covers nothing', async () => {
+  // The opus verifier on PR 896: a failed, timed-out or not-inspected run writes a line with its range, and a
+  // hand-written reviewed record naming it passed. The line that states the range must say reviewed.
+  const { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA } = await import('./codex-review-runs.mjs');
+  for (const outcome of ['failed', 'timed-out', 'not-inspected']) {
+    const { root, first, three } = fourCommits();
+    appendCodexReviewRun(root, { schema: CODEX_REVIEW_RUN_SCHEMA, id: `run-${outcome}`, base: first, from: first, head: three, outcome });
+    appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base: first, head: three, reviewedAt: '2026-11-16T00:00:00.000Z', outcome: 'reviewed', run: `run-${outcome}` });
+    const coverage = reviewCoverage(root, { from: first, tip: three });
+    assert.equal(coverage.covers.length, 0, outcome);
+    assert.equal(coverage.uncovered.length, 3, outcome);
+  }
 });

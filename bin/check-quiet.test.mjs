@@ -39,7 +39,8 @@ test('a gate that passes prints one line, the PASS of check with the count of it
     const { code, lines } = await run(['--cwd', dir]);
     assert.equal(code, 0);
     assert.equal(lines.length, 1, lines.join('\n'));
-    assert.match(lines[0], /^PASS {2}check {2}\d+ rows passed(, \d+ of them INFO)?; --verbose prints each; sensors: none ran, /);
+    // The Codex debt rides the line too (G-2); out of a repository it says it cannot tell.
+    assert.match(lines[0], /^PASS {2}check {2}\d+ rows passed(, \d+ of them INFO)?; --verbose prints each; codex-review: cannot tell [^;]+; sensors: none ran, /);
     // The inner check runs no test, lint or typecheck: its PASS says so, so a variable left set is never read as a gate.
     assert.match(lines[0], /; sensors: none ran, an inner check \(JS_HARNESS_CHECK_INNER=1\)$/);
   } finally {
@@ -98,6 +99,17 @@ test('the one line carries the verdict of the review row, which a commit shows s
   assert.equal(passLine(rows.slice(0, 1)), 'PASS  check  1 row passed; --verbose prints each');
   const inner = { name: 'inner', pass: true, info: true, inner: true, detail: 'none ran, an inner check (JS_HARNESS_CHECK_INNER=1)' };
   assert.equal(passLine([rows[0], inner]), 'PASS  check  2 rows passed, 1 of them INFO; --verbose prints each; sensors: none ran, an inner check (JS_HARNESS_CHECK_INNER=1)');
+});
+
+// G-2 of the full audit of 2026-11-14: "`check`'s quiet line hides the Codex debt; make it show both debts".
+test('G-2: the one line carries the Codex review debt beside the lens one', () => {
+  const rows = [
+    { name: 'budget', pass: true, detail: '10 estimated tokens (budget 1500)' },
+    { name: 'review', pass: true, info: true, detail: 'every one of 2 code commits since origin/main has a Claude lens record' },
+    { name: 'codex-review', pass: true, info: true, detail: '1 of 2 code commits since origin/main has no Codex review record' },
+  ];
+  assert.equal(passLine(rows), 'PASS  check  3 rows passed, 2 of them INFO; --verbose prints each; review: every one of 2 code commits since origin/main has a Claude lens record; codex-review: 1 of 2 code commits since origin/main has no Codex review record');
+  assert.equal(passLine([rows[0], rows[2]]), 'PASS  check  2 rows passed, 1 of them INFO; --verbose prints each; codex-review: 1 of 2 code commits since origin/main has no Codex review record');
 });
 
 test('the merge door still prints its rows when it passes, since merge-queue reads its INFO rows', async () => {

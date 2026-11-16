@@ -31,7 +31,7 @@
 // first, and reviews the new work from the recheck's head.
 
 import { isDocument } from './codex-review-scope.mjs';
-import { isValidCodexReview } from './codex-reviews.mjs';
+import { isValidCodexReview, NOTHING_TO_REVIEW } from './codex-reviews.mjs';
 import { EXCUSED_REFUSED_TESTS } from './no-test-outside-turn.mjs';
 import { claudeHome } from './model-home.mjs';
 
@@ -100,8 +100,12 @@ const owesCorrection = (answer) =>
 
 /** Where the findings a range may recheck ended: the head of the nearest `reviewed` record among the
  * commits behind `from` (`back`, `from` first, newest first), when nothing but documents changed between
- * that head and `from` (`changedBetween(head, from)` gives the paths, or `null` when git could not say).
- * Otherwise `from` itself. */
+ * that head and `from` (`changedBetween(head, from)` gives the paths, or `null` when git could not say), or
+ * when what did change lies in ranges whose records are no review (`throughNoReview`). Otherwise `from` itself.
+ *
+ * A record that is no review, an explicit skip or a range with nothing to review, pays no correction: a skip over
+ * code above a review that owes one left it owed, and the next review is its recheck (B1-2 of the full audit,
+ * 2026-11-14), as a commit and its revert leave it owed (Y1). */
 export function recheckAnchor({ from, records, back, changedBetween }) {
   const at = new Map(back.map((id, index) => [id, index]));
   let nearest = null;
@@ -110,8 +114,32 @@ export function recheckAnchor({ from, records, back, changedBetween }) {
     if (nearest === null || at.get(rec.head) < at.get(nearest)) nearest = rec.head;
   }
   if (nearest === null || nearest === from) return from;
-  const changed = changedBetween(nearest, from);
-  return changed !== null && changed.every(isDocument) ? nearest : from;
+  const documentsOnly = (older, newer) => older === newer || (changedBetween(older, newer)?.every(isDocument) ?? false);
+  if (documentsOnly(nearest, from)) return nearest;
+  return throughNoReview({ from, nearest, records, at, documentsOnly }) ? nearest : from;
+}
+
+/** Whether the line from `nearest` up to `from` (`at`, each commit's place behind `from`) is walked by records that
+ * are no review alone, with documents between them: from `from` down, a valid skip or range with nothing to review
+ * whose head is `from` or below it past documents only, and whose base lies on the line, takes the walk to its base,
+ * until `nearest` is reached past documents only, or passed: a record whose base is older than `nearest` spans the
+ * reviewed head and pays none of what it owes either. A stretch no such record covers stops it. */
+function throughNoReview({ from, nearest, records, at, documentsOnly }) {
+  const limit = at.get(nearest);
+  const noReviews = records.filter((rec) => isValidCodexReview(rec) && (rec.outcome === 'unavailable' || rec.outcome === NOTHING_TO_REVIEW) && at.has(rec.head) && at.has(rec.base) && at.get(rec.head) < at.get(rec.base));
+  // `recheckAnchor` already asked whether `nearest..from` changed documents alone: git is asked nothing more where no
+  // such record lies on the line, and each step asks it only of where the walk has moved to.
+  let cur = from;
+  for (let steps = 0; steps < noReviews.length; steps += 1) {
+    const place = at.get(cur);
+    const next = noReviews
+      .filter((rec) => at.get(rec.head) >= place && at.get(rec.base) > place && documentsOnly(rec.head, cur))
+      .reduce((oldest, rec) => (oldest === null || at.get(rec.base) > at.get(oldest.base) ? rec : oldest), null);
+    if (next === null) return false;
+    cur = next.base;
+    if (at.get(cur) >= limit || documentsOnly(nearest, cur)) return true;
+  }
+  return false;
 }
 
 /** What a review of a range whose findings would have ended at `from` (`recheckAnchor`) is, from the

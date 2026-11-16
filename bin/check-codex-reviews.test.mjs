@@ -17,6 +17,7 @@ import { lensCandidate } from './lib/lens-candidate.mjs';
 import { reviewCoverage } from './lib/codex-review-coverage.mjs';
 import { appendLensReview, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
 import { commandStep, firstStep, noStep } from './lib/next-step.mjs';
+import { giveRange } from './lib/codex-records.testkit.mjs';
 
 // Real git in every test, isolated from the host's config like project.test.mjs does.
 let configDir;
@@ -147,13 +148,21 @@ function feature(root) {
   git(root, 'checkout', '-b', 'feature');
 }
 
+let runCount = 0;
 function record(root, base, head, extra = {}) {
+  // A review is evidence only through the run line that names it (S5, JH 207): a record of a review this file writes
+  // has one, as `codex-review` writes it, unless the test names its own run or writes the record bare (`forged`).
+  const reviewed = (extra.outcome ?? 'reviewed') === 'reviewed';
+  const own = reviewed && extra.run === undefined && extra.runs === undefined ? { run: `run-${base.slice(0, 7)}-${head.slice(0, 7)}-${(runCount += 1)}` } : {};
+  if (own.run) run(root, { id: own.run, base, from: base, head });
+  else if (reviewed && typeof extra.run === 'string') giveRange(root, extra.run, { base, head, recheckOf: extra.recheckOf }, { where: whereOf(root) });
   appendCodexReview(root, {
     schema: CODEX_REVIEW_SCHEMA,
     base,
     head,
     reviewedAt: '2026-09-29T00:00:00.000Z',
     outcome: 'reviewed',
+    ...own,
     ...extra,
   });
   // A push asks for the Claude lenses' record too (odd/tasks/f8-s1-reviews.md, T4): a range Codex reviewed here was
@@ -164,6 +173,55 @@ function record(root, base, head, extra = {}) {
 }
 
 const short = (root, rev) => git(root, 'rev-parse', '--short', rev);
+
+// S5 (C-3 + B2-12, JH 207): a record of a review is evidence only where a run line of the log names it, as the lens
+// records are (`admittedLensReviews`). His answers: question 293, "Exigirla a todos"; question 299, "Seguir con S5".
+const forged = (root, base, head, extra = {}) => appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-10-05T22:40:07.430Z', outcome: 'reviewed', ...extra });
+const twoCode = () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  commit(root, 'b.js', 'two', 'feat: two');
+  return { root, base, head: commit(root, 'c.js', 'three', 'feat: three') };
+};
+
+test('S5: a record of a review that names no run line covers nothing, as the two of feat/codex-parity (5f772ede, ef0e71f1) would not', () => {
+  const { root, base, head } = twoCode();
+  forged(root, base, head);
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /^2 of 2 code commits since origin\/main have no Codex review record/);
+});
+
+test('S5: a record whose run line is of another range, or is missing from the log, covers nothing', () => {
+  const { root, base, head } = twoCode();
+  run(root, { id: 'other', base, from: base, head: base });
+  forged(root, base, head, { run: 'other' });
+  forged(root, base, head, { run: 'missing' });
+  forged(root, base, head, { runs: ['other', 'missing'] });
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, false);
+});
+
+test('S5: a run line is claimed by the first record that names it; a second record naming it covers nothing', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const first = commit(root, 'b.js', 'two', 'feat: two');
+  run(root, { id: 'r1', base, from: base, head: first });
+  forged(root, base, first, { run: 'r1' });
+  const second = commit(root, 'c.js', 'three', 'feat: three');
+  forged(root, first, second, { run: 'r1' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /^1 of 2 code commits/);
+  // The real run of the second range covers it.
+  record(root, first, second);
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, true);
+});
+
+test('S5: a record of nothing to review covers only a range that changes no file a review reads, as git says', () => {
+  const { root, base, head } = twoCode();
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-11-15T00:00:00.000Z', outcome: NOTHING_TO_REVIEW, reason: 'said by hand' });
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, false, 'code in the range');
+});
 
 test('every code commit inside a recorded range passes, and the detail counts them', () => {
   const { root, base } = makeRepo();
@@ -230,6 +288,90 @@ test('a skip ending at a later document commit does not clear the correction the
   assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
 });
 
+/** Y1, shape C1f (JH 199's narrow verifier on PR 883): a review that owes a correction, then a commit and its revert
+ * above it, which the default run records as a range with nothing to review. */
+function owedUnderNothing() {
+  const { root, base, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  commit(root, 'c.js', 'the gap', 'feat: the gap');
+  git(root, 'revert', '--no-edit', 'HEAD');
+  const back = git(root, 'rev-parse', 'HEAD');
+  record(root, head, back, { outcome: NOTHING_TO_REVIEW, reason: 'the range changes no file' });
+  return { root, base, head, back };
+}
+
+test('Y1: a commit and its revert above a review that owes a correction, recorded as nothing to review, pay none of it: the push row refuses', () => {
+  const { root, head } = owedUnderNothing();
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+  assert.ok(row.lines.join('\n').includes(priorLine(finding)), row.lines.join('\n'));
+});
+
+test('S5: a record with no run line above a review that owes a correction neither covers its commit nor pays the correction', () => {
+  // The advisor on S5: the correction is read from the records that cover (`correctionOwed`), so a bare record of a
+  // review over the fix's place is no review of it, and the push still asks for the recheck from the owing head.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const fix = commit(root, 'c.js', 'the fix', 'fix: the finding');
+  forged(root, head, fix);
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /1 of 2 code commits since origin\/main have no Codex review record/);
+  // The review it asks for starts at the owing head, so it is the recheck of those findings (`recheckState`).
+  assert.equal(row.review.base, `${short(root, fix)}^`);
+  assert.equal(git(root, 'rev-parse', `${fix}^`), head);
+});
+
+test('Y1: check --push itself refuses that push, on the Codex row', async () => {
+  const { root, head } = owedUnderNothing();
+  const { code, output } = await runCheck(['--push', '--cwd', root, '--home', tmp('js-harness-check-push-home-')]);
+  assert.equal(code, 1, output);
+  assert.match(output, new RegExp(`FAIL {2}codex-review {2}the Codex review that ended at ${short(root, head)} owes a correction`), output);
+});
+
+test('Y1: a document commit above that revert changes nothing: the push row still refuses', () => {
+  const { root, head } = owedUnderNothing();
+  commit(root, 'docs/NOTES.md', 'notes', 'docs: notes');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction`));
+});
+
+test('Y1: a commit and its revert above a review that owed nothing pass, as they did', () => {
+  const { root, base, head } = reviewedWith({ verdict: 'correct', findings: [] });
+  commit(root, 'c.js', 'the gap', 'feat: the gap');
+  git(root, 'revert', '--no-edit', 'HEAD');
+  record(root, head, git(root, 'rev-parse', 'HEAD'), { outcome: NOTHING_TO_REVIEW, reason: 'the range changes no file' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  void base;
+});
+
+test('B1-2: a skip over a later code commit pays no correction: the push row still refuses the review that owes it', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const later = commit(root, 'c.js', 'three', 'feat: three');
+  record(root, head, later, { outcome: 'unavailable', reason: 'codex was down' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('B1-2: check --push itself refuses that push', async () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  record(root, head, commit(root, 'c.js', 'three', 'feat: three'), { outcome: 'unavailable', reason: 'codex was down' });
+  const { code, output } = await runCheck(['--push', '--cwd', root, '--home', tmp('js-harness-check-push-home-')]);
+  assert.equal(code, 1, output);
+  assert.match(output, new RegExp(`FAIL {2}codex-review {2}the Codex review that ended at ${short(root, head)} owes a correction`), output);
+});
+
+test('B1-2: a skip after a review that owed nothing passes, listed as a skip', () => {
+  const { root, head } = reviewedWith({ verdict: 'correct', findings: [] });
+  const later = commit(root, 'c.js', 'three', 'feat: three');
+  record(root, head, later, { outcome: 'unavailable', reason: 'codex was down' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  assert.ok(row.lines.some((line) => line.startsWith('unavailable ')), row.lines.join('\n'));
+});
+
 test('a correction its recheck found fixed passes', () => {
   const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
   const fix = commit(root, 'b.js', 'two, fixed', 'fix: read the right field');
@@ -289,7 +431,7 @@ test('a recheck whose counts were not kept passes with the warning too', () => {
   assert.match(row.lines.join('\n'), /warning: the Codex recheck that ended at .* left findings open \(its counts were not kept\)/);
 });
 
-test('a review that found nothing, or a branch with no run log, passes as before', () => {
+test('a review that found nothing passes as before; a branch with no run log has no review, since nothing names one (S5)', () => {
   const { root } = reviewedWith({ verdict: 'correct', findings: [] });
   assert.equal(checkCodexReviews(root, 'HEAD').pass, true);
   const { root: bare, base } = makeRepo();
@@ -297,8 +439,8 @@ test('a review that found nothing, or a branch with no run log, passes as before
   const head = commit(bare, 'b.js', 'two', 'feat: two');
   record(bare, base, head, { run: 'run-1' });
   const row = checkCodexReviews(bare, 'HEAD');
-  assert.equal(row.pass, true, row.detail);
-  assert.match(row.detail, /1 code commit since origin.main, all covered by a Codex review record/);
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /^1 of 1 code commit since origin.main have no Codex review record/);
 });
 
 test('a push of a commit that is not HEAD names no command, which HEAD would not be bound to: the step is to check it out', () => {
@@ -902,6 +1044,47 @@ test('a review that left out files the project marks covers its commits only whe
   git(root, 'checkout', '--quiet', 'feature');
   commit(root, 'README.md', 'words', 'docs: a note');
   assert.equal(checkCodexReviews(root, 'HEAD').pass, true);
+});
+
+test('B1-1: a mark taken off after the review that left the file out leaves that file\'s commit uncovered, since nobody read it', () => {
+  // The full audit's B1-1: the commit that adds a file is reviewed with the file marked, and a later commit takes the
+  // mark off. At the tip the file is code, its commit lies inside the first record's range, and the review of the
+  // second commit read only the attributes file: nobody read the code.
+  const { root, base } = makeRepo();
+  feature(root);
+  const app = commit(root, 'src/app.js', 'code', 'feat: the application');
+  const marks = commit(root, '.gitattributes', 'src/** -codex-review\n', 'chore: mark the application as left out');
+  record(root, base, marks, { leftOut: leftOutOf(0, 1) });
+  const unmark = commit(root, '.gitattributes', '# nothing is left out\n', 'chore: take the mark off');
+  record(root, marks, unmark);
+  const row = checkCodexReviews(root, unmark);
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /^1 of 3 code commits since origin\/main have no Codex review record/);
+  assert.ok(row.lines[0].startsWith(short(root, app)), row.lines.join('\n'));
+  // A file the mark still leaves out at the tip is no code there, so the record covers as before.
+  const kept = commit(root, '.gitattributes', 'src/** -codex-review\n# kept\n', 'chore: keep the mark');
+  record(root, unmark, kept);
+  git(root, 'reset', '--quiet', '--hard', marks);
+  const still = commit(root, 'README.md', 'words', 'docs: a note');
+  assert.equal(checkCodexReviews(root, still).pass, true, 'the mark still on at the tip');
+});
+
+test('B1-1: a file of code moved into a marked path was read by its review, so taking that mark off later leaves its commit covered', () => {
+  // Codex on S3: a rename whose old name the review reads is read whole (`leftOutOfFiles`), mark or no mark on the
+  // new name, so what the record left out is read from its range as the review read it, never from the marks alone.
+  const { root, base } = makeRepo();
+  feature(root);
+  commit(root, '.gitattributes', 'lib/** -codex-review\ndata/** -codex-review\n', 'chore: mark lib and data');
+  const app = commit(root, 'src/app.js', Array.from({ length: 20 }, (_, n) => `export const line${n} = ${n};\n`).join(''), 'feat: the application');
+  record(root, base, app);
+  fs.mkdirSync(path.join(root, 'lib'), { recursive: true });
+  fs.renameSync(path.join(root, 'src', 'app.js'), path.join(root, 'lib', 'app.js'));
+  const move = commit(root, 'data/x.json', '{}\n', 'refactor: move the application into lib, with some data');
+  record(root, app, move, { leftOut: leftOutOf(0, 1) });
+  const unmark = commit(root, '.gitattributes', 'data/** -codex-review\n', 'chore: take the mark off lib');
+  record(root, move, unmark);
+  const row = checkCodexReviews(root, unmark);
+  assert.equal(row.pass, true, `${row.detail}\n${(row.lines ?? []).join('\n')}`);
 });
 
 test('a review that left out documents alone still covers an earlier tip where a record past the tip counts: no commit can make a Markdown file code', () => {
@@ -1810,5 +1993,294 @@ test('--head or --remote with no value exits 2 with usage and runs no row', asyn
     assert.equal(code, 2, argv.join(' '));
     assert.match(errOutput, /Usage: js-harness check .*--push/);
     assert.equal(output, '');
+  }
+});
+
+test('F2: a bare record at the head that owes, with no run line, does not cancel the correction', () => {
+  // The opus verifier on PR 896 (P1): correctionOwed read every record, so a forged review at the owing head read as
+  // the review the branch ends on, with nothing owed. The debt is read from admitted records only.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  forged(root, git(root, 'rev-parse', `${head}^`), head);
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('F2: a bare recheckOf record at the head that owes, with no run line, does not turn the correction into a warning', () => {
+  // The opus verifier on PR 896 (P2): recheckState read every record, so a hand-written record at the owing head naming
+  // it in recheckOf read as the last word on that head, a recheck with nothing kept, and the refusal became a warning.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  forged(root, head, head, { run: 'nope', recheckOf: head });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+// F3 (the opus verifier on PR 896; the lead, L34 and L42 of odd/tasks/review-gate.md): turning the Codex review off at
+// the tip does not drop a correction a review already owes. While it is off, `codex-review` records no recheck, so the
+// correction is paid by a recheck made with the review on again, or by a skip from the owing head whose reason carries
+// the owner's words; the skip pays it only while the review is off at the tip, and is listed.
+const OFF = `${JSON.stringify({ functions: { codexReview: 'off' } })}\n`;
+
+test('F3: a commit that only turns the Codex review off does not drop the correction the review below it owes', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const tip = commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+  assert.ok(row.lines.join('\n').includes(priorLine(finding)), row.lines.join('\n'));
+  assert.match(row.next.text, new RegExp(`js-harness codex-review --base ${short(root, head)} --at ${tip.slice(0, 12)} --unavailable`));
+});
+
+test('F3: code committed after the review went off does not hide the correction owed below it', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  commit(root, 'c.js', 'made with the review off', 'feat: more, with the review off');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('F3: with the review off at the tip, a skip from the owing head with its reason pays the correction, and is listed', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const tip = commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  record(root, head, tip, { outcome: 'unavailable', reason: 'the owner: "no, leave it"' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  assert.ok(row.lines.some((line) => line.includes(`${short(root, head)}..${short(root, tip)}`) && line.includes('the owner: "no, leave it"')), row.lines.join('\n'));
+});
+
+test('F3: with the review on, a skip from the owing head pays no correction', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const doc = commit(root, 'docs/NOTES.md', 'notes', 'docs: notes');
+  record(root, head, doc, { outcome: 'unavailable', reason: 'the owner: "no"' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('F3: a correction rechecked before the review went off owes nothing, and the off row passes as before', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const fix = commit(root, 'b.js', 'two, fixed', 'fix: read the right field');
+  run(root, { id: 'run-2', answer: { verdict: 'correct', findings: [] }, recheck: { of: head, findings: 1, fixed: 1, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } });
+  record(root, head, fix, { run: 'run-2', recheckOf: head });
+  commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  assert.match(row.detail, /the Codex review is off at the pushed commit/);
+});
+
+test('F3: a later skip of commits made with the review off does not hide the review that owes below them', () => {
+  // Codex on F3 (P2): the newest covered commit was read from any record, so a skip O..S of commits made off made S
+  // the head read, and the walk back from the tip could not cross the uncovered commit that turned the review off.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const off = commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  const later = commit(root, 'c.js', 'made with the review off', 'feat: more, with the review off');
+  record(root, off, later, { outcome: 'unavailable', reason: 'nothing to review here' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('F3: a skip from the owing head pays only where it ends on the history pushed', () => {
+  // Codex on F3 (P2): the record log is shared by every branch and worktree, so a skip from that head to another
+  // branch's commit, or to a commit that does not exist, paid this branch's correction.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  git(root, 'checkout', '-b', 'elsewhere');
+  const other = commit(root, 'd.js', 'another branch', 'feat: elsewhere');
+  git(root, 'checkout', 'feature');
+  commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  record(root, head, other, { outcome: 'unavailable', reason: 'the owner: "no"' });
+  record(root, head, 'f'.repeat(40), { outcome: 'unavailable', reason: 'the owner: "no"' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+// V1 (the opus verifier's second pass on PR 896, L48-L51 of odd/tasks/review-gate.md): admission trusted fields no run
+// line backs. A record is evidence only where its lines are the parts 1..of of one run, each reviewed and stating its
+// range (R1); each run id is claimed by one record, the first (R2); and its recheckOf is the recheck its line ran (R3).
+const part = (index, of) => ({ index, of, files: 1, changedLines: 1 });
+
+test('V1: a record naming the clean part of a run whose other part owes neither covers nor cancels the correction', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const head = commit(root, 'b.js', 'two', 'feat: two');
+  run(root, { id: 'p1', base, from: base, head, part: part(1, 2), answer: { verdict: 'correct', findings: [] } });
+  run(root, { id: 'p2', base, from: base, head, part: part(2, 2), answer: { verdict: 'incorrect', findings: [finding] } });
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-11-16T00:00:00.000Z', outcome: 'reviewed', run: 'p2', runs: ['p1', 'p2'] });
+  forged(root, base, head, { run: 'p1' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('V1: a reviewed part of a run whose other part failed covers nothing', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const head = commit(root, 'b.js', 'two', 'feat: two');
+  run(root, { id: 'q1', base, from: base, head, part: part(1, 2), answer: { verdict: 'correct', findings: [] } });
+  run(root, { id: 'q2', base, from: base, head, part: part(2, 2), outcome: 'failed' });
+  forged(root, base, head, { run: 'q1' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, /1 of 1 code commit since origin\/main have no Codex review record/);
+});
+
+test('V1: a second record claiming the owing run through the line\'s from, as a recheck, is no evidence', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const mid = commit(root, 'b.js', 'two', 'feat: two');
+  const head = commit(root, 'c.js', 'three', 'feat: three');
+  run(root, { id: 'r1', base, from: mid, head, answer: { verdict: 'incorrect', findings: [finding] } });
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-11-16T00:00:00.000Z', outcome: 'reviewed', run: 'r1' });
+  forged(root, mid, head, { run: 'r1', recheckOf: head });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('V1: a record naming a reviewed line no record names, with a recheckOf its line never ran, is no evidence', () => {
+  const { root, base, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  run(root, { id: 'orphan', base, from: base, head: base, answer: { verdict: 'correct', findings: [] } });
+  forged(root, base, base, { run: 'orphan', recheckOf: head });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('V1: a record appended after the review that owes, naming an older clean run of its range no record names, is no later word', () => {
+  // The advisor on L50 (4): the last record at a head decides by its place in the record file, so a record naming an
+  // older, complete, clean run line nobody claimed outranked the newer review that owes. At a head, records are
+  // admitted in the order of their runs in the log (R4).
+  const { root, base } = makeRepo();
+  feature(root);
+  const head = commit(root, 'b.js', 'two', 'feat: two');
+  run(root, { id: 'older', base, from: base, head, answer: { verdict: 'correct', findings: [] } });
+  run(root, { id: 'run-1', base, from: base, head, answer: { verdict: 'incorrect', findings: [finding] } });
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-11-16T00:00:00.000Z', outcome: 'reviewed', run: 'run-1' });
+  forged(root, base, head, { run: 'older' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('V1: an --again record that reuses a part kept from an earlier run is a review, and its new finding is owed', () => {
+  // Codex on c3c95d63 (P1): a clean run in two parts, then a fresh attempt whose first part finds a bug and whose second
+  // fails, then --again combining that new part with the clean second part kept from the first run (its id reused, no
+  // new line). That record is the review of the range: claiming each line once refused it, and the clean one decided.
+  const { root, base } = makeRepo();
+  feature(root);
+  const head = commit(root, 'b.js', 'two', 'feat: two');
+  run(root, { id: 'a1', base, from: base, head, part: part(1, 2), answer: { verdict: 'correct', findings: [] } });
+  run(root, { id: 'a2', base, from: base, head, part: part(2, 2), answer: { verdict: 'correct', findings: [] } });
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-11-16T00:00:00.000Z', outcome: 'reviewed', run: 'a2', runs: ['a1', 'a2'] });
+  run(root, { id: 'b1', base, from: base, head, part: part(1, 2), answer: { verdict: 'incorrect', findings: [finding] } });
+  run(root, { id: 'b2', base, from: base, head, part: part(2, 2), outcome: 'failed' });
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-11-16T00:01:00.000Z', outcome: 'reviewed', run: 'a2', runs: ['b1', 'a2'] });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('V1: a record mixing a clean part of an older run with the newest part of the review that owes is no later word', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const head = commit(root, 'b.js', 'two', 'feat: two');
+  run(root, { id: 'o1', base, from: base, head, part: part(1, 2), answer: { verdict: 'correct', findings: [] } });
+  run(root, { id: 'o2', base, from: base, head, part: part(2, 2), answer: { verdict: 'correct', findings: [] } });
+  run(root, { id: 'n1', base, from: base, head, part: part(1, 2), answer: { verdict: 'incorrect', findings: [finding] } });
+  run(root, { id: 'n2', base, from: base, head, part: part(2, 2), answer: { verdict: 'correct', findings: [] } });
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-11-16T00:00:00.000Z', outcome: 'reviewed', run: 'n2', runs: ['n1', 'n2'] });
+  forged(root, base, head, { run: 'n2', runs: ['o1', 'n2'] });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('V4: a skip recorded while the review was on at its head pays no correction once the review is turned off', () => {
+  // The verifier's second pass on PR 896 and the lead (L56): a skip pays an owed correction only where the review is
+  // off at the pushed commit and at the skip's own head, recorded on the owner's typed no while it was off.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const doc = commit(root, 'docs/NOTES.md', 'notes', 'docs: notes');
+  record(root, head, doc, { outcome: 'unavailable', reason: 'codex was down' });
+  commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('V3: with the review off here, the plain check says the correction a review below owes, which the push refuses', () => {
+  // The verifier's second pass on PR 896: the debt row said "no code waits for one" while the push refused the branch.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  const debt = checkCodexReviewDebt(root);
+  assert.equal(debt.pass, true, debt.detail);
+  assert.match(debt.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('V3: with the review off here, the plain check lists the skip that pays the correction owed', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const tip = commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  record(root, head, tip, { outcome: 'unavailable', reason: 'the owner: "no, leave it"' });
+  const debt = checkCodexReviewDebt(root);
+  assert.equal(debt.pass, true, debt.detail);
+  assert.doesNotMatch(debt.detail, /owes a correction/);
+  assert.ok(debt.lines?.some((line) => line.includes(`${short(root, head)}..${short(root, tip)}`) && line.includes('the owner: "no, leave it"')), debt.lines?.join('\n'));
+});
+
+test('V3: with the review on, the plain check says the correction owed where every code commit has a record', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const debt = checkCodexReviewDebt(root);
+  assert.equal(debt.pass, true, debt.detail);
+  assert.match(debt.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('V3: a merge of main at the tip with an edit in it, above a review that owes, has the plain check say the correction first', () => {
+  // The third verifier pass on PR 896 (L71 B): the plain row named a review of the merge while the push refuses it for
+  // the fix first (`owedBelow`), so the command it named was not the one the push asks for.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  git(root, 'checkout', 'main');
+  commit(root, 'other.js', 'elsewhere', 'feat: elsewhere on main');
+  git(root, 'update-ref', 'refs/remotes/origin/main', 'main');
+  git(root, 'checkout', 'feature');
+  git(root, 'merge', '--no-commit', '--no-ff', 'main');
+  fs.writeFileSync(path.join(root, 'b.js'), 'two, edited in the merge');
+  git(root, 'add', '.');
+  git(root, 'commit', '-m', 'merge main with an edit');
+  assert.match(checkCodexReviews(root, 'HEAD').detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+  const debt = checkCodexReviewDebt(root);
+  assert.equal(debt.pass, true, debt.detail);
+  assert.match(debt.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('V3: with the review on at HEAD and off only in the working tree, the plain check says the correction the push refuses, and lists no paying skip', () => {
+  // The lead on L76 (e1b, PR 896): the plain row read the switch from the working tree and listed a skip as paying
+  // while the push, which reads HEAD, refused the branch for the correction.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const off = commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  record(root, head, off, { outcome: 'unavailable', reason: 'the owner: "no"' });
+  const on = commit(root, 'harness.json', `${JSON.stringify({ functions: { codexReview: 'on' } })}\n`, 'chore: turn it on again');
+  record(root, off, on, { outcome: 'unavailable', reason: 'covers the switch' });
+  fs.writeFileSync(path.join(root, 'harness.json'), OFF);
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, false);
+  const debt = checkCodexReviewDebt(root);
+  assert.match(debt.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+  assert.equal((debt.lines ?? []).some((line) => line.includes('pays the correction')), false, (debt.lines ?? []).join('\n'));
+});
+
+test('V3: with the review off in the working tree and no HEAD to read, the plain check says it is off here, as before', () => {
+  // The advisor's probe before ready (L81): a folder in no repository, or a repository with no commit, has no HEAD, so
+  // the row must not say the review is on there.
+  const norepo = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-nohead-'));
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-nocommit-'));
+  try {
+    spawnSync('git', ['init', '-q'], { cwd: empty });
+    for (const dir of [norepo, empty]) {
+      fs.writeFileSync(path.join(dir, 'harness.json'), OFF);
+      assert.match(checkCodexReviewDebt(dir).detail, /^the Codex review is off here \(declared in harness\.json\): no code waits for one/, dir);
+    }
+  } finally {
+    for (const dir of [norepo, empty]) fs.rmSync(dir, { recursive: true, force: true });
   }
 });

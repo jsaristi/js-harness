@@ -16,6 +16,7 @@ import {
   runsLogged,
   secondRecheckRefused,
 } from './codex-review-recheck.mjs';
+import { NOTHING_TO_REVIEW } from './codex-reviews.mjs';
 import { RULES } from './rules-data.mjs';
 
 const A = 'a'.repeat(40);
@@ -153,6 +154,38 @@ test('commits that change only documents between a reviewed head and the start o
   // The nearest reviewed head wins over an older one.
   const two = [record(A, B, { run: 'r1' }), record(B, C, { run: 'r2' })];
   assert.equal(recheckAnchor({ from: D, records: two, back: [D, C, B, A], changedBetween: () => ['a.md'] }), C);
+});
+
+// The line behind E, newest first: B's review owes a correction and every step above it changes code, unless a test
+// says which steps change documents alone (B1-2 on JH 207, the reliability lens on S2).
+const E = 'e'.repeat(40);
+const LINE = [E, D, C, B, A];
+const skip = (base, head) => record(base, head, { outcome: 'unavailable', reason: 'no Codex' });
+const nothing = (base, head) => record(base, head, { outcome: NOTHING_TO_REVIEW, reason: 'no code changed' });
+const codeBut = (...docs) => (older, newer) => (docs.some(([o, n]) => o === older && n === newer) ? ['odd/tasks/x.md'] : ['bin/x.mjs']);
+const reviewedB = record(A, B, { run: 'r1' });
+
+test('records that are no review alone, chained back to the review that owes, keep its findings where they ended (B1-2)', () => {
+  const anchor = (records, changedBetween = codeBut()) => recheckAnchor({ from: E, records: [reviewedB, ...records], back: LINE, changedBetween });
+  assert.equal(anchor([skip(B, C), skip(C, E)]), B, 'two skips');
+  assert.equal(anchor([skip(B, C), nothing(C, E)]), B, 'a skip, then a range with nothing to review');
+  assert.equal(anchor([nothing(B, D), skip(D, E)]), B, 'nothing to review, then a skip');
+  assert.equal(anchor([skip(B, C), skip(D, E)], codeBut([C, D])), B, 'documents between the two records');
+  assert.equal(anchor([skip(B, C), skip(D, E)]), E, 'code between the two records, which no record covers');
+  assert.equal(anchor([skip(C, E)]), E, 'code between the review and the record');
+  // The record whose base is oldest is taken first: the newer one alone leads nowhere.
+  assert.equal(anchor([skip(D, E), skip(B, E)]), B, 'the oldest base wins');
+  assert.equal(anchor([skip(B, E), skip(D, E)]), B, 'whatever their order in the file');
+});
+
+test('a record that is no review alone, whose base is older than the review that owes, still leaves its findings owed (B1-2)', () => {
+  const anchor = (records) => recheckAnchor({ from: E, records: [reviewedB, ...records], back: LINE, changedBetween: codeBut() });
+  assert.equal(anchor([skip(A, E)]), B, 'a skip over the reviewed head');
+  assert.equal(anchor([nothing(A, E)]), B, 'a range with nothing to review over it');
+  assert.equal(anchor([skip(B, C), skip(A, E)]), B);
+  // A record off the line, or one reversed, walks nothing.
+  assert.equal(anchor([skip('f'.repeat(40), E)]), E, 'a base off the line');
+  assert.equal(anchor([skip(E, B)]), E, 'a reversed range');
 });
 
 // The line of `recheckThrough` (codex-spend L21): A, then G, whose review owes a correction, then M, a merge of S.

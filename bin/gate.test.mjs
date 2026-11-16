@@ -10,6 +10,7 @@ import { ruleValue } from './lib/rules.mjs';
 import { gateDir, readGateHolder, takeGateLock } from './lib/gate-lock.mjs';
 import { GATE_COMMAND_MAX, appendGateBusiest, appendGateEvent, gateLogDir, gatesOf, readGateBusiest, readGateLog } from './lib/gate-log.mjs';
 import { GATE_FIRST_MAX_MINUTES, GATE_FIRST_OPEN, readTickets } from './lib/gate-first.mjs';
+import { recordLine } from './lib/codex-records.testkit.mjs';
 
 // `js-harness gate -- <command>` runs any command under the machine's gate lock, for the heavy runs that
 // are not a commit's gate. The lock itself is tested in lib/gate-lock.test.mjs and what `check` does with
@@ -1855,7 +1856,7 @@ test('gate runs a turn when no push could go now: a code commit no Codex record 
   assert.equal(spawned.asked.length, 1);
   const records = path.join(dir, '.git', 'js-harness', 'codex-reviews.jsonl');
   fs.mkdirSync(path.dirname(records), { recursive: true });
-  fs.writeFileSync(records, `${JSON.stringify({ schema: 'js-harness.codex-review/v1', base: pushed, head, reviewedAt: '2026-10-14T00:00:00.000Z', outcome: 'reviewed' })}\n`);
+  fs.writeFileSync(records, recordLine(dir, { schema: 'js-harness.codex-review/v1', base: pushed, head, reviewedAt: '2026-10-14T00:00:00.000Z', outcome: 'reviewed' }));
   const after = ranWith(0);
   const { code, said } = await runGate(argv, {}, { spawn: after, gh: ghWith(OPEN) });
   assert.deepEqual([code, said, after.asked.length], [GATE_NOT_RUN, pushFirst(dir), 0]);
