@@ -74,6 +74,13 @@ test('a session whose app record is on the home is ok, a lead at the lead\'s lev
     note: '',
     fix: [`this session's menu holds ${home.model} at ${other} and it is held to ${home.model} at ${home.lead}; a session cannot change its own: only the user changes a lead's. To give him: ${menuLine({ model: home.model, effort: home.lead })}`],
   });
+  // A lead whose title drifted off the shape (odd/tasks/senior-orchestrator.md, T8, L6 as written) is held to the
+  // lead's level, and told to take its title back.
+  assert.deepEqual(ask({ readApp: () => record('JH ORQ orquestador F8', home.model, other) }).fix, [
+    `this session's menu holds ${home.model} at ${other} and it is held to ${home.model} at ${home.lead}; a session cannot change its own: only the user changes a lead's. To give him: ${menuLine({ model: home.model, effort: home.lead })}`,
+    'this session\'s title "JH ORQ orquestador F8" is a lead\'s off its shape, so no reader gives it the lead\'s role (sessions --address orchestrator finds none): rename it "<code> ORQ · <purpose>"',
+  ]);
+  assert.equal(ask({ readApp: () => record('JH ORQ orquestador F8', home.model, home.lead) }).state, 'stale', 'at the lead\'s level, the title alone is stale');
   assert.deepEqual(ask({ readApp: () => record('JH 7 · work', offModel, home.effort) }).fix, [
     `this session's menu holds ${offModel} at ${home.effort} and it is held to ${home.model} at ${home.effort}; a session cannot change its own: the lead sets it with its session tools, or the user in the menu. To give him: ${menuLine({ model: home.model, effort: home.effort })}`,
   ]);

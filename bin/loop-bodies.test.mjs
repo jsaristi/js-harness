@@ -44,6 +44,8 @@ function world({ files = {}, channel = '', onSleep = () => {} } = {}) {
     hostWatch: async () => null,
     // Nor the stored sign-in's end: the product's default reader runs the Claude CLI.
     signinExpiry: null,
+    // Nor the lead's own menu: the product's default reads the app's records.
+    leadHome: null,
     readdir: (dir) => Object.keys(state.files).filter((file) => path.dirname(file) === dir).map((file) => path.basename(file)),
     mtime: (file) => {
       if (state.files[file] === undefined) throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
@@ -830,4 +832,47 @@ test('heartbeat given no sign-in reader reads none, and a home that is not asked
 test('the product heartbeat reads the sign-in by default, for the home it was given and against the real user home', () => {
   const source = fs.readFileSync(new URL('./loop.mjs', import.meta.url), 'utf8');
   assert.match(source, /signinExpiry\s*=\s*\(home\)\s*=>\s*readSigninExpiry\(\{\s*home\s*\}\)/);
+});
+
+// odd/tasks/senior-orchestrator.md, T8: the lead held to rule:lead-effort. The heartbeat says what doctor finds of the
+// lead's own menu once per value, at its start and after whatever ends it, never as what ends it.
+test('heartbeat says the lead\'s HOME line once per value, at its start and after its ending, and is not ended by it', async () => {
+  const fix = ['this session\'s menu holds claude-fable-5-2 at medium and it is held to claude-fable-5-2 at high; a session cannot change its own: only the user changes a lead\'s.'];
+  const run = async (state, deps, said) => {
+    deps.leadHome = () => ({ state: said.length > 0 ? 'stale' : 'ok', note: '', fix: said });
+    state.out = [];
+    state.clock = T0;
+    return loopMain(['heartbeat', '--quiet', '30', '--every', '120'], { CLAUDE_CODE_SESSION_ID: OWNER }, deps);
+  };
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 - 3600000 } });
+  state.transcript = turn;
+  deps.readTail = tailOf(state);
+  assert.equal(await run(state, deps, fix), 0);
+  assert.equal(state.sleeps > 0, true, 'the line alone did not end it');
+  assert.match(state.out.at(-2), /^STALL: /);
+  assert.equal(state.out.at(-1), `HOME: ${fix[0]}`);
+  assert.equal(state.out[1], `HOME: ${fix[0]}`);
+  // A relaunch with the same value says nothing of it; another value is said again.
+  await run(state, deps, fix);
+  assert.equal(state.out.filter((line) => line.startsWith('HOME:')).length, 0, 'told before');
+  const other = [fix[0].replace('medium', 'low')];
+  await run(state, deps, other);
+  assert.equal(state.out.filter((line) => line.startsWith('HOME:')).length, 2);
+  await run(state, deps, []);
+  assert.equal(state.out.filter((line) => line.startsWith('HOME:')).length, 0, 'on the home, nothing');
+  // Codex on 95fe817..542c805: the ending reads it again, so a menu changed while the loop ran is what it says.
+  let reads = 0;
+  deps.leadHome = () => ({ state: 'stale', note: '', fix: reads++ === 0 ? fix : other });
+  state.out = [];
+  state.clock = T0;
+  await loopMain(['heartbeat', '--quiet', '30', '--every', '120'], { CLAUDE_CODE_SESSION_ID: OWNER }, deps);
+  assert.deepEqual(state.out.filter((line) => line.startsWith('HOME:')), [`HOME: ${fix[0]}`, `HOME: ${other[0]}`]);
+  // The reliability lens: a reading whose fix is not a list says nothing and ends nothing.
+  for (const odd of [null, 'a string', { fix: 'a string' }, { fix: null }]) {
+    deps.leadHome = () => odd;
+    state.out = [];
+    state.clock = T0;
+    assert.equal(await loopMain(['heartbeat', '--quiet', '30', '--every', '120'], { CLAUDE_CODE_SESSION_ID: OWNER }, deps), 0, JSON.stringify(odd));
+    assert.equal(state.out.filter((line) => line.startsWith('HOME:')).length, 0);
+  }
 });

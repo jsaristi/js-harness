@@ -42,7 +42,10 @@ import { harnessHome } from './lib/home.mjs';
 import { heldValues } from './lib/model-home.mjs';
 import { homeInForce, offHomeLines, sessionsOffHome } from './lib/home-sessions.mjs';
 import { readHomeSessions } from './lib/home-sessions-read.mjs';
-import { leadTitle, seniorTitle } from './lib/session-title-guard.mjs';
+import { driftedLeadTitle, leadTitle, seniorTitle } from './lib/session-title-guard.mjs';
+
+/** Whether `title` is held to the lead's level: a lead's title, or one off its shape (odd/tasks/senior-orchestrator.md, T8). */
+const heldAsLead = (title) => leadTitle(title) || driftedLeadTitle(title);
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const USAGE = `Usage: js-harness rules [<id> | check | render | applied | coverage [--json] [--strict] [--prove] [--refresh] | change <id> [--dry-run | --check-source] [--with <path>...] | ${SWITCH_USAGE} | --hook]`;
@@ -453,7 +456,7 @@ function appliedForm({ cwd, env, homedir, now, run, readApp, agents }, stdout) {
   if (homeInForce(home)) {
     const claudeDir = env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude');
     const read = readHomeSessions({ main, home: harnessHome({ env, homedir }), claudeDir, now: at, days: APPLIED_DAYS, env, homedir, ...(readApp && { readApp }), ...(agents && { agents }) });
-    for (const line of offHomeLines(sessionsOffHome(home, { ...read, isLead: leadTitle, isSenior: seniorTitle }), home, { unread: read.unread })) stdout(line);
+    for (const line of offHomeLines(sessionsOffHome(home, { ...read, isLead: heldAsLead, isSenior: seniorTitle }), home, { unread: read.unread })) stdout(line);
   }
   return records.exists ? result.exit : 0;
 }
@@ -526,7 +529,7 @@ async function switchForm(parsed, { top, root, cwd, env, homedir, now, run, rena
     readSessions: () => readHomeSessions({ main, home, claudeDir, now: now(), days: APPLIED_DAYS, env, homedir, ...(readApp && { readApp }), ...(agents && { agents }) }),
     readSettings: () => readSettings({ claudeDir, project: top }),
     configuredWindow: () => configuredWindow({ env, claudeHome: claudeDir, projectDir: top }),
-    isLead: leadTitle,
+    isLead: heldAsLead,
     isSenior: seniorTitle,
     ...(await machineProbes(env)),
     ...switchDeps,

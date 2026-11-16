@@ -1447,7 +1447,7 @@ export function rosterOf(sessions, { worktrees, since, record, app, hosts, home 
     const opened = earliestOpener ?? (scheduled ? 'scheduled' : 'unknown');
     // What the row holds of the home and what it is held to (`rowHome`), judged by the app's record, else by its last reply.
     const ofHome = rowHome(home, {
-      lead: said?.role === 'orchestrator', senior: said?.role === 'senior',
+      lead: said?.role === 'orchestrator', senior: said?.role === 'senior', title: hasTitle(latest) ? latest.title : null,
       record: latestRecord,
       replied: { model: members.find((member) => typeof member.context?.model === 'string')?.context.model ?? null, effort: members.find((member) => typeof member.effort === 'string')?.effort ?? null },
     });

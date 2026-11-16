@@ -42,3 +42,13 @@ test('forHimLine is the menu line for the reading session\'s own row off the hom
   assert.deepEqual(forHimLine({ self: true, held, off: { ...off, source: 'last reply' } }), [], 'no menu to pick in');
   assert.deepEqual(forHimLine({ self: true, held: { model: null, effort: 'medium' }, off }), [], 'a home that names no model gives no line to read out');
 });
+
+test('a row of a drifted lead title is judged at the lead\'s level and named (odd/tasks/senior-orchestrator.md, T8)', () => {
+  // L6 as written: the lead titled "JH ORQ orquestador F8" ran at medium while rule:lead-effort said high.
+  const menu = { model: HOME.model, effort: 'medium' };
+  const row = rowHome(HOME, { title: 'JH ORQ orquestador F8', record: menu });
+  assert.deepEqual(row, { menu, held: { model: HOME.model, effort: 'high' }, off: { source: 'menu', model: null, effort: 'medium' }, drifted: true });
+  assert.equal(openerLine({ opened: 'his', where: 'sessions', effort: 'medium', ...row }),
+    '    opened by him  in Sessions  effort medium  OFF THE HOME: its menu holds the level medium, the home high  A LEAD\'S TITLE OFF ITS SHAPE: renamed "<code> ORQ · <purpose>" it holds the lead\'s role, which no reader gives it now (sessions --address orchestrator finds none)');
+  assert.equal('drifted' in rowHome(HOME, { record: menu }), false, 'a row of no drifted title carries no mark');
+});

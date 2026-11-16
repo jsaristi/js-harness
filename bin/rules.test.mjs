@@ -583,6 +583,8 @@ test('applied lists the sessions off the home, desktop and background, with what
       ['c2', { where: 'sessions', model, effort: lead, archived: false, title: 'JH ORQ · lead', cwd: project }],
       ['c3', { where: 'archived', model: OFF_MODEL, effort, archived: true, title: 'JH 1 · old', cwd: project }],
       ['c4', { where: 'sessions', model: OFF_MODEL, effort: other, archived: false, title: 'JH 9 · elsewhere', cwd: home }],
+      // A lead whose title drifted off the shape, at the sessions' level (odd/tasks/senior-orchestrator.md, T8, L6 as written).
+      ['c5', { where: 'sessions', model, effort, archived: false, title: 'JH ORQ orquestador F8', cwd: project }],
     ]);
     appendRecord(home, { event: 'started', at: new Date(NOW).toISOString(), id: 'job-1', sessionId: null, title: 'JH 8 · job', root: project, cwd: project, worktree: null, worktreePath: null, model, effort: other });
     const { code, out } = await applied(project, home, undefined, { readApp: () => app, agents: () => [{ id: 'job-1', status: 'busy' }] });
@@ -592,6 +594,7 @@ test('applied lists the sessions off the home, desktop and background, with what
     assert.equal(out[at - 1], '');
     assert.deepEqual(out.slice(at + 1), [
       `  desktop  "JH 7 · work"  its menu holds ${model} at ${other}; held to ${model} at ${effort}; corrected by the lead's session tools`,
+      `  desktop  "JH ORQ orquestador F8"  its menu holds ${model} at ${effort}; held to ${model} at ${lead}; corrected by his menu`,
       `  background  "JH 8 · job" (job-1)  no reply of it was read; its start asked for ${model} at ${other}; its job: busy; held to ${model} at ${effort} with the advisor ${advisor}; corrected by closing it once its job is no longer at work, once what it holds is committed (js-harness sessions stop job-1), and start_session`,
       `  1 archived desktop session is off it too (1 at ${OFF_MODEL} at ${effort}): nothing corrects one while it is archived; he can unarchive it, and it is then listed`,
       '  on the home: 1 desktop, not archived, and 0 background',

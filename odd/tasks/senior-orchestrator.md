@@ -5,6 +5,29 @@ JH 192, slice 3 of the lead's brief. Delivery: this design, then one pull reques
 (`rules change` runs only on a `rule/` branch, `bin/lib/rules-change-run.mjs:170`). Runner: `node --test`.
 
 ## State
+Now (2026-11-16 ~04:00Z): T8 landed (PR 895, 83252acb); main is merged into T7's branch `rule/sessions-visible-only`
+(this State and Log hold both). T7 is reviewed clean and waits only on JH 208's `rule/away-autonomy`; then the two
+`rules change` (`sessions-open-in-sidebar` with the scratchpad's `sidebar.json`, then `senior-model`), gate, reviews, PR,
+`ready`. The paragraphs below are each task's record, T8's first.
+
+T8 (2026-11-16 ~03:00Z, JH 211), branch `feat/lead-held-high` from origin/main b3a73245, in worktree
+`tui-gentle-level-a6afd3`; T7 waits on branch `rule/sessions-visible-only` (its State is there; the second branch to land
+merges this State). Orientation: the lead's role comes only from `roleOfTitle` (`TITLE_SHAPE`, `bin/lib/sessions.mjs:1248`),
+so "JH ORQ orquestador F8" (no "·") holds no role: the board judges it at the sessions' level (`rosterOf` passes `lead:`
+to `rowHome`, `bin/lib/sessions.mjs:1450`), `rules applied` by `leadTitle`, and `sessions --address orchestrator` does
+NOT resolve it (`roleHolders` filters `row.role`, line 1495), against L6's note. Plan (D17): an additive detector in
+`bin/lib/roster-home.mjs`, never loosening `roleOfTitle`; slice 1 the board (row judged at `lead-effort` and marked), slice
+2 `rules applied`, slice 3 the heartbeat once per value. Tests first, L6's title as written.
+Built (~04:00Z): 95fe8178 board, `rules applied` and doctor (Codex correct 0.88; reliability 0; readability 2,
+fixed in b9bc0106: `driftedLeadTitle` in `bin/lib/session-title-guard.mjs` as not `leadTitle`, `rowHome` reads the
+title); 542c8059 the heartbeat's HOME line once per value (`leadHomeLines`, `bin/loop.mjs`, mark
+`loops/<slug>/home/<session>.json`); its review (Codex P2 stale ending reading; reliability: non-array fix; readability:
+clock flag) fixed in 872baee2, recheck clean (Codex correct 0.96, both lenses 0). Checked before the PR: the lead's
+start is `js-harness doctor --hook` (SessionStart, `bin/lib/hook-entries.mjs:11`), which announces a stale row
+(`bin/doctor.mjs:288`), the `modelHomeHealth` row; `lead-effort`'s subject names no title (`bin/lib/rules-data.mjs:332`);
+real runs with the branch: `node bin/js-harness.mjs sessions` loads (the lead row, titled again); `modelHomeHealth` for
+the lead 699d7c29 in D:/js-harness: ok (it is back on its shape and level). Next: push, PR, `notify --kind ready`.
+
 Committed: fd309617 senior-model; 8fc7a92b senior-effort; e25ab304 the reporters hold a senior by role (heldOfRole);
 a258b450 only the lead starts a senior, one at a time. Reviewed 1a5061d..a258b45 (Codex 2 parts, lenses risk and
 reliability). Their findings, fixed in the next commit, each with a test: a background senior was judged against the
@@ -200,10 +223,10 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   the messages to it. Route: inline, then one verifier. Commits: cb830c3e, the D11 fix.
 - [ ] T7 (kind: build) (5) The guard refuses `js-harness sessions start` for every title; `rule:sessions-open-in-sidebar`
   drops its exception by `rules change`, his to approve. Route: inline.
-- [ ] T8 (kind: build) (6) The lead held to `rule:lead-effort`: a lead whose title drifts off `<code> ORQ · …` keeps
+- [x] T8 (kind: build) (6) The lead held to `rule:lead-effort`: a lead whose title drifts off `<code> ORQ · …` keeps
   its role or is named (channel `--address orchestrator` still resolves it, `heldOfRole` does not), and the board,
   the heartbeat and the lead's start say a lead off `rule:lead-effort`, with the act that corrects it (his menu).
-  Route: inline.
+  Route: inline. Commits 95fe8178, b9bc0106, 542c8059, 872baee2.
 
 ## Log
 - L1 2026-11-12, his words at 93b72703:775 (S2); his "aplica todos los cambios ya" at 93b72703:896.
@@ -315,3 +338,9 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
 - L9 2026-11-16, the lead: the app record of JH SR showed claude-fable-5-2 at high right after `set_session_model`, so the
   record changes at the call, not at the next turn (the open point of D9/D11). T8 is at PR 895, which the lead lands; T7
   waits only on JH 208's `rule/away-autonomy`, which JH 208 is bringing to a PR.
+- D17 2026-11-16, T8 (advisor): "is named", not "keeps its role": `roleOfTitle` has 42 callers and the handover
+  needs `ORQ nueva`/`ORQ relevada` to hold no role, so loosening it is high risk. A title `<code> ORQ <words>` with no "·"
+  that is not a handover form is a drifted lead: judged at `rule:lead-effort` and named with its fix (rename to
+  `<code> ORQ · …`; his menu for the level). The harness does not set the level itself: no session changes its own, and
+  only his menu changes a lead's (`home-sessions.mjs` `corrects: his menu`). "Start" is read as the lead's session
+  start (the resume hook), since L6's case was a lead already running; the new lead's `start_session` is held already.

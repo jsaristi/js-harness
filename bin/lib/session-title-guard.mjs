@@ -14,6 +14,13 @@ import { guardHeld, ruleHere } from './rules.mjs';
  * read: a title with another project's code is a lead's here and refused for its code by `sessionTitleRefusal`. */
 export const leadTitle = (title) => roleOfTitle(title)?.role === 'orchestrator';
 
+/** Whether `title` is a lead's that drifted off `<code> ORQ · <purpose>` (odd/tasks/senior-orchestrator.md, T8): `<code> ORQ`
+ * and words after it, not a lead's (`leadTitle`). Such a title holds no role, so the lead was judged at the sessions'
+ * level on 2026-11-16 while rule:lead-effort said high; the board, `rules applied` and doctor hold it to the lead's
+ * and name it. A handover's `ORQ nueva` and `ORQ relevada` hold no role by design and are not drifted. */
+export const driftedLeadTitle = (title) => typeof title === 'string' && /^\S+ ORQ(?:\s|$)/.test(title) && !leadTitle(title)
+  && !/^\S+ ORQ (?:nueva|relevada)\b/.test(title);
+
 /** Whether `title` is the title of a senior, `<code> SR · <purpose>`: its start and its resume are held to the rule
  * `senior-model`, with no advisor (odd/tasks/senior-orchestrator.md). */
 export const seniorTitle = (title) => roleOfTitle(title)?.role === 'senior';
