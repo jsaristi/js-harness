@@ -747,6 +747,7 @@ test('a start_session of a senior is denied unless the lead starts it as the sen
     assert.ok(why.includes(JSON.stringify(SENIOR_WAIT_BACKGROUND)), 'the refusal gives the background to copy');
   }
   assert.ok(SENIOR_WAIT_BACKGROUND.length >= 80, 'the tool asks a fresh start for 80 characters of background');
+  assert.deepEqual(await hook({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, background: `\n${SENIOR_WAIT_BACKGROUND}  ` } }, { app: lead }), { code: 0, out: '', err: '' }, 'blanks around the background');
   // The verifier's findings (D13): a card's later start carries no title the guard could hold, so only "user_asked"
   // starts a senior; another project's lead is not this one's; it starts here, in its own worktree.
   for (const initiation of ['offer', 'own_initiative', undefined]) {
