@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { claudeArgs, LENS_ANSWER_KEPT, LENS_EFFORT, LENS_MODEL, lensEnv, lensReviewMain, runLens } from './lens-review.mjs';
-import { admittedLensReviews, appendLensReview, LENS_REVIEW_SCHEMA, readLensReviews, readLensRuns } from './lib/lens-reviews.mjs';
+import { admittedLensReviews, appendLensReview, LENS_REVIEW_SCHEMA, readLensReviews, readLensRuns, startLensRun } from './lib/lens-reviews.mjs';
 import { NOT_FIXED } from './lib/codex-review-recheck.mjs';
 import { LENS_ANSWER_SCHEMA } from './lib/lens-result.mjs';
 import { askedText, NO_ASKED, requestIntent, reviewIntent } from './lib/codex-review-prompt.mjs';
@@ -332,7 +332,10 @@ test('a range that starts at the head of a lens review with findings rechecks th
   const second = git('log', '--format=%H', '--grep=^second$');
   const first = git('rev-parse', `${second}~1`);
   const earlier = { severity: 'WARNING', location: 'a.mjs:1', claim: 'the constant is unexplained', evidence_class: 'deterministic', causal_disposition: 'introduced', proof_refs: ['a.mjs:1'] };
-  appendLensReview(dir, { schema: LENS_REVIEW_SCHEMA, base: first, head: first, outcome: 'reviewed', run: 'run-earlier', lenses: ['readability', 'risk'], results: [{ lens: 'readability', outcome: 'complete', findings: [earlier] }, { lens: 'risk', outcome: 'complete', findings: [] }] });
+  // The earlier review is one a run line admits (B2-2: a recheck is read from admitted records only).
+  const subjectHash = 'a'.repeat(64);
+  const earlierRun = startLensRun(dir, { base: first, head: first, subjectHash });
+  appendLensReview(dir, { schema: LENS_REVIEW_SCHEMA, base: first, head: first, subjectHash, reviewedAt: '2026-11-16T00:00:00.000Z', outcome: 'reviewed', run: earlierRun, lenses: ['readability', 'risk'], results: [{ lens: 'readability', outcome: 'complete', findings: [earlier] }, { lens: 'risk', outcome: 'complete', findings: [] }] });
   const notFixed = (lens, subject) => JSON.stringify({ subject_hash: subject.subject_hash, inspection: { status: 'completed', paths: ['a.mjs'] }, findings: lens === 'readability' ? [{ ...earlier, claim: `${NOT_FIXED} 1 the constant is still unexplained` }] : [], evidence: [`${lens}: read a.mjs`] });
   const claude = fakeClaude(notFixed);
   const { code, out } = run(['--base', first, '--head', second, '--lenses', 'readability,risk', '--reason', 'a constant', '--request', 'explain the constant'], { runLens: claude.runLens });
@@ -342,12 +345,27 @@ test('a range that starts at the head of a lens review with findings rechecks th
   assert.ok(readability.prompt.includes('1. a.mjs:1 WARNING the constant is unexplained'), readability.prompt);
   assert.ok(readability.prompt.includes('a regression this range brought into what it changed'), readability.prompt);
   assert.doesNotMatch(risk.prompt, /A recheck of earlier findings/, 'a lens that found nothing there reviews as it would');
-  assert.equal(readLensReviews(dir).at(-1).recheckOf, 'run-earlier');
+  assert.equal(readLensReviews(dir).at(-1).recheckOf, earlierRun);
   assert.ok(readability.prompt.includes('A finding whose code is not in the block cannot be checked'), 'an unchecked finding stays open, never counted fixed');
   // A skip over the same range picks no lens, and is recorded as before.
   assert.equal(run(['--base', first, '--head', second, '--unavailable', 'no CLI here'], { runLens: claude.runLens }).code, 0);
   assert.equal(readLensReviews(dir).at(-1).outcome, 'unavailable');
-  assert.ok(out.split('\n').includes('readability: rechecked 1 earlier finding of run-earlier: 0 fixed, 1 not fixed, 0 blocking'), out);
+  assert.ok(out.split('\n').includes(`readability: rechecked 1 earlier finding of ${earlierRun}: 0 fixed, 1 not fixed, 0 blocking`), out);
+});
+
+// B2-2: a record a session appended by hand at the base, which no run line names, makes no recheck: a "reviewed, no
+// findings" line there would otherwise turn the recheck of an owed correction into a fresh review.
+test('B2-2: a lens record no run line names is no earlier review: the range is reviewed, not rechecked', () => {
+  const second = git('log', '--format=%H', '--grep=^second$');
+  const first = git('rev-parse', `${second}~1`);
+  const earlier = { severity: 'CRITICAL', location: 'a.mjs:1', claim: 'the constant breaks the gate', evidence_class: 'deterministic', causal_disposition: 'introduced', proof_refs: ['a.mjs:1'] };
+  appendLensReview(dir, { schema: LENS_REVIEW_SCHEMA, base: first, head: first, subjectHash: 'b'.repeat(64), reviewedAt: '2026-11-16T00:00:00.000Z', outcome: 'reviewed', run: 'run-forged', lenses: ['risk'], results: [{ lens: 'risk', outcome: 'complete', findings: [earlier] }] });
+  const clean = (lens, subject) => JSON.stringify({ subject_hash: subject.subject_hash, inspection: { status: 'completed', paths: ['a.mjs'] }, findings: [], evidence: [`${lens}: read a.mjs`] });
+  const claude = fakeClaude(clean);
+  const { code, out } = run(['--base', first, '--head', second, '--lenses', 'risk', '--reason', 'a constant', '--request', 'explain the constant'], { runLens: claude.runLens });
+  assert.equal(code, 0, out);
+  assert.doesNotMatch(claude.calls[0].prompt, /A recheck of earlier findings/);
+  assert.equal(readLensReviews(dir).at(-1).recheckOf, undefined);
 });
 
 test('--doc and --request together, an empty request or a document with no Goal are usage errors, and no lens runs', () => {

@@ -625,3 +625,13 @@ test('C-3: a record of nothing to review whose head lies outside the range asks 
   reviewCoverage(root, { from: one, tip: three, spawn });
   assert.equal(started.filter((name) => name === 'diff').length, 0, started.join(' '));
 });
+
+test('C-3: a forged record of nothing to review whose head lies past the tip covers nothing', () => {
+  // The lens reliability on S5's fix: such a record is taken by its shape, so what keeps it out is that a record of
+  // nothing to review covers only where the range holds its head (`onlyWhole`). No run line names this one.
+  const { root, first, one, two, three } = fourCommits();
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base: first, head: three, reviewedAt: '2026-10-08T00:00:00.000Z', outcome: NOTHING_TO_REVIEW, reason: 'forged' });
+  const coverage = reviewCoverage(root, { from: first, tip: two });
+  assert.deepEqual(ids(coverage.uncovered), [two, one]);
+  assert.equal(coverage.covers.length, 0);
+});

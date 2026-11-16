@@ -26,7 +26,7 @@ import { lensCandidate } from './lib/lens-candidate.mjs';
 import { LENS_NAMES, LENSES, lensPrompt } from './lib/lens-prompts.mjs';
 import { LENS_ANSWER_SCHEMA, lensResult } from './lib/lens-result.mjs';
 import { claudeHome } from './lib/model-home.mjs';
-import { appendLensReview, INCOMPLETE, keepLensAnswer, LENS_REVIEW_SCHEMA, readLensReviews, startLensRun } from './lib/lens-reviews.mjs';
+import { admittedLensReviews, appendLensReview, INCOMPLETE, keepLensAnswer, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
 
 // The model each lens runs on: the Claude home's (`rule:session-model`), a full id, read from the declared list
 // wherever the lenses run. Until 2026-11-10 the lenses ran on a short name, and a short name gives whatever the engine
@@ -224,8 +224,10 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
     return 1;
   }
   const range = `${candidate.base.slice(0, 7)}..${candidate.head.slice(0, 7)}`;
-  // A range that starts where a reviewed lens record ended rechecks what each of its lenses found there (spec 7).
-  const earlier = readLensReviews(cwd).findLast((rec) => rec?.outcome === 'reviewed' && rec.head === candidate.base && Array.isArray(rec.results));
+  // A range that starts where a reviewed lens record ended rechecks what each of its lenses found there (spec 7). Only
+  // a record a run line admits counts (B2-2): one appended by hand would turn the recheck of a correction into a review.
+  const lensRecords = admittedLensReviews(cwd);
+  const earlier = lensRecords.records.findLast((rec) => lensRecords.admitted(rec) && rec.outcome === 'reviewed' && rec.head === candidate.base && Array.isArray(rec.results));
   const priorOf = (lens) => earlier?.results.find((one) => one?.lens === lens)?.findings ?? [];
   const rechecks = earlier !== undefined && (picked.names ?? []).some((lens) => priorOf(lens).length > 0);
   const record = {
