@@ -1,7 +1,7 @@
 # review-gate: one honest review gate
 
 ## State
-JH 207, branch feat/review-gate, pushed at a8ee54a8. V1 closed (L57-L61); V4+V3 4f9103fa reviewed and closed (L62-L65). V2 4c8069dd and its guard fix cfd546ba reviewed and closed (L66-L70); third verifier pass done (L71): B and C built tests first and green in the whole set (L72, L74); next: Codex and lenses, push; then notify ready --pr 896 (A is T10, its own slice after the land, L73). Every codex-review after its --plan and codex-meter; commit the doc before a review (L59); local runs name codex-review.second.test.mjs (L41). Open item, no check now: whether a skip's reason is the owner's words (L56).
+JH 207, branch feat/review-gate, pushed at a8ee54a8. V1 closed (L57-L61); V4+V3 4f9103fa reviewed and closed (L62-L65). V2 4c8069dd and its guard fix cfd546ba reviewed and closed (L66-L70); third verifier pass done (L71): B and C 3b41c3a7 reviewed and closed (L71-L75), T9 done; next: push; then notify ready --pr 896 (A is T10, its own slice after the land, L73). Every codex-review after its --plan and codex-meter; commit the doc before a review (L59); local runs name codex-review.second.test.mjs (L41). Open item, no check now: whether a skip's reason is the owner's words (L56).
 C:\Users\Oficina\.js-harness\background\briefs\2026-11-15T12-20-39-311Z-c126f3fd.md. Orientation done; plan draft and
 advisor answer taken (see Log L2). Next: read verify5 (Temp scratchpad path on line 4 of the lead's
 jh199-verify5-883.md), `git show worktree-full-audit:odd/tasks/full-audit.md`, his words (`js-harness sessions --quote`
@@ -90,7 +90,7 @@ Refusing existing records (S5's 78); anything that changes who decides a waiver.
 - [x] T6 (kind: build) S5, 5fd3e493 (fixes after L22), spec 5: go (L10); old-vs-new push row per open branch first
 - [x] T7 (kind: build) S6, spec 6: lens BLOCKER/CRITICAL owed until a lens recheck, admitted records only
 - [x] T8 (kind: build) S7, spec 7: the quiet line shows both debts
-- [ ] T9 (kind: verify) one opus verifier on the whole: first pass found F1-F3 (L30); second V1-V4 (L48); third A-G (L71), B and C fixed (L72)
+- [x] T9 (kind: verify) one opus verifier on the whole: first pass found F1-F3 (L30); second V1-V4 (L48); third A-G (L71), B and C fixed (L72)
 - [ ] T10 (kind: build) spec 8, route: its own slice from main after PR 896 lands, tests first, real records counted first (L73)
 
 ## Log
@@ -200,3 +200,4 @@ Refusing existing records (S5's 78); anything that changes who decides a waiver.
 - L72 2026-11-16, B and C built tests first. B: the plain row, for a merge of main at the tip alone uncovered above a review that owes, says the correction owed below it as the push does (codexReviewDebt; red then green; check-codex-reviews 147/147). C: the lens result line keeps each finding's severity, location and claim and the run's recheckOf and rechecked, and admission compares them (lens-reviews.mjs said()); red then green, lens tests 38/38. Question 314 (A) asked of the lead at 07:16; ready waits on it. Whole set in the gate.
 - L73 2026-11-16, the lead on question 314 (message to this session, decided and withdrawn): leave L71 A out of PR 896, since it predates the branch and main has it too, so landing 896 makes nothing worse and the PR should not keep growing with each pass. Written as spec 8 and T10: its own slice from main after the land, tests first, real records counted first. Finish the third pass; if nothing else in the PR's own changes, notify ready --pr 896, saying what 9760/9797 leaves out (skips or failures, by name).
 - L74 2026-11-16, whole set green with B and C: 9762 of 9799, 0 failed, 37 skipped, every skip by platform (symlinks or links this machine cannot make ×21, the POSIX runner needing bash, rsync, timeout and flock ×8, mode bits that stop no write ×2, Windows has no Unix mode or executable bit ×2, bash checked off Windows ×1, POSIX-only signal forwarding ×1, the 8.3 short name not reproducible here ×1, dir links EPERM counted in the links). B+C committed.
+- L75 2026-11-16, B and C reviewed: Codex on a8ee54a..3b41c3a correct, 0.87, 0 findings (114,698 input tokens); lenses reliability and risk 0 findings each (10,797 and 10,800). The third pass found nothing else in the PR's own changes (A is T10). T9 done. Next: push, notify ready --pr 896, summary, closed.
