@@ -7,8 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { appRoot, appSessions } from './app-record.mjs';
 import { EFFORTS, heldOfRole, heldValues, menuLine, offHome, sameClaudeModel } from './model-home.mjs';
-import { leadTitle, seniorTitle } from './session-title-guard.mjs';
-import { driftedLeadTitle } from './roster-home.mjs';
+import { driftedLeadTitle, leadTitle, seniorTitle } from './session-title-guard.mjs';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const said = ({ model, effort }) => `${model ?? 'no model'} at ${effort ?? 'no level'}`;
@@ -71,7 +70,7 @@ export function readSettings({ claudeDir, project, readFile = (file) => fs.readF
 /** The doctor row's reading, `{ state, note, fix }`, for the session `env.CLAUDE_CODE_SESSION_ID` names in the
  * project `project`, whose rules file has the text `rulesText` (null when it has none). `n/a` where the project
  * declares no home. `stale` when the app's record of the session holds another model or level than it is held to,
- * the lead's level for a lead (`leadTitle` of the record's title): the fix says what it holds and gives the line for
+ * the lead's level for a lead (`leadTitle` of the record's title, or `driftedLeadTitle`, which adds the rename): the fix says what it holds and gives the line for
  * the user. `ok` otherwise; the note then says when the session was not checked, with no session id or no app record
  * of it. The note carries `settingsNotes` in every state. `claudeDir` is the folder of his user settings. */
 export function modelHomeHealth({

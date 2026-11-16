@@ -42,8 +42,7 @@ import { harnessHome } from './lib/home.mjs';
 import { heldValues } from './lib/model-home.mjs';
 import { homeInForce, offHomeLines, sessionsOffHome } from './lib/home-sessions.mjs';
 import { readHomeSessions } from './lib/home-sessions-read.mjs';
-import { leadTitle, seniorTitle } from './lib/session-title-guard.mjs';
-import { driftedLeadTitle } from './lib/roster-home.mjs';
+import { driftedLeadTitle, leadTitle, seniorTitle } from './lib/session-title-guard.mjs';
 
 /** Whether `title` is held to the lead's level: a lead's title, or one off its shape (odd/tasks/senior-orchestrator.md, T8). */
 const heldAsLead = (title) => leadTitle(title) || driftedLeadTitle(title);

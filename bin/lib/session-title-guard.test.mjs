@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { RULES } from './rules-data.mjs';
 import { writeRules } from './rules.mjs';
-import { leadTitle, sessionTitleRefusal } from './session-title-guard.mjs';
+import { driftedLeadTitle, leadTitle, sessionTitleRefusal } from './session-title-guard.mjs';
 
 const HERE = writeRules(RULES);
 const VALUE = RULES.find((rule) => rule.id === 'session-title').value;
@@ -95,4 +95,12 @@ test('a session titled with the project\'s code passes, and so do a proposal, an
   assert.equal(sessionTitleRefusal({ proposal_id: 'task_ab12cd34' }, HERE, untouched), null, 'a proposal starts as it was proposed');
   assert.equal(sessionTitleRefusal({ ...BRIEF, title: 'Install module for required third-party tools' }, null, untouched), null);
   assert.equal(sessionTitleRefusal({ ...BRIEF, title: 'T9' }, writeRules(RULES.filter((rule) => rule.id !== 'session-title')), untouched), null);
+});
+
+test('a lead\'s title off "<code> ORQ · <purpose>" is drifted, never a lead\'s of the shape nor a handover form (odd/tasks/senior-orchestrator.md, T8)', () => {
+  // L6 as written: the lead titled "JH ORQ orquestador F8" ran at medium while rule:lead-effort said high.
+  for (const title of ['JH ORQ orquestador F8', 'JH ORQ', 'JH ORQ ·orquestador']) assert.equal(driftedLeadTitle(title), true, title);
+  for (const title of ['JH ORQ · orquestador F8', 'JH ORQ nueva · relevo', 'JH ORQ relevada · relevo', 'JH 211 · x', 'JH SR · x', 'orquestador', 'JH ORQUESTA x', null, undefined]) {
+    assert.equal(driftedLeadTitle(title), false, String(title));
+  }
 });

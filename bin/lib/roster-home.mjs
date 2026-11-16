@@ -5,13 +5,7 @@
 // hand. It is apart from ./sessions.mjs, which builds the rows and renders the board, because that module is at its
 // ceiling (bin/conventions-structure.test.mjs). It reads no file and prints nothing: a row comes in, lines come out.
 import { heldOfRole, menuLine, offHome } from './model-home.mjs';
-
-/** Whether `title` is a lead's that drifted off `<code> ORQ · <purpose>` (odd/tasks/senior-orchestrator.md, T8): `<code>
- * ORQ` with no ' · ' and a purpose after it. Such a title holds no role (`roleOfTitle` of ./sessions.mjs reads none),
- * so the lead was judged at the sessions' level on 2026-11-16 while rule:lead-effort said high; the board judges it at
- * the lead's and names it. A handover's `ORQ nueva` and `ORQ relevada` hold no role by design and are not drifted. */
-export const driftedLeadTitle = (title) => typeof title === 'string' && /^\S+ ORQ(?:\s|$)/.test(title)
-  && !/^\S+ ORQ · .*\S/.test(title) && !/^\S+ ORQ (?:nueva|relevada)\b/.test(title);
+import { driftedLeadTitle } from './session-title-guard.mjs';
 
 const OPENED_WORDS = { his: 'opened by him', session: 'opened by a session', command: 'opened by a command', scheduled: 'opened by a scheduled task', unknown: 'opened unknown' };
 const WHERE_WORDS = { sessions: 'in Sessions', routines: 'in Routines', archived: 'archived', 'not-in-app': 'not in the app', unknown: 'where unknown' };
@@ -19,11 +13,14 @@ const WHERE_WORDS = { sessions: 'in Sessions', routines: 'in Routines', archived
 /** What a row holds of the home and what it is held to, as `{ menu, held, off }`. `menu` is the app record's
  * `{ model, effort }` (what his menu holds), null with no `record`. `held` is the `{ model, effort }` of `home`
  * (`{ model, effort, lead }` as the rules give them, each null where the project declares none) the row is held to:
- * the lead's level for the orchestrator's row (`lead`) where the home gives one; null where no home is given or it
+ * the lead's level for the orchestrator's row (`lead`), and for a row whose `title` is a lead's off its shape, then
+ * marked `drifted`, where the home gives one; null where no home is given or it
  * holds nothing, since a project that declares none of those rules marks nothing. `off` is what the menu, or with no
  * record the last reply (`replied`, the same shape), holds that `held` does not (`offHome`), with its `source`
  * (`menu` or `last reply`), else null. */
-export function rowHome(home, { lead = false, senior = false, drifted = false, record = null, replied = null } = {}) {
+export function rowHome(home, { lead = false, senior = false, title = null, record = null, replied = null } = {}) {
+  // A lead's title off its shape is held to the lead's level and named (odd/tasks/senior-orchestrator.md, T8).
+  const drifted = !lead && driftedLeadTitle(title);
   const inForce = home !== null && typeof home === 'object' && [home.model, home.effort, home.lead].some((value) => typeof value === 'string');
   const menu = record === null ? null : { model: record.model ?? null, effort: record.effort ?? null };
   const role = inForce ? heldOfRole(home, { lead: lead || drifted, senior }) : null;
