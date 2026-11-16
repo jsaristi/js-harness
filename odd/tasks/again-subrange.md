@@ -1,10 +1,9 @@
 # again-subrange: an --again over part of a range does not clear an owed correction
 
 ## State
-JH 207, worktree D:/js-harness-worktrees/lens-older-writer, branch feat/lens-older-writer from main 6bd49076 (PR 898
-landed). T3 (L84) in its own PR: test first (red), the older-writer note now names only records whose head is in the
-range checked. Next: the targeted tests, commit, js-harness codex-meter before Codex, Codex and the lenses, PR, ready.
-T5 stays open for his report. The session waits on its notices (rule:wait-for).
+JH 207, worktree D:/js-harness-worktrees/lens-older-writer, branch feat/lens-older-writer from main 6bd49076. T3 (L84)
+done in 6eba0f3f (L32), reviewed, its PR ready for the lead to land. T5 stays open for his report. The session waits on
+its notices (rule:wait-for).
 
 ## Goal
 A clean Codex review at a head that owes a correction settles that correction only where it reads the whole range the
@@ -59,7 +58,7 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
 - [x] T4 (kind: build) spec 1, open: a test that fails without `decidingRecord` in the merge walk's `lastAt` and the row's `mergeOwnAt` (L14)
 - [ ] T5 (kind: build) open, for the lead: a clean review M..H2 that spans the owing head H from inside its range and ends above it clears the correction (L12)
 - [ ] T6 (kind: build) open, for the lead: where a plain review decides, a standing recheck's open finding joins a first recheck and can get a fourth review (L27)
-- [ ] T3 (kind: build) spec 2, in progress (L31): the lens rows' older-writer note counts only records of the range checked
+- [x] T3 (kind: build) spec 2, done in 6eba0f3f (L32): the lens rows' older-writer note counts only records of the range checked
 
 ## Log
 - L1 2026-11-16, the lead (message to JH 207): "PR 896 landed. main 83252ac is now 45a40e8 ... Start T10 from main: the
@@ -99,3 +98,4 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
 - L29 2026-11-16, T6 fixed tests first: the q3 test was red (a second recheck offered from the joint recheck's head); second now also counts the last record at the head rechecked (as main reads it) and the standing rechecks there that owe. Targeted files 417 tests, 0 failed; the recount over the real records, 1,409 heads, the same state on main and the branch at all of them.
 - L30 2026-11-16, T6 checked further: the verifier's probes rerun on the fixed code through real git; only q3 changed, where the fourth review (A3, B3) is now refused as main refuses A3. The fix also refuses a third review of findings reviewed twice where the last record at the head rechecked is a clean recheck and a plain review there owes: main refuses it the same way, so it is meant (the lead on T6). Codex ea7a235..5d09384 correct (0.87); lenses reliability and risk 0 findings, run without --doc, so they judged the code alone.
 - L31 2026-11-16, the lead: "PR 898 landed. main is 6bd49076 and the installed copy is refreshed. T3 (L84) goes as its own PR from main; run js-harness codex-meter before its Codex review and tell me the figure. T5 stays open for his report." T3's test was red first: a record of another branch, of an older writer, was named in the note of a range it has nothing in. The fix counts only those whose head is in the range checked; the no-evidence note still subtracts every older writer's record, so none of the rest is named as another kind.
+- L32 2026-11-16, T3 checked: the tests of coverage, turns, lens records and rows, check-codex-reviews, codex-review and lens-review, 515 tests, 0 failed. js-harness codex-meter before Codex: five-hour 16% used, weekly 92% used (resets 23:15 local). Codex 6bd4907..6eba0f3 correct (0.94), 110,749 input tokens; lenses reliability and risk 0 findings.
