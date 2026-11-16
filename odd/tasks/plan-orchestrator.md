@@ -42,9 +42,10 @@ nobody started.
 
 ## Constraints
 - Four rules are his and change only with words he typed (`rules change`, a quotation with its date): a tapped
-  answer is recorded as "Tapped, not quoted" and does not carry a rule change. So questions 2 and 3 ask for a line
-  in his own words — because `rule:remote-control-yes`, `rule:questions-one-place`, `rule:lead-charter` and
-  `rule:sessions-open-in-sidebar` all say "the orchestrator" today.
+  answer is recorded as "Tapped, not quoted" and does not carry a rule change. `rule:remote-control-yes` and
+  `rule:sessions-open-in-sidebar` have their source already, Spec 7. `rule:questions-one-place` and
+  `rule:lead-charter` do not, so question 2 asks for a line in his own words — because both say "the
+  orchestrator" today.
 - No background session, ever (Spec 5), and none nested (Spec 6): the Plan is a visible, detached app session.
 - One more session in the chain is one more place to hold work: every hop this design adds is a file or a recorded
   notice a command can time, never a relay a session must remember — because the funnel on record was a session
@@ -60,8 +61,8 @@ Five questions, one at a time, in this order; the first two unblock phase 0. Eac
 `notify --to orchestrator --kind question` after the double review, and the lead puts it to him.
 1. The verdict (Depth pass item 4): build the three checks with the role, the checks first (recommended), or the
    role alone, or drop the layer.
-2. Where he talks: only to the Plan (his questions and Remote Control move to it, the lead stops asking him), or to
-   both. A yes changes four rules and needs one typed line.
+2. Where his questions reach him: only in the Plan's chat (the lead stops asking him), or in both. Remote Control is
+   settled by Spec 7, on both orchestrators. A yes changes two rules and needs one typed line.
 3. The Plan's model and level: Fable 5.2 at high (his "el modelo que organiza todo de entrada"; the level is this
    session's reading). Its cost is an estimate (The design, "Cost").
 4. "enjambres de sesiones": sub-agents inside each session (what `fanout-tree.md` designs), or sessions that open
@@ -115,6 +116,7 @@ Five questions, one at a time, in this order; the first two unblock phase 0. Eac
   spec 4: left out because JH 211 builds it as T8 of `odd/tasks/senior-orchestrator.md`; this design only reads its result
   spec 5: `node --test bin/guard.test.mjs`: none, new behaviour (a PLAN start by `sessions start` is refused once T7 lands; the Plan opens visible)
   spec 6: `node --test bin/guard.test.mjs`: none, new behaviour (a Plan start is held to one live Plan, its own worktree, then detached)
+  spec 7: `node --test bin/lib/host-update.test.mjs`: none, new behaviour (the host-update step names the orchestrator session alone today, `bin/lib/host-update.mjs:197-205`)
 - 4. Refutation: the request fails if a plan written as a file already exists and is used, and the failures on
   record are ones a planner above the lead would not see. Run 2026-11-15: `node replay.mjs` (this session's
   scratchpad). Result: 16 stretches opened in 7 days, so the file exists and is used; 4 of the 5 failures of line
@@ -149,6 +151,7 @@ Five questions, one at a time, in this order; the first two unblock phase 0. Eac
 5. "ok recuerda que no se puede abrir ninguna sesion en segundo plano" (2026-11-16T00:10Z, line 402)
 6. "vuelve a abrir el JH SR y nunca anides la sesiones ademas de que ya ninguna va con remote control solo el
    Orquestador" (2026-11-15T22:16Z, 69918425 line 20757)
+7. "El orquestador plan debe tener Remote control osea este y el Plan" (2026-11-16T02:22Z, 699d7c29 line 1389)
 
 ## The design
 - **The role.** A session titled `<code> PLAN · <purpose>`, role `plan`: the onboarding's plan orchestrator, which
@@ -170,7 +173,9 @@ Five questions, one at a time, in this order; the first two unblock phase 0. Eac
 - **One place to talk** (proposal 2, his to decide, question 2). A question is recorded once and addressed to the
   session that holds his chat: the Plan where one is live, the lead where none is. No relay through the lead. The
   lead's own doubts go to the Plan the same way, and the Plan answers what is inside the plan and asks him only
-  what `rule:owner-decisions` lists. Remote Control is turned back on in that session alone.
+  what `rule:owner-decisions` lists. Remote Control is on in both orchestrators, the Plan and the lead, and in no
+  other session (Spec 7, which replaces "solo el Orquestador" of Spec 6): the host-update step turns it back on in
+  both, and `rule:remote-control-yes` and `rule:sessions-open-in-sidebar` change with line 1389 as their source.
 - **Three clocks, read from the records by a command** (proposal 3, taken and made concrete). `ready-age`: a ready
   notice with neither a land nor a question shown, past a threshold by day. `waiting-age`: a waiting notice or a
   question from a session, with no act of the lead toward it, past a threshold. `item-unbound`: a stretch item
@@ -201,8 +206,9 @@ He opens a session in the app on Fable 5.2 at high and names it `JH PLAN · plan
 `start_session`, so a title typed by hand passes. It works from this document. What works today: his chat with it;
 the plan as a stretch plan and a roadmap PR; the plan handed to the lead by `SendMessage` to its `local_…` id with
 the file's path. What does not, until the build: `notify --to plan` throws, so sessions keep reporting to the lead
-and the lead forwards by message; his questions stay in the lead's chat and Remote Control with the lead
-(`rule:questions-one-place`, `rule:remote-control-yes`) unless his typed line changes them first; `rules applied`
+and the lead forwards by message; his questions stay in the lead's chat (`rule:questions-one-place`) unless his typed
+line changes it first; Remote Control he turns on in the Plan himself (Spec 7), since the host-update step still
+names the lead alone; `rules applied`
 and the board list the Plan off the home (it is read as a work session on Fable); the advisor gate is not exempt,
 about 214k Fable tokens for each gated act; no clock runs, so the audit is the Plan reading `js-harness sessions`
 and `stretch status` on his request. It is his choice (question 5).
@@ -229,9 +235,10 @@ opus readers launched together; a writer sub-agent only where two units have dis
   `bin/lib/channel.mjs`, `bin/lib/model-shape.mjs`, `bin/lib/model-home.mjs`, `bin/lib/rules-data.mjs`,
   `bin/lib/rules-coverage-data.mjs`, `bin/guard.mjs`, `bin/lib/guard.mjs`, `bin/advisor-gate.mjs`, the five
   reporters, their tests.
-- [ ] T6 (kind: build) (1) His desk, only on his typed line (question 2): a question addressed to the session that
-  holds his chat (`bin/lib/channel.mjs:131`, `bin/notify.mjs`), the host-update step (`bin/lib/host-update.mjs`),
-  and the four rules by `rules change`, one commit a rule. Session Y, after T5. High risk 3: a verifier.
+- [ ] T6 (kind: build) (1, 7) His desk: Remote Control on both orchestrators (`bin/lib/host-update.mjs`,
+  `rule:remote-control-yes` and `rule:sessions-open-in-sidebar` by `rules change`, source line 1389); and, only on
+  his typed line (question 2), a question addressed to the session that holds his chat (`bin/lib/channel.mjs:131`,
+  `bin/notify.mjs`) with `rule:questions-one-place` and `rule:lead-charter`. One commit a rule. Session Y, after T5. High risk 3: a verifier.
 - [ ] T7 (kind: docs) (1, 2) The texts: "The plan orchestrator" in `bin/lib/lead-protocols.mjs` and the Plan's part
   of the orchestrator skill (`bin/lib/manifest.mjs`), conditional on a Plan holding its role. Session Y, after T6
   and after JH 211 releases both files. High risk 3: a verifier.
@@ -256,4 +263,7 @@ opus readers launched together; a writer sub-agent only where two units have dis
   not confirm it; `fanout-tree.md` reads his earlier "sub sesiones" the same way. Question 4.
 - L6 The advisor before writing: replay PR 883 against the metric; classify the tails before quoting them; count
   the stretches. All three run; they moved the verdict from supports to refutes and the clocks ahead of the role.
+- L8 2026-11-16T02:22Z, his decision, typed (Spec 7), carried by the lead and read here with `--quote`: Remote
+  Control on both orchestrators. It settles half of question 2 as first written; what stays open is where his
+  questions reach him. Written while the double review read the earlier copy: the confirming read covers it.
 - L7 The usage tool names his plan otherwise than this project's notes do; the page gives no plan name.
