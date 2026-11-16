@@ -17,6 +17,7 @@ test('a step that launches claude --bg or js-harness sessions start is found, ho
     ['/usr/bin/env claude --bg "p"', 'claude --bg'],
     ['echo id | xargs -n 1 claude --bg', 'claude --bg'],
     ['xargs -I{} js-harness sessions start --resume {} < ids', 'js-harness sessions start'],
+    ['echo id | xargs -J % claude --bg %', 'claude --bg'],
     ['claude --bg=true "p"', 'claude --bg'],
     ['claude respawn --all', 'claude respawn'],
     ['claude --cloud "fix the tests"', 'claude --cloud'],

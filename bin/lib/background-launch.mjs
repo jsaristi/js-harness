@@ -9,8 +9,8 @@ import { programOf } from './chained-step-guard.mjs';
 // The keywords that open a condition: the command after one is a step of its own.
 const CONDITIONS = new Set(['if', 'elif', 'while', 'until']);
 
-// The options of xargs that take the next word as their value.
-const XARGS_VALUES = new Set(['-n', '-L', '-P', '-s', '-d', '-E', '-a', '-I', '--max-args', '--max-lines', '--max-procs', '--max-chars', '--delimiter', '--eof', '--arg-file', '--replace']);
+// The options of xargs, GNU's and BSD's, that take the next word as their value.
+const XARGS_VALUES = new Set(['-n', '-L', '-P', '-s', '-d', '-E', '-a', '-I', '-J', '-R', '-S', '--max-args', '--max-lines', '--max-procs', '--max-chars', '--delimiter', '--eof', '--arg-file', '--replace']);
 
 /** Whether `args` hold the option `name`, alone or with its value after `=`. */
 const hasOption = (args, name) => args.some((arg) => arg === name || arg.startsWith(`${name}=`));
