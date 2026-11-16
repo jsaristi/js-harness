@@ -4,9 +4,11 @@
 Design only, no code. Version 3, 2026-11-16, by JH SR at the lead's word (T12 of
 `odd/tasks/plan-orchestrator.md`, its Spec 9). Read twice: read d8b87396 found 14 failures and read 7d891ab3
 found 13, all 27 taken (L4, L5). Version 3 is the second correction: one delivery path for every role in place of
-four. It waits for its third and last read; what that read still finds goes to him as problems. Branch
-`docs/session-roles`, cut from main at 035a2dcc, worktree `rule-lead-effort-split-aac740`. Nothing is built.
-Three things are his and are drafted for the lead to put to him ("Ask me before").
+four. The third and last read (ea3a7283) still finds 21 real failures, four of them high (L6): they are open,
+not corrected, and go to him as problems (`rule:double-review`: no fourth read). The design is not approved.
+Branch `docs/session-roles`, cut from main at 035a2dcc, worktree `rule-lead-effort-split-aac740`. Nothing is
+built. Three things are his and were drafted for the lead to put to him ("Ask me before"); they are not recorded
+as questions, since the last read disputes the first (L6).
 
 ## Goal
 Each session that holds a role (the lead, the Plan, the senior) reads what its role is, from one text the harness
@@ -264,3 +266,28 @@ card ships without the lines that wait for a rule.
   estimate from what was measured, no senior stopped for T4, the senior's card drafted; Codex 2, the skill's
   "Two kinds of session" and the paragraph of `CLAUDE.md`, question 3; Codex 3, the sub-agents' line and
   `rule:senior-effort` in the senior's card, with its test.
+- L6 Double review 3, the last (`rule:double-review`), read ea3a7283-5bc5-40c1-aba3-0d06f5f71375 of version 3
+  (measured 3,445,474 Claude and 767,513 Codex tokens): Claude 14 findings, Codex 7. It still finds real failures,
+  so they go to him as problems and none is corrected here; version 3 stands as read. Their full text is in the
+  review's record (`double-reviews.jsonl` under the git common dir) and in JH SR's scratchpad output. High:
+  (Claude 1, Codex 5) moving the lead's sentences out of `bin/lib/manifest.mjs:154-156` moves the home of
+  `rule:lead-charter`, his rule, which the document never says, and `npm run check` would fail; (Claude 2, Codex
+  2) the once-a-session line rests on a false precedent, since the pause notice is not found in the transcript
+  but through kept state, and a marker in the transcript never arms again after a compaction; (Claude 3) "every
+  project gets them" contradicts a senior's card whose sources are this repository's rules and a feature
+  document; (Codex 1) a hook after a tool call cannot make a session know its role when it starts: the first
+  call can already act, and a session that answers in text alone gets no card. Medium: every card's line on his
+  questions will go stale when his typed line moves them to the Plan (Claude 4); the senior's draft adds duties
+  with no source, such as an unconditional "you ask him nothing" (Claude 5); the Plan's phase 0 opening keeps a
+  role section no task removes (Claude 6); question 1 asks what his words already answer, since "cada sesion"
+  takes in the work sessions (Claude 7); a Plan's resume block still carries the work session's instructions
+  (Codex 3); T2 does wait for his answer to question 1 (Codex 4). Low: a carrier before the first act, `rules
+  --hook`, is not weighed, and a relieved lead keeps its card (Claude 8); the failed-tool-call entry does give
+  the model context (Claude 9, Codex 6); "42 callers" does not reproduce (Claude 10); this senior was misread at
+  both of its compactions, not one (Claude 11); "T5 reads delivery" should say T4 (Claude 12, Codex 7); L4 does
+  not answer read 1 finding by finding (Claude 13); rendering from a constant gives `lead-protocols.mjs` an
+  import D11 forbade (Claude 14). What three reads cost: 6,986,244 Claude and 1,716,658 Codex tokens, with the
+  explorer's 152,840. What holds across the three versions: the card itself (one text a role, six parts, one
+  home, a budget) and the resume block as its carrier after a compaction. What does not hold yet: how the card
+  reaches a session at its start, and where the lead's sentences live. The three questions of "Ask me before"
+  are not recorded: the read disputes the first, and the design is not approved.
