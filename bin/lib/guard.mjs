@@ -87,8 +87,6 @@ export function openingRefusal(toolName, projectData) {
     + `it is refused even when he asked for it.${rule.note}`;
 }
 
-
-
 /** The tool that starts a session in the desktop app, a row in his sidebar. */
 export const SESSION_TOOL = 'mcp__ccd_session__start_session';
 

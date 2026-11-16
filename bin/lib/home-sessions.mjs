@@ -42,8 +42,8 @@ const correctionOf = (job) => `closing it${job.working === true ? ' once its job
  * background row its `asked`, `replied` and `state`. A background session is judged by its last reply, and
  * by what its start asked only where no reply was read. `corrects` is the act that puts it on the home: `his menu`
  * for a lead in the app, since only the user changes a lead's own; `the lead's session tools` for another desktop
- * session; a resume for a background one, which takes the home's, once its job is no longer at work where it is, since
- * `sessions start --resume` refuses a conversation a job works; none for a job the harness removed, which is in no
+ * session; for a background one, `correctionOf`'s closing and start_session, since a background resume is refused
+ * where rule sessions-open-in-sidebar is declared; none for a job the harness removed, which is in no
  * row: `removedOff` counts those off the home.
  *
  * An archived desktop session is in no row: nothing corrects one while it is archived, and this machine held 124 of

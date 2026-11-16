@@ -42,7 +42,7 @@ export function backgroundLaunch(command) {
 }
 
 /** Why a Bash step that launches a background session, `launch` (`claude --bg` or `js-harness sessions start`, from
- * `backgroundLaunch` of ./chained-step-guard.mjs), is refused in the project whose rules file has the text
+ * `backgroundLaunch` above), is refused in the project whose rules file has the text
  * `projectData`, or null where the rule `sessions-open-in-sidebar` gives no value (T7, as below). */
 export function backgroundLaunchRefusal(launch, projectData) {
   const rule = sidebarRule(projectData);
