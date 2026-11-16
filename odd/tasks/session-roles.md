@@ -7,8 +7,8 @@ found 13, all 27 taken (L4, L5). Version 3 is the second correction: one deliver
 four. The third and last read (ea3a7283) still finds 21 real failures, four of them high (L6): they are open,
 not corrected, and go to him as problems (`rule:double-review`: no fourth read). The design is not approved.
 Branch `docs/session-roles`, cut from main at 035a2dcc, worktree `rule-lead-effort-split-aac740`. Nothing is
-built. Three things are his and were drafted for the lead to put to him ("Ask me before"); they are not recorded
-as questions, since the last read disputes the first (L6).
+built. Three things are his ("Ask me before"): at the lead's word they are recorded as questions 316, 317 and
+318, the first with the last read's dispute in its text (L7). The lead puts them to him one at a time.
 
 ## Goal
 Each session that holds a role (the lead, the Plan, the senior) reads what its role is, from one text the harness
@@ -291,3 +291,13 @@ card ships without the lines that wait for a rule.
   home, a budget) and the resume block as its carrier after a compaction. What does not hold yet: how the card
   reaches a session at its start, and where the lead's sentences live. The three questions of "Ask me before"
   are not recorded: the read disputes the first, and the design is not approved.
+- L7 The lead's word after L6 (by message, 2026-11-16 15:04 local): "Record questions 2 and 3 now with their
+  drafted texts. Record question 1 too, and put read 3's dispute in its text: his line "cada sesion" may already
+  answer it. I put all three to him one at a time when he returns. Correct nothing yet and run no more reads: the
+  21 findings and who corrects them go to him as a problem, along with the measured spend. Keep PR 899 a draft.
+  Phase 0 stays as stored." Recorded in the channel: question 316 (do the numbered work sessions get a card;
+  its text says the last read holds his "cada sesion" may already answer yes), question 317 (the two rules for
+  the senior, with a third option for the second rule alone, since it is the one that already failed) and
+  question 318 (scoping the "one feature a session" paragraph of `CLAUDE.md` to work sessions). Each says the
+  design is not approved and that a yes authorizes no build. L6's last sentence, that the questions are not
+  recorded, held until this line. Nothing is corrected; draft PR 899.
