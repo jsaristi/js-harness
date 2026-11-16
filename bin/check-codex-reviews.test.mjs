@@ -2069,3 +2069,30 @@ test('F3: a correction rechecked before the review went off owes nothing, and th
   assert.equal(row.pass, true, row.detail);
   assert.match(row.detail, /the Codex review is off at the pushed commit/);
 });
+
+test('F3: a later skip of commits made with the review off does not hide the review that owes below them', () => {
+  // Codex on F3 (P2): the newest covered commit was read from any record, so a skip O..S of commits made off made S
+  // the head read, and the walk back from the tip could not cross the uncovered commit that turned the review off.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const off = commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  const later = commit(root, 'c.js', 'made with the review off', 'feat: more, with the review off');
+  record(root, off, later, { outcome: 'unavailable', reason: 'nothing to review here' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('F3: a skip from the owing head pays only where it ends on the history pushed', () => {
+  // Codex on F3 (P2): the record log is shared by every branch and worktree, so a skip from that head to another
+  // branch's commit, or to a commit that does not exist, paid this branch's correction.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  git(root, 'checkout', '-b', 'elsewhere');
+  const other = commit(root, 'd.js', 'another branch', 'feat: elsewhere');
+  git(root, 'checkout', 'feature');
+  commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  record(root, head, other, { outcome: 'unavailable', reason: 'the owner: "no"' });
+  record(root, head, 'f'.repeat(40), { outcome: 'unavailable', reason: 'the owner: "no"' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});

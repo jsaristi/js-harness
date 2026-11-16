@@ -260,11 +260,16 @@ function madeWithReviewOn(cwd, git, head, { spawn, remote }) {
 function owedWhereOff(cwd, git, head, tip, { spawn, remote }) {
   const state = codexReviewCoverage(cwd, head, { spawn, remote });
   if (state.unknown) return null;
-  const left = new Set(state.uncovered.map((commit) => commit.id));
-  const owed = correctionOwed(cwd, { ...state, codeCommits: state.codeCommits.filter((commit) => !left.has(commit.id)) }, { spawn });
+  // Read from the newest code commit a review covers: a later skip or record of nothing to review, of commits made off,
+  // would put the read past the uncovered commit that turned the review off, where the walk back stops (Codex on F3).
+  const reviewed = new Set(state.covers.filter(({ rec }) => rec.outcome === 'reviewed').flatMap(({ covered }) => [...covered]));
+  const owed = correctionOwed(cwd, { ...state, codeCommits: state.codeCommits.filter((commit) => reviewed.has(commit.id)) }, { spawn });
   if (!owed?.refuse) return null;
   const shortOf = (id) => git(['rev-parse', '--short', id])?.trim() ?? id.slice(0, 7);
-  const skip = readCodexReviews(cwd, { spawn }).findLast((rec) => isValidCodexReview(rec) && rec.outcome === 'unavailable' && rec.base === owed.of);
+  // The record log is shared by every branch and worktree: a skip pays only where it ends on the history pushed, at
+  // or past the owing head (Codex on F3).
+  const onLine = (older, newer) => spawn('git', ['merge-base', '--is-ancestor', older, newer], { cwd, encoding: 'utf8' }).status === 0;
+  const skip = readCodexReviews(cwd, { spawn }).findLast((rec) => isValidCodexReview(rec) && rec.outcome === 'unavailable' && rec.base === owed.of && onLine(rec.base, rec.head) && onLine(rec.head, tip));
   if (skip !== undefined) return { paid: `skip ${shortOf(skip.base)}..${shortOf(skip.head)} pays the correction the review that ended there owes while the Codex review is off, and stays listed: ${skip.reason}` };
   const step = reviewCommand('codex-review', { base: shortOf(owed.of), at: tip.slice(0, 12), flags: ['--unavailable "<the owner\'s own words>"'] });
   return {
