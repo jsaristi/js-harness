@@ -34,7 +34,7 @@ L42, L56, L73). The owner was away; no question went to him.
 - This session:
   - V1's rules: R1 and R3, and R4 made strict after Codex's P1 (L57-L61).
   - V2's transition rule, counted first: 598 of 598 admitted are kept (L66).
-  - B and C are fixed in this PR; D-G are written as notes (L71, L76).
+  - B, C, e1b, D's message and the no-HEAD case are fixed in this PR; E-G are notes (L71, L76, L78-L83).
 
 ## Failures and lessons
 - **Local runs left out codex-review.second.test.mjs**, so GitHub refused a commit. Local runs now name both files (L41).
@@ -55,6 +55,7 @@ L42, L56, L73). The owner was away; no question went to him.
   branch. This session builds it from main after the land, as its own slice.
 - **V2's cut:** it has not happened on the real log yet. The 5 old unnamed lens run lines stay nameable until the
   first record from the new writer (L66, L71 D).
+- **The lens note on older writers counts the whole log** (L84): after the cut it may name a record of another range; open for the lead.
 - **A skip's reason:** whether it is the owner's words stays an open item, with no check (L56).
 
 ## Cost
