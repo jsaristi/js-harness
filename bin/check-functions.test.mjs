@@ -266,5 +266,5 @@ test('with the Codex review off, the review row says the lenses are the one revi
   const { checkReviewDebt } = await import('./check.mjs');
   const root = pushed(t);
   commit(root, { 'bin/b.mjs': 'y\n', 'harness.json': '{ "functions": { "codexReview": "off", "lensReview": "on" } }\n' });
-  assert.match(checkReviewDebt(root).detail, /^no Claude lens record for 1 of 1 code commit since origin\/main; the Codex review is off here, so the lenses are the one review, and no push is refused for it$/);
+  assert.match(checkReviewDebt(root).detail, /^no Claude lens record for 1 of 1 code commit since origin\/main; the Codex review is off here, so the lenses are the one review, and no push is refused for a missing record, only for a correction owed$/);
 });

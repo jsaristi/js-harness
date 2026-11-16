@@ -2015,3 +2015,57 @@ test('F2: a bare recheckOf record at the head that owes, with no run line, does 
   assert.equal(row.pass, false, row.detail);
   assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
 });
+
+// F3 (the opus verifier on PR 896; the lead, L34 and L42 of odd/tasks/review-gate.md): turning the Codex review off at
+// the tip does not drop a correction a review already owes. While it is off, `codex-review` records no recheck, so the
+// correction is paid by a recheck made with the review on again, or by a skip from the owing head whose reason carries
+// the owner's words; the skip pays it only while the review is off at the tip, and is listed.
+const OFF = `${JSON.stringify({ functions: { codexReview: 'off' } })}\n`;
+
+test('F3: a commit that only turns the Codex review off does not drop the correction the review below it owes', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const tip = commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+  assert.ok(row.lines.join('\n').includes(priorLine(finding)), row.lines.join('\n'));
+  assert.match(row.next.text, new RegExp(`js-harness codex-review --base ${short(root, head)} --at ${tip.slice(0, 12)} --unavailable`));
+});
+
+test('F3: code committed after the review went off does not hide the correction owed below it', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  commit(root, 'c.js', 'made with the review off', 'feat: more, with the review off');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('F3: with the review off at the tip, a skip from the owing head with its reason pays the correction, and is listed', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const tip = commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  record(root, head, tip, { outcome: 'unavailable', reason: 'the owner: "no, leave it"' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  assert.ok(row.lines.some((line) => line.includes(`${short(root, head)}..${short(root, tip)}`) && line.includes('the owner: "no, leave it"')), row.lines.join('\n'));
+});
+
+test('F3: with the review on, a skip from the owing head pays no correction', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const doc = commit(root, 'docs/NOTES.md', 'notes', 'docs: notes');
+  record(root, head, doc, { outcome: 'unavailable', reason: 'the owner: "no"' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('F3: a correction rechecked before the review went off owes nothing, and the off row passes as before', () => {
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  const fix = commit(root, 'b.js', 'two, fixed', 'fix: read the right field');
+  run(root, { id: 'run-2', answer: { verdict: 'correct', findings: [] }, recheck: { of: head, findings: 1, fixed: 1, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } });
+  record(root, head, fix, { run: 'run-2', recheckOf: head });
+  commit(root, 'harness.json', OFF, 'chore: turn the Codex review off');
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+  assert.match(row.detail, /the Codex review is off at the pushed commit/);
+});

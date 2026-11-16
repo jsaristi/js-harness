@@ -9,12 +9,12 @@ import { reviewParts } from './codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './codex-review-plan.mjs';
 import { beyondLines, defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, remoteHoldsNoBranch, reviewCoverage, reviewStart, admittedRecords } from './codex-review-coverage.mjs';
 import { mergeTurn, recheckAt, turnsCheaper } from './codex-review-turns.mjs';
-import { codexReviewsPath, isValidCodexReview } from './codex-reviews.mjs';
+import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './codex-reviews.mjs';
 import { readCodexReviewRuns } from './codex-review-runs.mjs';
 import { classifyRecheck, ESCALATION_SAID, priorLine, recheckState, runAnswerFindings } from './codex-review-recheck.mjs';
 import { counted, leftOutOf, rangeFiles, reviewScope } from './codex-review-scope.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit, harnessOfTree, workingTree } from './project-functions.mjs';
-import { firstStep, noStep } from './next-step.mjs';
+import { commandStep, firstStep, noStep, reviewCommand } from './next-step.mjs';
 import { reviewStep } from './lens-review-rows.mjs';
 // The Claude lens rows, beside Codex's, for `check` to import from one place (odd/tasks/f8-s1-reviews.md, T4).
 export { checkLensReviews } from './lens-review-rows.mjs';
@@ -155,6 +155,7 @@ function correctionOwed(cwd, { codeCommits, covers, tip }, { spawn, below = null
     return {
       refuse: true,
       through,
+      of: from,
       detail: `the Codex review that ended at ${at} owes a correction: ${findings(state.findings.length)} open, not rechecked`,
       lines: state.findings.map(priorLine),
       next: firstStep('fix the open findings above in code and commit the fix'),
@@ -213,9 +214,12 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
   if (atTip?.value === 'off') {
     const madeOn = madeWithReviewOn(cwd, git, head, { spawn, remote });
     if (madeOn) return madeOn;
+    const owed = owedWhereOff(cwd, git, head, tip, { spawn, remote });
+    if (owed?.refuse) return owed.row;
     const row = { name: 'codex-review', pass: true, detail: `the Codex review is off at the pushed commit (${atTip.because}), so no record is asked for` };
     const turned = turnsReviewOff(cwd, git, spawn, remote, tip);
-    return turned ? { ...row, lines: [turned] } : row;
+    const lines = [...(turned ? [turned] : []), ...(owed?.paid ? [owed.paid] : [])];
+    return lines.length ? { ...row, lines } : row;
   }
   const row = codexCoverageRow(cwd, head, { spawn, remote });
   if (!atTip?.errors.length) return row;
@@ -243,6 +247,35 @@ function madeWithReviewOn(cwd, git, head, { spawn, remote }) {
     // Bound to the newest of them, where the review is on: `codex-review` records nothing at a head with it off (Codex on S4).
     next: reviewStep(cwd, { spawn, ...review, tip: asked[0].id }),
     review,
+  };
+}
+
+/** The correction a Codex review owes where the review is off at the pushed commit `tip` (F3, the opus verifier on pull
+ * request 896; the lead, L34 and L42 of odd/tasks/review-gate.md): `null` when none is owed or the range cannot be
+ * read; `{ paid }`, the line of the skip that pays it; else `{ refuse: true, row }`. It is read from the code commits a
+ * record covers, as `correctionOwed` reads it, since the commits made after the review went off ask for none. While
+ * the review is off `codex-review` records no recheck, so the correction is paid by a recheck made with it on again,
+ * or by a skip from the owing head, recorded on the owner's typed no with his words as its reason; the skip pays it
+ * only here, with the review off at the tip, never with it on. */
+function owedWhereOff(cwd, git, head, tip, { spawn, remote }) {
+  const state = codexReviewCoverage(cwd, head, { spawn, remote });
+  if (state.unknown) return null;
+  const left = new Set(state.uncovered.map((commit) => commit.id));
+  const owed = correctionOwed(cwd, { ...state, codeCommits: state.codeCommits.filter((commit) => !left.has(commit.id)) }, { spawn });
+  if (!owed?.refuse) return null;
+  const shortOf = (id) => git(['rev-parse', '--short', id])?.trim() ?? id.slice(0, 7);
+  const skip = readCodexReviews(cwd, { spawn }).findLast((rec) => isValidCodexReview(rec) && rec.outcome === 'unavailable' && rec.base === owed.of);
+  if (skip !== undefined) return { paid: `skip ${shortOf(skip.base)}..${shortOf(skip.head)} pays the correction the review that ended there owes while the Codex review is off, and stays listed: ${skip.reason}` };
+  const step = reviewCommand('codex-review', { base: shortOf(owed.of), at: tip.slice(0, 12), flags: ['--unavailable "<the owner\'s own words>"'] });
+  return {
+    refuse: true,
+    row: {
+      name: 'codex-review',
+      pass: false,
+      detail: `${owed.detail}; turning the Codex review off at the pushed commit does not pay it`,
+      lines: [...owed.lines, 'it is paid by a recheck made with the review on again, or, on the owner\'s typed no, by a skip from that head with his words as its reason'],
+      next: commandStep(step),
+    },
   };
 }
 

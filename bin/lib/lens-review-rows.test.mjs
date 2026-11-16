@@ -195,7 +195,7 @@ test('the review row lists the skips of both reviews that still owe one, and dro
 
 test('with the Codex review off, the lenses are the one review: their debt is still said, and no push is refused for it (S9)', () => {
   withoutAutoMaintenance(() => commit('harness.json', '{ "functions": { "codexReview": "off", "lensReview": "on" } }\n', 'chore: codex review off'));
-  assert.equal(debt().detail, 'no Claude lens record for 2 of 2 code commits since origin/main; the Codex review is off here, so the lenses are the one review, and no push is refused for it');
+  assert.equal(debt().detail, 'no Claude lens record for 2 of 2 code commits since origin/main; the Codex review is off here, so the lenses are the one review, and no push is refused for a missing record, only for a correction owed');
   assert.equal(row().pass, true);
 });
 
@@ -386,4 +386,25 @@ test('B2-2: a recheck that fixes the finding but marks a new one blocking passes
   assert.equal(said.pass, true);
   assert.match(said.lines.join('\n'), /left 1 BLOCKER or CRITICAL or blocking finding open/);
   assert.match(said.lines.join('\n'), /risk WARNING a\.mjs:1 \[blocks\] the fix exposes a token/);
+});
+
+// F3 (the opus verifier on PR 896; the lead, L34 of odd/tasks/review-gate.md): turning the Codex review off at the tip
+// asks no lens record of what is uncovered, as before, but does not drop a correction a lens review already owes,
+// as the door does not; `lens-review` records the recheck with the review off.
+const CODEX_OFF = '{ "functions": { "codexReview": "off", "lensReview": "on" } }\n';
+
+test('F3: turning the Codex review off at the tip keeps the lens correction owed until a recheck pays it', () => {
+  const run = record(base, head, found('risk', [finding('CRITICAL')]));
+  let off;
+  withoutAutoMaintenance(() => {
+    fs.writeFileSync(path.join(dir, 'harness.json'), CODEX_OFF);
+    off = commit('a.mjs', 'export const a = 3;\n', 'fix: the finding, with the Codex review off');
+  });
+  const said = row();
+  assert.equal(said.pass, false, said.detail);
+  assert.match(said.detail, /the lens review that ended at [0-9a-f]{7} owes a correction: 1 BLOCKER or CRITICAL finding open, not rechecked/);
+  record(head, off, { recheckOf: run, rechecked: { risk: [run] }, ...found('risk', []) });
+  const paid = row();
+  assert.equal(paid.pass, true, paid.detail);
+  assert.equal(paid.detail, 'the review is off at the pushed commit, so no lens record is asked for');
 });

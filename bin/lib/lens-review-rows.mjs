@@ -261,7 +261,7 @@ export function checkReviewDebt(cwd, { spawn = spawnSync, remote = 'origin' } = 
     if (owed) skipLines.unshift(...owed.lines);
     skipLines.push(...openLines(state));
     const correction = owed ? `; ${owed.detail}` : '';
-    const off = reviewOffAt(cwd, 'HEAD', spawn) ? '; the Codex review is off here, so the lenses are the one review, and no push is refused for it' : '';
+    const off = reviewOffAt(cwd, 'HEAD', spawn) ? '; the Codex review is off here, so the lenses are the one review, and no push is refused for a missing record, only for a correction owed' : '';
     if (uncovered.length) return row(`no Claude lens record for ${uncovered.length} of ${plural(codeCommits.length, 'code commit')} since ${base}${correction}${owing}${off}${note}`, [...uncoveredLines(state), ...skipLines]);
     const said = codeCommits.length ? `every one of ${plural(codeCommits.length, 'code commit')} since ${base} has a Claude lens record` : `no code commits since ${base} that ask for a lens record`;
     return row(`${said}${correction}${owing}${off}${note}`, skipLines);
@@ -274,7 +274,14 @@ export function checkReviewDebt(cwd, { spawn = spawnSync, remote = 'origin' } = 
  * the record; passes with a line for each skip that covers one. A project with its review switched off asks for none. */
 export function checkLensReviews(cwd, head = 'HEAD', { spawn = spawnSync, remote = 'origin' } = {}) {
   const name = 'lens-review';
-  if (reviewOffAt(cwd, head, spawn)) return { name, pass: true, detail: 'the review is off at the pushed commit, so no lens record is asked for' };
+  if (reviewOffAt(cwd, head, spawn)) {
+    // Off at the tip, nothing uncovered is asked for, but a correction a lens review already owes stays owed until a
+    // recheck pays it, as at the door (F3, the lead, L34 of odd/tasks/review-gate.md); `lens-review` records it off.
+    const state = lensCoverage(cwd, head, { spawn, remote });
+    const owed = state.unknown ? null : correctionRefusal(cwd, state, spawn);
+    if (owed) return { name, pass: false, ...owed };
+    return { name, pass: true, detail: 'the review is off at the pushed commit, so no lens record is asked for' };
+  }
   const state = lensCoverage(cwd, head, { spawn, remote });
   if (state.unknown && remoteHoldsNoBranch(cwd, { spawn, remote })) {
     return { name, pass: true, detail: `${remote} holds no branch yet, so this first push passes with no lens record, as the codex-review row says of its own` };
