@@ -601,3 +601,27 @@ test('a spawn that fails every merge-base call gives no base left out, and throw
   assert.equal(baseLeftOut(root, { from: one, spawn: failing }), null);
   assert.equal(baseLeftOut(root, { from: one, spawn: throwing }), null);
 });
+
+test('C-3: a record of nothing to review whose base moved past the fork point is admitted by the range the review read', () => {
+  // Codex on S5: `codex-review` reviews from the merge base when the base it was given has moved on, and keeps the
+  // given base in the record. The branch's commit and its revert change nothing from there, though the two ends differ.
+  const { root, first } = makeRepo();
+  git(root, 'checkout', '-q', '-b', 'feat');
+  const added = commit(root, 'x.js', 'x', 'feat: x');
+  git(root, 'revert', '--no-edit', 'HEAD');
+  const reverted = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '-q', 'main');
+  const moved = commit(root, 'c.js', 'c', 'feat: c on main');
+  record(root, moved, reverted, { outcome: NOTHING_TO_REVIEW, reason: 'the range changes no file' });
+  const coverage = reviewCoverage(root, { from: first, tip: reverted });
+  assert.deepEqual(ids(coverage.uncovered), [], `the commit ${added.slice(0, 7)} and its revert are covered`);
+});
+
+test('C-3: a record of nothing to review whose head lies outside the range asks git nothing', () => {
+  // The lens reliability on S5: admission asked git of every such record ever written, and history grows.
+  const { root, first, one, three } = fourCommits();
+  record(root, first, one, { outcome: NOTHING_TO_REVIEW, reason: 'the range changes no file' });
+  const { spawn, started } = countingSpawn();
+  reviewCoverage(root, { from: one, tip: three, spawn });
+  assert.equal(started.filter((name) => name === 'diff').length, 0, started.join(' '));
+});

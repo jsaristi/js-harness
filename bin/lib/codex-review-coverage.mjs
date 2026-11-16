@@ -261,7 +261,10 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read,
   // Codex's records, unless a caller names its own: those a run line admits (`admittedCodexReviews`, S5).
   const codex = read === undefined && isValid === undefined ? admittedCodexReviews(cwd, { spawn, where }) : null;
   const records = codex ? codex.records : (read ?? readCodexReviews)(cwd, { spawn, where });
-  const valid = records.filter(codex ? codex.admitted : (isValid ?? isValidCodexReview));
+  // A record of nothing to review covers only where the range holds its head (`onlyWhole` below), so admission, which asks
+  // git of it, is asked of no other: one of them outside the range is taken by its shape and then skipped (lens on S5).
+  const admit = codex ? (rec) => (rec.outcome === NOTHING_TO_REVIEW && !rangeIds.has(rec.head) ? isValidCodexReview(rec) : codex.admitted(rec)) : null;
+  const valid = records.filter(admit ?? isValid ?? isValidCodexReview);
   // A record can cover part of the range only when its head is in it, or lies past the tip (a review of
   // base..D still covers C when C is the tip). Any other record is unrelated, and expanding it would cost
   // one git process per record ever written.
@@ -311,7 +314,8 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read,
  * at its base, and no earlier record claimed that run over that range. A record anyone could append by hand, as the 78 written before
  * run lines were, covers nothing (C-3 and B2-12 of the full audit of 2026-11-14; his answers to questions 293 and 299
  * on 2026-11-15). A skip is admitted as it is, since every row lists it as no review; a range with nothing to review
- * only where git finds that it changes no file a review reads, asked of such a record alone. */
+ * only where git finds that it changes no file a review reads from the merge base of its ends, asked of such a record
+ * alone. */
 export function admittedCodexReviews(cwd, { spawn = spawnSync, where } = {}) {
   // Where the two files are is asked of git once, as reading the records alone asked it: the rows count their processes.
   const file = where?.commonGitDir !== undefined ? null : codexReviewsPath(cwd, { spawn, where });
@@ -344,7 +348,8 @@ export function admittedCodexReviews(cwd, { spawn = spawnSync, where } = {}) {
   const asked = new Map();
   const changesNoCode = (rec) => {
     if (!asked.has(rec)) {
-      const names = gitOut(spawn, cwd, ['diff', '--name-only', '-z', '--no-renames', '--no-relative', rec.base, rec.head]);
+      // From the merge base of its two ends, as the review read it when its base had moved past the fork point (Codex on S5).
+      const names = gitOut(spawn, cwd, ['diff', '--name-only', '-z', '--no-renames', '--no-relative', `${rec.base}...${rec.head}`]);
       const files = names === null ? null : names.split('\0').filter(Boolean);
       const left = files === null ? null : leftOutOf(files, { cwd, source: rec.head, spawn, where });
       asked.set(rec, left !== null && files.every((file) => left.has(file)));
