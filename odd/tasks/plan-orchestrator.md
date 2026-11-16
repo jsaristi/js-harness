@@ -1,15 +1,14 @@
 # plan-orchestrator — a Plan orchestrator above the lead (JH SR, design only)
 
 ## State
-Design only, no code. Version 3. Two double reviews ran: read 2a17bbe1 (24 findings) and read 5eed176c (24
-findings); all 48 taken, Log L9 and L10. Draft PR 894, branch `claude/dreamy-nash-50fa03`, worktree
-`rule-lead-effort-split-aac740`. Next, in order: the third and last read of this version (one try; each read cost
-about 3.4M Claude and 0.7M Codex tokens), its findings answered, and whatever real failure it still finds told to
-him as a problem (`rule:double-review`), not fixed in a fourth round; the page
-(`orquestador-plan.html` in this session's scratchpad, written from version 2) brought to this version and
-published as an Artifact; the four questions recorded with `notify --to orchestrator --kind question` in the order
-of "Ask me before"; `notify --kind ready --pr 894`, then `closed`. Reports go only by
-`js-harness notify --to orchestrator`. The measures and their scripts:
+Design only, no code. Version 3, read three times (reads 2a17bbe1, 5eed176c, b88ea402). The first two reads' 48
+findings are taken (L9, L10). The third still finds real failures: its 21 findings are open and listed in L11,
+to be told to him as problems; no fourth round. Draft PR 894, branch `claude/dreamy-nash-50fa03`, worktree
+`rule-lead-effort-split-aac740`. Next, in order: the page (`orquestador-plan.html` in this session's scratchpad,
+written from version 2) brought to version 3 with L11's problems first, previewed and published as an Artifact;
+the four questions recorded with `notify --to orchestrator --kind question`; `notify --kind ready --pr 894`,
+then `closed`. The lead decides whether a new session on a fresh context corrects L11 before he reads the page.
+Reports go only by `js-harness notify --to orchestrator`. The measures:
 `odd/tasks/plan-orchestrator-evidence/measures.md`.
 
 ## Goal
@@ -376,3 +375,19 @@ while the next task's design is read. The board is checked before each task star
   removed; Claude 12, the cost sums and what cannot be rebuilt; Claude 13, the unbound items are "not measured";
   Claude 14, the level comes from Spec 4; Claude 15, four citations; Claude 16 and Codex 4 (shared), surfaces
   computed from git and again at the land; Codex 7, an amendment cancels and replaces.
+- L11 Double review 3, the last (`rule:double-review`), read b88ea402 of version 3 (2,952,411 Claude and 670,852
+  Codex tokens): Claude 16 findings, Codex 5. It still finds real failures, so by the rule they go to him as
+  problems and are not fixed in a fourth round; version 3 stands as read, and none of the 21 is corrected here. The
+  full text of each is in the review's record (`double-reviews.jsonl` under the git common dir, read b88ea402).
+  High: (Claude 1) the verdict's "0 of 15 roadmap steps closed" is itself disputed as a measure of the plan;
+  (Claude 2) moving his conversation to the Plan breaks the lead's absence detector, which no task names;
+  (Claude 3) a line he typed after Spec 7 is missing, "Me avisas cuando el orquestador plan este funcionando para
+  comenzarlo a probar"; (Codex 1) the lead can still close a stretch the Plan opened. Medium: the measures do not
+  reproduce at the stated END (Claude 4, Codex 5); the clock's states are not all readable from the records and
+  lack transitions for a closed or reopened PR and for a question nobody has shown him (Claude 5, Codex 3 and 4);
+  T3 is ordered before the `away` record it reads exists (Claude 6); the cost guess leaves out the advisor calls
+  of the Plan's own sub-agents (Claude 7); the plan's figure is not defined tightly and its bar measures another
+  population (Claude 8, Codex 2); T4 is high risk with no verifier and too large for one task (Claude 9). Low:
+  `lead-stall`'s scope; a wrong line for the skill text; in phase 0 Remote Control goes off at each app restart;
+  Spec 7's Remote Control part should not wait behind T4; proposal 2's question half read unevenly; Spec 4
+  stretched to the Plan; small inaccuracies (Claude 10 to 16).
