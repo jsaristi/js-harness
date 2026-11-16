@@ -1,58 +1,48 @@
 # plan-orchestrator: the measures and their scripts
 
 Read-only scripts run by JH SR for `odd/tasks/plan-orchestrator.md` (Depth pass items 2 and 4). They read the project's
-channel record, its stretch record and `git log origin/main`, and write nothing. The outputs below are a rerun of
-2026-11-16T03:00Z, so the 7-day window ends there (local time UTC-05:00); the figures quoted in the document come
-from the run that ended 2026-11-16T02:20Z and differ by the notices of those 40 minutes. A line longer than 230
-characters is cut with an ellipsis. The last line of `latency.mjs` matches a question to its answer by the
-wrong number and prints "answered: 0": that line is wrong and is kept as it ran; `questions.mjs` gives the
-questions' figures and the stretch items' count.
+channel record, its stretch record and `git log origin/main`, and write nothing. Each takes the end of its window
+from the environment variable `END`; the outputs below are the run with `END=2026-11-16T02:20:00Z`, so the window
+is 2026-11-09T02:20Z to 2026-11-16T02:20Z (local time UTC-05:00), with `origin/main` at b3a73245. A line longer
+than 230 characters is cut with an ellipsis. The records are append-only, so the same END gives the same counts.
 
 ## latency.mjs
 
 Arguments: the channel record, the repository.
 
 ```js
-// Read-only: ready -> merge and question -> answer latency from the channel record and git, last 7 days.
+// Read-only: ready -> merge latency from the channel record and git, over the 7 days that end at END.
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 const [,, channel, repo] = process.argv;
-const since = Date.now() - 7 * 864e5;
+const end = Date.parse(process.env.END); // the window: the 7 days that end at END
+const since = end - 7 * 864e5;
 const rows = fs.readFileSync(channel, 'utf8').split('\n').filter(Boolean).map((l, i) => { try { return { n: i + 1, ...JSON.parse(l) }; } catch { return null; } }).filter(Boolean);
 const keys = new Set(); rows.slice(-200).forEach((r) => Object.keys(r).forEach((k) => keys.add(k)));
 console.log('keys:', [...keys].join(','));
 const at = (r) => Date.parse(r.at ?? r.time ?? r.ts);
-const recent = rows.filter((r) => at(r) >= since);
+const recent = rows.filter((r) => at(r) >= since && at(r) <= end);
 const byKind = {}; recent.forEach((r) => { byKind[r.kind] = (byKind[r.kind] ?? 0) + 1; });
 console.log('kinds 7d:', JSON.stringify(byKind));
 const merges = execFileSync('git', ['-C', repo, 'log', 'origin/main', '--merges', '--since=8 days ago', '--format=%cI %s'], { encoding: 'utf8' }).split('\n').filter(Boolean)
-  .map((l) => { const m = /^(\S+) Merge pull request #(\d+)/.exec(l); return m ? { at: Date.parse(m[1]), pr: Number(m[2]) } : null; }).filter(Boolean);
+  .map((l) => { const m = /^(\S+) Merge pull request #(\d+)/.exec(l); return m ? { at: Date.parse(m[1]), pr: Number(m[2]) } : null; }).filter((x) => x && x.at <= end);
 const med = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : null; };
 const firstReady = new Map();
 recent.filter((r) => r.kind === 'ready' && r.pr).forEach((r) => { if (!firstReady.has(r.pr)) firstReady.set(r.pr, at(r)); });
 const lat = [];
 for (const [pr, t] of firstReady) { const m = merges.find((x) => x.pr === Number(pr)); if (m) lat.push({ pr, min: Math.round((m.at - t) / 6e4) }); }
 const mins = lat.map((x) => x.min);
-console.log(`ready notices with a PR: ${firstReady.size}; merged on origin/main: ${lat.length}; median ${med(mins)} min; over 60: ${mins.filter((x) => x > 60).length}; over 120: ${mins.filter((x) => x > 120).length}; max ${Math.max(...mins)}`);
+console.log(`PRs with a ready notice: ${firstReady.size}; merged on origin/main: ${lat.length}; median ${med(mins)} min; over 60: ${mins.filter((x) => x > 60).length}; over 120: ${mins.filter((x) => x > 120).length}; max ${Math.max(...mins)}`);
 console.log('slowest:', lat.sort((a, b) => b.min - a.min).slice(0, 6).map((x) => `#${x.pr} ${x.min}m`).join(', '));
-const qs = recent.filter((r) => r.kind === 'question');
-const ans = rows.filter((r) => r.kind === 'answer' && r.question);
-const ql = [];
-for (const q of qs) { const a = ans.find((x) => Number(x.question) === q.n); if (a) ql.push(Math.round((at(a) - at(q)) / 6e4)); }
-console.log(`questions 7d: ${qs.length}; answered: ${ql.length}; median record->answer ${med(ql)} min; over 60: ${ql.filter((x) => x > 60).length}; max ${ql.length ? Math.max(...ql) : null}`);
-const waits = recent.filter((r) => r.kind === 'waiting');
-console.log(`waiting notices 7d: ${waits.length}`);
 ```
 
 Output:
 
 ```
-keys: n,schema,at,from,to,kind,text,cwd,worktree,branch,id,options,waits,transcript,line,question,verified,copy,shownAt,answeredAt,pr,summary,by,head,proposals,reader,title
-kinds 7d: {"note":360,"answer":73,"ready":91,"opened":64,"closed":53,"question":72,"waiting":37,"undefined":34,"withdrawn":1,"relieved":4}
-ready notices with a PR: 87; merged on origin/main: 86; median 10 min; over 60: 20; over 120: 17; max 1669
+keys: n,schema,at,from,to,kind,text,cwd,worktree,branch,transcript,line,question,verified,copy,shownAt,answeredAt,pr,summary,by,head,id,options,waits,proposals,reader,title
+kinds 7d: {"note":360,"ready":93,"closed":54,"question":75,"answer":73,"opened":63,"waiting":37,"undefined":33,"withdrawn":1,"relieved":4}
+PRs with a ready notice: 88; merged on origin/main: 87; median 10 min; over 60: 21; over 120: 17; max 1669
 slowest: #800 1669m, #797 1342m, #809 1107m, #810 1036m, #811 925m, #801 644m
-questions 7d: 72; answered: 0; median record->answer null min; over 60: 0; max null
-waiting notices 7d: 37
 ```
 
 ## questions.mjs
@@ -66,36 +56,39 @@ import fs from 'node:fs';
 const [,, channel, stretches] = process.argv;
 const read = (f) => fs.readFileSync(f, 'utf8').split('\n').map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
 const rows = read(channel);
-const since = Date.now() - 7 * 864e5;
+const end = Date.parse(process.env.END); // the window: the 7 days that end at END
+const since = end - 7 * 864e5;
 const questions = rows.filter((r) => r.kind === 'question');
 const byNumber = new Map(questions.map((r, i) => [i + 1, r]));
 const hold = [], his = [];
 for (const a of rows.filter((r) => r.kind === 'answer')) {
   const q = byNumber.get(Number(a.question));
-  if (!q || Date.parse(q.at) < since || !a.shownAt || !a.answeredAt) continue;
+  if (!q || Date.parse(q.at) < since || Date.parse(q.at) > end || !a.shownAt || !a.answeredAt) continue;
   hold.push(Math.round((Date.parse(a.shownAt) - Date.parse(q.at)) / 6e4));
   his.push(Math.round((Date.parse(a.answeredAt) - Date.parse(a.shownAt)) / 6e4));
 }
 const say = (a) => { const s = [...a].sort((x, y) => x - y); return `n=${s.length} median ${s[Math.floor(s.length / 2)]} over60 ${s.filter((x) => x > 60).length} max ${s[s.length - 1]} sum ${s.reduce((p, c) => p + c, 0)}`; };
-console.log('questions recorded:', questions.filter((r) => Date.parse(r.at) >= since).length);
+console.log('questions recorded:', questions.filter((r) => Date.parse(r.at) >= since && Date.parse(r.at) <= end).length);
 console.log('record -> shown:', say(hold));
 console.log('shown -> answered:', say(his));
-const opens = read(stretches).filter((e) => e.event === 'open' && Date.parse(e.at) >= since);
+const opens = read(stretches).filter((e) => e.event === 'open' && Date.parse(e.at) >= since && Date.parse(e.at) <= end);
 let items = 0, named = 0;
 for (const o of opens) for (const i of o.plan?.items ?? []) { items += 1; if (i.session) named += 1; }
-console.log(`stretches opened: ${opens.length}; items ${items}; naming a session at the opening ${named}; binds ${read(stretches).filter((e) => e.event === 'bind' && Date.parse(e.at) >= since).length}`);
+console.log(`stretches opened: ${opens.length}; items ${items}; naming a session at the opening ${named}; binds ${read(stretches).filter((e) => e.event === 'bind' && Date.parse(e.at) >= since && Date.parse(e.at) <= end).length}`);
 ```
 
 Output:
 
 ```
-questions recorded: 72
-record -> shown: n=67 median 0 over60 12 max 1334 sum 5472
-shown -> answered: n=67 median 2 over60 3 max 188 sum 798
+questions recorded: 75
+record -> shown: n=70 median 0 over60 12 max 1334 sum 5562
+shown -> answered: n=70 median 2 over60 3 max 188 sum 809
 stretches opened: 16; items 45; naming a session at the opening 30; binds 7
 ```
 
 ## replay.mjs
+
+No arguments.
 
 ```js
 // Read-only replay: PR 883's hold, the tails classified, and the stretches of the last 7 days.
@@ -104,7 +97,8 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 const home = 'C:/Users/Oficina/.js-harness';
 const rows = fs.readFileSync(`${home}/channel/D--js-harness.jsonl`, 'utf8').split('\n').map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
-const since = Date.now() - 7 * 864e5;
+const end = Date.parse(process.env.END); // the window: the 7 days that end at END
+const since = end - 7 * 864e5;
 const T = (s) => Date.parse(s);
 const loc = (ms) => new Date(ms - 5 * 36e5).toISOString().slice(5, 16).replace('T', ' ');
 const cut = (s, n = 110) => String(s ?? '').replace(/\s+/g, ' ').slice(0, n);
@@ -113,12 +107,12 @@ rows.filter((r) => r.pr === 883 || /\b883\b/.test(r.text ?? '')).slice(0, 14).fo
 const m883 = execFileSync('git', ['log', 'origin/main', '--merges', '--grep=#883', '--format=%cI %s'], { encoding: 'utf8' }).trim();
 console.log('merge:', m883 || 'not on origin/main');
 console.log('--- ready -> merge over 60 min');
-const merges = execFileSync('git', ['log', 'origin/main', '--merges', '--since=8 days ago', '--format=%cI %s'], { encoding: 'utf8' }).split('\n').map((l) => { const m = /^(\S+) Merge pull request #(\d+)/.exec(l); return m ? { at: T(m[1]), pr: Number(m[2]) } : null; }).filter(Boolean);
+const merges = execFileSync('git', ['log', 'origin/main', '--merges', '--since=8 days ago', '--format=%cI %s'], { encoding: 'utf8' }).split('\n').map((l) => { const m = /^(\S+) Merge pull request #(\d+)/.exec(l); return m ? { at: T(m[1]), pr: Number(m[2]) } : null; }).filter((x) => x && x.at <= end);
 const qn = rows.filter((r) => r.kind === 'question');
 const answers = rows.filter((r) => r.kind === 'answer');
 const openAt = (ms) => qn.filter((q, i) => T(q.at) <= ms && !answers.some((a) => Number(a.question) === i + 1 && T(a.at) <= ms) && !rows.some((w) => w.kind === 'withdrawn' && Number(w.question) === i + 1 && T(w.at) <= ms)).length;
 const first = new Map();
-rows.filter((r) => r.kind === 'ready' && r.pr && T(r.at) >= since).forEach((r) => { if (!first.has(r.pr)) first.set(r.pr, r); });
+rows.filter((r) => r.kind === 'ready' && r.pr && T(r.at) >= since && T(r.at) <= end).forEach((r) => { if (!first.has(r.pr)) first.set(r.pr, r); });
 let night = 0, withQ = 0, n60 = 0;
 for (const [pr, r] of first) {
   const m = merges.find((x) => x.pr === pr); if (!m) continue;
@@ -133,7 +127,7 @@ console.log(`over 60: ${n60}; ready at night (22-07 local): ${night}; with a que
 console.log('--- questions held over 60 min before shown');
 let k = 0;
 qn.forEach((q, i) => {
-  if (T(q.at) < since) return;
+  if (T(q.at) < since || T(q.at) > end) return;
   const a = answers.find((x) => Number(x.question) === i + 1 && x.shownAt); if (!a) return;
   const hold = Math.round((T(a.shownAt) - T(q.at)) / 6e4); if (hold <= 60) return;
   k += 1; const h = new Date(T(q.at) - 5 * 36e5).getUTCHours();
@@ -146,7 +140,7 @@ for (const p of fs.readdirSync(dir)) {
   const f = path.join(dir, p, 'stretches.jsonl'); if (!fs.existsSync(f)) continue;
   const ev = fs.readFileSync(f, 'utf8').split('\n').map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
   const kinds = {}; ev.forEach((e) => { const key = e.event ?? e.kind ?? e.type; kinds[key] = (kinds[key] ?? 0) + 1; });
-  const recent = ev.filter((e) => T(e.at ?? e.time ?? e.openedAt ?? 0) >= since);
+  const recent = ev.filter((e) => T(e.at ?? e.time ?? e.openedAt ?? 0) >= since && T(e.at ?? 0) <= end);
   const rk = {}; recent.forEach((e) => { const key = e.event ?? e.kind ?? e.type; rk[key] = (rk[key] ?? 0) + 1; });
   console.log(p, 'all:', JSON.stringify(kinds), '7d:', JSON.stringify(rk), 'last:', ev.length ? JSON.stringify(Object.fromEntries(Object.entries(ev[ev.length - 1]).filter(([, v]) => typeof v !== 'object'))).slice(0, 200) : 'none');
 }
@@ -172,6 +166,7 @@ Output:
 11-15 10:52 question | [object Object] | ¿Antes de irte te pregunto por adelantado las bifurcaciones probables, dentro del plan del tramo? Hoy unas 3 d
 merge: 2026-11-15T10:26:21-05:00 Merge pull request #883 from feat/codex-spend-t2
 --- ready -> merge over 60 min
+#794 87m ready 11-08 21:43 merged 11-08 23:10 openQuestions=0
 #795 529m ready 11-08 22:54 merged 11-09 07:43 openQuestions=0 night
 #797 1342m ready 11-09 00:11 merged 11-09 22:33 openQuestions=0 night
 #800 1669m ready 11-09 21:14 merged 11-11 01:02 openQuestions=2
@@ -192,7 +187,7 @@ merge: 2026-11-15T10:26:21-05:00 Merge pull request #883 from feat/codex-spend-t
 #868 388m ready 11-14 06:56 merged 11-14 13:25 openQuestions=0 night
 #883 229m ready 11-15 06:36 merged 11-15 10:26 openQuestions=0 night
 #886 89m ready 11-15 12:31 merged 11-15 14:00 openQuestions=1
-over 60: 20; ready at night (22-07 local): 15; with a question open at ready: 9
+over 60: 21; ready at night (22-07 local): 15; with a question open at ready: 9
 --- questions held over 60 min before shown
 Q235 hold 1334m rec 11-09 00:45 shown 11-09 22:59 his 0m night from [object Object] waits=T4 (two of 48 controls)
 Q238 hold 745m rec 11-09 08:05 shown 11-09 20:30 his 121m from [object Object] waits=PR 797, then 798 and 799
@@ -211,12 +206,16 @@ held over 60: 12
 D--js-harness all: {"open":29,"check":37,"close":29,"explain":11,"closes":2,"bind":8} 7d: {"open":16,"bind":7,"check":23,"close":16,"explain":1} last: {"schema":"js-harness.stretch/v1","event":"close","id":"2026-11-15T16:15:58.154 …
 ```
 
-## js-harness progress --baseline 2026-11-09
+## The roadmap alone, and the pace
+
+`git show <rev>:docs/ROADMAP.md`, its checkboxes counted with grep, at the last commit before 2026-11-09 and at
+`origin/main`; then the last lines of `js-harness progress --pace --days 7`, which counts the roadmap and every
+feature document together.
 
 ```
-Plan of origin/main since 2026-11-09, from cb539ba8 (its last commit before that day) to now:
-Open then   67 steps
-Done        8 of them closed (12%), 59 still open, 0 left the plan open
-Added       201 steps since (15% of the plan then), 170 of them closed
-The plan    1305 steps then, 1505 now: it grew by 200; open steps 67 then, 90 now
+cb539ba8 docs/ROADMAP.md: open 15 done 100
+b3a73245 docs/ROADMAP.md: open 22 done 100
+  2026-11-15  closed 17  reopened 0  added 33  removed 0  (today, so far)
+Total       closed 178  reopened 0  added 201  removed 1
+A day       closed 25.4  reopened 0  added 28.7  removed 0.1
 ```
