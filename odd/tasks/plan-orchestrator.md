@@ -8,7 +8,8 @@ T1 is closed (L13): the page is published, https://claude.ai/artifact/1ppv1NAxbr
 questions are recorded as 307 to 310 for the lead to put to him one at a time. Draft PR 894, branch
 `claude/dreamy-nash-50fa03`, worktree `rule-lead-effort-split-aac740`. Left, all the lead's: whether a new session
 on a fresh context corrects L11 before he reads the page; landing this PR and the notice of Spec 8 (phase 0's step
-1, T10); his four answers (T9); opening session X for T3. The measures:
+1, T10); his four answers (T9); opening session X for T3. His line of L14 (try it, watch the Fable usage, take
+the advisor off the swarms if it is excessive) is recorded and changes nothing of the design. The measures:
 `odd/tasks/plan-orchestrator-evidence/measures.md`.
 
 ## Goal
@@ -420,3 +421,18 @@ while the next task's design is read. The board is checked before each task star
   The design still says two reads at about 3.4M each (three ran: L9, L10, L11); phase 0's step 2 says "high
   (question 3)" while question 3 asks the model and takes the level from Spec 4; T3 names a "session X" no one
   has opened.
+- L14 His words, typed in JH SR's own chat on 2026-11-16 at 01:27 local (06:27Z; line 1812 of transcript
+  285fc2c7-d588-4b0c-bef5-ded03fe6b04c, read from the file under
+  `~/.claude/projects/D--js-harness--claude-worktrees-rule-lead-effort-split-aac740`, since `sessions --quote` does
+  not reach a worktree's transcripts): "probemos asi a ver como nos va con el uso y si vemos si es excesivo se lo
+  quitamos a los enjambres". It answers JH SR's view of the workflow, which he had asked for (699d7c29 line 2900):
+  that view said the advisor is most of the Fable spend by the cost reader's figures and that a swarm multiplies
+  it. Read here, his to correct: the workflow is tried with the advisor on every session and sub-agent, as Spec 2
+  says; the usage is watched; if it is excessive, the advisor comes off the swarms' sub-agents. Not read into it:
+  his approval of the page, an answer to questions 307 to 310, or JH SR's proposed order (phase 0 by hand and the
+  clock alone before T4 to T7), which "asi" may or may not cover. Open, with no owner yet: what "excessive" is (he
+  gave no figure); who reads the meter and when (T8 reads `get_usage` after phase 0's third day, and no command
+  reads it); whether the advisor can come off sub-agents alone, since it comes from `advisorModel` in his settings
+  and a sub-agent inherits it (`odd/tasks/advisor-home.md:118-121`), not checked. The reading to compare against,
+  from the app's usage tool at 01:00 local on 2026-11-16: Fable 17% of the week, all models 38%, reset
+  2026-11-20T14:00Z. Nothing of the design changes with this line, and no reader has read it.

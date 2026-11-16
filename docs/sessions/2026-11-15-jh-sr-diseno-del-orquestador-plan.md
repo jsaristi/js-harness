@@ -17,7 +17,8 @@ All typed, read with `js-harness sessions --quote 699d7c29-54c4-460e-a5e8-700b11
 - 1389 (02:22Z): "El orquestador plan debe tener Remote control osea este y el Plan"
 - 1598 (03:02Z): "Me avisas cuando el orquestador plan este funcionando para comenzarlo a probar"
 - 519 and 402 of the same transcript, and 69918425 line 20757, as Specs 4 to 6.
-He typed nothing in this session.
+He typed one line in this session, after the design was delivered (Log L14 of the feature document): "probemos asi
+a ver como nos va con el uso y si vemos si es excesivo se lo quitamos a los enjambres" (2026-11-16T06:27Z).
 
 ## Delivered
 - `odd/tasks/plan-orchestrator.md`, version 3, with Log L1 to L13; `odd/tasks/plan-orchestrator-evidence/measures.md`.
