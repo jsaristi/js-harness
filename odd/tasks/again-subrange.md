@@ -65,3 +65,6 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
   does the new admission still admit the review records of the open branches, PR 897 and PR 894?" Checked with main's
   code (45a40e8, read-only, scratchpad openprs.mjs): PR 897 codex and lens push rows PASS, 1 code commit covered by
   both; PR 894 PASS, no code commits; reported by note. The D:/js-harness checkout is still at 83252acb.
+- L2 2026-11-16, counted read-only with main's code (scratchpad t10count.mjs): 1,401 admitted reviewed Codex records
+  over 1,398 heads; 2 heads hold more than one; 0 later records there have a base that is not at or before the earlier
+  one's. The rule of spec 1 changes what no real record means today. Next: the red test of spec 1.
