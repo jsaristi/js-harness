@@ -19,7 +19,7 @@ export function withRunLine(root, rec, deps = {}) {
   if (typeof rec.run === 'string') {
     // Its line written before it says no range: given the record's. Written after it, for its answer: a line of the
     // range is written now, as the command's line would carry it.
-    if (!giveRange(root, rec.run, rec, deps)) appendCodexReviewRun(root, { schema: CODEX_REVIEW_RUN_SCHEMA, id: rec.run, base: rec.base, from: rec.base, head: rec.head, outcome: 'reviewed', testkit: true }, deps);
+    if (!giveRange(root, rec.run, rec, deps)) appendCodexReviewRun(root, { schema: CODEX_REVIEW_RUN_SCHEMA, id: rec.run, base: rec.base, from: rec.base, head: rec.head, outcome: 'reviewed', ...(typeof rec.recheckOf === 'string' ? { recheck: { of: rec.recheckOf } } : {}), testkit: true }, deps);
     return rec;
   }
   if (rec.run !== undefined) return rec;
@@ -32,7 +32,7 @@ export function withRunLine(root, rec, deps = {}) {
  * command writes every run line with its `base`, `from` and `head`: a test that writes a run line for its answer
  * alone, then a record naming it, gets what `codex-review` would have written. A line that says a range keeps it.
  * Returns whether a line of `id` says this range now. */
-export function giveRange(root, id, { base, head }, deps = {}) {
+export function giveRange(root, id, { base, head, recheckOf }, deps = {}) {
   const file = codexReviewRunsPath(root, deps);
   if (!file || !fs.existsSync(file)) return false;
   const lines = fs.readFileSync(file, 'utf8').split('\n');
@@ -49,7 +49,9 @@ export function giveRange(root, id, { base, head }, deps = {}) {
     }
     found = true;
     changed = true;
-    return JSON.stringify({ ...line, base, from: base, head });
+    // A recheck's line says what it rechecked, as the command writes it (R3, V1 of PR 896's second verifier pass).
+    const recheck = typeof recheckOf === 'string' ? { recheck: { ...line.recheck, of: line.recheck?.of ?? recheckOf } } : {};
+    return JSON.stringify({ ...line, base, from: base, head, ...recheck });
   });
   if (changed) fs.writeFileSync(file, out.join('\n'), 'utf8');
   // Whether a line of `id` now says this range.

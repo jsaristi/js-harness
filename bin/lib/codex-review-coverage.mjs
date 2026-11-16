@@ -322,12 +322,16 @@ export function admittedCodexReviews(cwd, { spawn = spawnSync, where } = {}) {
   const at = file === null ? where : { ...where, commonGitDir: path.dirname(path.dirname(file)) };
   const records = readCodexReviews(cwd, { spawn, where: at });
   const linesOf = new Map();
+  // Where each line stands in the log, which orders the records of one head (R4).
+  const placeOf = new Map();
   for (const line of readCodexReviewRuns(cwd, { spawn, where: at })) {
     if (typeof line?.id !== 'string') continue;
+    placeOf.set(line, placeOf.size);
     if (!linesOf.has(line.id)) linesOf.set(line.id, []);
     linesOf.get(line.id).push(line);
   }
   const claimed = new Set();
+  const lastAt = new Map();
   const admitted = new Set();
   const nothing = [];
   for (const rec of records) {
@@ -339,12 +343,25 @@ export function admittedCodexReviews(cwd, { spawn = spawnSync, where } = {}) {
     }
     const ids = Array.isArray(rec.runs) ? rec.runs : typeof rec.run === 'string' ? [rec.run] : [];
     if (ids.length === 0 || !ids.every((id) => typeof id === 'string' && linesOf.has(id))) continue;
-    // The run, with the range it ran over, is claimed once: a second record of the same run and range is a copy.
-    const claim = `${ids.at(-1)} ${rec.base} ${rec.head}`;
-    // The line that states the range says the run reviewed: a failed, timed-out or not-inspected run writes its range
-    // too, and a record naming it would cover code no review read (F1, the opus verifier on pull request 896).
-    if (claimed.has(claim) || !linesOf.get(ids.at(-1)).some((line) => line.head === rec.head && (line.base === rec.base || line.from === rec.base) && line.outcome === 'reviewed')) continue;
-    claimed.add(claim);
+    // The line of each run that states the range says it reviewed: a failed, timed-out or not-inspected run writes its
+    // range too, and a record naming it would cover code no review read (F1).
+    const stating = ids.map((id) => linesOf.get(id).findLast((line) => line.head === rec.head && (line.base === rec.base || line.from === rec.base) && line.outcome === 'reviewed'));
+    if (stating.includes(undefined)) continue;
+    // Each line is claimed by one record, the first: a second record naming it, as a copy, through the line's `from`, or
+    // naming one part of a run another record names whole, is no review (R2, V1 of the opus verifier's second pass on
+    // pull request 896).
+    if (stating.some((line) => claimed.has(line))) continue;
+    // A run in parts is named whole, its parts 1..of (R1): one part is never a review of the range.
+    const of = stating[0].part?.of;
+    if ((ids.length > 1 || of !== undefined) && !(Number.isInteger(of) && ids.length === of && stating.every((line) => line.part?.of === of) && new Set(stating.map((line) => line.part?.index)).size === of)) continue;
+    // A recheck is one its run ran (R3): a recheckOf no line of its run says reads an owed correction as rechecked.
+    if (typeof rec.recheckOf === 'string' && !stating.some((line) => line.recheck?.of === rec.recheckOf)) continue;
+    // At one head the records come in the order of their runs: a record appended after a review, naming an older run of
+    // that head no record named, would be the last word there and outrank it (R4, the advisor on V1).
+    const place = Math.max(...stating.map((line) => placeOf.get(line)));
+    if (place < (lastAt.get(rec.head) ?? -1)) continue;
+    lastAt.set(rec.head, place);
+    for (const line of stating) claimed.add(line);
     admitted.add(rec);
   }
   const asked = new Map();
