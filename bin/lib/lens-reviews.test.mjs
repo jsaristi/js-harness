@@ -147,6 +147,21 @@ test('V2: a skip and a range with nothing to review are admitted by a result lin
   assert.deepEqual(records.map(admitted), [true, false]);
 }));
 
+test('V2: the result line backs each finding and the recheck: a CRITICAL relabelled, or a recheck the run did not make, is no evidence', () => inScratch((deps) => {
+  // The third verifier pass on PR 896 (L71 C): a line that kept counts alone admitted a record with the same count.
+  const relabelled = startLensRun('.', RANGE, deps);
+  appendLensReview('.', record({ run: relabelled, results: [{ lens: 'risk', outcome: 'complete', findings: found(1).map((one) => ({ ...one, severity: 'WARNING' })) }] }), deps);
+  endLensRun('.', { id: relabelled, ...RANGE, outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: found(1) }] }, deps);
+  const rechecks = startLensRun('.', RANGE, deps);
+  appendLensReview('.', record({ run: rechecks, recheckOf: 'r0', rechecked: { risk: ['r0'] } }), deps);
+  endLensRun('.', { id: rechecks, ...RANGE, outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: [] }] }, deps);
+  const honest = startLensRun('.', RANGE, deps);
+  appendLensReview('.', record({ run: honest, recheckOf: 'r0', rechecked: { risk: ['r0'] } }), deps);
+  endLensRun('.', { id: honest, ...RANGE, outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: [] }], recheckOf: 'r0', rechecked: { risk: ['r0'] } }, deps);
+  const { records, admitted } = admittedLensReviews('.', deps);
+  assert.deepEqual(records.map(admitted), [false, false, true]);
+}));
+
 // JH 75: what a lens's CLI printed is kept whole beside the records, in a file of its run and lens, since the first
 // characters a record kept did not tell why three answers of JH 73's broke.
 test('a lens run\'s output is kept whole in a file of its run and lens beside the records', () => inScratch((deps) => {

@@ -2235,3 +2235,21 @@ test('V3: with the review on, the plain check says the correction owed where eve
   assert.equal(debt.pass, true, debt.detail);
   assert.match(debt.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
 });
+
+test('V3: a merge of main at the tip with an edit in it, above a review that owes, has the plain check say the correction first', () => {
+  // The third verifier pass on PR 896 (L71 B): the plain row named a review of the merge while the push refuses it for
+  // the fix first (`owedBelow`), so the command it named was not the one the push asks for.
+  const { root, head } = reviewedWith({ verdict: 'incorrect', findings: [finding] });
+  git(root, 'checkout', 'main');
+  commit(root, 'other.js', 'elsewhere', 'feat: elsewhere on main');
+  git(root, 'update-ref', 'refs/remotes/origin/main', 'main');
+  git(root, 'checkout', 'feature');
+  git(root, 'merge', '--no-commit', '--no-ff', 'main');
+  fs.writeFileSync(path.join(root, 'b.js'), 'two, edited in the merge');
+  git(root, 'add', '.');
+  git(root, 'commit', '-m', 'merge main with an edit');
+  assert.match(checkCodexReviews(root, 'HEAD').detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+  const debt = checkCodexReviewDebt(root);
+  assert.equal(debt.pass, true, debt.detail);
+  assert.match(debt.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});

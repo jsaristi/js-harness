@@ -250,7 +250,7 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
   // admits, never a result line a record written by hand could name (V2).
   const write = (fields) => {
     const file = appendLensReview(cwd, { ...record, run: start(), ...fields, reviewedAt: new Date().toISOString() });
-    endLensRun(cwd, { id: runId, base: record.base, head: record.head, subjectHash: record.subjectHash, outcome: fields.outcome, results: fields.results });
+    endLensRun(cwd, { id: runId, base: record.base, head: record.head, subjectHash: record.subjectHash, outcome: fields.outcome, results: fields.results, recheckOf: fields.recheckOf, rechecked: fields.rechecked });
     return file;
   };
   if (skip !== undefined) {

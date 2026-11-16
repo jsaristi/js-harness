@@ -63,16 +63,23 @@ export function startLensRun(root, { base, head, subjectHash }, deps = {}) {
 }
 
 /** Writes the last line of the run `id` over `base..head` at `subjectHash`: its `outcome` and, where its lenses ran,
- * what each found (`results`, kept as each lens's outcome and count of findings). Written after the run's record, so a
+ * what each found (`results`, kept as each lens's outcome and its findings' severity, location and claim), and the runs it
+ * rechecked (`recheckOf`, `rechecked`), which the gate reads: counts alone admitted a CRITICAL relabelled (L71 C). Written after the run's record, so a
  * run stopped before it leaves a record no check admits, never a result a record written by hand could name (V2, the
  * opus verifier's second pass on pull request 896). Throws outside a git repository. */
-export function endLensRun(root, { id, base, head, subjectHash, outcome, results }, deps = {}) {
-  const said = resultsSaid(results);
-  appendJsonLine(root, LENS_REVIEW_RUNS_FILE, { schema: LENS_REVIEW_RUN_SCHEMA, id, base, head, subjectHash, outcome, ...(said === null ? {} : { results: said }), endedAt: new Date().toISOString() }, deps);
+export function endLensRun(root, { id, base, head, subjectHash, outcome, results, recheckOf, rechecked }, deps = {}) {
+  appendJsonLine(root, LENS_REVIEW_RUNS_FILE, { schema: LENS_REVIEW_RUN_SCHEMA, id, base, head, subjectHash, outcome, ...said({ results, recheckOf, rechecked }), endedAt: new Date().toISOString() }, deps);
+}
+
+/** What a run's last line keeps of a run, and what a record is read as to match it: its lenses' results with each
+ * finding's severity, location and claim, and the runs it rechecked, each only where there is one. */
+function said({ results, recheckOf, rechecked }) {
+  const kept = resultsSaid(results);
+  return { ...(kept === null ? {} : { results: kept }), ...(recheckOf === undefined ? {} : { recheckOf }), ...(rechecked === undefined ? {} : { rechecked }) };
 }
 
 /** What a run's last line keeps of its lenses' results, and what a record's are read as to match it: `null` for none. */
-const resultsSaid = (results) => (Array.isArray(results) ? results.map((one) => ({ lens: one?.lens, outcome: one?.outcome, ...(Array.isArray(one?.findings) ? { findings: one.findings.length } : {}) })) : null);
+const resultsSaid = (results) => (Array.isArray(results) ? results.map((one) => ({ lens: one?.lens, outcome: one?.outcome, ...(Array.isArray(one?.findings) ? { findings: one.findings.map((each) => ({ severity: each?.severity, location: each?.location, claim: each?.claim })) } : {}) })) : null);
 
 /** Every run line, oldest first, with the tolerance of `readLensReviews`. */
 export function readLensRuns(root, deps = {}) {
@@ -111,7 +118,7 @@ export function admittedLensReviews(root, { spawn = spawnSync, where, ...rest } 
       continue;
     }
     const [end] = ends;
-    const agrees = ends.length === 1 && runKey(end) === key && end.outcome === rec.outcome && JSON.stringify(end.results ?? null) === JSON.stringify(resultsSaid(rec.results));
+    const agrees = ends.length === 1 && runKey(end) === key && end.outcome === rec.outcome && JSON.stringify(said(end)) === JSON.stringify(said(rec));
     if (!agrees) continue;
     admitted.add(rec);
     resulted = true;

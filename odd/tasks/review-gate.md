@@ -1,7 +1,7 @@
 # review-gate: one honest review gate
 
 ## State
-JH 207, branch feat/review-gate, pushed at 5d6d2863. V1 closed (L57-L61); V4+V3 4f9103fa reviewed and closed (L62-L65). V2 4c8069dd and its guard fix cfd546ba reviewed and closed (L66-L70); next: the narrow third verifier pass (V1-V4), then notify ready --pr 896; then a narrow third verifier pass, notify ready --pr 896. Every codex-review after its --plan and codex-meter; commit the doc before a review (L59); local runs name codex-review.second.test.mjs (L41). Open item, no check now: whether a skip's reason is the owner's words (L56).
+JH 207, branch feat/review-gate, pushed at a8ee54a8. V1 closed (L57-L61); V4+V3 4f9103fa reviewed and closed (L62-L65). V2 4c8069dd and its guard fix cfd546ba reviewed and closed (L66-L70); third verifier pass done (L71): B and C built tests first and green in the whole set (L72, L74); next: Codex and lenses, push; then notify ready --pr 896 (A is T10, its own slice after the land, L73). Every codex-review after its --plan and codex-meter; commit the doc before a review (L59); local runs name codex-review.second.test.mjs (L41). Open item, no check now: whether a skip's reason is the owner's words (L56).
 C:\Users\Oficina\.js-harness\background\briefs\2026-11-15T12-20-39-311Z-c126f3fd.md. Orientation done; plan draft and
 advisor answer taken (see Log L2). Next: read verify5 (Temp scratchpad path on line 4 of the lead's
 jh199-verify5-883.md), `git show worktree-full-audit:odd/tasks/full-audit.md`, his words (`js-harness sessions --quote`
@@ -78,6 +78,8 @@ Refusing existing records (S5's 78); anything that changes who decides a waiver.
 5. C-3 + B2-12: "a forged Codex record is accepted by `check --push`".
 6. B2-2: "lens findings never block".
 7. G-2: "`check`'s quiet line hides the Codex debt; make it show both debts".
+8. L71 A (the third verifier pass; the lead on question 314): "an honest `--again` of a clean sub-range ending at the
+   owing head clears the correction". Predates the branch; its own slice after PR 896 lands.
 
 ## Tasks
 - [x] T1 (kind: design) depth pass, specs and the slice plan, written here
@@ -88,7 +90,8 @@ Refusing existing records (S5's 78); anything that changes who decides a waiver.
 - [x] T6 (kind: build) S5, 5fd3e493 (fixes after L22), spec 5: go (L10); old-vs-new push row per open branch first
 - [x] T7 (kind: build) S6, spec 6: lens BLOCKER/CRITICAL owed until a lens recheck, admitted records only
 - [x] T8 (kind: build) S7, spec 7: the quiet line shows both debts
-- [ ] T9 (kind: verify) one opus verifier on the whole: first pass found F1-F3 (L30)
+- [ ] T9 (kind: verify) one opus verifier on the whole: first pass found F1-F3 (L30); second V1-V4 (L48); third A-G (L71), B and C fixed (L72)
+- [ ] T10 (kind: build) spec 8, route: its own slice from main after PR 896 lands, tests first, real records counted first (L73)
 
 ## Log
 - L1 2026-11-15, his request: question 287, answered 02:51 local, "Puerta de revisión (Recomendada)" (quote to be read
@@ -193,3 +196,7 @@ Refusing existing records (S5's 78); anything that changes who decides a waiver.
 - L68 2026-11-16, whole set green: 9760 of 9797, 37 skipped, 0 failed (2,214 s). V2 committed.
 - L69 2026-11-16, V2 reviewed by Codex on 81c373a..4c8069d (with --doc): incorrect, 0.98, 1 P2 (209,756 input tokens): the guard's RECORD_APPENDS did not name endLensRun, so a session could append a second result line by node -e and discard a review and its debt. Fixed test first (guard.test.mjs, red then green, 51/51): endLensRun joins the guarded writers. Next: its recheck after --plan, then lenses, push.
 - L70 2026-11-16, V2 closed: Codex recheck of cfd546ba correct, 0.98, 1 of 1 fixed (34,764 input tokens); lenses reliability and risk over 81c373a..cfd546b, 0 findings each (15,059 and 15,061 input tokens). Next: push, then the narrow third verifier pass (V1-V4), then notify ready --pr 896.
+- L71 2026-11-16, third verifier pass (opus, read-only; probes in the scratchpad's probes3/): no CRITICAL; no forgery without a race turns a refusal into a pass. A WARNING, predates: an honest --again of a clean sub-range ending at the owing head clears the correction (the last admitted reviewed record at a head decides, codex-review-recheck.mjs:180; againPastThreeReviews refuses only at 3); main the same; asked of the lead. B WARNING (V3): a merge of main at the tip with an edit in it, above an owing review: the plain row names a review of <merge>^ while the push refuses for the fix first (owedBelow, codex-review-rows.mjs:368-370); L62's reason does not hold there; fix now. C WARNING (V2): the lens result line backs only lens, outcome and finding counts, not each finding's severity and claim nor recheckOf/rechecked: a record appended in the run's window with a CRITICAL relabelled is admitted; fix now (the line carries them). Notes, no change: D the cut has not happened on the real log (0 result lines; 5 old lines claimable until then), and a record of an old installed writer after it is refused with a misleading reason; E a skip recorded with the review back on but at an off head pays (L56's words hold); F the plain row reads the switch from the working tree, the push from the tip (predates); G Codex admission does not compare diff or leftOut (predates, not shown to turn a refusal).
+- L72 2026-11-16, B and C built tests first. B: the plain row, for a merge of main at the tip alone uncovered above a review that owes, says the correction owed below it as the push does (codexReviewDebt; red then green; check-codex-reviews 147/147). C: the lens result line keeps each finding's severity, location and claim and the run's recheckOf and rechecked, and admission compares them (lens-reviews.mjs said()); red then green, lens tests 38/38. Question 314 (A) asked of the lead at 07:16; ready waits on it. Whole set in the gate.
+- L73 2026-11-16, the lead on question 314 (message to this session, decided and withdrawn): leave L71 A out of PR 896, since it predates the branch and main has it too, so landing 896 makes nothing worse and the PR should not keep growing with each pass. Written as spec 8 and T10: its own slice from main after the land, tests first, real records counted first. Finish the third pass; if nothing else in the PR's own changes, notify ready --pr 896, saying what 9760/9797 leaves out (skips or failures, by name).
+- L74 2026-11-16, whole set green with B and C: 9762 of 9799, 0 failed, 37 skipped, every skip by platform (symlinks or links this machine cannot make ×21, the POSIX runner needing bash, rsync, timeout and flock ×8, mode bits that stop no write ×2, Windows has no Unix mode or executable bit ×2, bash checked off Windows ×1, POSIX-only signal forwarding ×1, the 8.3 short name not reproducible here ×1, dir links EPERM counted in the links). B+C committed.

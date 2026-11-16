@@ -268,7 +268,7 @@ test('each record names the run line the command wrote before any lens ran, so e
   // V2: each run's last line, written after its record, carries the outcome and what each lens found.
   const ends = lines.filter((line) => line.outcome !== undefined);
   assert.deepEqual(ends.map((line) => [line.id, line.outcome]), records.map((rec) => [rec.run, rec.outcome]));
-  assert.deepEqual(ends[0].results, [{ lens: 'risk', outcome: 'complete', findings: 0 }]);
+  assert.deepEqual(ends[0].results, [{ lens: 'risk', outcome: 'complete', findings: [] }]);
   const { records: read, admitted } = admittedLensReviews(dir);
   assert.deepEqual(read.slice(-3).map(admitted), [true, false, true]);
 });

@@ -490,6 +490,13 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
     if (owed?.refuse) return row(`${owed.detail}, which the push refuses${note}`, owed.lines);
     return row(`${coveredDetail(state)}${said}${note}`, owed?.lines);
   }
+  // A merge at the tip alone uncovered, below which a review owes a correction: the push asks for the fix first, since
+  // `codex-review` reviews no such merge before the recheck (`codexCoverageRow`), and so does this (L71 B).
+  const oldest = uncovered[uncovered.length - 1];
+  if (uncovered.length === 1 && oldest.id === tip && oldest.parentCount === 2) {
+    const owedBelow = correctionOwed(cwd, state, { spawn, below: oldest.parent });
+    if (owedBelow?.refuse) return row(`${owedBelow.detail}, which the push refuses before the merge is reviewed${note}`, owedBelow.lines);
+  }
   // The review that is sized is the one `js-harness codex-review` would run: it starts where that command
   // starts it (`reviewStart`), from the commit the range of the default branch starts at, which is `null`
   // where the two histories share none. That is the parent of the oldest uncovered commit, named as
