@@ -9,6 +9,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { guardMain } from './guard.mjs';
 import { appRoot } from './lib/app-record.mjs';
+import { SENIOR_WAIT_BACKGROUND, SENIOR_WAIT_BRIEF } from './lib/lead-protocols.mjs';
 import { EFFORTS } from './lib/model-home.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { ruleValue, writeRules } from './lib/rules.mjs';
@@ -705,9 +706,98 @@ test('a configured window is the one a stated share is checked against, ahead of
   }
 });
 
-// odd/tasks/senior-orchestrator.md: a senior starts only by js-harness sessions start, never by the app's tool.
-test('a start_session titled as a senior is denied, naming js-harness sessions start, whatever it asks', async () => {
-  const tool_input = { initiation: 'user_asked', title: 'JH SR · a design', prompt: 'Design it.', background: 'x'.repeat(80), effort: SESSION_EFFORT };
-  const refused = await hook({ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', tool_input });
-  assert.match(denied(refused).permissionDecisionReason, /does not start a senior.*js-harness sessions start --title "JH SR · a design"/s);
+// odd/tasks/senior-orchestrator.md, T6 (his words of 2026-11-15, S3 and S4): the lead starts the senior as a visible
+// app session with start_session, then sets its model and level and detaches it.
+const SENIOR_MODEL = RULES.find((rule) => rule.id === 'senior-model').value;
+const SENIOR_EFFORT = RULES.find((rule) => rule.id === 'senior-effort').value;
+const LEAD_RECORD = { sessionId: 'local_lead', where: 'sessions', title: 'JH ORQ · orquestador', model: RULES.find((rule) => rule.id === 'session-model').value, effort: 'max', archived: false };
+const SENIOR_START = { tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', session_id: 'c-lead', tool_input: { initiation: 'user_asked', title: 'JH SR · a design', prompt: SENIOR_WAIT_BRIEF, background: SENIOR_WAIT_BACKGROUND, effort: SENIOR_EFFORT, context: 'fresh' } };
+const appOf = (...records) => new Map(records);
+
+test('the lead starts a senior with start_session at rule:senior-effort, naming no model, in its own worktree', async () => {
+  const passes = { code: 0, out: '', err: '' };
+  assert.deepEqual(await hook(SENIOR_START, { app: appOf(['c-lead', LEAD_RECORD]) }), passes);
+  assert.deepEqual(await hook({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, use_worktree: true } }, { app: appOf(['c-lead', LEAD_RECORD]) }), passes, 'its own worktree named');
+  // An archived senior, or one of another project's code, is not a live senior of this one.
+  const archived = { sessionId: 'local_old', title: 'JH SR · old', model: SENIOR_MODEL, effort: SENIOR_EFFORT, archived: true };
+  const elsewhere = { sessionId: 'local_xy', title: 'XY SR · other', model: SENIOR_MODEL, effort: SENIOR_EFFORT, archived: false };
+  assert.deepEqual(await hook(SENIOR_START, { app: appOf(['c-lead', LEAD_RECORD], ['c-old', archived], ['c-xy', elsewhere]) }), passes, 'an archived senior, another code');
+});
+
+test('a start_session of a senior is denied unless the lead starts it as the senior rules hold it', async () => {
+  const reason = async (call, app) => denied(await hook(call, { app })).permissionDecisionReason;
+  const lead = appOf(['c-lead', LEAD_RECORD]);
+  assert.match(await reason(SENIOR_START, appOf(['c-lead', { ...LEAD_RECORD, title: 'JH 7 · thing' }])), /a senior is started by the lead.*titled "JH 7 · thing"/s);
+  assert.match(await reason(SENIOR_START, new Map()), /a senior is started by the lead.*no app record that can be read/s);
+  assert.match(await reason({ ...SENIOR_START, session_id: undefined }, lead), /a senior is started by the lead.*not run from a session/s);
+  assert.match(await reason(SENIOR_START, { get: () => { throw new Error('locked'); } }), /a senior is started by the lead/);
+  // A title-only offer carries no brief and no effort, and the brief that follows it carries no title.
+  assert.match(await reason({ ...SENIOR_START, tool_input: { initiation: 'offer', title: 'JH SR · a design' } }, lead), /carries its brief/);
+  // Its first turn runs on the lead's model, before set_session_model applies, so its brief is only the wait (D11).
+  for (const prompt of ['Review the design now and produce your findings.', `${SENIOR_WAIT_BRIEF} Then review the design.`]) {
+    const why = await reason({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, prompt } }, lead);
+    assert.match(why, /its first turn runs on the lead's model/, prompt);
+    assert.ok(why.includes(JSON.stringify(SENIOR_WAIT_BRIEF)), 'the refusal gives the brief to copy');
+  }
+  assert.deepEqual(await hook({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, prompt: `  ${SENIOR_WAIT_BRIEF}\n` } }, { app: lead }), { code: 0, out: '', err: '' }, 'blanks around it');
+  // The background reaches its first turn too (D14).
+  for (const background of ['Review the design in odd/tasks/x.md now and write your findings to the notes folder, then report.', undefined]) {
+    const why = await reason({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, background } }, lead);
+    assert.match(why, /background other than the wait/, String(background));
+    assert.ok(why.includes(JSON.stringify(SENIOR_WAIT_BACKGROUND)), 'the refusal gives the background to copy');
+  }
+  assert.ok(SENIOR_WAIT_BACKGROUND.length >= 80, 'the tool asks a fresh start for 80 characters of background');
+  assert.deepEqual(await hook({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, background: `\n${SENIOR_WAIT_BACKGROUND}  ` } }, { app: lead }), { code: 0, out: '', err: '' }, 'blanks around the background');
+  // The verifier's findings (D13): a card's later start carries no title the guard could hold, so only "user_asked"
+  // starts a senior; another project's lead is not this one's; it starts here, in its own worktree.
+  for (const initiation of ['offer', 'own_initiative', undefined]) {
+    assert.match(await reason({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, initiation } }, lead), /initiation "user_asked"/, String(initiation));
+  }
+  assert.match(await reason(SENIOR_START, appOf(['c-lead', { ...LEAD_RECORD, title: 'XY ORQ · other lead' }])), /a senior is started by the lead.*titled "XY ORQ · other lead"/s);
+  for (const [field, value] of [['target', 'cloud'], ['target', 'ssh'], ['cwd', 'D:/other'], ['preset', 'mine'], ['host', 'box'], ['use_worktree', 'false']]) {
+    assert.match(await reason({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, [field]: value } }, lead), /starts here, in its own worktree/, `${field}: ${value}`);
+  }
+  assert.deepEqual(await hook({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, target: 'local' } }, { app: lead }), { code: 0, out: '', err: '' }, 'target local');
+  assert.match(await reason({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, effort: undefined } }, lead), /names no effort.*rule senior-effort/s);
+  const other = EFFORTS.find((level) => level !== SENIOR_EFFORT);
+  assert.match(await reason({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, effort: other } }, lead), new RegExp(`asks for effort "${other}", not the level of the rule senior-effort`));
+  for (const model of [SENIOR_MODEL, LEAD_RECORD.model]) {
+    assert.match(await reason({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, model } }, lead), /names the model.*set_session_model/s, model);
+  }
+  assert.match(await reason({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, use_worktree: false } }, lead), /use_worktree false.*detach_session/s);
+  // A lead under the senior's level starts it no higher than its own: the tool caps a start at its caller's.
+  const low = EFFORTS[EFFORTS.indexOf(SENIOR_EFFORT) - 1];
+  assert.match(await reason(SENIOR_START, appOf(['c-lead', { ...LEAD_RECORD, effort: low }])), new RegExp(`level "${low}", under the one of the rule senior-effort`));
+  const live = { sessionId: 'local_sr', title: 'JH SR · earlier', model: SENIOR_MODEL, effort: SENIOR_EFFORT, archived: false };
+  assert.match(await reason(SENIOR_START, appOf(['c-lead', LEAD_RECORD], ['c-sr', live])), /while "JH SR · earlier" is live: one live senior at a time/);
+  // A project that declares no rule senior-model has no senior to start.
+  const noSenior = writeRules(RULES.filter((rule) => rule.id !== 'senior-model' && rule.id !== 'senior-effort'));
+  assert.match(denied(await hook(SENIOR_START, { app: lead, rulesText: noSenior })).permissionDecisionReason, /declares no rule senior-model/);
+});
+
+test('a message to a senior whose app record is off rule:senior-model or rule:senior-effort is denied, naming the lead\'s session tools', async () => {
+  const senior = { sessionId: 'local_sr', title: 'JH SR · a design', model: SENIOR_MODEL, effort: SENIOR_EFFORT, archived: false };
+  const passes = { code: 0, out: '', err: '' };
+  const other = EFFORTS.find((level) => level !== SENIOR_EFFORT);
+  for (const [tool_name, field] of [['SendMessage', 'to'], ['mcp__ccd_session_mgmt__send_message', 'session_id']]) {
+    const call = { tool_name, cwd: 'D:/project', tool_input: { [field]: 'local_sr', message: 'Your task: review the design.' } };
+    assert.deepEqual(await hook(call, { app: appOf(['c-sr', senior]) }), passes, `${tool_name}: on the senior's own`);
+    const onOpus = denied(await hook(call, { app: appOf(['c-sr', { ...senior, model: LEAD_RECORD.model }]) })).permissionDecisionReason;
+    assert.match(onOpus, new RegExp(`"JH SR · a design".*the model ${LEAD_RECORD.model}.*rule senior-model: ${SENIOR_MODEL}.*set_session_model`, 's'), tool_name);
+    const level = denied(await hook(call, { app: appOf(['c-sr', { ...senior, effort: other }]) })).permissionDecisionReason;
+    assert.match(level, new RegExp(`the level ${other}.*rule senior-effort: ${SENIOR_EFFORT}.*set_session_effort`, 's'), tool_name);
+    // A work session's record, no record, or one that cannot be read is not held here.
+    assert.deepEqual(await hook(call, { app: appOf(['c-sr', { ...senior, title: 'JH 7 · thing', model: LEAD_RECORD.model }]) }), passes);
+    assert.deepEqual(await hook(call, { app: new Map() }), passes);
+    assert.deepEqual(await hook(call, { app: { get: () => null, values: () => { throw new Error('locked'); } } }), passes);
+  }
+  // Each tool's own target field is read: a `to` beside send_message's session_id hides nothing (D13).
+  const onOpus = appOf(['c-sr', { ...senior, model: LEAD_RECORD.model }]);
+  assert.match(denied(await hook({ tool_name: 'mcp__ccd_session_mgmt__send_message', cwd: 'D:/project', tool_input: { to: 'someone', session_id: 'local_sr', message: 'x' } }, { app: onOpus })).permissionDecisionReason, /set_session_model/);
+  assert.match(denied(await hook({ tool_name: 'SendMessage', cwd: 'D:/project', tool_input: { to: 'local_sr', session_id: 'someone', message: 'x' } }, { app: onOpus })).permissionDecisionReason, /set_session_model/);
+  // A target that is no app id (a name) reads no record.
+  let reads = 0;
+  const counted = { get: () => null, values: () => { reads += 1; return [].values(); } };
+  await hook({ tool_name: 'SendMessage', cwd: 'D:/project', tool_input: { to: 'researcher', message: 'x' } }, { app: counted });
+  assert.equal(reads, 0);
 });

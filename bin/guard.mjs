@@ -125,6 +125,23 @@ async function worktreeLister(cwd) {
   };
 }
 
+/** Why a message (`SendMessage` or `send_message`) is refused for its target, or null: a target named by its app id
+ * (`local_…`) is looked up in the app's records, and a senior off its rules gets no task (`seniorMessageRefusal`,
+ * odd/tasks/senior-orchestrator.md, T6). A name reads no record and no rules (`rulesOf` gives their text); a reader that
+ * fails, or no record, passes. */
+async function seniorMessageOf(tool, input, rulesOf, readApp) {
+  // Each tool's own field: a `to` beside send_message's `session_id` must not hide it (D13).
+  const target = tool === 'SendMessage' ? input.to : input.session_id;
+  if (typeof target !== 'string' || !target.startsWith('local_')) return null;
+  let record = null;
+  try {
+    record = [...(await readApp()).values()].find((one) => one?.sessionId === target) ?? null;
+  } catch {
+    return null;
+  }
+  return (await import('./lib/session-title-guard.mjs')).seniorMessageRefusal(record, rulesOf());
+}
+
 /** Why the call of `payload` is refused, or null. */
 async function refusalOf(payload, { now, projectRoot, readFile, testRun, readIndex, claudeConfigDir, baseContains, readApp, listWorktrees, env = {}, homedir = os.homedir }) {
   const tool = payload?.tool_name;
@@ -171,11 +188,22 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     const root = rootOf();
     const rules = rulesTextOf(root, readFile);
     // A lead's title holds the start to rule:lead-effort, any other to rule:session-effort; both to rule:session-model.
-    const { leadTitle, seniorTitle } = await import('./lib/session-title-guard.mjs');
-    // A senior (odd/tasks/senior-orchestrator.md) starts only by the command, which holds it to its own model and names
-    // no advisor (his settings' advisorModel still gives it one); this tool would hold it to the home's.
+    const { leadTitle, seniorTitle, seniorStartRefusal } = await import('./lib/session-title-guard.mjs');
+    // A senior is started by the lead as a visible app session (odd/tasks/senior-orchestrator.md, T6): its caller and
+    // the live seniors are read from the app's records, and a record that cannot be read refuses it.
     if (seniorTitle(input.title)) {
-      return `js-harness guard: start_session does not start a senior ("${input.title}"): start it with js-harness sessions start --title "${input.title}", which holds it to rule:senior-model and names no advisor (his settings' advisorModel still gives it one).`;
+      let starter = null;
+      let records = [];
+      try {
+        const app = await readApp();
+        if (typeof payload.session_id === 'string' && payload.session_id !== '') starter = app.get(payload.session_id) ?? null;
+        records = [...app.values()];
+      } catch {
+        // A reader that fails leaves what it gave: no starter refuses the start.
+      }
+      return seniorStartRefusal(input, rules, { starter, records })
+        ?? sessionStartRefusal(input, rules, { senior: true })
+        ?? (await sessionTitleOf(input, rules, root, harnessHome({ env, homedir }), readFile));
     }
     const lead = leadTitle(input.title);
     const start = sessionStartRefusal(input, rules, { lead });
@@ -195,7 +223,7 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
       ?? (await sessionTitleOf(input, rules, root, harnessHome({ env, homedir }), readFile));
   }
   if (OPENING_TOOLS.includes(tool)) return openingRefusal(tool, rulesTextOf(rootOf(), readFile));
-  if (MESSAGE_TOOLS.has(tool)) return hourRefusal(input.message, now());
+  if (MESSAGE_TOOLS.has(tool)) return hourRefusal(input.message, now()) ?? (await seniorMessageOf(tool, input, () => rulesTextOf(rootOf(), readFile), readApp));
   const backticks = backtickRefusal(input.command);
   if (backticks !== null) return backticks;
   const driveRoot = driveRootRemovalRefusal(input.command);
