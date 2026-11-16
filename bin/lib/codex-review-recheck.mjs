@@ -161,8 +161,18 @@ function throughNoReview({ from, nearest, records, at, documentsOnly }) {
  *   (whether the range's head holds a commit: `true`, `false`, or `null` when git cannot say) says the
  *   range's head does not hold that recheck's head: then it forked before the recheck, and is a review.
  *
- * The last reviewed record that ends at `from` decides, since a later one is the later word on that head. */
-export function recheckState({ from, records, runs, holds = () => null }) {
+ * The last reviewed record that ends at `from` decides, since a later one is the later word on that head, save one
+ * thing: a later record settles a correction an earlier one owes there only where it read all that one read, its base at
+ * or before the earlier base (`atOrBefore(older, newer)`: `true`, `false`, or `null` when git cannot say; equal
+ * bases need no git). A clean `--again` over a part of the range read only that part, and cleared what the rest owed
+ * (odd/tasks/again-subrange.md, L71 A of review-gate). Unknown keeps what is owed. */
+export function recheckState(given) {
+  return decidingRecord(given).state;
+}
+
+/** The reviewed record at `from` that decides, as `recheckState` reads it (`kept`, undefined where none ends there),
+ * and the state it gives. */
+export function decidingRecord({ from, records, runs, holds = () => null, atOrBefore = () => null }) {
   const reviewed = records.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed');
   const linesOf = (rec) => recordRuns(rec).map((id) => (id === null ? null : runs.findLast((one) => one?.id === id) ?? null));
   const openOf = (rec) => {
@@ -177,35 +187,48 @@ export function recheckState({ from, records, runs, holds = () => null }) {
     const read = classifyRecheck(answer, 0);
     return [...read.notFixed, ...read.blocking, ...read.unmarked];
   };
-  const prior = reviewed.filter((rec) => rec.head === from).at(-1);
-  if (prior === undefined) return { kind: 'review' };
   const rechecked = reviewed.filter((rec) => rec.recheckOf === from).at(-1);
-  if (typeof prior.recheckOf === 'string') {
-    const open = openOf(prior);
-    if (open === 0) return { kind: 'review' };
-    const second = typeof reviewed.filter((rec) => rec.head === prior.recheckOf).at(-1)?.recheckOf === 'string';
-    if (second) return { kind: 'refused', of: from, open, reviews: 3, findings: openFindings(prior) };
-    if (rechecked !== undefined) {
-      if (holds(rechecked.head) === false) return { kind: 'review' };
-      const left = openOf(rechecked);
-      return left === 0 ? { kind: 'refused', of: from, open: 0 } : { kind: 'refused', of: rechecked.head, open: left, reviews: 3, findings: openFindings(rechecked) };
+  const stateOf = (prior) => {
+    if (typeof prior.recheckOf === 'string') {
+      const open = openOf(prior);
+      if (open === 0) return { kind: 'review' };
+      const second = typeof reviewed.filter((rec) => rec.head === prior.recheckOf).at(-1)?.recheckOf === 'string';
+      if (second) return { kind: 'refused', of: from, open, reviews: 3, findings: openFindings(prior) };
+      if (rechecked !== undefined) {
+        if (holds(rechecked.head) === false) return { kind: 'review' };
+        const left = openOf(rechecked);
+        return left === 0 ? { kind: 'refused', of: from, open: 0 } : { kind: 'refused', of: rechecked.head, open: left, reviews: 3, findings: openFindings(rechecked) };
+      }
+      const findings = openFindings(prior);
+      return findings.length === 0 ? { kind: 'refused', of: prior.recheckOf, open } : { kind: 'recheck', of: from, findings, second: true };
     }
-    const findings = openFindings(prior);
-    return findings.length === 0 ? { kind: 'refused', of: prior.recheckOf, open } : { kind: 'recheck', of: from, findings, second: true };
+    // A second recheck only on the line the recheck continues. A range whose head forked from `from` before
+    // the recheck holds none of the correction it read: its commits are new code, a review as any other
+    // (L8 of odd/tasks/merge-queue.md, pull request 167). Unknown is refused, as before.
+    if (rechecked !== undefined) return holds(rechecked.head) === false ? { kind: 'review' } : { kind: 'refused', of: from, open: openOf(rechecked) };
+    const lines = linesOf(prior);
+    if (lines.length === 0 || lines.includes(null)) return { kind: 'review' };
+    const answers = lines.map(runAnswer);
+    if (answers.includes(null)) return { kind: 'review' };
+    if (!answers.some(owesCorrection)) return { kind: 'review' };
+    const findings = answers.flatMap((answer) => answer.findings);
+    if (findings.length === 0) return { kind: 'review' };
+    return { kind: 'recheck', of: from, findings };
+  };
+  let kept;
+  let state = { kind: 'review' };
+  for (const rec of reviewed) {
+    if (rec.head !== from) continue;
+    const reads = kept === undefined || rec.base === kept.base || atOrBefore(rec.base, kept.base) === true;
+    if (!reads && owes(state)) continue;
+    kept = rec;
+    state = stateOf(rec);
   }
-  // A second recheck only on the line the recheck continues. A range whose head forked from `from` before
-  // the recheck holds none of the correction it read: its commits are new code, a review as any other
-  // (L8 of odd/tasks/merge-queue.md, pull request 167). Unknown is refused, as before.
-  if (rechecked !== undefined) return holds(rechecked.head) === false ? { kind: 'review' } : { kind: 'refused', of: from, open: openOf(rechecked) };
-  const lines = linesOf(prior);
-  if (lines.length === 0 || lines.includes(null)) return { kind: 'review' };
-  const answers = lines.map(runAnswer);
-  if (answers.includes(null)) return { kind: 'review' };
-  if (!answers.some(owesCorrection)) return { kind: 'review' };
-  const findings = answers.flatMap((answer) => answer.findings);
-  if (findings.length === 0) return { kind: 'review' };
-  return { kind: 'recheck', of: from, findings };
+  return { kept, state };
 }
+
+/** Whether a state still owes something: a recheck, or a refusal that left findings open. */
+const owes = (state) => state.kind === 'recheck' || (state.kind === 'refused' && state.open !== 0);
 
 /** What a range from `from` is, as `recheckState` says from where `recheckAnchor` puts its findings, and read past a
  * merge on the first-parent line as well: what a review owes is owed until a recheck names it, and a merge above it
@@ -252,8 +275,8 @@ export function recheckState({ from, records, runs, holds = () => null }) {
  * so a range with none pays nothing for this. The state found below a merge, or joined there, carries `at`, the head
  * of the newest record that owes it; a state read past a merge or at one carries `merge`, the newest merge on the way,
  * which a refusal names. Neither is ever in a record. */
-export function recheckThrough({ from, rows, records, runs, holds = () => null, changedBetween, writesNothing }) {
-  const today = recheckState({ from: recheckAnchor({ from, records, back: rows.map(([id]) => id), changedBetween }), records, runs, holds });
+export function recheckThrough({ from, rows, records, runs, holds = () => null, atOrBefore = () => null, changedBetween, writesNothing }) {
+  const today = recheckState({ from: recheckAnchor({ from, records, back: rows.map(([id]) => id), changedBetween }), records, runs, holds, atOrBefore });
   const parentsOf = new Map(rows.map(([id, ...parents]) => [id, parents]));
   const reviewed = records.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed');
   const lastAt = (id) => reviewed.filter((one) => one.head === id).at(-1);
@@ -279,7 +302,7 @@ export function recheckThrough({ from, rows, records, runs, holds = () => null, 
       const parents = parentsOf.get(at);
       const rec = lastAt(at);
       if (rec !== undefined) {
-        const state = recheckState({ from: at, records, runs, holds });
+        const state = recheckState({ from: at, records, runs, holds, atOrBefore });
         if (state.kind !== 'review') {
           if (!passed) return owed;
           stretches.push([at, newer]);

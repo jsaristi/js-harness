@@ -2284,3 +2284,20 @@ test('V3: with the review off in the working tree and no HEAD to read, the plain
     for (const dir of [norepo, empty]) fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('an --again of a sub-range that ends at the head owing a correction does not settle it', () => {
+  // The third verifier pass on PR 896 (odd/tasks/review-gate.md L71 A; odd/tasks/again-subrange.md spec 1): a clean
+  // review of M..H, which reads none of the file the review of base..H found wrong, cleared that review's correction.
+  const { root, base } = makeRepo();
+  feature(root);
+  commit(root, 'b.js', 'two', 'feat: two');
+  const middle = commit(root, 'c.js', 'three', 'feat: three');
+  const head = commit(root, 'd.js', 'four', 'feat: four');
+  run(root, { id: 'owes', base, from: base, head, answer: { verdict: 'incorrect', findings: [finding] } });
+  record(root, base, head, { run: 'owes' });
+  run(root, { id: 'narrow', base: middle, from: middle, head, answer: { verdict: 'correct', findings: [] } });
+  record(root, middle, head, { run: 'narrow' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});

@@ -484,3 +484,23 @@ test('runAnswerFindings tells an answer that found nothing from a line that kept
   assert.equal(runAnswerFindings({ findings: { total: 0 } }), null);
   assert.equal(runAnswerFindings(undefined), null);
 });
+
+test('a later review at a head that owes settles it only where its base is at or before the owing one\'s; unknown keeps the debt (L71 A)', () => {
+  const found = [finding('[P2] Drops a record')];
+  const owes = record(A, D, { run: 'r1' });
+  const runs = [runLine('r1', { answer: { findings: found, verdict: 'incorrect' } }), runLine('r2', { answer: { findings: [], verdict: 'correct' } })];
+  const order = [A, B, C, D];
+  const atOrBefore = (older, newer) => order.indexOf(older) <= order.indexOf(newer);
+  // A clean --again over C..D, a part of A..D: the correction is still owed.
+  const narrow = [owes, record(C, D, { run: 'r2' })];
+  assert.deepEqual(recheckState({ from: D, records: narrow, runs, atOrBefore }), { kind: 'recheck', of: D, findings: found });
+  assert.deepEqual(recheckState({ from: D, records: narrow, runs, atOrBefore: () => null }), { kind: 'recheck', of: D, findings: found });
+  assert.deepEqual(recheckState({ from: D, records: narrow, runs }), { kind: 'recheck', of: D, findings: found }, 'no git: unknown');
+  // The same range again, or a wider one, reads all the owing review read: the later word decides.
+  for (const base of [A]) assert.deepEqual(recheckState({ from: D, records: [owes, record(base, D, { run: 'r2' })], runs, atOrBefore }), { kind: 'review' });
+  const wider = [record(B, D, { run: 'r1' }), record(A, D, { run: 'r2' })];
+  assert.deepEqual(recheckState({ from: D, records: wider, runs, atOrBefore }), { kind: 'review' });
+  // A later narrower review that owes, after a clean one, is the later word: nothing earlier is owed.
+  const later = [record(A, D, { run: 'r2' }), record(C, D, { run: 'r1' })];
+  assert.deepEqual(recheckState({ from: D, records: later, runs, atOrBefore }), { kind: 'recheck', of: D, findings: found });
+});

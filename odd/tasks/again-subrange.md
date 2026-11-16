@@ -2,10 +2,9 @@
 
 ## State
 JH 207, worktree D:/js-harness-worktrees/again-subrange, branch feat/again-subrange from main 45a40e8 (PR 896 landed).
-Opened; nothing built. Next: count the real Codex records first (how many heads hold more than one admitted reviewed
-record, and of those how many have a later record whose base is not at or before the earlier one's base), then the
-depth pass, then the red test (the verifier's probe a-again-subrange.mjs, scratchpad probes3 of the JH 207 session),
-then the fix. Open task T3 (L84 of odd/tasks/review-gate.md). The lead was told PR 897 and 894 pass with main's code (L1).
+T1 done (L2); T2 built (L5): `recheckState` keeps an owed correction past a later record whose base is not at or before
+the owing one's. Next: the whole set (the commit's hook), Codex and the lenses, push, PR, notice to the lead. T3 (L84)
+stays open. The background wait for notices to 207 runs until this session closes.
 
 ## Goal
 A clean Codex review at a head that owes a correction settles that correction only where it reads the whole range the
@@ -55,8 +54,8 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
    unrelated record) to that slice as an open task."
 
 ## Tasks
-- [ ] T1 (kind: design) count the real records, depth pass
-- [ ] T2 (kind: build) spec 1, tests first
+- [x] T1 (kind: design) count the real records, depth pass
+- [x] T2 (kind: build) spec 1, tests first
 - [ ] T3 (kind: build) spec 2, open: the lens rows' older-writer note counts only records of the range checked
 
 ## Log
@@ -69,3 +68,5 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
   over 1,398 heads; 2 heads hold more than one; 0 later records there have a base that is not at or before the earlier
   one's. The rule of spec 1 changes what no real record means today. Next: the red test of spec 1.
 - L3 2026-11-16, spec 1's red test written (uncommitted) at the end of bin/check-codex-reviews.test.mjs, 'an --again of a sub-range that ends at the head owing a correction does not settle it': red for its reason, the push row passes ('3 code commits since origin/main, all covered'). Next: the fix where the last reviewed record at a head decides (bin/lib/codex-review-recheck.mjs:180): a later record settles only where its base is at or before the earlier one's.
+- L4 2026-11-16, read before the fix: recheckState takes `prior = reviewed.filter((rec) => rec.head === from).at(-1)` (codex-review-recheck.mjs:180). Open: whether recheckState can ask git (an `holds` function is in scope at :187) for the ancestry the rule needs; if not, pass a predicate from its callers (correctionOwed, recheckAt, afterTurn). Choose the smallest; check the 2 real heads with more than one record keep their reading.
+- L5 2026-11-16, spec 1 built: `decidingRecord` (codex-review-recheck.mjs) reads the reviewed records at a head in order; a later one replaces an earlier one that owes only where its base is at or before (`atOrBefore`, `git merge-base --is-ancestor` through `atOrBeforeIn` in codex-review-turns.mjs; unknown keeps the debt; equal bases need no git). Wired into the push row, `recheckAt`/`recheckThrough` and `afterTurn`; the row's message reads the same record. Tests: the row test of L3 and a unit test in codex-review-recheck.test.mjs, red before, green after; the targeted files 212 of 214 pass, 0 fail. Real heads (scratchpad t10keep.mjs): e3aad480 (3 records) and ed1fd0e1 (2) read `review` with the rule and with the last record alone. L2 said 2 heads with more than one record; one holds 3.
