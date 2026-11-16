@@ -1,9 +1,10 @@
 # again-subrange: an --again over part of a range does not clear an owed correction
 
 ## State
-JH 207, worktree D:/js-harness-worktrees/again-subrange, branch feat/again-subrange, PR 898. Delta pass done (L27), no
-blocking finding. Next: gh pr ready 898, notify ready --pr 898. Then T3 (L84) as its own PR. Open: T5 (predates), T6
-(a fourth review, L27, for the lead). The wait for notices to 207 runs until this session closes.
+JH 207, worktree D:/js-harness-worktrees/again-subrange, branch feat/again-subrange, PR 898 held for T6 (L28). Plan:
+test first from the verifier's q3: from the head of the joint recheck, a further review is refused when any standing
+recheck at the head it rechecked owes (second counts the standing owing rechecks, not only the deciding record). Then
+targeted files, commit, Codex and lenses, push, draft off, notify ready --pr 898. T3 and T5 as they are. The wait for 207 runs.
 
 ## Goal
 A clean Codex review at a head that owes a correction settles that correction only where it reads the whole range the
@@ -94,3 +95,5 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
 - L25 2026-11-16, d445505 reviewed: Codex correct, its P2 rechecked fixed (41,162 input tokens); risk 0; reliability WARNING: other rechecks' open findings now join a second-recheck state (`second: true`), unproven whether meant. Meant, and fail closed: the last recheck's second recheck takes up what the wider one left open too; the 'two rechecks' test now asserts `second: true`.
 - L26 2026-11-16, cef6ccf7 reviewed: Codex correct (61,734 input tokens); reliability 0 findings, its warning rechecked fixed. Recount with the final code (t10all.mjs): 1,412 admitted reviewed records over 1,409 heads, 2 with more than one (e3aad480, ed1fd0e1); the same state on main and the branch at all 1,409, 0 different. The verifier pass is answered: V1 fixed, V2 decided and pinned (a known refusal, remedy a recheck at the merge), V3 and V6 fixed by the standing-records rule, V4 and V5 notes that fail closed. Codex in T10: 12 runs.
 - L27 2026-11-16, corrects L26: Codex in T10 ran 11 times for 955,676 input tokens (12 with cef6ccf7's run, 61,734); lenses 10 runs; the opus verifier 177,496 + 200,268 tokens, the writer 83,861. The verifier's delta pass at f9a8ba72 (scratchpad verify898/, q2-q4): no blocking finding; earlier probes differ only for V1, V3, V6, now fixed; three standing records join right (q2); an owing record below a merge then a clean S..C2 above it passes on main and the branch alike (predates, the T5 shape). Notes: (T6) q3: a plain review that owes plus a narrower recheck at one head lets the recheck's leftover finding get a fourth review, which main stops (by dropping the other finding); where two rechecks join, the row's warning names only the deciding recheck's findings (the state holds both); `also` is dead code on the plain path.
+- L28 2026-11-16, the lead on T6: "I hold PR 898 for it. Main stops that fourth review and the branch allows it, so this PR loosens the three-review limit in its own change. Fix it in 898, tests first: the branch must stop a fourth review wherever main stops one."
+- L29 2026-11-16, T6 fixed tests first: the q3 test was red (a second recheck offered from the joint recheck's head); second now also counts the last record at the head rechecked (as main reads it) and the standing rechecks there that owe. Targeted files 417 tests, 0 failed; the recount over the real records, 1,409 heads, the same state on main and the branch at all of them.

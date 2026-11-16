@@ -172,7 +172,7 @@ export function recheckState(given) {
 }
 
 /** The reviewed record at `from` that decides, as `recheckState` reads it (`kept`, undefined where none ends there),
- * and the state it gives. `within` is the heads already being read on the way here: a recheck that names one of them
+ * the standing records there that owe (`owing`), and the state it gives. `within` is the heads already being read on the way here: a recheck that names one of them
  * again (its own head, or a pair naming each other) is read at the last record there, so the reading ends. */
 export function decidingRecord({ from, records, runs, holds = () => null, atOrBefore = () => null, within = [] }) {
   const reviewed = records.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed');
@@ -204,12 +204,15 @@ export function decidingRecord({ from, records, runs, holds = () => null, atOrBe
     if (typeof prior.recheckOf === 'string') {
       const open = openOf(prior);
       if (open === 0) return { kind: 'review' };
-      // The record that decides at the head it rechecked, read by the same rule: a clean --again over part of it
-      // hides no recheck (L71 A).
-      const below = [...within, from].includes(prior.recheckOf)
-        ? reviewed.filter((rec) => rec.head === prior.recheckOf).at(-1)
-        : decidingRecord({ from: prior.recheckOf, records, runs, holds, atOrBefore, within: [...within, from] }).kept;
-      const second = typeof below?.recheckOf === 'string';
+      // It was a second recheck where a recheck spoke at the head it rechecked: the record that decides there, read by
+      // the same rule (a clean --again over part of it hides no recheck, L71 A), the last record there (as main reads
+      // it, so the branch stops a fourth review wherever main does), or a standing recheck there that left some open,
+      // whose findings joined it when a plain review decided (verifier q3, the lead on T6).
+      const last = reviewed.filter((rec) => rec.head === prior.recheckOf).at(-1);
+      const there = [...within, from].includes(prior.recheckOf)
+        ? { kept: last, owing: [] }
+        : decidingRecord({ from: prior.recheckOf, records, runs, holds, atOrBefore, within: [...within, from] });
+      const second = [there.kept, last, ...there.owing].some((rec) => typeof rec?.recheckOf === 'string');
       if (second) return { kind: 'refused', of: from, open, reviews: 3, findings: openFindings(prior) };
       if (rechecked !== undefined) {
         if (holds(rechecked.head) === false) return { kind: 'review' };
@@ -232,19 +235,19 @@ export function decidingRecord({ from, records, runs, holds = () => null, atOrBe
   // findings of each, and what each standing recheck left open joins them; where only rechecks owe, the last decides and
   // what the others left open joins it; where none owes, the last standing record decides.
   const at = reviewed.filter((rec) => rec.head === from);
-  if (at.length === 0) return { kept: undefined, state: { kind: 'review' } };
+  if (at.length === 0) return { kept: undefined, owing: [], state: { kind: 'review' } };
   const standing = at.filter((rec, i) => !at.slice(i + 1).some((later) => later.base === rec.base || atOrBefore(later.base, rec.base) === true));
   const owing = standing.filter(ownDebt);
   const plain = owing.filter((rec) => typeof rec.recheckOf !== 'string');
   const kept = plain.at(-1) ?? owing.at(-1) ?? standing.at(-1);
   const state = stateOf(kept);
-  if (state.kind !== 'recheck' || owing.length < 2) return { kept, state };
+  if (state.kind !== 'recheck' || owing.length < 2) return { kept, owing, state };
   const also = [
     ...plain.filter((rec) => rec !== kept).flatMap(plainFindings),
     ...owing.filter((rec) => rec !== kept && typeof rec.recheckOf === 'string').flatMap(openFindings),
   ];
-  if (plain.length > 0) return { kept, state: { ...state, findings: [...plain.flatMap(plainFindings), ...owing.filter((rec) => typeof rec.recheckOf === 'string').flatMap(openFindings)] } };
-  return { kept, state: { ...state, findings: [...state.findings, ...also] } };
+  if (plain.length > 0) return { kept, owing, state: { ...state, findings: [...plain.flatMap(plainFindings), ...owing.filter((rec) => typeof rec.recheckOf === 'string').flatMap(openFindings)] } };
+  return { kept, owing, state: { ...state, findings: [...state.findings, ...also] } };
 }
 
 /** What a range from `from` is, as `recheckState` says from where `recheckAnchor` puts its findings, and read past a

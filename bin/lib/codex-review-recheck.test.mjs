@@ -621,3 +621,32 @@ test('a clean review that reads a joined narrower review settles its findings, n
   ];
   assert.deepEqual(recheckState({ from: E, records, runs, atOrBefore }), { kind: 'recheck', of: E, findings: [f0] });
 });
+
+test('a recheck of a head where a plain review decides and a recheck left a finding open is its third review: a fourth is refused (verifier q3, the lead on T6)', () => {
+  // H is B, F is C, F2 is D. fH: the review A..B (1), the recheck B..C (2), the joint recheck C..D (3).
+  const order = [A, B, C, D];
+  const atOrBefore = (older, newer) => order.indexOf(older) <= order.indexOf(newer);
+  const counts = { findings: 1, fixed: 0, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 };
+  const left = finding('[not fixed] 1 Still wrong field');
+  const leftAgain = finding('[not fixed] 2 Still wrong field');
+  const runs = [
+    runLine('r1', { answer: { findings: [finding('[P2] Wrong field')], verdict: 'incorrect' } }),
+    runLine('r2', { answer: { findings: [finding('[P2] Loses a record', { file: 'c.js' })], verdict: 'incorrect' } }),
+    runLine('r3', { answer: { findings: [left], verdict: 'incorrect' }, recheck: counts }),
+    runLine('r4', { answer: { findings: [leftAgain], verdict: 'incorrect' }, recheck: { ...counts, findings: 2, fixed: 1 } }),
+  ];
+  const refused = { kind: 'refused', of: D, open: 1, reviews: 3, findings: [leftAgain] };
+  // The order main reads: the recheck is the last record at C, so main stops the fourth review; the branch must too.
+  const mainOrder = [record(A, B, { run: 'r1' }), record(A, C, { run: 'r2' }), record(B, C, { run: 'r3', recheckOf: B }), record(C, D, { run: 'r4', recheckOf: C })];
+  assert.deepEqual(recheckState({ from: D, records: mainOrder, runs, atOrBefore }), refused);
+  // The recheck still stands but is not the last record at C: a narrower plain review X..C after it owes and decides.
+  // fH was still reviewed three times, so the branch refuses where main, reading the last record, would not.
+  const X = 'f'.repeat(40);
+  const narrowOrder = [A, B, X, C, D];
+  const narrowAtOrBefore = (older, newer) => narrowOrder.indexOf(older) <= narrowOrder.indexOf(newer);
+  const other = [record(A, B, { run: 'r1' }), record(B, C, { run: 'r3', recheckOf: B }), record(X, C, { run: 'r2' }), record(C, D, { run: 'r4', recheckOf: C })];
+  assert.deepEqual(recheckState({ from: D, records: other, runs, atOrBefore: narrowAtOrBefore }), refused);
+  // Where a wider plain review read all the recheck read, the recheck no longer stands: C..D is a first recheck of f0.
+  const wider = [record(A, B, { run: 'r1' }), record(B, C, { run: 'r3', recheckOf: B }), record(A, C, { run: 'r2' }), record(C, D, { run: 'r4', recheckOf: C })];
+  assert.equal(recheckState({ from: D, records: wider, runs, atOrBefore }).kind, 'recheck');
+});
