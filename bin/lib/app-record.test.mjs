@@ -83,8 +83,8 @@ test('appSessions maps each session record by its cliSessionId to where it sits:
     record('local_3.json', { cliSessionId: 'c-plain', isArchived: false, scheduledTaskId: '' }),
   ]));
   const sessions = lib.appSessions(ROOT, root);
-  assert.deepEqual(sessions.get('c-archived'), { where: 'archived', model: null, effort: 'high', scheduledTaskId: 'task-1', archived: true, title: 'Old', cwd: null, priorCliSessionIds: [] });
-  assert.deepEqual(sessions.get('c-routine'), { where: 'routines', model: null, effort: 'medium', scheduledTaskId: 'task-1', archived: false, title: null, cwd: null, priorCliSessionIds: [] });
+  assert.deepEqual(sessions.get('c-archived'), { sessionId: null, where: 'archived', model: null, effort: 'high', scheduledTaskId: 'task-1', archived: true, title: 'Old', cwd: null, priorCliSessionIds: [] });
+  assert.deepEqual(sessions.get('c-routine'), { sessionId: null, where: 'routines', model: null, effort: 'medium', scheduledTaskId: 'task-1', archived: false, title: null, cwd: null, priorCliSessionIds: [] });
   assert.equal(sessions.get('c-plain').where, 'sessions', 'an empty scheduledTaskId is no routine');
 });
 
@@ -177,4 +177,15 @@ test('scheduledRegistry is found when any account folder holds a registry', () =
     [other, '{"scheduledTasks":[]}'],
   ]));
   assert.deepEqual(lib.scheduledRegistry(ROOT, root), { found: true, tasks: [] });
+});
+
+// odd/tasks/senior-orchestrator.md, T6: the guard finds the session a message is sent to by its app id.
+test('appSessions gives each record its app id, the sessionId a message and the session tools name, null when absent', () => {
+  const root = fakeFs(Object.fromEntries([
+    record('local_1.json', { cliSessionId: 'c-one', sessionId: 'local_1' }),
+    record('local_2.json', { cliSessionId: 'c-two', sessionId: 7 }),
+  ]));
+  const sessions = lib.appSessions(ROOT, root);
+  assert.equal(sessions.get('c-one').sessionId, 'local_1');
+  assert.equal(sessions.get('c-two').sessionId, null);
 });

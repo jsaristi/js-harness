@@ -72,8 +72,8 @@ function orgFolders(root, readdir, unreadable) {
   return listing(readdir, base, unreadable).flatMap((account) => listing(readdir, path.join(base, account), unreadable).map((org) => path.join(base, account, org)));
 }
 
-/** The app's session records by `cliSessionId`: `{ where, model, effort, scheduledTaskId, archived, title, cwd, priorCliSessionIds }`,
- * `cwd` the folder the session runs in (null when the record names none), `model` and `effort` what the session's
+/** The app's session records by `cliSessionId`: `{ sessionId, where, model, effort, scheduledTaskId, archived, title, cwd, priorCliSessionIds }`,
+ * `sessionId` the app's own `local_…` id, which a message and the session tools name (null when absent), `cwd` the folder the session runs in (null when the record names none), `model` and `effort` what the session's
  * menu holds, as the record writes them (null when it writes none). `where` is
  * `'archived'` when the app archived it, `'routines'` when a scheduled task opened it, else `'sessions'`.
  * `priorCliSessionIds` are the CLI session ids the app had given this session before a clear, so a session started
@@ -88,6 +88,7 @@ export function appSessions(root, { readdir = fs.readdirSync, readFile = (file) 
       const scheduledTaskId = typeof data.scheduledTaskId === 'string' && data.scheduledTaskId !== '' ? data.scheduledTaskId : null;
       const archived = data.isArchived === true;
       sessions.set(data.cliSessionId, {
+        sessionId: typeof data.sessionId === 'string' && data.sessionId !== '' ? data.sessionId : null,
         where: archived ? 'archived' : scheduledTaskId !== null ? 'routines' : 'sessions',
         model: typeof data.model === 'string' && data.model !== '' ? data.model : null,
         effort: typeof data.effort === 'string' ? data.effort : null,
