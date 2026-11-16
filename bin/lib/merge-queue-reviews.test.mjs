@@ -165,3 +165,22 @@ test('a pull request that conflicts with main is refused, naming the files, and 
   });
   assert.notEqual(main, moved);
 });
+
+// B2-1 at the merge door: "commits before a `codexReview: false` commit are asked by no review". The door reads the
+// Codex review through `checkCodexReviews`, which asks each code commit by the switch its own tree holds (S4), so a pull
+// request that turns the review off after a code commit made with it on is refused until that commit has a record.
+test('B2-1: the door refuses a pull request that turns the Codex review off after a code commit made with it on', () => {
+  const { root, main, c } = makeRepo();
+  git(root, 'checkout', '--quiet', c);
+  fs.writeFileSync(path.join(root, 'harness.json'), `${JSON.stringify({ functions: { codexReview: 'off', lensReview: 'on' } })}\n`, 'utf8');
+  git(root, 'add', 'harness.json');
+  git(root, 'commit', '--quiet', '-m', 'turn the Codex review off');
+  const off = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', '--detach', main);
+  // The lenses cover the whole pull request; Codex covers nothing.
+  const { subjectHash } = lensCandidate(root, { base: main, head: off });
+  appendLensReview(root, { schema: LENS_REVIEW_SCHEMA, base: main, head: off, subjectHash, run: startLensRun(root, { base: main, head: off, subjectHash }), reviewedAt: '2026-10-29T12:00:00.000Z', outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: [] }] });
+  const said = reviewEvidence(root, main, off);
+  assert.equal(said.pass, false, 'c was made with the Codex review on, and no Codex record covers it');
+  assert.match(said.detail, /no Codex review record|made with the review on/);
+});

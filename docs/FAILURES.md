@@ -1684,6 +1684,15 @@ cut after a compaction, and no hook asked for it.
 - Control: check — bin/lib/return-report.test.mjs — "a planted return without the page is turned back once, with
   what to run" — since 2026-10-31
 
+### review-slice-read-as-recheck
+A slice reviewed from the head of a review that left findings was read as the recheck of those
+findings, though its range held none of their fix, and spent one of the three reviews a change has.
+- Class: tool
+- Seen: 2026-11-16 — odd/tasks/review-gate.md, L28 — JH 207 reviewed S7 alone from 7030550, the
+  head of S6's review with three findings, without reading its --plan; Codex recorded 0 of 3 fixed,
+  and the fix's review became the second recheck, the last of three
+- Control: protocol — CLAUDE.md — "Read the proof before the command it allows" — since 2026-11-16
+
 ### review-tool-timeout
 The bound status of a gentle-ai review failed with `operation_timeout`, the candidate was left
 without that review, and the choice went to him.
