@@ -2,9 +2,9 @@
 
 ## State
 JH 207, worktree D:/js-harness-worktrees/again-subrange, branch feat/again-subrange from main 45a40e8 (PR 896 landed).
-T1 done (L2); T2 built (L5): `recheckState` keeps an owed correction past a later record whose base is not at or before
-the owing one's. Next: the whole set (the commit's hook), Codex and the lenses, push, PR, notice to the lead. T3 (L84)
-stays open. The background wait for notices to 207 runs until this session closes.
+T1 done (L2); T2 built and reviewed (L5-L7): spec 1's fix in b78093fe and f2059356, Codex's recheck correct, the lenses
+clean. Next: push, the pull request, the ready notice to the lead. T3 (L84) stays open. The background wait for notices
+to 207 runs until this session closes.
 
 ## Goal
 A clean Codex review at a head that owes a correction settles that correction only where it reads the whole range the
@@ -71,3 +71,4 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
 - L4 2026-11-16, read before the fix: recheckState takes `prior = reviewed.filter((rec) => rec.head === from).at(-1)` (codex-review-recheck.mjs:180). Open: whether recheckState can ask git (an `holds` function is in scope at :187) for the ancestry the rule needs; if not, pass a predicate from its callers (correctionOwed, recheckAt, afterTurn). Choose the smallest; check the 2 real heads with more than one record keep their reading.
 - L5 2026-11-16, spec 1 built: `decidingRecord` (codex-review-recheck.mjs) reads the reviewed records at a head in order; a later one replaces an earlier one that owes only where its base is at or before (`atOrBefore`, `git merge-base --is-ancestor` through `atOrBeforeIn` in codex-review-turns.mjs; unknown keeps the debt; equal bases need no git). Wired into the push row, `recheckAt`/`recheckThrough` and `afterTurn`; the row's message reads the same record. Tests: the row test of L3 and a unit test in codex-review-recheck.test.mjs, red before, green after; the targeted files 212 of 214 pass, 0 fail. Real heads (scratchpad t10keep.mjs): e3aad480 (3 records) and ed1fd0e1 (2) read `review` with the rule and with the last record alone. L2 said 2 heads with more than one record; one holds 3.
 - L6 2026-11-16, Codex on c2b1705..b78093f (157,959 input tokens): incorrect, one P2, "Preserve findings from later narrower reviews": a narrower review that owes too was dropped, so a recheck of the wider debt alone could settle it. Fixed tests first: where both owe a first recheck, the recheck takes up the findings of both; any other pair keeps the wider debt alone. Next: the targeted files, the commit, Codex's recheck, the lenses.
+- L7 2026-11-16, Codex's recheck of b78093f..f205935 (38,638 input tokens): correct, 1 fixed, 0 not fixed. The Claude lenses reliability and risk over 45a40e8..f205935: complete, 0 findings each (13,811 and 13,814 input tokens). Targeted files after the fix: 599 of 604 pass, 0 fail. Next: push and the pull request.
