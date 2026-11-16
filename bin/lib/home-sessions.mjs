@@ -26,7 +26,9 @@ function advisorOf(replied, advisor) {
 export const homeInForce = (home) => home !== null && typeof home === 'object' && [home.model, home.effort, home.lead, home.lenses, home.advisor].some((value) => typeof value === 'string');
 
 /** The act that puts the background job `job` on the home: a resume, which waits for a job at work to end. */
-const resumeOf = (job) => `a resume${job.working === true ? ' once its job is no longer at work, which a resume refuses until then:' : ','} js-harness sessions start --resume ${job.id}`;
+// A background resume is refused where rule sessions-open-in-sidebar is declared (odd/tasks/senior-orchestrator.md, T7), and
+// a message resumes it on the model it ran, so it is closed, once what it holds is committed, and opened again visibly.
+const resumeOf = (job) => `closing it${job.working === true ? ' once its job is no longer at work' : ''}, once what it holds is committed (js-harness sessions stop ${job.id}), and start_session`;
 
 /** The sessions off `home`, as `{ rows, archived, removedOff, on }`.
  *

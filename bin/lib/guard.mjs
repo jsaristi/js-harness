@@ -73,14 +73,20 @@ export const OPENING_TOOLS = Object.freeze([
  * rule and the value to open a session with instead. In a project that does not declare the rule nothing is refused;
  * behind one that declares it, the copy's value is held (`guardHeld`). The rule is read with `ruleHere`, by its id
  * written out so that `rules check` lists this file as its reader. */
+/** The rule sessions-open-in-sidebar as the project whose rules file has the text `projectData` declares it, held
+ * behind a copy that declares it (`guardHeld`), or null: the one read of the three refusals below. */
+export const sidebarRule = (projectData) => guardHeld('sessions-open-in-sidebar', ruleHere('sessions-open-in-sidebar', undefined, projectData));
+
 export function openingRefusal(toolName, projectData) {
   if (!OPENING_TOOLS.includes(toolName)) return null;
-  const rule = guardHeld('sessions-open-in-sidebar', ruleHere('sessions-open-in-sidebar', undefined, projectData));
+  const rule = sidebarRule(projectData);
   if (rule === null) return null;
   return `js-harness guard: ${toolName} opens a session in the app's Routines or in the cloud, where he does not see it `
     + `(rule sessions-open-in-sidebar). Open it with ${rule.value}, a row in his sidebar, or tell the lead; `
     + `it is refused even when he asked for it.${rule.note}`;
 }
+
+
 
 /** The tool that starts a session in the desktop app, a row in his sidebar. */
 export const SESSION_TOOL = 'mcp__ccd_session__start_session';
@@ -148,7 +154,7 @@ export function starterRefusal(starter, projectData, { lead = false, starterLead
   const who = starterLead
     ? `Only the user changes a lead's own: ${menuLine({ model: home.model?.value ?? starter.model, effort: own?.value ?? starter.effort })}`
     : 'The lead sets that session\'s with its session tools.';
-  return `js-harness guard: start_session is called from a session whose own record holds ${off}, and a start is capped at the session that makes it. ${who} Where a card is enough, js-harness sessions start starts one on the rules' model and level, capped by no session.`;
+  return `js-harness guard: start_session is called from a session whose own record holds ${off}, and a start is capped at the session that makes it. ${who} Where the user is not there to type, start_session leaves a card he taps.`;
 }
 
 /** The model, the level and the advisor a start takes where its call names none, as `{ model, effort, advisor }`:

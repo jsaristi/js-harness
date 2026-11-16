@@ -211,7 +211,7 @@ test('a start from a session whose own record holds another model, or a lower le
   // The starter's own level is the higher of the two the home gives, so it is under neither whichever is above: a
   // switch may put the lead's level below the sessions', and a starter at the lead's would then be capped.
   const on = { model, effort: EFFORTS[Math.max(EFFORTS.indexOf(HELD), EFFORTS.indexOf(LEAD))], title: 'JH ORQ · orquestador' };
-  const way = ' Where a card is enough, js-harness sessions start starts one on the rules\' model and level, capped by no session.';
+  const way = ' Where the user is not there to type, start_session leaves a card he taps.';
   assert.equal(starterRefusal(on, HERE), null);
   assert.equal(starterRefusal(on, HERE, { lead: true }), null);
   assert.equal(starterRefusal({ ...on, model: `${model}[1m]` }, HERE), null, 'a bracket aside is the same model');

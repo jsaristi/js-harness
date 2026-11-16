@@ -228,7 +228,7 @@ test('what is left outside names each session off the new home with what sets it
   assert.match(text, /the installed copy still holds the home that leaves: refresh it at the land \(js-harness merge-queue --land --refresh-copy\)/);
   assert.match(text, new RegExp(`desktop {2}"JH 7 · work" {2}its menu holds ${OLD} at ${MEDIUM}; held to ${NEW} at ${MEDIUM}; corrected by the lead's session tools`));
   assert.match(text, /desktop {2}"JH ORQ · lead" .*corrected by his menu/);
-  assert.match(text, /background {2}"JH 8 · more" \(job1\).*corrected by a resume, js-harness sessions start --resume job1/);
+  assert.match(text, /background {2}"JH 8 · more" \(job1\).*corrected by closing it, once what it holds is committed \(js-harness sessions stop job1\), and start_session/);
   assert.match(text, /the lead's session tools are set_session_model and set_session_effort, called by the lead on another open session/);
   assert.ok(text.includes(`only he changes the lead's own session. To give him: ${menuLine({ model: NEW, effort: HIGH })}`));
   assert.match(text, /a resume starts a background session again on the home's model and level, whatever its record holds/);

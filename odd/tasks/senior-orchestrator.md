@@ -37,6 +37,37 @@ the guard's header and usage); then `rules change sessions-open-in-sidebar --wit
 `--dry-run` first, one commit a rule. Check the background record for jobs a refused `--resume` strands; name them to
 the lead. Then gate, Codex and lenses (risk, reliability, readability), a verifier on the matcher, a stacked PR, a
 note (not `ready`) until T6 lands. Then T8.
+T7 in the worktree, uncommitted (2026-11-16 ~01:00Z), held while the lead lands PR 893 (its order: cut T7's branch
+from origin/main once 893 is there): `backgroundStartRefusal` in `bin/lib/guard.mjs` beside `openingRefusal`, called
+first in `sessionsStartMain` (`bin/sessions-background.mjs`), refuses start and `--resume` where the rule is declared;
+the test `sessions start and --resume refuse every title ...` (red, then green; 112 tests of that file and
+`bin/lib/guard.test.mjs` green); `makeWorld({ rules: true })` drops the rule, `rules: 'all'` keeps it. D15: the refusal
+sits in the command, its only entry (`bin/sessions.mjs:482`), so Bash, the terminal, the remote server and `node
+bin/js-harness.mjs` are all covered with no text matching; raw `claude --bg` stays open, to name to the lead. Next:
+re-cut on origin/main, the texts, the two `rules change`, reviews.
+2026-11-16 ~01:30Z: re-cut on origin/main b3a73245 (PR 893 landed), work reapplied uncommitted. The lead: the guard
+refuses raw `claude --bg` too (his line 402). Built, uncommitted: `backgroundLaunch` in `bin/lib/chained-step-guard.mjs`
+(`programOf` split out of `guardedStep`, `launchOf`), `backgroundLaunchRefusal` in `bin/lib/guard.mjs`, called in
+`bin/guard.mjs` for Bash and for the Terminal panel (before terminal-note); its test passes both ways. Texts changed:
+`bin/lib/manifest.mjs:157` (the card is the way; no background start), `bin/lib/guard.mjs` starter refusal tail,
+`bin/lib/home-sessions.mjs` resumeOf (a message resumes), `bin/lib/background-close.mjs:95`. Next: 8 tests pin the old
+texts (manifest x2, home-sessions x3-4, guard.test starter, background-close); fix them, gate, then the two
+`rules change` (dry-run first), commit, reviews, verifier, stacked-free PR from origin/main, note.
+~02:00Z: the 8 tests fixed, `sidebarRule` joins the three reads of the rule (the coverage break finds it once);
+498 tests of the ten touched files green, `rules check` PASS. Blocked: `rules change sessions-open-in-sidebar --dry-run`
+refuses while local branch `rule/away-autonomy` (JH 208) holds an open rule change; its input is ready in the
+scratchpad (`sidebar.json`: subject, quotes 69918425:21275 and 699d7c29:402, reading, accepted = the 306 tap). Paused once for the lead's refresh of the installed copy.
+~02:20Z, the lead: the copy is refreshed; commit T7's code apart from `rules change` if it stands alone and is green;
+the two rule changes wait for JH 208's `rule/away-autonomy` (never touch it; the lead says when). Before that commit
+(advisor): fix the size convention (`bin/conventions-structure.test.mjs`: a module over 1,000 lines grew, likely
+`bin/lib/guard.mjs` or `bin/lib/chained-step-guard.mjs`: move the three new exports out, update the coverage break path);
+match `--background` beside `--bg` (claude --help lists both); `time -p claude --bg` passes (fix); add passing heredoc
+cases (a commit `-F -` body and a `gh pr create --body-file -` body naming them); make `bin/lib/manifest.mjs:202` (never
+stop to restart) agree with the new `resumeOf` (stop once committed, reopen with start_session); update `bin/guard.mjs`
+header and usage and `START_USAGE`; coverage controls for the two refusals. Open, to log and tell the lead: `bash -c`,
+`powershell -Command`, `cmd /c` and `$(…)` hide a `claude --bg` from the guard. Then commit, codex-meter, Codex,
+lenses (risk, reliability, readability), verifier, a note (no PR or ready before the rule commit). T8 after, own
+branch from origin/main, orient then advisor.
 
 ## Goal
 The lead starts a senior session, titled `<code> SR · <purpose>`, as a visible app session with `start_session`
@@ -226,3 +257,11 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
 - D14 2026-11-16, the advisor before the PR: `start_session` requires a `background` of 80 characters for a fresh
   start, and it reaches the first turn as the brief does, yet the guard read only `prompt`. It is held the same way to
   one constant, `SENIOR_WAIT_BACKGROUND`, which the protocol prints beside the brief.
+- D15 2026-11-16, T7: the refusal sits in `sessions start` itself (its only entry, `bin/sessions.mjs:482`) and in the
+  guard for a Bash or Terminal step that launches `js-harness sessions start` or `claude --bg`/`--background`, read per
+  step (`backgroundLaunch`, `bin/lib/background-launch.mjs`, apart from `bin/lib/guard.mjs` at its size limit). Text that
+  only names one passes (quotes, heredoc bodies). Known: `claude --print "--bg"` is refused (quotes gone, kept); `bash
+  -c`, `powershell -Command`, `cmd /c` and `$(…)` hide a `claude --bg` from the guard (the command refuses itself for
+  `sessions start`). A background session off its home is corrected by closing it once committed and opening it with
+  `start_session` (`resumeOf`), which keeps `bin/lib/manifest.mjs:202` (never stop to restart by `sessions start`).
+  Not done: coverage controls for the two refusals.

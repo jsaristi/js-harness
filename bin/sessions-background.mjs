@@ -14,6 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { CLOSE_FINISHED, appendRecord, atWork, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, finishedOf, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, resumedChain, resumedNote, resumePrompt, saidBy, startArgs, startPrompt, strandedWords, undoSession, within, worktreeHolding, worktreeOf } from './lib/background.mjs';
 import { KEEP_LEFT_OUT, closeFinishedIn, closedLines, keepUnkept, sharingSession } from './lib/background-close.mjs';
 import { boundedGit } from './lib/worktrees.mjs';
+import { backgroundStartRefusal } from './lib/background-launch.mjs';
 import { sessionStartHome, sessionStartRefusal } from './lib/guard.mjs';
 import { leadTitle, seniorTitle, sessionTitleRefusal } from './lib/session-title-guard.mjs';
 import { appendNotice, newNotice, nextSessionNumber, placeOf, readNotices } from './lib/channel.mjs';
@@ -203,6 +204,12 @@ export function sessionsStartMain(argv, given = {}) {
   } catch (err) {
     if (!(err instanceof StartArgError)) throw err;
     stderr(`${err.message}\n\n${START_USAGE}`);
+    return 2;
+  }
+  // T7 of odd/tasks/senior-orchestrator.md: a start or a resume is refused before anything runs where the rule is declared.
+  const background = backgroundStartRefusal(rulesText(topLevel(run, path.resolve(deps.cwd, parsed.cwd ?? '.')), readFile));
+  if (background !== null) {
+    stderr(background);
     return 2;
   }
   if (parsed.resume !== undefined) return resumeStart(parsed, deps);

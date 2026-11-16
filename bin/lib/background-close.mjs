@@ -92,7 +92,7 @@ export function closedLines({ closed, kept }) {
     ...closed.map(({ entry, worktree, jobs }) => `closed ${name(entry)}: ${worktree === null ? '' : `git removed its worktree ${worktree}, which held nothing to lose, and `}claude removed its ${jobs === 1 ? 'job, with the scratch folder claude keeps for it' : `${jobs} jobs, with the scratch folder claude keeps for each`}; its transcript stays`),
     ...kept.flatMap(({ entry, why, settle, stopped }) => [
       `kept ${name(entry)}: ${why}`,
-      ...(stopped ? [`  claude stop was sent to its job before that, which deletes nothing; js-harness sessions start --resume ${entry.id} resumes it`] : []),
+      ...(stopped ? [`  claude stop was sent to its job before that, which deletes nothing; a message to it resumes ${entry.id}`] : []),
       ...(settle === null ? [] : [`  ${settle}`]),
     ]),
   ];

@@ -10,6 +10,7 @@ import { runText, sessionsStartMain } from './sessions-background.mjs';
 import { appendNotice, newNotice } from './lib/channel.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { projectSlug } from './lib/sessions.mjs';
+import { writeRules } from './lib/rules.mjs';
 
 // `js-harness sessions start` and `stop`, the board's background sessions and the machine uninstall, through the public
 // command line, against a fake `claude` on PATH (odd/tasks/background-sessions.md). The fake keeps its sessions in a
@@ -119,7 +120,9 @@ function makeWorld({ rules = false } = {}) {
   git('init', '-q', '-b', 'main');
   if (rules) {
     fs.mkdirSync(path.join(world.project, 'bin', 'lib'), { recursive: true });
-    fs.copyFileSync(RULES_DATA, path.join(world.project, 'bin', 'lib', 'rules-data.mjs'));
+    // The rule sessions-open-in-sidebar refuses every start (T7); `rules: 'all'` keeps it, to test that refusal.
+    const list = rules === 'all' ? RULES : RULES.filter((rule) => rule.id !== 'sessions-open-in-sidebar');
+    fs.writeFileSync(path.join(world.project, 'bin', 'lib', 'rules-data.mjs'), writeRules(list));
     fs.writeFileSync(path.join(world.project, 'harness.json'), JSON.stringify({ code: 'JH' }));
   }
   git('commit', '-q', '--allow-empty', '-m', 'init');
@@ -1474,3 +1477,16 @@ test('a watch returns when a background session starts waiting', withWorld(async
   assert.equal(result.code, 0, result.stderr);
   assert.match(result.stdout, /background session 0db8bc5e · Mine waits for permission prompt/);
 }));
+
+// odd/tasks/senior-orchestrator.md, T7 (spec 5, his words of 2026-11-15 and 2026-11-16: no session opens where he
+// cannot see it): where the project declares sessions-open-in-sidebar, the command starts and resumes nothing.
+test('sessions start and --resume refuse every title where the rule sessions-open-in-sidebar is declared, running no claude', withWorld((world) => {
+  for (const args of [['--title', 'JH 7 · thing', '--brief', world.brief], ['--title', 'JH SR · a design', '--brief', world.brief], ['--resume', '0db8bc5e']]) {
+    const result = js(world, ['sessions', 'start', ...args]);
+    assert.equal(result.code, 2, args.join(' '));
+    assert.match(result.stderr, /rule sessions-open-in-sidebar.*start_session.*detach_session/s, args.join(' '));
+    assert.match(result.stderr, /a card he taps/, args.join(' '));
+  }
+  assert.deepEqual(actions(world), [], 'no claude ran');
+  assert.deepEqual(recordLines(world), [], 'nothing recorded');
+}, { rules: 'all' }));
