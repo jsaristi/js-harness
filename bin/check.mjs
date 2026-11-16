@@ -1796,14 +1796,14 @@ export const VERBOSE_ENV = 'JS_HARNESS_CHECK_VERBOSE';
 /** The one line a gate that passes prints in place of its rows, unless `--verbose` asks for them: a passing
  * commit printed dozens of lines, the name of every contract among them (finding 5 of JH 43,
  * odd/tasks/quiet-gate.md). It counts the rows, says how many only inform, and carries the verdict of the
- * `review` row, which a commit shows so that nobody has to remember to ask (`checkReviewDebt`), and says when an inner check
+ * `review` and `codex-review` rows, which a commit shows so nobody has to ask (both debts: G-2), and says when an inner check
  * ran no sensor, so a `JS_HARNESS_CHECK_INNER` left set in a shell never passes for a gate. */
 export function passLine(rows) {
   const info = rows.filter((row) => row.info).length;
-  const review = rows.find((row) => row.name === 'review');
+  const debts = ['review', 'codex-review'].map((name) => rows.find((row) => row.name === name)).filter(Boolean);
   const inner = rows.find((row) => row.inner === true);
   const counted = `${rows.length} row${rows.length === 1 ? '' : 's'} passed${info > 0 ? `, ${info} of them INFO` : ''}`;
-  return `PASS  check  ${counted}; --verbose prints each${review ? `; review: ${review.detail}` : ''}${inner ? `; sensors: ${inner.detail}` : ''}`;
+  return `PASS  check  ${counted}; --verbose prints each${debts.map((row) => `; ${row.name}: ${row.detail}`).join('')}${inner ? `; sensors: ${inner.detail}` : ''}`;
 }
 
 /** Runs all check rows and prints them; returns the process exit code. Exits 2, printing usage to
