@@ -5,6 +5,15 @@ JH 192, slice 3 of the lead's brief. Delivery: this design, then one pull reques
 (`rules change` runs only on a `rule/` branch, `bin/lib/rules-change-run.mjs:170`). Runner: `node --test`.
 
 ## State
+T8 (2026-11-16 ~03:00Z, JH 211), branch `feat/lead-held-high` from origin/main b3a73245, in worktree
+`tui-gentle-level-a6afd3`; T7 waits on branch `rule/sessions-visible-only` (its State is there; the second branch to land
+merges this State). Orientation: the lead's role comes only from `roleOfTitle` (`TITLE_SHAPE`, `bin/lib/sessions.mjs:1248`),
+so "JH ORQ orquestador F8" (no "·") holds no role: the board judges it at the sessions' level (`rosterOf` passes `lead:`
+to `rowHome`, `bin/lib/sessions.mjs:1450`), `rules applied` by `leadTitle`, and `sessions --address orchestrator` does
+NOT resolve it (`roleHolders` filters `row.role`, line 1495), against L6's note. Plan (D17): an additive detector in
+`bin/lib/roster-home.mjs`, never loosening `roleOfTitle`; slice 1 the board (row judged at `lead-effort` and marked), slice
+2 `rules applied`, slice 3 the heartbeat once per value. Tests first, L6's title as written.
+
 Committed: fd309617 senior-model; 8fc7a92b senior-effort; e25ab304 the reporters hold a senior by role (heldOfRole);
 a258b450 only the lead starts a senior, one at a time. Reviewed 1a5061d..a258b45 (Codex 2 parts, lenses risk and
 reliability). Their findings, fixed in the next commit, each with a test: a background senior was judged against the
@@ -212,3 +221,9 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
 - D14 2026-11-16, the advisor before the PR: `start_session` requires a `background` of 80 characters for a fresh
   start, and it reaches the first turn as the brief does, yet the guard read only `prompt`. It is held the same way to
   one constant, `SENIOR_WAIT_BACKGROUND`, which the protocol prints beside the brief.
+- D17 2026-11-16, T8 (advisor): "is named", not "keeps its role": `roleOfTitle` has 42 callers and the handover
+  needs `ORQ nueva`/`ORQ relevada` to hold no role, so loosening it is high risk. A title `<code> ORQ <words>` with no "·"
+  that is not a handover form is a drifted lead: judged at `rule:lead-effort` and named with its fix (rename to
+  `<code> ORQ · …`; his menu for the level). The harness does not set the level itself: no session changes its own, and
+  only his menu changes a lead's (`home-sessions.mjs` `corrects: his menu`). "Start" is read as the lead's session
+  start (the resume hook), since L6's case was a lead already running; the new lead's `start_session` is held already.
