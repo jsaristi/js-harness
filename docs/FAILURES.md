@@ -1122,6 +1122,12 @@ the console, was still pending.
 - Seen: 2026-10-30 — the lead's note to JH 106 at 17:20Z (claimed; the lead's own) — the land took PR 596; the lead
   stopped it before any push (main unchanged at 04e3d29d) and turned 596 to a draft, which GitHub records at
   17:18:12Z; its timeline has no ready-for-review event, so it was opened ready
+- Seen: 2026-11-15 — channel record, the ready notice for PR 894 at 2026-11-16T03:43:49Z and JH SR's note at
+  03:46:13Z — JH SR took PR 894, a design with 21 review findings open, out of draft to get its ready notice
+  recorded while his approval of the design's page was pending; the lead's message turned it back and
+  `gh pr ready --undo` made it a draft again about three minutes later, before any land ran (state OPEN, not
+  merged). The ready notice stays in the record: no kind withdraws one. The check that would have caught it:
+  `notify --kind ready` refusing a pull request whose feature document's State names an approval of his as pending
 
 ### language-server-load
 A TypeScript language server per session works whenever tests write files, takes up to a whole
