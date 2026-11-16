@@ -562,7 +562,11 @@ test('a narrower review that owes, after a recheck that left a finding open at t
     runLine('r2', { answer: { findings: [open], verdict: 'incorrect' }, recheck: counts }),
     runLine('r3', { answer: { findings: [fresh], verdict: 'incorrect' } }),
   ];
-  assert.deepEqual(recheckState({ from: D, records, runs, atOrBefore }), { kind: 'recheck', of: D, findings: [fresh] });
+  // The plain review that owes decides, and what the recheck left open joins it: neither is dropped (the lens on 3f177ce).
+  assert.deepEqual(recheckState({ from: D, records, runs, atOrBefore }), { kind: 'recheck', of: D, findings: [fresh, open] });
+  // The other order: a wide plain review that owes, then a narrower recheck at the same head that left a finding open.
+  const other = [record(A, B, { run: 'r1' }), record(A, D, { run: 'r3' }), record(B, D, { run: 'r2', recheckOf: B })];
+  assert.deepEqual(recheckState({ from: D, records: other, runs, atOrBefore }), { kind: 'recheck', of: D, findings: [fresh, open] });
 });
 
 test('a clean review from main side does not settle what the merge own record owes; a recheck at the merge does (the lead on question 320)', () => {

@@ -233,11 +233,21 @@ export function decidingRecord({ from, records, runs, holds = () => null, atOrBe
   for (const rec of reviewed) {
     if (rec.head !== from) continue;
     const reads = kept === undefined || rec.base === kept.base || atOrBefore(rec.base, kept.base) === true;
-    // A narrower record that owes nothing is skipped. One that owes something itself is never dropped: joined where
-    // both are plain reviews, else it is the later word, as main reads it (the verifier's V1 on 7e5d6772).
-    const both = typeof kept?.recheckOf !== 'string' && typeof rec.recheckOf !== 'string';
-    if (!reads && ownDebt(kept) && (!ownDebt(rec) || both)) {
-      if (both) also.push(...plainFindings(rec));
+    // A narrower record that owes nothing is skipped. One that owes something itself is never dropped (the verifier's V1
+    // on 7e5d6772, the reliability lens on 3f177ce): where both are plain reviews its findings join; where one is a
+    // recheck, the plain review, whose debt blocks, decides, and what the recheck left open joins it.
+    if (!reads && ownDebt(kept)) {
+      if (!ownDebt(rec)) continue;
+      const keptPlain = typeof kept.recheckOf !== 'string';
+      const recPlain = typeof rec.recheckOf !== 'string';
+      if (keptPlain && recPlain) also.push(...plainFindings(rec));
+      else if (keptPlain) also.push(...openFindings(rec));
+      else if (recPlain) {
+        const left = openFindings(kept);
+        kept = rec;
+        also.length = 0;
+        also.push(...left);
+      }
       continue;
     }
     kept = rec;
