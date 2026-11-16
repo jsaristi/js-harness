@@ -18,6 +18,9 @@ senior"). "No advisor" is claimed only after the first senior's transcript shows
 T6 (2026-11-15, specs 3 and 4): the lead starts the senior as a visible app session with `start_session`, then sets
 its model and level with its session tools and detaches it; the guard lets that start through and holds the senior to
 its rules where the lead sends it work. `sessions start --title "<code> SR · …"` stays, unused by the protocol.
+cb830c3e built it; Codex's review (7619fc9..25e7f82, verdict incorrect at 0.92) found one P2: any brief passed, so a
+task in it ran on the lead's model before `set_session_model`. The next commit holds the brief to `SENIOR_WAIT_BRIEF`
+(D11). Left: the lens review, the Codex recheck, the verifier, the PR. Then T7.
 
 ## Goal
 The lead starts a senior session, titled `<code> SR · <purpose>`, as a visible app session with `start_session`
@@ -47,7 +50,8 @@ intelligence or complexity. Today a start on Fable is refused (the guard and `se
   readable record is refused, a title-only offer too; naming no effort, another level, any model, or
   `use_worktree: false` is refused; a second live (not archived) senior of the code is refused; a message
   (`SendMessage`, `send_message`) to an SR session whose app record holds another model or level than the senior's
-  is refused, naming `set_session_model` and `set_session_effort`, and one on Fable at high passes.
+  is refused, naming `set_session_model` and `set_session_effort`, and one on Fable at high passes; a start whose
+  `prompt` is other than `SENIOR_WAIT_BRIEF` (blanks around it aside) is refused, giving the brief to copy.
 
 ## In scope / Out of scope
 - In: two rules, `senior-model` and `senior-effort`, joined to the Claude home (`CLAUDE_HOME`, `claudeHome`,
@@ -89,6 +93,9 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
 - 3. The bar:
   spec 1: `node --test bin/lib/sessions.test.mjs`: none, new behaviour (`roleOfTitle('JH SR · x')` is null today).
   spec 2: `node --test bin/sessions-background.test.mjs bin/lib/guard.test.mjs`: none, new behaviour (a start on Fable is refused today).
+  spec 3: `node --test bin/guard.test.mjs`: none, new behaviour (a start_session of an SR title is refused at 7619fc94).
+  spec 4: `node --test bin/guard.test.mjs`: none, new behaviour (the lead starts the senior; same tests as spec 3).
+  spec 5: `node --test bin/guard.test.mjs`: none, new behaviour (`js-harness sessions start` passes the guard today).
 - 4. Refutation: the request fails if a senior can be started today. Run: `node -e` importing `roleOfTitle` from
   `bin/lib/sessions.mjs` on `JH SR · x`. Result: null, so the title guard refuses it before any model is read.
   Verdict: supports
@@ -106,6 +113,11 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
 2. "pero tanto los sub agentes como el orquestador deben tener el advisor fable 5.2 alto tambien y ademas debe haber
    un orquestador senior fable 5.2 alto que le manden tareas de ciertas cosas especificas que se requiera mas
    inteligencia o complejidad" (2026-11-12)
+3. "vuelve a abrir el JH SR y nunca anides la sesiones ademas de que ya ninguna va con remote control solo el
+   Orquestador" (2026-11-15, lead transcript 69918425 line 20757)
+4. "necesitamos hacer que el orquestador controle todo" (2026-11-15, line 20853, typed answer to question 305)
+5. "has lanzados sesiones que nisiquiera veo pensando que tenemos el tablero desocupado y eso no me gusta ni es
+   practico ni funcional nunca debemos permitir eso" (2026-11-15, line 21275)
 
 ## Tasks
 - [x] T1 (kind: design) (1, 2) This document and its double review. Route: inline.
@@ -116,6 +128,10 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
 - [ ] T4 (kind: build) (1, 2) The reporters' hold by role, and the texts of session-model, session-effort and
   advisor-model. Route: inline.
 - [ ] T5 (kind: docs) (2) `bin/lib/lead-protocols.mjs`: when and how the lead sends a senior a task. Route: inline.
+- [ ] T6 (kind: build) (3, 4) The lead starts the senior visibly with `start_session`; the guard holds the start and
+  the messages to it. Route: inline, then one verifier. Commits: cb830c3e, the D11 fix.
+- [ ] T7 (kind: build) (5) The guard refuses `js-harness sessions start` for every title; `rule:sessions-open-in-sidebar`
+  drops its exception by `rules change`, his to approve. Route: inline.
 
 ## Log
 - L1 2026-11-12, his words at 93b72703:775 (S2); his "aplica todos los cambios ya" at 93b72703:896.
@@ -154,3 +170,7 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   record. `use_worktree: false` is refused, since `detach_session` refuses a session that shares a worktree.
 - L4 2026-11-15 17:50 local, the lead's note: T7's scope, from S5. 17:55: pause for a machine restart; resume from
   this document's State.
+- D11 2026-11-15, Codex's P2 on cb830c3e: a start held only to a non-empty brief let a task run on the lead's model
+  before `set_session_model`. The brief is one constant, `SENIOR_WAIT_BRIEF` in `bin/lib/lead-protocols.mjs` (no
+  imports, so the guard's load stays light), compared after a trim; the protocol prints it. Not checked: whether the
+  app record's `model` changes at `set_session_model` or at the next turn (D9); the first senior start shows it.
