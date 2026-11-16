@@ -701,7 +701,7 @@ export const RECORD_HANDLES = Object.freeze({
 const RECORD_HANDLE = new RegExp(`\\b(${Object.keys(RECORD_HANDLES).join('|')})\\b`);
 // A function of this package that appends a record of a review and nothing else, named in a script's code: called,
 // passed on or held, it is refused; named in a string, it is text.
-const RECORD_APPENDS = /\b(appendLensReview|startLensRun|appendCodexReviewRun|appendCodexReview)\b/;
+const RECORD_APPENDS = /\b(appendLensReview|startLensRun|endLensRun|appendCodexReviewRun|appendCodexReview)\b/;
 
 /** Why the Bash command `command` is refused for writing a review record, or null (`recordWriteOf`). */
 export function reviewRecordWriteRefusal(command) {
