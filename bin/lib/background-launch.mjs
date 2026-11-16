@@ -9,11 +9,28 @@ import { programOf } from './chained-step-guard.mjs';
 // The keywords that open a condition: the command after one is a step of its own.
 const CONDITIONS = new Set(['if', 'elif', 'while', 'until']);
 
-/** The launch of a background session the words of one simple command make, `claude --bg` or `js-harness sessions
- * start` (behind `js-harness gate --` too), or null (odd/tasks/senior-orchestrator.md, T7). */
+// The options of xargs that take the next word as their value.
+const XARGS_VALUES = new Set(['-n', '-L', '-P', '-s', '-d', '-E', '-a', '-I', '--max-args', '--max-lines', '--max-procs', '--max-chars', '--delimiter', '--eof', '--arg-file', '--replace']);
+
+/** Whether `args` hold the option `name`, alone or with its value after `=`. */
+const hasOption = (args, name) => args.some((arg) => arg === name || arg.startsWith(`${name}=`));
+
+/** The launch of a session out of his sidebar the words of one simple command make, or null
+ * (odd/tasks/senior-orchestrator.md, T7): `claude --bg`, `claude respawn` (which restarts background sessions),
+ * `claude --cloud`, or `js-harness sessions start`, behind `js-harness gate --` or `xargs` too. The guard reads
+ * launches written out in an ordinary shape; text the shell computes (`eval`, `$C`, `bash -c`) it does not read. */
 function launchOf(words) {
   const { program, args } = programOf(words);
-  if (program === 'claude') return args.includes('--bg') || args.includes('--background') ? 'claude --bg' : null;
+  if (program === 'xargs') {
+    let at = 0;
+    while (at < args.length && args[at].startsWith('-')) at += XARGS_VALUES.has(args[at]) ? 2 : 1;
+    return launchOf(args.slice(at));
+  }
+  if (program === 'claude') {
+    if (hasOption(args, '--bg') || hasOption(args, '--background')) return 'claude --bg';
+    if (hasOption(args, '--cloud')) return 'claude --cloud';
+    return args[0] === 'respawn' ? 'claude respawn' : null;
+  }
   if (program !== 'js-harness') return null;
   if (args[0] === 'gate') return args.includes('--') ? launchOf(args.slice(args.indexOf('--') + 1)) : null;
   return args[0] === 'sessions' && args[1] === 'start' ? 'js-harness sessions start' : null;
@@ -41,13 +58,13 @@ export function backgroundLaunch(command) {
   return null;
 }
 
-/** Why a Bash step that launches a background session, `launch` (`claude --bg` or `js-harness sessions start`, from
- * `backgroundLaunch` above), is refused in the project whose rules file has the text
- * `projectData`, or null where the rule `sessions-open-in-sidebar` gives no value (T7, as below). */
+/** Why a Bash step that launches a session out of his sidebar, `launch` (from `backgroundLaunch` above), is refused
+ * in the project whose rules file has the text `projectData`, or null where the rule `sessions-open-in-sidebar` gives no value (T7, as below). */
 export function backgroundLaunchRefusal(launch, projectData) {
   const rule = sidebarRule(projectData);
   if (rule === null) return null;
-  return `js-harness guard: ${launch} opens a session in the background, where he does not see it (rule sessions-open-in-sidebar). `
+  const where = launch === 'claude --cloud' ? 'in the cloud' : 'in the background';
+  return `js-harness guard: ${launch} opens a session ${where}, where he does not see it (rule sessions-open-in-sidebar). `
     + `Open it with ${rule.value} on a turn he typed, then detach_session to top level; on any other turn start_session `
     + `leaves a card he taps.${rule.note}`;
 }

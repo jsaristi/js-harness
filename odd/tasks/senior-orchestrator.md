@@ -68,6 +68,9 @@ header and usage and `START_USAGE`; coverage controls for the two refusals. Open
 `powershell -Command`, `cmd /c` and `$(…)` hide a `claude --bg` from the guard. Then commit, codex-meter, Codex,
 lenses (risk, reliability, readability), verifier, a note (no PR or ready before the rule commit). T8 after, own
 branch from origin/main, orient then advisor.
+~03:00Z: T7 at 9696d60a (docs of the lens findings) plus the verifier's four spellings (D16), green in its three
+test files, committed next. Then one Codex and lens pass (risk, reliability, readability) from 493378a2, a note to the
+lead (no PR or ready before the rule commit); the two `rules change` wait for JH 208's `rule/away-autonomy`. Then T8.
 
 ## Goal
 The lead starts a senior session, titled `<code> SR · <purpose>`, as a visible app session with `start_session`
@@ -284,3 +287,17 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   Then: the resume-root test written (fails without the fix, passes with it), `sidebarRule` placed above
   `openingRefusal`'s doc; 187 tests of the touched files green, `rules check` PASS. Committed next as the fix of L7;
   then Codex recheck and lenses (reliability, readability) from 5dc8d1ab, the verifier, a note to the lead.
+- L8 2026-11-16, T7: 493378a2 fixed L7 (Codex recheck correct 0.96; reliability 0; readability left the blank lines and
+  `backgroundLaunchRefusal`'s doc pointer, fixed in 9696d60a with `sessionsOffHome`'s doc). An independent verifier
+  (read-only, about 130 probes of `backgroundLaunch`, `claude --help` of CLI 2.1.322) found nothing blocking. Open, told
+  to the lead: `Monitor` and `preview_start` run commands and are not in the guard's matcher (`bin/lib/hook-entries.mjs:82`),
+  so no Bash refusal reaches them; changing the installed matcher is its own change. `claude remote-control --spawn` is
+  his call (`bin/lib/remote.mjs:97` uses it); `claude -p ... &` is a scope question (the reviews use `-p`). `resumeStart`
+  lets a resume run when the recorded root is gone (0 of 159 records). A PowerShell tool was not seen. The subjects of
+  `sessions-open-in-sidebar` and `senior-model` (`bin/lib/rules-data.mjs:764`, `:656`) contradict the code until the two
+  `rules change` run. `bin/advisor-gate.mjs:47-57` keeps its own regex for `sessions start` (it gates the advisor, not the
+  launch; not shared). No background job is stranded: the two on the machine (JH 201, JH 203) are done and closed.
+- D16 2026-11-16, T7: the guard reads launches written out in an ordinary shape, never text the shell computes (`eval`,
+  `$C`, `${IFS}`, `bash -c`, backticks, `Start-Process`). Added from the verifier: a wrapper named by its path
+  (`/usr/bin/env`, in `programOf`, so the chained-step guard gains it too), `xargs` and its options, an option's value
+  after `=` (`--bg=true`), `claude respawn` and `claude --cloud` (refused as "in the cloud").

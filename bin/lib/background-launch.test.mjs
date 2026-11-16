@@ -13,6 +13,14 @@ test('a step that launches claude --bg or js-harness sessions start is found, ho
     ['time -p claude --bg "p"', 'claude --bg'],
     ['if true; then claude --bg "p"; fi', 'claude --bg'],
     ['git status || js-harness sessions start --resume 1', 'js-harness sessions start'],
+    // The verifier's spellings of 2026-11-16: a wrapper named by its path, xargs, an option's value after =, respawn and the cloud.
+    ['/usr/bin/env claude --bg "p"', 'claude --bg'],
+    ['echo id | xargs -n 1 claude --bg', 'claude --bg'],
+    ['xargs -I{} js-harness sessions start --resume {} < ids', 'js-harness sessions start'],
+    ['claude --bg=true "p"', 'claude --bg'],
+    ['claude respawn --all', 'claude respawn'],
+    ['claude --cloud "fix the tests"', 'claude --cloud'],
+    ['claude --cloud="fix"', 'claude --cloud'],
   ]) {
     assert.equal(backgroundLaunch(command), launch, command);
   }
@@ -23,6 +31,10 @@ test('a command that only names a launch, in quotes or a heredoc body, launches 
     "git commit -q -F - <<'EOF'\nfeat: refuse claude --bg\n\nclaude --bg and js-harness sessions start are refused\nEOF",
     "gh pr create --title t --body-file - <<'EOF'\njs-harness sessions start --resume 1\nEOF",
     'echo claude --bg',
+    'xargs grep "claude --bg" < files',
+    '/usr/bin/env node -e 1',
+    'claude agents --json --all',
+    'claude -p "say respawn" --model x',
   ]) {
     assert.equal(backgroundLaunch(command), null, command);
   }
@@ -35,6 +47,7 @@ test('both refusals speak only where the rule sessions-open-in-sidebar is declar
   const without = writeRules(RULES.filter((rule) => rule.id !== 'sessions-open-in-sidebar'));
   assert.match(backgroundLaunchRefusal('claude --bg', declared), /claude --bg opens a session in the background.*start_session/s);
   assert.match(backgroundStartRefusal(declared), /js-harness sessions start: .*nothing ran/s);
+  assert.match(backgroundLaunchRefusal('claude --cloud', declared), /claude --cloud opens a session in the cloud, where he does not see it/);
   assert.equal(backgroundLaunchRefusal('claude --bg', without), null);
   assert.equal(backgroundStartRefusal(without), null);
 });
