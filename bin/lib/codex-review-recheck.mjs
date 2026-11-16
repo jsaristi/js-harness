@@ -294,7 +294,7 @@ export function decidingRecord({ from, records, runs, holds = () => null, atOrBe
 export function recheckThrough({ from, rows, records, runs, holds = () => null, atOrBefore = () => null, changedBetween, writesNothing }) {
   const today = recheckState({ from: recheckAnchor({ from, records, back: rows.map(([id]) => id), changedBetween }), records, runs, holds, atOrBefore });
   const parentsOf = new Map(rows.map(([id, ...parents]) => [id, parents]));
-  const lastAt = (id) => decidingRecord({ from: id, records, runs, holds, atOrBefore }).kept;
+  const lastAt = (id) => records.filter((one) => isValidCodexReview(one) && one.outcome === 'reviewed' && one.head === id).at(-1);
   // Whether the last record at `id` is a merge's own: what was written in it, from its first parent, and no recheck.
   const mergeOwn = (id) => {
     const [rec, parents] = [lastAt(id), parentsOf.get(id) ?? []];
