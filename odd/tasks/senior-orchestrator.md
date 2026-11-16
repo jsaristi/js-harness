@@ -174,3 +174,8 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   before `set_session_model`. The brief is one constant, `SENIOR_WAIT_BRIEF` in `bin/lib/lead-protocols.mjs` (no
   imports, so the guard's load stays light), compared after a trim; the protocol prints it. Not checked: whether the
   app record's `model` changes at `set_session_model` or at the next turn (D9); the first senior start shows it.
+- D12 2026-11-15, the resilience lens on cf5bd6f..1fc6100 (WARNING, `bin/guard.mjs:128-142`): the message check passes
+  when the app records cannot be read or none carries the target's id. Kept as D9 decided: the check cannot tell a
+  senior from a work session without the record, so failing closed would refuse every message the lead sends to any
+  `local_…` session while the records are unreadable, stopping the lead's whole channel; what it guards against, one
+  task run on the lead's model, costs quality and spend, not security, and the start itself fails closed (D10).
