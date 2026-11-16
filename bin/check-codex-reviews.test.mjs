@@ -2164,3 +2164,36 @@ test('V1: a record appended after the review that owes, naming an older clean ru
   assert.equal(row.pass, false, row.detail);
   assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
 });
+
+test('V1: an --again record that reuses a part kept from an earlier run is a review, and its new finding is owed', () => {
+  // Codex on c3c95d63 (P1): a clean run in two parts, then a fresh attempt whose first part finds a bug and whose second
+  // fails, then --again combining that new part with the clean second part kept from the first run (its id reused, no
+  // new line). That record is the review of the range: claiming each line once refused it, and the clean one decided.
+  const { root, base } = makeRepo();
+  feature(root);
+  const head = commit(root, 'b.js', 'two', 'feat: two');
+  run(root, { id: 'a1', base, from: base, head, part: part(1, 2), answer: { verdict: 'correct', findings: [] } });
+  run(root, { id: 'a2', base, from: base, head, part: part(2, 2), answer: { verdict: 'correct', findings: [] } });
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-11-16T00:00:00.000Z', outcome: 'reviewed', run: 'a2', runs: ['a1', 'a2'] });
+  run(root, { id: 'b1', base, from: base, head, part: part(1, 2), answer: { verdict: 'incorrect', findings: [finding] } });
+  run(root, { id: 'b2', base, from: base, head, part: part(2, 2), outcome: 'failed' });
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-11-16T00:01:00.000Z', outcome: 'reviewed', run: 'a2', runs: ['b1', 'a2'] });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});
+
+test('V1: a record mixing a clean part of an older run with the newest part of the review that owes is no later word', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const head = commit(root, 'b.js', 'two', 'feat: two');
+  run(root, { id: 'o1', base, from: base, head, part: part(1, 2), answer: { verdict: 'correct', findings: [] } });
+  run(root, { id: 'o2', base, from: base, head, part: part(2, 2), answer: { verdict: 'correct', findings: [] } });
+  run(root, { id: 'n1', base, from: base, head, part: part(1, 2), answer: { verdict: 'incorrect', findings: [finding] } });
+  run(root, { id: 'n2', base, from: base, head, part: part(2, 2), answer: { verdict: 'correct', findings: [] } });
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-11-16T00:00:00.000Z', outcome: 'reviewed', run: 'n2', runs: ['n1', 'n2'] });
+  forged(root, base, head, { run: 'n2', runs: ['o1', 'n2'] });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
+});

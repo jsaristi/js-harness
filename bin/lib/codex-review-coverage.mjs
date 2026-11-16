@@ -311,7 +311,7 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read,
 /** The Codex review records of the repository at `cwd` and which of them are evidence, as `admittedLensReviews` says
  * it of the lenses': `{ records, admitted }`. A review is evidence only where the run log names it: every run it
  * names (`run`, or `runs` for one in parts) has a line in the log, a line of the last one ends at its head and starts
- * at its base, and no earlier record claimed that run over that range. A record anyone could append by hand, as the 78 written before
+ * at its base and says it reviewed; a run in parts is named whole; a recheckOf is the recheck its line ran; and at one head each record names a line newer than the last admitted there (F1, V1). A record anyone could append by hand, as the 78 written before
  * run lines were, covers nothing (C-3 and B2-12 of the full audit of 2026-11-14; his answers to questions 293 and 299
  * on 2026-11-15). A skip is admitted as it is, since every row lists it as no review; a range with nothing to review
  * only where git finds that it changes no file a review reads from the merge base of its ends, asked of such a record
@@ -330,7 +330,6 @@ export function admittedCodexReviews(cwd, { spawn = spawnSync, where } = {}) {
     if (!linesOf.has(line.id)) linesOf.set(line.id, []);
     linesOf.get(line.id).push(line);
   }
-  const claimed = new Set();
   const lastAt = new Map();
   const admitted = new Set();
   const nothing = [];
@@ -347,21 +346,18 @@ export function admittedCodexReviews(cwd, { spawn = spawnSync, where } = {}) {
     // range too, and a record naming it would cover code no review read (F1).
     const stating = ids.map((id) => linesOf.get(id).findLast((line) => line.head === rec.head && (line.base === rec.base || line.from === rec.base) && line.outcome === 'reviewed'));
     if (stating.includes(undefined)) continue;
-    // Each line is claimed by one record, the first: a second record naming it, as a copy, through the line's `from`, or
-    // naming one part of a run another record names whole, is no review (R2, V1 of the opus verifier's second pass on
-    // pull request 896).
-    if (stating.some((line) => claimed.has(line))) continue;
     // A run in parts is named whole, its parts 1..of (R1): one part is never a review of the range.
     const of = stating[0].part?.of;
     if ((ids.length > 1 || of !== undefined) && !(Number.isInteger(of) && ids.length === of && stating.every((line) => line.part?.of === of) && new Set(stating.map((line) => line.part?.index)).size === of)) continue;
     // A recheck is one its run ran (R3): a recheckOf no line of its run says reads an owed correction as rechecked.
     if (typeof rec.recheckOf === 'string' && !stating.some((line) => line.recheck?.of === rec.recheckOf)) continue;
-    // At one head the records come in the order of their runs: a record appended after a review, naming an older run of
-    // that head no record named, would be the last word there and outrank it (R4, the advisor on V1).
+    // At one head the records come in the order of their runs, each with a line newer than the last admitted there: a
+    // record appended after a review, naming an older run of that head, or mixing older parts with that review's newest
+    // line, would be the last word there and outrank it (R4, the advisor on V1). A line may be named again: an --again
+    // reuses a part kept from an earlier run under its id, with no new line (Codex on c3c95d63).
     const place = Math.max(...stating.map((line) => placeOf.get(line)));
-    if (place < (lastAt.get(rec.head) ?? -1)) continue;
+    if (place <= (lastAt.get(rec.head) ?? -1)) continue;
     lastAt.set(rec.head, place);
-    for (const line of stating) claimed.add(line);
     admitted.add(rec);
   }
   const asked = new Map();
