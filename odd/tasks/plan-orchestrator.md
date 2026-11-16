@@ -2,13 +2,13 @@
 
 ## State
 Design only, no code. Version 3, read three times (reads 2a17bbe1, 5eed176c, b88ea402). The first two reads' 48
-findings are taken (L9, L10). The third still finds real failures: its 21 findings are open and listed in L11,
-to be told to him as problems; no fourth round. His line 1598 is Spec 8 since L12, added after the last read. Draft PR 894, branch `claude/dreamy-nash-50fa03`, worktree
-`rule-lead-effort-split-aac740`. Next, in order: the page (`orquestador-plan.html` in this session's scratchpad,
-written from version 2) brought to version 3 with L11's problems first, previewed and published as an Artifact;
-the four questions recorded with `notify --to orchestrator --kind question`; `notify --kind ready --pr 894`,
-then `closed`. The lead decides whether a new session on a fresh context corrects L11 before he reads the page.
-Reports go only by `js-harness notify --to orchestrator`. The measures:
+findings are taken (L9, L10). The third still finds real failures: its 21 findings are open and listed in L11, told
+to him as problems on the page; no fourth round. His line 1598 is Spec 8 since L12, added after the last read.
+T1 is closed (L13): the page is published, https://claude.ai/artifact/1ppv1NAxbrfv3THX96Gt7b, and the four
+questions are recorded as 307 to 310 for the lead to put to him one at a time. Draft PR 894, branch
+`claude/dreamy-nash-50fa03`, worktree `rule-lead-effort-split-aac740`. Left, all the lead's: whether a new session
+on a fresh context corrects L11 before he reads the page; landing this PR and the notice of Spec 8 (phase 0's step
+1, T10); his four answers (T9); opening session X for T3. The measures:
 `odd/tasks/plan-orchestrator-evidence/measures.md`.
 
 ## Goal
@@ -289,7 +289,8 @@ JH 209, JH 211 and fanout-tree's build, so one task lands before the next starts
 T8 land and JH 209 releases `bin/lib/sessions.mjs`), then T4 (after JH 208 releases `stretch*`), then T6, then T7.
 What is parallel is inside each task: round one reads with opus readers launched together, and its verifier runs
 while the next task's design is read. The board is checked before each task starts.
-- [ ] T1 (kind: design) (1, 2, 3) This document, its double reviews, the page, the questions. Route: inline, JH SR.
+- [x] T1 (kind: design) (1, 2, 3, 8) This document, its double reviews, the page, the questions (L13). Route:
+  inline, JH SR.
 - [x] T2 (kind: docs) (2) `odd/tasks/fanout-tree.md`: `docs/fanout-tree` merged into this branch (8288102e) and its
   Log line L8, his line 992 and the reopened reading of "sub sesiones" (5b02f348). Route: inline, JH SR.
 - [ ] T3 (kind: build) (2) The lead's side of the stall clock, its three states and the `away` field's reader:
@@ -407,3 +408,15 @@ while the next task's design is read. The board is checked before each task star
   done condition is a Plan working and him told, by a push notification and a line in the lead's chat, so he can
   try it. These lines were added after the third read and no reader has read them; nothing else of L11 is
   corrected.
+- L13 T1 closed, 2026-11-15 local. The page (`rule:reports-spanish-visual`), written by an opus writer from
+  version 3 and checked by this session at phone width in both themes: https://claude.ai/artifact/1ppv1NAxbrfv3THX96Gt7b,
+  private to him, marked a free page for the template gate because no template command holds a design. The four
+  questions of "Ask me before" are recorded as 307, 308, 309 and 310. Two things in them are not in the text the
+  readers read and no reader has read them: question 307 says that "both" also changes `rule:questions-one-place`
+  and needs his typed line, since that rule's subject is one place, the orchestrator's chat
+  (`js-harness rules questions-one-place`), and that until he answers the lead asks him everything, as phase 0
+  says; question 310 says a second level of sessions would sit inside his cap of 6, open detached, and need his
+  gesture for each. The page's decision 1 says the same. Known and left as read, not corrected: "Double review" in
+  The design still says two reads at about 3.4M each (three ran: L9, L10, L11); phase 0's step 2 says "high
+  (question 3)" while question 3 asks the model and takes the level from Spec 4; T3 names a "session X" no one
+  has opened.
