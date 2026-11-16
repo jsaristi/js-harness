@@ -503,3 +503,9 @@ while the next task's design is read. The board is checked before each task star
   Plan and the senior, not only an opening prompt. Phase 0 does not wait for T12: JH SR writes the Plan's phase 0
   opening with an explicit role section and the lead stores it. Spec 9, its bar line and T12 were added after the
   last read and no reader has read them.
+- L18 2026-11-16, from `odd/tasks/session-roles.md` (T12's design, its Log L5): the two documents touch the same
+  lines. That design's T2 turns the roles of `bin/lib/sessions.mjs` into one exported list and ships the Plan's
+  card in `bin/lib/role-cards.mjs`, found by a match of the title alone. So T5 here, when it makes `PLAN` a role,
+  adds it to that list and finds its card there, and whichever of the two lands second carries the other's
+  change; T7 here renders the Plan's role sentences from the card's constant and writes no second copy. Added
+  after the last read of this document and read by no reader.
