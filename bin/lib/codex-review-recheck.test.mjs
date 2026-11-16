@@ -525,3 +525,14 @@ test('a clean --again over part of the range of a recheck does not hide that a s
   ];
   assert.deepEqual(recheckState({ from: D, records, runs, atOrBefore }), { kind: 'refused', of: D, open: 1, reviews: 3, findings: [open] });
 });
+
+test('records whose rechecks name each other, or their own head, give a state, not a stack overflow (lens on 420b76c)', () => {
+  const open = finding('[not fixed] 1 Still drops the last line');
+  const counts = { findings: 1, fixed: 0, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 };
+  const runs = [runLine('r1', { answer: { findings: [open], verdict: 'incorrect' }, recheck: counts }), runLine('r2', { answer: { findings: [open], verdict: 'incorrect' }, recheck: counts })];
+  const self = [record(B, C, { run: 'r1', recheckOf: C })];
+  assert.doesNotThrow(() => recheckState({ from: C, records: self, runs }));
+  const pair = [record(B, C, { run: 'r1', recheckOf: D }), record(C, D, { run: 'r2', recheckOf: C })];
+  assert.doesNotThrow(() => recheckState({ from: D, records: pair, runs }));
+  assert.doesNotThrow(() => recheckState({ from: C, records: pair, runs }));
+});

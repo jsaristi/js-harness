@@ -51,8 +51,9 @@ L42, L56, L73). The owner was away; no question went to him.
   from the whole record log (L80).
 
 ## Left
-- **T10 (spec 8, L71 A):** an honest `--again` over a clean sub-range clears an owed correction. It predates the
-  branch. This session builds it from main after the land, as its own slice.
+- **T10 (spec 8, L71 A):** built after the land on branch feat/again-subrange (odd/tasks/again-subrange.md, L1-L8):
+  a later record at a head that owes settles it only where it read all the owing one read. Its pull request is the next
+  notice; T3 there (L84) stays open by the lead's word.
 - **V2's cut:** it has not happened on the real log yet. The 5 old unnamed lens run lines stay nameable until the
   first record from the new writer (L66, L71 D).
 - **The lens note on older writers counts the whole log** (L84): after the cut it may name a record of another range; open for the lead.

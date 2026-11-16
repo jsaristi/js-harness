@@ -172,8 +172,9 @@ export function recheckState(given) {
 }
 
 /** The reviewed record at `from` that decides, as `recheckState` reads it (`kept`, undefined where none ends there),
- * and the state it gives. */
-export function decidingRecord({ from, records, runs, holds = () => null, atOrBefore = () => null }) {
+ * and the state it gives. `within` is the heads already being read on the way here: a recheck that names one of them
+ * again (its own head, or a pair naming each other) is read at the last record there, so the reading ends. */
+export function decidingRecord({ from, records, runs, holds = () => null, atOrBefore = () => null, within = [] }) {
   const reviewed = records.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed');
   const linesOf = (rec) => recordRuns(rec).map((id) => (id === null ? null : runs.findLast((one) => one?.id === id) ?? null));
   const openOf = (rec) => {
@@ -205,7 +206,10 @@ export function decidingRecord({ from, records, runs, holds = () => null, atOrBe
       if (open === 0) return { kind: 'review' };
       // The record that decides at the head it rechecked, read by the same rule: a clean --again over part of it
       // hides no recheck (L71 A).
-      const second = typeof decidingRecord({ from: prior.recheckOf, records, runs, holds, atOrBefore }).kept?.recheckOf === 'string';
+      const below = [...within, from].includes(prior.recheckOf)
+        ? reviewed.filter((rec) => rec.head === prior.recheckOf).at(-1)
+        : decidingRecord({ from: prior.recheckOf, records, runs, holds, atOrBefore, within: [...within, from] }).kept;
+      const second = typeof below?.recheckOf === 'string';
       if (second) return { kind: 'refused', of: from, open, reviews: 3, findings: openFindings(prior) };
       if (rechecked !== undefined) {
         if (holds(rechecked.head) === false) return { kind: 'review' };
