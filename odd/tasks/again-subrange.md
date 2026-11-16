@@ -2,12 +2,9 @@
 
 ## State
 JH 207, worktree D:/js-harness-worktrees/again-subrange, branch feat/again-subrange, PR 898 (jsaristi/js-harness#898).
-33bc9e98 put lastAt, mergeOwnAt and atFrom back to raw-last (L11); Codex (2 P2) and both lenses refuse it (L13). Next:
-restore decidingRecord in those three (git revert of 33bc9e98's code, docs kept), with a red-first row test: A..B owes,
-B..C recheck leaves 1 open, clean M..C (M between B and C); the row at C must refuse (raw atFrom picks M..C, finds no
-recheck and returns null). Then a lastAt test or a logged reason, Codex and lenses, push, gh pr checks 898, bind the
-PR, ready note (State items of L10-L12: no local gate, 5 skipped, Codex costs, lens runs, L8 notes, T3 and T5 open).
-The wait for notices to 207 runs until this session closes.
+Spec 1 built and reviewed to 6dfbadea (L5-L15). Next: push, gh pr checks 898, bind the PR, notify ready --pr 898. Open:
+T3 (L84, the lead's word), T4 (a test for lastAt and mergeOwnAt), T5 (a clean review spanning the owing head, for the
+lead). The wait for notices to 207 runs until this session closes.
 
 ## Goal
 A clean Codex review at a head that owes a correction settles that correction only where it reads the whole range the
@@ -84,3 +81,4 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
 - L12 2026-11-16, the advisor's sibling shape, probed on this branch (scratchpad probes3/a-span.t10.out): review base..H owes; commit H2; a clean record M..H2 with M between base and H: the push row passes ("3 code commits since origin/main, all covered"). The rule of spec 1 compares records at one head only, so this is outside its words; left open as T5 and reported to the lead, not built in this PR.
 - L13 2026-11-16, 33bc9e98 reviewed: Codex incorrect, 2 P2 ("Preserve the deciding recheck when enforcing the review cap", recheck.mjs:297; "Select the owing recheck when building the push warning", rows.mjs:170), 145,463 input tokens; lens reliability CRITICAL on lastAt and WARNING, risk WARNING on atFrom. They are right: green tests meant no test covers them, not that the readers are free. T4 is withdrawn: the three go back through decidingRecord with tests.
 - L14 2026-11-16, the three readers restored to `decidingRecord` (33bc9e98^'s code). Red first for `atFrom`: 'a clean --again over part of a recheck that left a finding open keeps the warning that names it' (check-codex-reviews.test.mjs) failed on raw-last (the row passed with no warning) and passes now. `lastAt` and `mergeOwnAt` stay on `decidingRecord` on Codex's and the lenses' reading, with no test yet that fails without them: T4.
+- L15 2026-11-16, 6dfbadea reviewed: Codex correct, its 2 P2 rechecked fixed (98,929 input tokens); lenses: risk 0, reliability 1 SUGGESTION (no test pins lastAt and mergeOwnAt: T4), every earlier lens finding rechecked fixed. Targeted files 602 of 607, 0 fail, 5 skipped.
