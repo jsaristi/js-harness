@@ -1,9 +1,9 @@
 # again-subrange: an --again over part of a range does not clear an owed correction
 
 ## State
-JH 207, worktree D:/js-harness-worktrees/again-subrange, branch feat/again-subrange, PR 898: the lead's hold (L20)
-answered in L21-L26. Next: push, notify ready --pr 898; the lead lands on it. Then T3 (L84) as its own PR from main.
-T5 open (predates, L16). The wait for notices to 207 runs until this session closes.
+JH 207, worktree D:/js-harness-worktrees/again-subrange, branch feat/again-subrange, PR 898. Delta pass done (L27), no
+blocking finding. Next: gh pr ready 898, notify ready --pr 898. Then T3 (L84) as its own PR. Open: T5 (predates), T6
+(a fourth review, L27, for the lead). The wait for notices to 207 runs until this session closes.
 
 ## Goal
 A clean Codex review at a head that owes a correction settles that correction only where it reads the whole range the
@@ -57,6 +57,7 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
 - [x] T2 (kind: build) spec 1, tests first
 - [x] T4 (kind: build) spec 1, open: a test that fails without `decidingRecord` in the merge walk's `lastAt` and the row's `mergeOwnAt` (L14)
 - [ ] T5 (kind: build) open, for the lead: a clean review M..H2 that spans the owing head H from inside its range and ends above it clears the correction (L12)
+- [ ] T6 (kind: build) open, for the lead: where a plain review decides, a standing recheck's open finding joins a first recheck and can get a fourth review (L27)
 - [ ] T3 (kind: build) spec 2, open: the lens rows' older-writer note counts only records of the range checked
 
 ## Log
@@ -92,3 +93,4 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
 - L24 2026-11-16, e741821 reviewed: Codex incorrect, P2 "Preserve blocking findings from a later narrower recheck" (two rechecks: the later one's were dropped), 130,811 input tokens; reliability WARNING (after a replace, later records compared against the narrower base); risk 0. Both came from one kept pointer patched pair by pair, so it is replaced: a record at a head stands unless a later one read at least its range (base at or before; equal needs no git; unknown stands); the plain reviews that owe decide with all their findings and the standing rechecks' open findings join; where only rechecks owe, the last decides and the others' open findings join; where none owes, the last standing decides. Red first: 'two rechecks at one head ...' and 'a clean review that reads a joined narrower review ...' (V6, now settled as it should); the recheck unit file 40 of 40.
 - L25 2026-11-16, d445505 reviewed: Codex correct, its P2 rechecked fixed (41,162 input tokens); risk 0; reliability WARNING: other rechecks' open findings now join a second-recheck state (`second: true`), unproven whether meant. Meant, and fail closed: the last recheck's second recheck takes up what the wider one left open too; the 'two rechecks' test now asserts `second: true`.
 - L26 2026-11-16, cef6ccf7 reviewed: Codex correct (61,734 input tokens); reliability 0 findings, its warning rechecked fixed. Recount with the final code (t10all.mjs): 1,412 admitted reviewed records over 1,409 heads, 2 with more than one (e3aad480, ed1fd0e1); the same state on main and the branch at all 1,409, 0 different. The verifier pass is answered: V1 fixed, V2 decided and pinned (a known refusal, remedy a recheck at the merge), V3 and V6 fixed by the standing-records rule, V4 and V5 notes that fail closed. Codex in T10: 12 runs.
+- L27 2026-11-16, corrects L26: Codex in T10 ran 11 times for 955,676 input tokens (12 with cef6ccf7's run, 61,734); lenses 10 runs; the opus verifier 177,496 + 200,268 tokens, the writer 83,861. The verifier's delta pass at f9a8ba72 (scratchpad verify898/, q2-q4): no blocking finding; earlier probes differ only for V1, V3, V6, now fixed; three standing records join right (q2); an owing record below a merge then a clean S..C2 above it passes on main and the branch alike (predates, the T5 shape). Notes: (T6) q3: a plain review that owes plus a narrower recheck at one head lets the recheck's leftover finding get a fourth review, which main stops (by dropping the other finding); where two rechecks join, the row's warning names only the deciding recheck's findings (the state holds both); `also` is dead code on the plain path.
