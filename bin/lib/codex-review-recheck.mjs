@@ -226,37 +226,25 @@ export function decidingRecord({ from, records, runs, holds = () => null, atOrBe
     const findings = plainFindings(prior);
     return findings.length === 0 ? { kind: 'review' } : { kind: 'recheck', of: from, findings };
   };
-  // A later record at `from` replaces the one kept unless that one owes something itself and the later one read less.
-  // What a narrower review found is then owed beside it, and a first recheck takes up both (Codex's P2 on b78093fe).
-  let kept;
-  const also = [];
-  for (const rec of reviewed) {
-    if (rec.head !== from) continue;
-    const reads = kept === undefined || rec.base === kept.base || atOrBefore(rec.base, kept.base) === true;
-    // A narrower record that owes nothing is skipped. One that owes something itself is never dropped (the verifier's V1
-    // on 7e5d6772, the reliability lens on 3f177ce): where both are plain reviews its findings join; where one is a
-    // recheck, the plain review, whose debt blocks, decides, and what the recheck left open joins it.
-    if (!reads && ownDebt(kept)) {
-      if (!ownDebt(rec)) continue;
-      const keptPlain = typeof kept.recheckOf !== 'string';
-      const recPlain = typeof rec.recheckOf !== 'string';
-      if (keptPlain && recPlain) also.push(...plainFindings(rec));
-      else if (keptPlain) also.push(...openFindings(rec));
-      else if (recPlain) {
-        const left = openFindings(kept);
-        kept = rec;
-        also.length = 0;
-        also.push(...left);
-      }
-      continue;
-    }
-    kept = rec;
-    also.length = 0;
-  }
-  if (kept === undefined) return { kept, state: { kind: 'review' } };
+  // Which records at `from` still say something: a record stands unless a later one read at least its range, its base at
+  // or before (equal bases need no git; unknown stands). Every standing debt is kept (L71 A; the verifier's V1 and V6;
+  // Codex and the lenses on 3f177ce and e741821): the plain reviews that owe decide, since their debt blocks, with the
+  // findings of each, and what each standing recheck left open joins them; where only rechecks owe, the last decides and
+  // what the others left open joins it; where none owes, the last standing record decides.
+  const at = reviewed.filter((rec) => rec.head === from);
+  if (at.length === 0) return { kept: undefined, state: { kind: 'review' } };
+  const standing = at.filter((rec, i) => !at.slice(i + 1).some((later) => later.base === rec.base || atOrBefore(later.base, rec.base) === true));
+  const owing = standing.filter(ownDebt);
+  const plain = owing.filter((rec) => typeof rec.recheckOf !== 'string');
+  const kept = plain.at(-1) ?? owing.at(-1) ?? standing.at(-1);
   const state = stateOf(kept);
-  if (also.length > 0 && state.kind === 'recheck' && state.second !== true) return { kept, state: { ...state, findings: [...state.findings, ...also] } };
-  return { kept, state };
+  if (state.kind !== 'recheck' || owing.length < 2) return { kept, state };
+  const also = [
+    ...plain.filter((rec) => rec !== kept).flatMap(plainFindings),
+    ...owing.filter((rec) => rec !== kept && typeof rec.recheckOf === 'string').flatMap(openFindings),
+  ];
+  if (plain.length > 0) return { kept, state: { ...state, findings: [...plain.flatMap(plainFindings), ...owing.filter((rec) => typeof rec.recheckOf === 'string').flatMap(openFindings)] } };
+  return { kept, state: { ...state, findings: [...state.findings, ...also] } };
 }
 
 /** What a range from `from` is, as `recheckState` says from where `recheckAnchor` puts its findings, and read past a

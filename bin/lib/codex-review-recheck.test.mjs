@@ -585,3 +585,36 @@ test('a clean review from main side does not settle what the merge own record ow
   const rechecked = [...records, record(M, N, { run: 'r3', recheckOf: M })];
   assert.deepEqual(recheckState({ from: N, records: rechecked, runs, atOrBefore }), { kind: 'review' });
 });
+
+test('two rechecks at one head, the later reading less, both keep what they left open (Codex P2 on e741821)', () => {
+  const order = [A, B, C, D];
+  const atOrBefore = (older, newer) => order.indexOf(older) <= order.indexOf(newer);
+  const wide = finding('[not fixed] 1 Still drops the last line');
+  const narrow = finding('[not fixed] 1 Still loses a line', { start: 9, end: 9 });
+  const counts = { findings: 1, fixed: 0, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 };
+  const records = [record(A, B, { run: 'r1' }), record(B, D, { run: 'r2', recheckOf: B }), record(C, D, { run: 'r3', recheckOf: C }), record(A, C, { run: 'r4' })];
+  const runs = [
+    runLine('r1', { answer: { findings: [finding('[P2] Drops the last line')], verdict: 'incorrect' } }),
+    runLine('r4', { answer: { findings: [finding('[P2] Loses a line', { start: 9, end: 9 })], verdict: 'incorrect' } }),
+    runLine('r2', { answer: { findings: [wide], verdict: 'incorrect' }, recheck: counts }),
+    runLine('r3', { answer: { findings: [narrow], verdict: 'incorrect' }, recheck: counts }),
+  ];
+  const state = recheckState({ from: D, records, runs, atOrBefore });
+  assert.equal(state.kind, 'recheck', JSON.stringify(state));
+  assert.deepEqual(new Set(state.findings.map((one) => one.title)), new Set([narrow.title, wide.title]));
+});
+
+test('a clean review that reads a joined narrower review settles its findings, not the wider debt (verifier V6)', () => {
+  const E = 'e'.repeat(40);
+  const order = [A, B, C, D, E];
+  const atOrBefore = (older, newer) => order.indexOf(older) <= order.indexOf(newer);
+  const f0 = finding('[P2] Drops the last line');
+  const fy = finding('[P2] Loses a line', { start: 9, end: 9 });
+  const records = [record(A, E, { run: 'r1' }), record(C, E, { run: 'r2' }), record(B, E, { run: 'r3' })];
+  const runs = [
+    runLine('r1', { answer: { findings: [f0], verdict: 'incorrect' } }),
+    runLine('r2', { answer: { findings: [fy], verdict: 'incorrect' } }),
+    runLine('r3', { answer: { findings: [], verdict: 'correct' } }),
+  ];
+  assert.deepEqual(recheckState({ from: E, records, runs, atOrBefore }), { kind: 'recheck', of: E, findings: [f0] });
+});
