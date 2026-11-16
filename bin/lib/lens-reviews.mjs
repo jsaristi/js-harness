@@ -62,6 +62,18 @@ export function startLensRun(root, { base, head, subjectHash }, deps = {}) {
   return id;
 }
 
+/** Writes the last line of the run `id` over `base..head` at `subjectHash`: its `outcome` and, where its lenses ran,
+ * what each found (`results`, kept as each lens's outcome and count of findings). Written after the run's record, so a
+ * run stopped before it leaves a record no check admits, never a result a record written by hand could name (V2, the
+ * opus verifier's second pass on pull request 896). Throws outside a git repository. */
+export function endLensRun(root, { id, base, head, subjectHash, outcome, results }, deps = {}) {
+  const said = resultsSaid(results);
+  appendJsonLine(root, LENS_REVIEW_RUNS_FILE, { schema: LENS_REVIEW_RUN_SCHEMA, id, base, head, subjectHash, outcome, ...(said === null ? {} : { results: said }), endedAt: new Date().toISOString() }, deps);
+}
+
+/** What a run's last line keeps of its lenses' results, and what a record's are read as to match it: `null` for none. */
+const resultsSaid = (results) => (Array.isArray(results) ? results.map((one) => ({ lens: one?.lens, outcome: one?.outcome, ...(Array.isArray(one?.findings) ? { findings: one.findings.length } : {}) })) : null);
+
 /** Every run line, oldest first, with the tolerance of `readLensReviews`. */
 export function readLensRuns(root, deps = {}) {
   return readJsonLines(root, LENS_REVIEW_RUNS_FILE, deps);
@@ -72,18 +84,37 @@ const runKey = ({ id, base, head, subjectHash }) => JSON.stringify([id, base, he
 
 /** The records, oldest first, and `admitted(rec)`, true only for one of them that is evidence (`isValidLensReview`)
  * and the first record to name a run line of its own range and subject hash; a record of another range naming that
- * run claims nothing. A record of another read is never admitted, so `records` is what a check reads with it. The git
+ * run claims nothing. A run's last line says its result (`endLensRun`): a record naming a run with one is admitted only
+ * where it says the same outcome and findings, and a run with two results admits none. A run with no result line was
+ * written before runs had one, or stopped before its end: its record is admitted only where it stands before the first
+ * record a result line admits, so the records of the shared log stay as they were and none written after is (V2, L66 of
+ * odd/tasks/review-gate.md). A record of another read is never admitted, so `records` is what a check reads with it. The git
  * common dir is asked once for both files (`where`, as `jsonLinesPath` takes it). */
 export function admittedLensReviews(root, { spawn = spawnSync, where, ...rest } = {}) {
   const deps = { ...rest, spawn, where: where ?? { commonGitDir: gitDirs(root, spawn).commonGitDir ?? null } };
   const records = readLensReviews(root, deps);
-  const runs = new Set(readLensRuns(root, deps).filter((line) => line.schema === LENS_REVIEW_RUN_SCHEMA).map(runKey));
+  const lines = readLensRuns(root, deps).filter((line) => line.schema === LENS_REVIEW_RUN_SCHEMA);
+  const runs = new Set(lines.map(runKey));
+  const endsOf = new Map();
+  for (const line of lines) if (line.outcome !== undefined) endsOf.set(line.id, [...(endsOf.get(line.id) ?? []), line]);
   const claimed = new Set();
   const admitted = new Set();
+  let resulted = false;
   for (const rec of records) {
-    if (typeof rec.run !== 'string' || claimed.has(rec.run) || !runs.has(runKey({ ...rec, id: rec.run }))) continue;
+    const key = runKey({ ...rec, id: rec.run });
+    if (typeof rec.run !== 'string' || claimed.has(rec.run) || !runs.has(key)) continue;
     claimed.add(rec.run);
-    if (isValidLensReview(rec)) admitted.add(rec);
+    if (!isValidLensReview(rec)) continue;
+    const ends = endsOf.get(rec.run) ?? [];
+    if (ends.length === 0) {
+      if (!resulted) admitted.add(rec);
+      continue;
+    }
+    const [end] = ends;
+    const agrees = ends.length === 1 && runKey(end) === key && end.outcome === rec.outcome && JSON.stringify(end.results ?? null) === JSON.stringify(resultsSaid(rec.results));
+    if (!agrees) continue;
+    admitted.add(rec);
+    resulted = true;
   }
   return { records, admitted: (rec) => admitted.has(rec) };
 }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { admittedLensReviews, appendLensReview, isValidLensReview, keepLensAnswer, LENS_ANSWERS_FOLDER, LENS_REVIEW_RUN_SCHEMA, LENS_REVIEW_RUNS_FILE, LENS_REVIEW_SCHEMA, readLensReviews, readLensRuns, startLensRun } from './lens-reviews.mjs';
+import { admittedLensReviews, appendLensReview, endLensRun, isValidLensReview, keepLensAnswer, LENS_ANSWERS_FOLDER, LENS_REVIEW_RUN_SCHEMA, LENS_REVIEW_RUNS_FILE, LENS_REVIEW_SCHEMA, readLensReviews, readLensRuns, startLensRun } from './lens-reviews.mjs';
 
 const record = (over = {}) => ({
   schema: LENS_REVIEW_SCHEMA, base: 'a'.repeat(40), head: 'b'.repeat(40), subjectHash: 'c'.repeat(64), reviewedAt: '2026-10-27T17:00:00Z',
@@ -97,6 +97,54 @@ test('a line of another schema is no run line, and a record read by no reader of
   const { admitted } = admittedLensReviews('.', deps);
   assert.equal(admitted(readLensReviews('.', deps)[0]), false);
   assert.equal(admitted(record({ run })), false);
+}));
+
+// V2, the opus verifier's second pass on pull request 896 and the lead (L56): a lens run line carried no result, so a
+// record naming an aborted run's line was admitted and could pay a CRITICAL. The run's last line carries its outcome and
+// what each lens found, and the record that names it must say the same.
+const RANGE = { base: 'a'.repeat(40), head: 'b'.repeat(40), subjectHash: 'c'.repeat(64) };
+const found = (n) => Array.from({ length: n }, (_, i) => ({ severity: 'CRITICAL', location: `a.js:${i + 1}`, claim: 'broken' }));
+
+test('V2: a run whose line carries its result admits only the record that says the same outcome and findings', () => inScratch((deps) => {
+  const said = startLensRun('.', RANGE, deps);
+  appendLensReview('.', record({ run: said, results: [{ lens: 'risk', outcome: 'complete', findings: found(1) }] }), deps);
+  endLensRun('.', { id: said, ...RANGE, outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: found(1) }] }, deps);
+  const aborted = startLensRun('.', RANGE, deps);
+  appendLensReview('.', record({ run: aborted }), deps);
+  endLensRun('.', { id: aborted, ...RANGE, outcome: 'incomplete', results: [{ lens: 'risk', outcome: 'incomplete' }] }, deps);
+  const critical = startLensRun('.', RANGE, deps);
+  appendLensReview('.', record({ run: critical }), deps);
+  endLensRun('.', { id: critical, ...RANGE, outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: found(1) }] }, deps);
+  const { records, admitted } = admittedLensReviews('.', deps);
+  assert.deepEqual(records.map(admitted), [true, false, false]);
+}));
+
+test('V2: after the first record a result line admits, a record naming a run line with no result is no evidence', () => inScratch((deps) => {
+  // Before the first run line with a result, records are admitted as they were: the 598 of the shared log (L66).
+  const old = startLensRun('.', RANGE, deps);
+  appendLensReview('.', record({ run: old }), deps);
+  const unnamed = startLensRun('.', RANGE, deps);
+  const now = startLensRun('.', RANGE, deps);
+  appendLensReview('.', record({ run: now }), deps);
+  endLensRun('.', { id: now, ...RANGE, outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: [] }] }, deps);
+  // An old line no record named, and a new run stopped before its result: neither is evidence once a result line is.
+  appendLensReview('.', record({ run: unnamed }), deps);
+  const stopped = startLensRun('.', RANGE, deps);
+  appendLensReview('.', record({ run: stopped }), deps);
+  const { records, admitted } = admittedLensReviews('.', deps);
+  assert.deepEqual(records.map(admitted), [true, true, false, false]);
+}));
+
+test('V2: a skip and a range with nothing to review are admitted by a result line of their outcome, and a run has one result', () => inScratch((deps) => {
+  const skip = startLensRun('.', RANGE, deps);
+  appendLensReview('.', record({ run: skip, outcome: 'unavailable', reason: 'out of turns', results: undefined }), deps);
+  endLensRun('.', { id: skip, ...RANGE, outcome: 'unavailable' }, deps);
+  const twice = startLensRun('.', RANGE, deps);
+  appendLensReview('.', record({ run: twice }), deps);
+  endLensRun('.', { id: twice, ...RANGE, outcome: 'incomplete', results: [{ lens: 'risk', outcome: 'incomplete' }] }, deps);
+  endLensRun('.', { id: twice, ...RANGE, outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: [] }] }, deps);
+  const { records, admitted } = admittedLensReviews('.', deps);
+  assert.deepEqual(records.map(admitted), [true, false]);
 }));
 
 // JH 75: what a lens's CLI printed is kept whole beside the records, in a file of its run and lens, since the first

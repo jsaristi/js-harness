@@ -26,7 +26,7 @@ import { lensCandidate } from './lib/lens-candidate.mjs';
 import { LENS_NAMES, LENSES, lensPrompt } from './lib/lens-prompts.mjs';
 import { LENS_ANSWER_SCHEMA, lensResult } from './lib/lens-result.mjs';
 import { claudeHome } from './lib/model-home.mjs';
-import { admittedLensReviews, appendLensReview, INCOMPLETE, keepLensAnswer, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
+import { admittedLensReviews, appendLensReview, endLensRun, INCOMPLETE, keepLensAnswer, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
 
 // The model each lens runs on: the Claude home's (`rule:session-model`), a full id, read from the declared list
 // wherever the lenses run. Until 2026-11-10 the lenses ran on a short name, and a short name gives whatever the engine
@@ -246,7 +246,13 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
   // The run line goes first, before any lens runs, and the record names it: a check admits no record that names none.
   let runId = null;
   const start = () => (runId ??= startLensRun(cwd, record));
-  const write = (fields) => appendLensReview(cwd, { ...record, run: start(), ...fields, reviewedAt: new Date().toISOString() });
+  // The record first, then the run's last line with its result: a run stopped between the two leaves a record no check
+  // admits, never a result line a record written by hand could name (V2).
+  const write = (fields) => {
+    const file = appendLensReview(cwd, { ...record, run: start(), ...fields, reviewedAt: new Date().toISOString() });
+    endLensRun(cwd, { id: runId, base: record.base, head: record.head, subjectHash: record.subjectHash, outcome: fields.outcome, results: fields.results });
+    return file;
+  };
   if (skip !== undefined) {
     const file = write({ outcome: 'unavailable', reason: skip });
     stdout(`Recorded a skip of the Claude lenses over ${range} (${skip}) in ${file}: the push lets it through, and check, doctor and merge-queue list it until a review covers the range.`);
