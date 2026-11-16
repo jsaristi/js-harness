@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { guardMain } from './guard.mjs';
 import { appRoot } from './lib/app-record.mjs';
-import { SENIOR_WAIT_BRIEF } from './lib/lead-protocols.mjs';
+import { SENIOR_WAIT_BACKGROUND, SENIOR_WAIT_BRIEF } from './lib/lead-protocols.mjs';
 import { EFFORTS } from './lib/model-home.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { ruleValue, writeRules } from './lib/rules.mjs';
@@ -711,7 +711,7 @@ test('a configured window is the one a stated share is checked against, ahead of
 const SENIOR_MODEL = RULES.find((rule) => rule.id === 'senior-model').value;
 const SENIOR_EFFORT = RULES.find((rule) => rule.id === 'senior-effort').value;
 const LEAD_RECORD = { sessionId: 'local_lead', where: 'sessions', title: 'JH ORQ · orquestador', model: RULES.find((rule) => rule.id === 'session-model').value, effort: 'max', archived: false };
-const SENIOR_START = { tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', session_id: 'c-lead', tool_input: { initiation: 'user_asked', title: 'JH SR · a design', prompt: SENIOR_WAIT_BRIEF, background: 'x'.repeat(80), effort: SENIOR_EFFORT, context: 'fresh' } };
+const SENIOR_START = { tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', session_id: 'c-lead', tool_input: { initiation: 'user_asked', title: 'JH SR · a design', prompt: SENIOR_WAIT_BRIEF, background: SENIOR_WAIT_BACKGROUND, effort: SENIOR_EFFORT, context: 'fresh' } };
 const appOf = (...records) => new Map(records);
 
 test('the lead starts a senior with start_session at rule:senior-effort, naming no model, in its own worktree', async () => {
@@ -740,6 +740,13 @@ test('a start_session of a senior is denied unless the lead starts it as the sen
     assert.ok(why.includes(JSON.stringify(SENIOR_WAIT_BRIEF)), 'the refusal gives the brief to copy');
   }
   assert.deepEqual(await hook({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, prompt: `  ${SENIOR_WAIT_BRIEF}\n` } }, { app: lead }), { code: 0, out: '', err: '' }, 'blanks around it');
+  // The background reaches its first turn too (D14).
+  for (const background of ['Review the design in odd/tasks/x.md now and write your findings to the notes folder, then report.', undefined]) {
+    const why = await reason({ ...SENIOR_START, tool_input: { ...SENIOR_START.tool_input, background } }, lead);
+    assert.match(why, /background other than the wait/, String(background));
+    assert.ok(why.includes(JSON.stringify(SENIOR_WAIT_BACKGROUND)), 'the refusal gives the background to copy');
+  }
+  assert.ok(SENIOR_WAIT_BACKGROUND.length >= 80, 'the tool asks a fresh start for 80 characters of background');
   // The verifier's findings (D13): a card's later start carries no title the guard could hold, so only "user_asked"
   // starts a senior; another project's lead is not this one's; it starts here, in its own worktree.
   for (const initiation of ['offer', 'own_initiative', undefined]) {

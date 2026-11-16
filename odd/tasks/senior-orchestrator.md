@@ -21,7 +21,8 @@ its rules where the lead sends it work. `sessions start --title "<code> SR 路 鈥
 cb830c3e built it; Codex's review (7619fc9..25e7f82, verdict incorrect at 0.92) found one P2: any brief passed, so a
 task in it ran on the lead's model before `set_session_model`. The next commit holds the brief to `SENIOR_WAIT_BRIEF`
 (D11). Lenses: risk and reliability 0, resilience 1 warning, answered (D12). Codex recheck: fixed (0.98). The
-verifier's findings are fixed in the next commit (D13). Left: its reviews, the PR. Then T7 (question 306).
+verifier's findings are fixed in a95fd076 (D13), reviewed clean (Codex 0.94, lenses 0); the background is held in
+the next commit (D14). Left: its reviews, the PR. Then T7 (question 306, yes), then T8.
 
 ## Goal
 The lead starts a senior session, titled `<code> SR 路 <purpose>`, as a visible app session with `start_session`
@@ -52,7 +53,8 @@ intelligence or complexity. Today a start on Fable is refused (the guard and `se
   `use_worktree: false` is refused; a second live (not archived) senior of the code is refused; a message
   (`SendMessage`, `send_message`) to an SR session whose app record holds another model or level than the senior's
   is refused, naming `set_session_model` and `set_session_effort`, and one on Fable at high passes; a start whose
-  `prompt` is other than `SENIOR_WAIT_BRIEF` (blanks around it aside) is refused, giving the brief to copy.
+  `prompt` is other than `SENIOR_WAIT_BRIEF`, or whose `background` is other than `SENIOR_WAIT_BACKGROUND` (blanks
+  around them aside), is refused, giving the text to copy.
   So is one whose `initiation` is not "user_asked", one from another project's lead, and one naming `target` other
   than "local", `cwd`, `preset`, `host` or a `use_worktree` other than true; `send_message` is read by its
   `session_id` and `SendMessage` by its `to`.
@@ -198,7 +200,8 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   record exists (reasoned; the lead protocol starts one); a session renamed to an ORQ or off an SR title by
   `set_session_title` escapes the title checks, which nothing guards; a lead whose record writes no effort is not
   held to senior-effort (the tool still caps the start at the lead's, and the message check holds the senior's); the
-  rule subject of senior-model still names `sessions start` (T7, question 306).
+  rule subject of senior-model still names `sessions start` (T7, question 306); a message `to` such as
+  `"local_x [ref]"` or one with a leading space passes unmatched (run; whether the app resolves those is unknown).
 - L5 2026-11-16, question 306 answered "S铆, quita la excepci贸n (Recomendada)" (tapped, lead transcript 699d7c29 line
   505); his typed words for T7's rule change: 699d7c29 line 402, "ok recuerda que no se puede abrir ninguna sesion en
   segundo plano", and 69918425 line 21275 (spec 5). The lead: T6's PR first, T7 in its own PR, landed only after JH SR
@@ -206,3 +209,6 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
 - L6 2026-11-16, the lead's note: T8 from spec 6. Seen tonight: the lead ran at medium titled "JH ORQ orquestador F8"
   (no "路"), and `rules applied` listed no session off the home, since the role comes from the title; after a rename
   it listed the lead "corrected by his menu".
+- D14 2026-11-16, the advisor before the PR: `start_session` requires a `background` of 80 characters for a fresh
+  start, and it reaches the first turn as the brief does, yet the guard read only `prompt`. It is held the same way to
+  one constant, `SENIOR_WAIT_BACKGROUND`, which the protocol prints beside the brief.

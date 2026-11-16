@@ -4,7 +4,7 @@
 // no number, and one later called itself "JH 7", a number already used. Only `start_session` loads this file, so the
 // session board's module it reads the title shape from costs nothing on the other calls the guard checks.
 
-import { SENIOR_WAIT_BRIEF } from './lead-protocols.mjs';
+import { SENIOR_WAIT_BACKGROUND, SENIOR_WAIT_BRIEF } from './lead-protocols.mjs';
 import { roleOfTitle } from './sessions.mjs';
 import { EFFORTS, SENIOR_HOME, claudeHeld, sameClaudeModel } from './model-home.mjs';
 import { guardHeld, ruleHere } from './rules.mjs';
@@ -94,6 +94,9 @@ export function seniorStartRefusal(toolInput, projectData, { starter = null, rec
   }
   if (toolInput.prompt.trim() !== SENIOR_WAIT_BRIEF) {
     return `${who} gives the senior ${title} a brief other than the wait: its first turn runs on the lead's model, before set_session_model applies, so a task in it would run off the rule ${SENIOR_HOME.model}. Pass the prompt ${JSON.stringify(SENIOR_WAIT_BRIEF)} and nothing more, then send the task as a message once its model and level are set.`;
+  }
+  if (typeof toolInput.background !== 'string' || toolInput.background.trim() !== SENIOR_WAIT_BACKGROUND) {
+    return `${who} gives the senior ${title} a background other than the wait: it reaches the first turn, on the lead's model, as the brief does. Pass the background ${JSON.stringify(SENIOR_WAIT_BACKGROUND)} and nothing more.`;
   }
   if (typeof toolInput.model === 'string' && toolInput.model !== '') {
     return `${who} names the model "${toolInput.model}" for the senior ${title}: the tool caps a start at the caller's model, so name none, then set rule ${SENIOR_HOME.model} (${home.senior.value}) with set_session_model once it has started.${home.senior.note}`;

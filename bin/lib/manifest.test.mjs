@@ -37,7 +37,7 @@ import { appendNotice, appendRelief, channelDir, newNotice, recordPath, writeOpe
 import { remoteDir, remoteFiles } from './remote.mjs';
 import { hygieneDir, journalPath, purgeMarker } from './memory-hygiene.mjs';
 import { ruleValue } from './rules.mjs';
-import { SENIOR_WAIT_BRIEF } from './lead-protocols.mjs';
+import { SENIOR_WAIT_BACKGROUND, SENIOR_WAIT_BRIEF } from './lead-protocols.mjs';
 import { PERMISSIONS_ALLOW, PERMISSIONS_DENY } from './permissions.mjs';
 import { EARLIER_CODEX_ENTRIES, EARLIER_CODEX_FILES, EARLIER_INSTALL } from './earlier-codex.testkit.mjs';
 
@@ -3044,7 +3044,7 @@ test('the orchestrator skill describes the senior session and asks for the closi
     assert.ok(senior.includes(phrase), phrase);
   }
   assert.ok(!senior.includes('js-harness sessions start'), 'no background start of the senior');
-  assert.ok(senior.includes(`"${SENIOR_WAIT_BRIEF}" and nothing more`), 'the one brief the guard lets a senior start with (D11)');
+  assert.ok(senior.includes(`"${SENIOR_WAIT_BRIEF}" and the \`background\` "${SENIOR_WAIT_BACKGROUND}" and nothing more`), 'the one brief and background the guard lets a senior start with (D11, D14)');
   assert.ok(text.includes('Before the `ready` of your last pull request, write your summary and commit and push it as the closing steps below say, keeping only their `closed` notice for after that `ready`'), 'the ready bullet');
 });
 
