@@ -73,6 +73,15 @@ test files, committed as 9c7f3458; Codex correct 0.87, lenses risk and readabili
 `-J -R -S`), fixed in 7929b5a5 (Codex correct 0.98, reliability recheck fixed). T7's code is reviewed to 7929b5a5. Next:
 the note to the lead; the two `rules change` when JH 208's `rule/away-autonomy` lands or is dropped (the lead says),
 then gate, the rule commits' reviews, PR, `ready`. Meanwhile T8 on its own branch from origin/main.
+~02:45Z, note sent to the lead (T7 reviewed, open items, waiting its word on rule/away-autonomy). T8 next, advisor's
+plan: `git switch -c feat/lead-held-high origin/main` here (origin/main's doc already has spec 6 and T8); before code,
+read the lead's original T8 message (what "start" means), the `sessions --address` resolver (`bin/lib/sessions.mjs` ~1295:
+does it resolve a title with no "·"?), what board/applied/doctor already say (board marks OFF THE HOME via
+`bin/lib/roster-home.mjs` `rowHome`), whether a `rules-data.mjs` text must change (held behind away-autonomy). Design:
+never loosen `TITLE_SHAPE`/`roleOfTitle` (42 callers, the handover's `ORQ nueva`/`relevada`); an additive detector of a
+drifted lead title (`<code> ORQ` with no "·", not the handover forms) that names it and judges its level; heartbeat says
+it once per value (a mark like `cuts`/`away`), in a module of its own; tests first with L6 as written. Write T8's
+orientation and depth pass here before the first code.
 
 ## Goal
 The lead starts a senior session, titled `<code> SR · <purpose>`, as a visible app session with `start_session`
