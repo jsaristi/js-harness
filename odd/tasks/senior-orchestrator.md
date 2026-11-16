@@ -100,6 +100,7 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   spec 3: `node --test bin/guard.test.mjs`: none, new behaviour (a start_session of an SR title is refused at 7619fc94).
   spec 4: `node --test bin/guard.test.mjs`: none, new behaviour (the lead starts the senior; same tests as spec 3).
   spec 5: `node --test bin/guard.test.mjs`: none, new behaviour (`js-harness sessions start` passes the guard today).
+  spec 6: `node bin/js-harness.mjs rules applied`: lists no lead off `rule:lead-effort` when its title lacks the "·" (seen 2026-11-16).
 - 4. Refutation: the request fails if a senior can be started today. Run: `node -e` importing `roleOfTitle` from
   `bin/lib/sessions.mjs` on `JH SR · x`. Result: null, so the title guard refuses it before any model is read.
   Verdict: supports
@@ -122,6 +123,8 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
 4. "necesitamos hacer que el orquestador controle todo" (2026-11-15, line 20853, typed answer to question 305)
 5. "has lanzados sesiones que nisiquiera veo pensando que tenemos el tablero desocupado y eso no me gusta ni es
    practico ni funcional nunca debemos permitir eso" (2026-11-15, line 21275)
+6. "ademas la sesion orquestadora siempre debe estar en alto y es algo que el harness pueda revisar y cuadrar por
+   ejemplo en este momento estamos en medio" (2026-11-16, lead transcript 699d7c29 line 519)
 
 ## Tasks
 - [x] T1 (kind: design) (1, 2) This document and its double review. Route: inline.
@@ -136,6 +139,10 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   the messages to it. Route: inline, then one verifier. Commits: cb830c3e, the D11 fix.
 - [ ] T7 (kind: build) (5) The guard refuses `js-harness sessions start` for every title; `rule:sessions-open-in-sidebar`
   drops its exception by `rules change`, his to approve. Route: inline.
+- [ ] T8 (kind: build) (6) The lead held to `rule:lead-effort`: a lead whose title drifts off `<code> ORQ · …` keeps
+  its role or is named (channel `--address orchestrator` still resolves it, `heldOfRole` does not), and the board,
+  the heartbeat and the lead's start say a lead off `rule:lead-effort`, with the act that corrects it (his menu).
+  Route: inline.
 
 ## Log
 - L1 2026-11-12, his words at 93b72703:775 (S2); his "aplica todos los cambios ya" at 93b72703:896.
@@ -192,3 +199,10 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   `set_session_title` escapes the title checks, which nothing guards; a lead whose record writes no effort is not
   held to senior-effort (the tool still caps the start at the lead's, and the message check holds the senior's); the
   rule subject of senior-model still names `sessions start` (T7, question 306).
+- L5 2026-11-16, question 306 answered "Sí, quita la excepción (Recomendada)" (tapped, lead transcript 699d7c29 line
+  505); his typed words for T7's rule change: 699d7c29 line 402, "ok recuerda que no se puede abrir ninguna sesion en
+  segundo plano", and 69918425 line 21275 (spec 5). The lead: T6's PR first, T7 in its own PR, landed only after JH SR
+  opens visibly on Fable through T6's path; then T8.
+- L6 2026-11-16, the lead's note: T8 from spec 6. Seen tonight: the lead ran at medium titled "JH ORQ orquestador F8"
+  (no "·"), and `rules applied` listed no session off the home, since the role comes from the title; after a rename
+  it listed the lead "corrected by his menu".
