@@ -8,9 +8,12 @@ T1 is closed (L13): the page is published, https://claude.ai/artifact/1ppv1NAxbr
 questions are recorded as 307 to 310 for the lead to put to him one at a time. Draft PR 894, branch
 `claude/dreamy-nash-50fa03`, worktree `rule-lead-effort-split-aac740`. Left, all the lead's: whether a new session
 on a fresh context corrects L11 before he reads the page; landing this PR and the notice of Spec 8 (phase 0's step
-1, T10); his four answers (T9); opening session X for T3. His line of L14 (try it, watch the Fable usage, take
+1, T10); his typed line for question 1; opening session X for T3. His line of L14 (try it, watch the Fable usage, take
 the advisor off the swarms if it is excessive) is recorded and changes nothing of the design. Question 2 (308) is
-answered A, the lead opens the work sessions (L15); 309, 310 and 307 are still open. The measures:
+answered A, the lead opens the work sessions (L15). Questions 3, 4 and 1 (309, 310, 307) are answered by taps
+too (L16): Fable 5.2 at high; sub-agents inside each session; his questions only in the Plan. For question 1 his
+typed line is still owed before any rule changes, and A makes L11's finding on his absence a task, T11. The
+measures:
 `odd/tasks/plan-orchestrator-evidence/measures.md`.
 
 ## Goal
@@ -74,7 +77,7 @@ not asked: it is the answer to his "dime que tenemos que hacer" (Spec 3); questi
 steps, and until question 1 is answered it runs under today's rules.
 1. Where his questions reach him: only in the Plan's chat (the lead stops asking him, and the departure and return
    of a stretch move to the Plan), or in both. A yes to "only the Plan" changes three rules and needs one typed
-   line.
+   line. Answered 2026-11-16, tapped: A, only the Plan; the typed line is owed before any rule changes (L16).
 2. Who opens the work sessions. The Plan always hands the plan to the lead itself, as he said. What the host
    needs from him is one gesture where the sessions open: (A) the lead opens them, and he taps a card for each in
    the lead's chat or types one line there (his design as he said it; recommended), or (B) the Plan opens them in
@@ -82,9 +85,10 @@ steps, and until question 1 is answered it runs under today's rules.
    little). Answered 2026-11-16, tapped: A, the lead opens them (L15).
 3. The Plan's model: Fable 5.2 (his "el modelo que organiza todo de entrada"). Its level is high by Spec 4, which
    says the orchestrating session; if he means only the lead there, the level is his to say. The cost is a guess
-   that phase 0 measures (The design, "Cost").
+   that phase 0 measures (The design, "Cost"). Answered 2026-11-16, tapped: Fable 5.2 at high (L16).
 4. "enjambres de sesiones": sub-agents inside each session (what `fanout-tree.md` designs), or sessions that open
    sessions (a second level, under his cap of 6 and his "nunca anides la sesiones").
+   Answered 2026-11-16, tapped: A, sub-agents inside each session (L16).
 
 ## Depth pass
 - 1. Method: separating planning from execution is the control-plane split of an operations team: a planner writes
@@ -236,7 +240,10 @@ The times are UTC; in his local time all eight fall on 2026-11-15, between 17:16
   session; the host-update step turns it back on in both. He tells the Plan what he wants and approves the plan
   there. Where his questions reach him is question 1; if only in the Plan, a question is recorded once, addressed
   to the session that holds his chat, with no relay through the lead, and the Plan answers what is inside the plan
-  and asks him only what `rule:owner-decisions` lists.
+  and asks him only what `rule:owner-decisions` lists. His answer is A, tapped (L16): only the Plan, once his typed
+  line changes the three rules; until then phase 0's limit stands. A carries L11's open high finding (Claude 2):
+  the lead's `AWAY:` line reads when he last wrote to the lead, so with his conversation in the Plan the lead no
+  longer knows when he is away. This design does not say yet how that is solved: T11.
 - **The hand-off and the start** (question 2). The Plan sends the lead the plan's path itself, by a message, every
   time. The host then opens a session only on his gesture: with A, each session the lead starts is a card he taps
   in the lead's chat, or he types one line there and the lead opens that wave in that turn; with B, the Plan opens
@@ -244,7 +251,8 @@ The times are UTC; in his local time all eight fall on 2026-11-15, between 17:16
   phase 0 shows it. His answer is A (L15): B is dropped and the Plan opens no work session.
 - **What runs at the same time** (proposal 4). The plan's `together` and `surfaces` are the declared units
   `fanout-tree.md` spec 3 waits for. Sub-agent swarms inside a session stay that document's, under his three
-  pending answers; the reading of "enjambres de sesiones" is question 4.
+  pending answers; the reading of "enjambres de sesiones" is question 4, answered A (L16): sub-agents inside each
+  session, no second level of sessions.
 - **Double review** (proposal 5, already `rule:double-review`). A plan put to him passes it, by the rule's own
   exemptions and no other. Estimate: 3 to 5 such plans a week; a read is about 1% of Codex's weekly limit, and each
   of this document's two reads cost about 3.4M Claude tokens against the 1.1M the command states.
@@ -270,8 +278,8 @@ In order (Spec 3):
 1. The lead lands this document's docs PR, so the Plan can read it on main, and stores the Plan's opening with
    `js-harness notify --opening`. Then it tells him, by a push notification and a line in its chat, that the Plan
    is ready for him to open and try, with steps 2 to 4 as what he does (Spec 8).
-2. He opens a session in the app on Fable 5.2 at high (question 3), names it `JH PLAN · planes`, turns Remote
-   Control on in it (Spec 7) and sends it the opening's first message.
+2. He opens a session in the app on Fable 5.2 at high (question 3, answered: L16), names it `JH PLAN · planes`,
+   turns Remote Control on in it (Spec 7) and sends it the opening's first message.
 3. He tells it what he wants. It writes the plan (a stretch plan, and a roadmap PR where the order changes), passes
    the double review and shows him the page.
 4. He approves. The Plan sends the plan's path to the lead; the lead's sessions open on his tap or his line there
@@ -314,11 +322,13 @@ while the next task's design is read. The board is checked before each task star
   `bin/lib/inbox.mjs`, `bin/lib/channel.mjs`, `bin/lib/model-shape.mjs`, `bin/lib/model-home.mjs`,
   `bin/lib/rules-data.mjs`, `bin/lib/rules-coverage-data.mjs`, `bin/guard.mjs`, `bin/lib/guard.mjs`, the five
   reporters, their tests. The role opens no work session: the lead does (question 2, answered A, L15).
+  Its model and level are his answer to question 3: Fable 5.2 at high (L16).
 - [ ] T6 (kind: build) (1, 7) His desk: Remote Control on both orchestrators (`bin/lib/host-update.mjs`,
   `rule:remote-control-yes` and `rule:sessions-open-in-sidebar` by `rules change`, source line 1389); and, only on
   his typed line (question 1), a question addressed to the session that holds his chat (`bin/lib/channel.mjs:131`,
   `bin/notify.mjs`) with `rule:questions-one-place`, `rule:lead-charter` and `rule:away-autonomy`. One commit a
-  rule. After T4. High risk 3: a verifier.
+  rule. After T4. High risk 3: a verifier. Question 1 is answered A by a tap (L16): his typed line is still owed,
+  and the question part also waits for T11.
 - [ ] T7 (kind: docs) (1, 2) The texts: "The plan orchestrator" in `bin/lib/lead-protocols.mjs` and the Plan's part
   of the orchestrator skill (`bin/lib/manifest.mjs`), conditional on a Plan holding its role. After T6. High risk
   3: a verifier.
@@ -331,8 +341,16 @@ while the next task's design is read. The board is checked before each task star
   that says what works, what does not yet and how he tries it: when phase 0's step 1 is done, and when the built
   Plan has passed T8's one real request. Proof: the line in the lead's transcript, read with `sessions --quote`,
   written in this Log. Route: the lead.
-- [ ] T9 (kind: docs) (1) His answer to each of the four questions in this Log with its transcript line, on a docs
-  branch. Route: the lead, or the Plan once phase 0 runs. Question 2: L15, entered by JH SR at the lead's word.
+- [x] T9 (kind: docs) (1) His answer to each of the four questions in this Log with its transcript line, on a docs
+  branch. Route: the lead, or the Plan once phase 0 runs. Done by JH SR at the lead's word: question 2 in L15,
+  questions 3, 4 and 1 in L16. His typed line for question 1 is not part of this task: T6 waits for it.
+- [ ] T11 (kind: design) (1) Under his answer A to question 1 (L16), solve L11's high finding Claude 2: how the lead
+  knows he is away once his conversation is in the Plan. Today `bin/lib/lead-away.mjs:67` and
+  `bin/lib/return-report.mjs:336` read his last message to the lead, and the skill (`bin/lib/manifest.mjs:148`)
+  has the lead open a stretch on that `AWAY:` line; in phase 0 it fires while he is present in the Plan, and once a
+  stretch is open most of the time it never fires. The reader's proposed fix (a line in phase 0's limits; the two
+  files in a task's surfaces, absence read from the chat that holds him) is not taken here: it is a design change
+  and needs its read, and this document has used its three. Before T6's question part. Route: not assigned.
 
 ## Log
 - L1 2026-11-15 local, his words: Specs 1 to 7, each read with `sessions --quote` by this session.
@@ -446,3 +464,18 @@ while the next task's design is read. The board is checked before each task star
   Entered at the lead's word in "Ask me before" 2, "The hand-off and the start", phase 0's step 4, T5 and T9;
   those lines were added after the last read and no reader has read them. Still not checked: whether a turn that
   follows his typed turn can open one more session. Questions 309, 310 and 307 are open.
+- L16 His answers to questions 3, 4 and 1, each a tap on a card of the lead's question tool, read with `js-harness
+  sessions --quote 699d7c29-54c4-460e-a5e8-700b114eb251 <line>`, and held by the channel as verified answers. All
+  three are "Tapped, not quoted". Question 3 (309), line 3217, 2026-11-16 at 02:27 local (07:27Z): "Fable 5.2 en
+  alto", so the Plan runs on Fable 5.2 at high, in phase 0 and in T5. Question 4 (310), line 3239, 02:48 local
+  (07:48Z): "A: sub-agentes dentro de cada sesión", so no session opens sessions and `fanout-tree.md`'s reading
+  stands (its Log L9). Question 1 (307), line 3256, 03:08 local (08:08Z): "A: solo en el Plan". A changes three
+  rules of his (`rule:questions-one-place`, `rule:lead-charter`, `rule:away-autonomy`) and a tap changes none: his
+  typed line is still owed, the lead is asking for it, and until it is quoted here phase 0 runs under today's rules
+  and T6's question part does not start. The question told him why it carried no recommendation: with A the lead
+  stops knowing when he is away, L11's high finding Claude 2, read again here from the review's record
+  (`double-reviews.jsonl`, read b88ea402) and its three citations checked at their lines. He chose A knowing it, so
+  the design now owes the answer: T11, a design change that needs its read. Entered at the lead's word in "Ask me
+  before" 1, 3 and 4, "Where he talks", "What runs at the same time", phase 0's step 2, T5, T6, T9 (closed) and
+  T11 (new); none of these lines has been read by a reader. Not answered by any of the four: his approval of the
+  page, and his line of L14 on the advisor.

@@ -316,3 +316,8 @@ Line 45 follows from the three answers (spec 4), its whole text given for the ca
   thing his answer cannot change: the plan file of that design declares, per item, its `surfaces` and what runs
   `together`, which are the declared units spec 3's option C waits for (Depth pass item 4 found none on the record
   because nobody declared any); a yes there is a reason to weigh option C again, with a fresh count.
+- L9 2026-11-16T07:48Z, his answer to question 4 of `odd/tasks/plan-orchestrator.md` (recorded as 310), a tap on a
+  card in the lead's chat (`js-harness sessions --quote 699d7c29-54c4-460e-a5e8-700b114eb251 3239`), carried here
+  by JH SR: "A: sub-agentes dentro de cada sesión". It closes what L8 reopened: "enjambres de sesiones" is read as
+  sub-agents inside each session, this document's scope, and no session opens sessions. Tapped, not quoted, and it
+  needs no rule change. This document's three questions stand as written.
