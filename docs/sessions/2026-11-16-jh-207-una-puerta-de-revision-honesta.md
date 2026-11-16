@@ -60,9 +60,9 @@ L42, L56, L73). The owner was away; no question went to him.
 ## Cost
 - **Time:** from the first notice of this stretch to the ready notice at 2026-11-16T13:17:45Z.
 - **Context:** compacted twice by the host; 70% of the context held at ready.
-- **Codex, after the last compaction:** 112,392 + 209,756 + 34,764 + 114,698 input tokens. The weekly meter was at
+- **Codex, after the last compaction:** 112,392 + 209,756 + 34,764 + 114,698 + 73,693 + 63,860 input tokens. The weekly meter was at
   88%.
-- **Lenses:** 4 runs of reliability and risk, each between 10,797 and 15,061 input tokens.
+- **Lenses:** 6 runs of reliability and risk, each between 7,459 and 15,061 input tokens.
 - **Whole-set gate runs:** 7 (the two after this list were green, 9764 of 9801, and the L81 run).
   - 1 failed at once on my command.
   - 1 timed out at 30 minutes.
