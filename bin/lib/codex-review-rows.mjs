@@ -459,17 +459,17 @@ export function checkCodexReviewDebt(cwd, { spawn = spawnSync, remote = 'origin'
     // Inside the guard: the switch is read from files and git as the rest is, and fails nothing either.
     const here = codexSwitchHere(cwd, spawn);
     // Off in the working tree alone, with HEAD on: the push reads HEAD, so this says what it says (e1b, the lead on L76).
-    const atHead = here.value === 'off' ? codexReviewOffAt(cwd, 'HEAD', { spawn }) : false;
-    if (here.value === 'off' && !atHead) {
+    // Only where HEAD is a commit: with none (no repository, no commit yet) the review is off here, as it was (L81).
+    const git = here.value === 'off' ? gitIn(cwd, spawn) : null;
+    const head = git?.(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'])?.trim();
+    if (head && codexSwitchAt(git, head).value !== 'off') {
       const said = codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell });
       return { ...said, detail: `the Codex review is off in the working tree (${here.because}) but on at HEAD, which the push reads: ${said.detail}` };
     }
     if (here.value === 'off') {
       // A correction owed below is still owed with the review off, and the push refuses it: the row says so, and
       // names the skip that pays it where one does (V3, the opus verifier's second pass on pull request 896).
-      const git = gitIn(cwd, spawn);
-      const tip = git(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'])?.trim();
-      const owed = tip ? owedWhereOff(cwd, git, 'HEAD', tip, { spawn, remote }) : null;
+      const owed = head ? owedWhereOff(cwd, git, 'HEAD', head, { spawn, remote }) : null;
       const off = `the Codex review is off here (${here.because})`;
       if (owed?.refuse) return row(`${off}, and still ${owed.row.detail}`, owed.row.lines);
       return row(`${off}: no code waits for one`, owed?.paid ? [owed.paid] : undefined);

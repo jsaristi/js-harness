@@ -2268,3 +2268,19 @@ test('V3: with the review on at HEAD and off only in the working tree, the plain
   assert.match(debt.detail, new RegExp(`review that ended at ${short(root, head)} owes a correction: 1 finding open`));
   assert.equal((debt.lines ?? []).some((line) => line.includes('pays the correction')), false, (debt.lines ?? []).join('\n'));
 });
+
+test('V3: with the review off in the working tree and no HEAD to read, the plain check says it is off here, as before', () => {
+  // The advisor's probe before ready (L81): a folder in no repository, or a repository with no commit, has no HEAD, so
+  // the row must not say the review is on there.
+  const norepo = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-nohead-'));
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-nocommit-'));
+  try {
+    spawnSync('git', ['init', '-q'], { cwd: empty });
+    for (const dir of [norepo, empty]) {
+      fs.writeFileSync(path.join(dir, 'harness.json'), OFF);
+      assert.match(checkCodexReviewDebt(dir).detail, /^the Codex review is off here \(declared in harness\.json\): no code waits for one/, dir);
+    }
+  } finally {
+    for (const dir of [norepo, empty]) fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
