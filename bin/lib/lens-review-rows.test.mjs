@@ -133,6 +133,22 @@ test('V2: a record whose run has no result line, written after the first that ha
   assert.match(said.detail, /1 record of a run with no result line, written after the first run that has one, as an older js-harness writes it/);
 });
 
+// L84 of odd/tasks/review-gate.md (T3 of odd/tasks/again-subrange.md): the older-writer note counted the whole log, so
+// after the cut it named a record of another branch that has nothing to do with the range checked.
+test('the older-writer note names only records of the range checked, not one of another branch', () => {
+  const { subjectHash } = lensCandidate(dir, { base, head });
+  const now = record(base, head);
+  endLensRun(dir, { id: now, base, head, subjectHash, outcome: 'reviewed', results: [{ lens: 'risk', outcome: 'complete', findings: [] }] });
+  git('checkout', '-q', '-b', 'other', base);
+  const elsewhere = commit('d.mjs', 'export const d = 1;\n', 'feat: d elsewhere');
+  record(base, elsewhere);
+  git('checkout', '-q', 'feature');
+  const said = row();
+  assert.equal(said.pass, true, said.detail);
+  assert.doesNotMatch(said.detail, /as an older js-harness writes it/);
+  assert.doesNotMatch(said.detail, /no evidence/);
+});
+
 // Row 3 of docs/proposals/gentle-ai-reverse-engineering.md, section 13.3: provenance is what refuses a well-shaped forged
 // record, one a session appended by hand, since it names no run line `lens-review` wrote first.
 test('a well-shaped record that names no run line lens-review wrote is refused by the push, and said', () => {
