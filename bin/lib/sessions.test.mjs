@@ -2486,6 +2486,12 @@ test('a row whose app record is not the home\'s is marked with what it holds, bo
   assert.equal(opener(lead(), record('claude-fable-5-2', 'high')), '    opened by him  in Sessions  effort high');
   assert.deepEqual(row(lead(), record('claude-fable-5-2', 'high')).held, { model: 'claude-fable-5-2', effort: 'high' });
   assert.equal(opener(lead({ effort: 'medium' }), record('claude-fable-5-2', 'medium')), '    opened by him  in Sessions  effort medium  OFF THE HOME: its menu holds the level medium, the home high');
+  // A lead whose title drifted off the shape (odd/tasks/senior-orchestrator.md, T8, L6 as written): held to the lead's
+  // level and named, though it holds no role.
+  const drifted = [member(A, 'JH ORQ orquestador F8', 60, { opened: 'his', effort: 'medium' })];
+  assert.equal(row(drifted, record('claude-fable-5-2', 'medium')).role, null);
+  assert.match(opener(drifted, record('claude-fable-5-2', 'medium')), /OFF THE HOME: its menu holds the level medium, the home high  A LEAD'S TITLE OFF ITS SHAPE/);
+  assert.equal(row(lead(), record('claude-fable-5-2', 'high')).drifted, undefined, 'a lead of the shape is not drifted');
   // The menu and the last reply disagree: both are said, and the menu's is the one judged.
   assert.equal(opener(lead(), record('claude-fable-5-2', 'xhigh')), '    opened by him  in Sessions  effort xhigh in its menu, high in its last reply  OFF THE HOME: its menu holds the level xhigh, the home high');
   assert.equal(opener(work({ effort: 'high' }), record('claude-fable-5-2', 'medium')), '    opened by a session  in Sessions  effort medium in its menu, high in its last reply');

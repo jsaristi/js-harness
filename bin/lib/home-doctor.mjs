@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { appRoot, appSessions } from './app-record.mjs';
 import { EFFORTS, heldOfRole, heldValues, menuLine, offHome, sameClaudeModel } from './model-home.mjs';
-import { leadTitle, seniorTitle } from './session-title-guard.mjs';
+import { driftedLeadTitle, leadTitle, seniorTitle } from './session-title-guard.mjs';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const said = ({ model, effort }) => `${model ?? 'no model'} at ${effort ?? 'no level'}`;
@@ -70,7 +70,7 @@ export function readSettings({ claudeDir, project, readFile = (file) => fs.readF
 /** The doctor row's reading, `{ state, note, fix }`, for the session `env.CLAUDE_CODE_SESSION_ID` names in the
  * project `project`, whose rules file has the text `rulesText` (null when it has none). `n/a` where the project
  * declares no home. `stale` when the app's record of the session holds another model or level than it is held to,
- * the lead's level for a lead (`leadTitle` of the record's title): the fix says what it holds and gives the line for
+ * the lead's level for a lead (`leadTitle` of the record's title, or `driftedLeadTitle`, which adds the rename): the fix says what it holds and gives the line for
  * the user. `ok` otherwise; the note then says when the session was not checked, with no session id or no app record
  * of it. The note carries `settingsNotes` in every state. `claudeDir` is the folder of his user settings. */
 export function modelHomeHealth({
@@ -97,7 +97,9 @@ export function modelHomeHealth({
     if (record === null) notes.push('this session has no app record that can be read, so its model and level were not checked (js-harness rules applied lists the sessions off the home)');
   }
   if (record !== null) {
-    const lead = leadTitle(record.title ?? '');
+    // A lead's title off its shape is held to the lead's level too (odd/tasks/senior-orchestrator.md, T8).
+    const drifted = driftedLeadTitle(record.title);
+    const lead = leadTitle(record.title ?? '') || drifted;
     const { model, effort } = heldOfRole(home, { lead, senior: seniorTitle(record.title ?? '') });
     const held = { model, effort };
     if (offHome(record, held) !== null) {
@@ -105,6 +107,7 @@ export function modelHomeHealth({
       const line = typeof held.model === 'string' && typeof held.effort === 'string' ? ` To give him: ${menuLine(held)}` : '';
       fix.push(`this session's menu holds ${said(record)} and it is held to ${said(held)}; a session cannot change its own: ${who}.${line}`);
     }
+    if (drifted) fix.push(`this session's title ${JSON.stringify(record.title)} is a lead's off its shape, so no reader gives it the lead's role (sessions --address orchestrator finds none): rename it "<code> ORQ · <purpose>"`);
   }
   notes.push(...settingsNotes(home, readSettings({ claudeDir, project, readFile })));
   return { state: fix.length > 0 ? 'stale' : 'ok', note: notes.join('; '), fix };
