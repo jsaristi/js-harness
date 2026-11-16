@@ -1,9 +1,9 @@
 # again-subrange: an --again over part of a range does not clear an owed correction
 
 ## State
-JH 207, worktree D:/js-harness-worktrees/again-subrange, branch feat/again-subrange, PR 898 (jsaristi/js-harness#898),
-back to draft on the lead's word (L16). T4 done (L17). Next: its reviews, push, gh pr ready 898, notify ready --pr 898 (the lead lands on it). T5 predates the branch: open.
-T3 open (the lead's word). The wait for notices to 207 runs until this session closes.
+JH 207, worktree D:/js-harness-worktrees/again-subrange, branch feat/again-subrange, PR 898 (jsaristi/js-harness#898).
+Spec 1 and T4 built and reviewed (L5-L18). Next: push, gh pr ready 898, notify ready --pr 898; the lead lands on it.
+Open: T3 (L84, the lead's word), T5 (predates the branch, L16). The wait for notices to 207 runs until this session closes.
 
 ## Goal
 A clean Codex review at a head that owes a correction settles that correction only where it reads the whole range the
@@ -83,3 +83,4 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
 - L15 2026-11-16, 6dfbadea reviewed: Codex correct, its 2 P2 rechecked fixed (98,929 input tokens); lenses: risk 0, reliability 1 SUGGESTION (no test pins lastAt and mergeOwnAt: T4), every earlier lens finding rechecked fixed. Targeted files 602 of 607, 0 fail, 5 skipped.
 - L16 2026-11-16, the lead: "put PR 898 back to draft now ... Send notify --kind ready --pr 898 only when it is ready to land; I land it on that notice. Your T5 ...: fix it in PR 898, tests first, unless it predates the branch; if it predates, say so and leave it as an open task." Done: draft. T5 predates: the same probe on main's code (review-gate head db114bff, in main; scratchpad probes3/a-span.main.out) passes too, so it stays open. A ready notice had been recorded at 14:04 (`2026-11-16T19:04:52Z`); the next one comes after T4.
 - L17 2026-11-16, T4 by a writer sub-agent, checked here: two tests, a `recheckThrough` unit test in codex-review-recheck.test.mjs (a clean record at a merge from its second parent after the merge's own owing record) and a push-row test in codex-review.test.mjs (the three-review warning after a clean review of the merge from main). Scratchpad mutate.mjs: `lastAt` raw gives 2 failures, `mergeOwnAt` raw 1, `atFrom` raw 1 (L14's test); with the code as it is, recheck unit 36 of 36 and codex-review.test.mjs 224 of 225 (1 skipped, the symlink test, EPERM). The writer's report says `mergeOwnAt` sits in `correctionOwed` (codex-review-rows.mjs:144).
+- L18 2026-11-16, cfbb25df reviewed: Codex correct, 0 findings (73,184 input tokens); lens reliability 0 findings (tests only, so risk was not pertinent). Next: push, ready.
