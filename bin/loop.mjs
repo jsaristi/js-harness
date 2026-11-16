@@ -31,6 +31,8 @@ import { readStalled } from './lib/stall.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { SIGNIN_WARN_DAYS, readSigninExpiry, signinTold } from './lib/signin-expiry.mjs';
+import { modelHomeHealth } from './lib/home-doctor.mjs';
+import { readProjectRulesText } from './lib/host-update.mjs';
 
 // The lead's cut (F8 S7, odd/tasks/f8-s7-topology.md, spec 1): the lead is cut at a phase's close or after this many
 // compactions of its session, the diet's starting line (docs/proposals/harness-diet.md, section 6), which S8 measures.
@@ -404,6 +406,33 @@ function stalledLine(item) {
   return `STALLED: ${name} — no commit, notice or gate since ${hourOf(Date.parse(item.quietSince))}, holding ${held} of ${hourOf(Date.parse(item.holding.at))}: ${text}`;
 }
 
+/** The HOME lines of the session `session` (`modelHomeHealth`'s fixes, through `ctx.leadHome`), or none: none
+ * outside a session, none when they were told last (the mark `markFile` keeps their text), and none when the reading
+ * fails, since doctor says it then. */
+function leadHomeLines(ctx, session, markFile) {
+  if (session === null || !ctx.leadHome) return [];
+  let fix;
+  try {
+    fix = ctx.leadHome(ctx.env, mainCheckout(ctx.run, path.resolve(ctx.cwd))).fix;
+  } catch {
+    return [];
+  }
+  const lines = fix.map((line) => `HOME: ${line}`);
+  let told = '';
+  try {
+    told = JSON.parse(ctx.readFile(markFile)).told ?? '';
+  } catch {
+    // No mark is nothing told.
+  }
+  if (lines.join('\n') === told) return [];
+  try {
+    ctx.writeFile(markFile, `${JSON.stringify({ told: lines.join('\n') })}\n`);
+  } catch (err) {
+    ctx.out(`the lead's HOME line could not keep its mark ${markFile}: ${err.code ?? err.message}`);
+  }
+  return lines;
+}
+
 /** The body of the lead's heartbeat: ends when neither the gate log nor the channel record was written for
  * `--quiet` minutes (a stall: nothing on the machine moves), when a work session that holds handed work crosses
  * `--stall` minutes with no commit, notice or gate, or after `--max` hours. One silent session among busy ones never
@@ -601,9 +630,12 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   const tellAway = (found, now) => away.tell(found, now);
   // Every line that ends the loop is followed by the sign-in's line, from its margin on, and by the reviews still due,
   // so whatever wakes the lead names them. The ending's own lines are said first: the sign-in's may wait on a reading.
+  let homeLines = [];
   const ending = (lines, dues, code) => {
     for (const line of lines) ctx.out(line);
-    for (const line of [...signinLines(), ...dues.map((due) => due.line)]) ctx.out(line);
+    // The lead's HOME lines, said at the start already when the loop ends at its start.
+    const home = ctx.now() === started ? [] : homeLines;
+    for (const line of [...signinLines(), ...home, ...dues.map((due) => due.line)]) ctx.out(line);
     return code;
   };
   const started = ctx.now();
@@ -640,6 +672,11 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     ctx.out(signin.line);
     signin.saidAt = started;
   }
+  // The lead's own menu against its level (odd/tasks/senior-orchestrator.md, T8): what doctor finds of this session,
+  // said at the start and after whatever ends the loop, once per value; it never ends the loop, since the lead does not
+  // change its own menu and a line that woke it at each relaunch would be a loop.
+  homeLines = leadHomeLines(ctx, session, path.join(loopsFolder(home, slug), 'home', `${session}.json`));
+  for (const line of homeLines) ctx.out(line);
   let compactions = compactionsNow();
   for (const item of stalledAt(started)) {
     told.set(identity(item), crossing(item));
@@ -792,6 +829,8 @@ export async function loopMain(
     // The heartbeat's reading of when the stored claude.ai sign-in ends: the product's own, since a sign-in that ends
     // stops any project's unattended work. It runs the Claude CLI, only for the user's own home; `null` reads nothing.
     signinExpiry = (home) => readSigninExpiry({ home }),
+    // The lead's own menu against the project's home, as doctor reads it (bin/lib/home-doctor.mjs).
+    leadHome = (env, project) => modelHomeHealth({ project, rulesText: readProjectRulesText(project), claudeDir: env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude'), env, homedir }),
   } = {},
 ) {
   let parsed;
@@ -807,7 +846,7 @@ export async function loopMain(
   const slug = projectSlug(mainCheckout(run, cwd));
   // Where Claude Code keeps its session records, as `check`'s sub-agent row reads them (bin/lib/subagent-records.mjs).
   const claudeDir = env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude');
-  const ctx = { env, cwd, out: stdout, err: stderr, now, sleep, pid, platform, snapshot, kill, spawn: spawnChild, readdir, mtime, readFile, readTail, writeFile, claudeDir, run, windowsDaily, throughputTick, hostWatch, signinExpiry };
+  const ctx = { env, cwd, out: stdout, err: stderr, now, sleep, pid, platform, snapshot, kill, spawn: spawnChild, readdir, mtime, readFile, readTail, writeFile, claudeDir, run, windowsDaily, throughputTick, hostWatch, signinExpiry, leadHome };
   if (parsed.verb === 'status') return status(ctx, parsed, loopsFolder(home, slug));
   if (parsed.verb === 'heartbeat' || parsed.verb === 'channel-watch') {
     try {
