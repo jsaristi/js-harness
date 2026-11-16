@@ -1,19 +1,16 @@
 # plan-orchestrator — a Plan orchestrator above the lead (JH SR, design only)
 
 ## State
-Design only, no code. Version 3, read three times (reads 2a17bbe1, 5eed176c, b88ea402). The first two reads' 48
-findings are taken (L9, L10). The third still finds real failures: its 21 findings are open and listed in L11, told
-to him as problems on the page; no fourth round. His line 1598 is Spec 8 since L12, added after the last read.
-T1 is closed (L13): the page is published, https://claude.ai/artifact/1ppv1NAxbrfv3THX96Gt7b, and the four
-questions are recorded as 307 to 310 for the lead to put to him one at a time. Draft PR 894, branch
-`claude/dreamy-nash-50fa03`, worktree `rule-lead-effort-split-aac740`. Left, all the lead's: whether a new session
-on a fresh context corrects L11 before he reads the page; landing this PR and the notice of Spec 8 (phase 0's step
-1, T10); his typed line for question 1; opening session X for T3. His line of L14 (try it, watch the Fable usage, take
-the advisor off the swarms if it is excessive) is recorded and changes nothing of the design. Question 2 (308) is
-answered A, the lead opens the work sessions (L15). Questions 3, 4 and 1 (309, 310, 307) are answered by taps
-too (L16): Fable 5.2 at high; sub-agents inside each session; his questions only in the Plan. For question 1 his
-typed line is still owed before any rule changes, and A makes L11's finding on his absence a task, T11. The
-measures:
+Design only, no code. Version 3, read three times (reads 2a17bbe1, 5eed176c, b88ea402): the first two reads' 48
+findings are taken (L9, L10); the third's 21 are open in L11 and told to him as problems on the page
+(https://claude.ai/artifact/1ppv1NAxbrfv3THX96Gt7b), with no fourth round. Everything from L12 on was added after
+the last read and no reader has read it: Spec 8 (L12), his line on the advisor and the swarms (L14), his four
+answers (L15, L16: the lead opens the work sessions; Fable 5.2 at high; sub-agents inside each session; his
+questions only in the Plan, by a tap, the typed line still owed), T11 and Spec 9. On 2026-11-16 he typed yes to
+starting phase 0 with those problems said (L17, question 315), so PR 894 (branch `claude/dreamy-nash-50fa03`,
+worktree `rule-lead-effort-split-aac740`) goes ready and the lead lands it. Left: the lead stores the Plan's
+opening and tells him (phase 0's step 1, T10); his typed line for question 1; T11, how the lead knows he is away;
+T12, how each role reaches its session (Spec 9), JH SR's; a session for T3. The measures:
 `odd/tasks/plan-orchestrator-evidence/measures.md`.
 
 ## Goal
@@ -151,6 +148,7 @@ steps, and until question 1 is answered it runs under today's rules.
   spec 6: `node --test bin/guard.test.mjs`: none, new behaviour (a Plan start is held to one live Plan, its own worktree, then detached)
   spec 7: `node --test bin/lib/host-update.test.mjs`: none, new behaviour (the host-update step names the orchestrator session alone today, `bin/lib/host-update.mjs:194-205`)
   spec 8: `js-harness sessions`: none, new behaviour (no session holds a Plan title today; done when a Plan is working and the lead has told him, by a push notification and a line in its chat, that he can try it and how)
+  spec 9: `js-harness sessions --opening "JH SR · diseño del Orquestador Plan"`: none, new behaviour (a stored opening is what hands a session its role today; what else carries a role is the search of T12; done when the lead, the Plan and the senior each hold a role of their own that outlives the opening, through a compaction and a new session)
 - 4. Refutation: his complaint is the planning (Spec 2), so the request fails if the project's plan is being worked
   through. Run 2026-11-15: the roadmap's checkboxes at cb539ba8, its last commit before 2026-11-09, against
   `origin/main`. Result: 0 of the 15 steps open then are closed, 7 were added, and the done count stayed at 100,
@@ -185,7 +183,11 @@ steps, and until question 1 is answered it runs under today's rules.
 7. "El orquestador plan debe tener Remote control osea este y el Plan" (2026-11-16T02:22Z, 699d7c29 line 1389)
 8. "Me avisas cuando el orquestador plan este funcionando para comenzarlo a probar" (2026-11-16T03:02Z, 699d7c29
    line 1598)
-The times are UTC; in his local time all eight fall on 2026-11-15, between 17:16 and 22:02.
+9. "cada sesion por ejemplo Orquestador, Orquestador Plan y Senior deben saber cual es su rol y su funcion osea
+   cada uno debe no solo tener un prompt inicial sino un rol especifico que haga que funcione mejor"
+   (2026-11-16T18:58Z, 699d7c29 line 5054: the second half of his typed answer to question 315, whole in L17)
+The times are UTC; in his local time Specs 1 to 8 fall on 2026-11-15, between 17:16 and 22:02, and Spec 9 on
+2026-11-16 at 13:58.
 
 ## The design
 - **The role.** A session titled `<code> PLAN · <purpose>`, role `plan`: the onboarding's plan orchestrator, which
@@ -351,6 +353,12 @@ while the next task's design is read. The board is checked before each task star
   stretch is open most of the time it never fires. The reader's proposed fix (a line in phase 0's limits; the two
   files in a task's surfaces, absence read from the chat that holds him) is not taken here: it is a design change
   and needs its read, and this document has used its three. Before T6's question part. Route: not assigned.
+- [ ] T12 (kind: design) (9) How each role (the lead, the Plan, the senior) reaches its session beyond the opening,
+  so that it survives a compaction and a new session. First the search of `rule:reuse-first`, named: the
+  orchestrator skill, the agent types under `.claude/agents/`, the output styles, the opening store, the
+  SessionStart resume. Then a proposal with its double review, its cost said first, before anything is built.
+  Phase 0 does not wait for it: the Plan's phase 0 opening carries an explicit role section. Route: JH SR, at the
+  lead's word (L17).
 
 ## Log
 - L1 2026-11-15 local, his words: Specs 1 to 7, each read with `sessions --quote` by this session.
@@ -479,3 +487,19 @@ while the next task's design is read. The board is checked before each task star
   before" 1, 3 and 4, "Where he talks", "What runs at the same time", phase 0's step 2, T5, T6, T9 (closed) and
   T11 (new); none of these lines has been read by a reader. Not answered by any of the four: his approval of the
   page, and his line of L14 on the advisor.
+- L17 His words, typed on 2026-11-16 at 13:58 local (18:58Z) as his answer to question 315 in the lead's chat
+  (`js-harness sessions --quote 699d7c29-54c4-460e-a5e8-700b114eb251 5054`; the channel holds it as a verified
+  answer): "Si rranca  la fase 0 pero no solo eso, se me olvido decirte que cada sesion por ejemplo Orquestador,
+  Orquestador Plan y Senior deben saber cual es su rol y su funcion osea cada uno debe no solo tener un prompt
+  inicial sino un rol especifico que haga que funcione mejor". The question asked his approval of the design so
+  that he can talk to the Plan today, and told him what is not guaranteed: three reads used, the third's 21
+  problems open and listed on the page, T11 unsolved, his four answers entered after the last read and read by
+  nobody, the page older than them. It said a yes covers landing PR 894, storing the Plan's opening and telling
+  him, after which he opens `JH PLAN · planes` on Fable 5.2 at high with Remote Control and pastes that message;
+  and that it does not cover building anything (T3 to T7), the cost of T11's read, or a change of his rules: until
+  he types question 1's line, the lead keeps asking him the decisions. So the first half starts phase 0 and takes
+  PR 894 out of draft; it is not a yes to the 21 findings being solved. The second half is new and is Spec 9, with
+  its bar line and T12, at the lead's word (its message to JH SR): a role of its own for each of the lead, the
+  Plan and the senior, not only an opening prompt. Phase 0 does not wait for T12: JH SR writes the Plan's phase 0
+  opening with an explicit role section and the lead stores it. Spec 9, its bar line and T12 were added after the
+  last read and no reader has read them.
