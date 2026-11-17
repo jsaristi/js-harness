@@ -678,3 +678,25 @@ test('a head whose correction a record spanning it read only part of still owes 
   // No record spans it: the push reads it where it covers the newest commit, as before.
   assert.equal(spannedDebt({ heads, records: [owes], runs, atOrBefore }), null);
 });
+
+test('a spanning record settles a head only where it read what every standing record that owes there read, and only on the history checked (Codex on 2d0a5ee)', () => {
+  const order = [A, B, C, D, E];
+  const atOrBefore = (older, newer) => order.indexOf(older) <= order.indexOf(newer);
+  const f0 = finding('[P2] Loses a record');
+  const fy = finding('[P2] Drops a line', { start: 9, end: 9 });
+  const runs = [
+    runLine('r1', { answer: { findings: [f0], verdict: 'incorrect' } }),
+    runLine('r4', { answer: { findings: [fy], verdict: 'incorrect' } }),
+    runLine('r2', { answer: { findings: [], verdict: 'correct' } }),
+  ];
+  // A..C and the narrower B..C both owe at C; a clean B..E read what B..C read, not A..B.
+  const both = [record(A, C, { run: 'r1' }), record(B, C, { run: 'r4' }), record(B, E, { run: 'r2' })];
+  assert.equal(spannedDebt({ heads: [E, D, C, B], records: both, runs, atOrBefore })?.at, C);
+  // A..C owes and B..D spans it on the history checked; a clean A..S of another branch, whose head is not on it, settles
+  // nothing, and a record of that branch triggers nothing either.
+  const S = 'f'.repeat(40);
+  const sibling = (older, newer) => (newer === S ? older === A || older === B || older === C || older === S : atOrBefore(older, newer));
+  const records = [record(A, C, { run: 'r1' }), record(B, D, { run: 'r2' }), record(A, S, { run: 'r2' })];
+  assert.equal(spannedDebt({ heads: [D, C, B], records, runs, atOrBefore: sibling })?.at, C);
+  assert.equal(spannedDebt({ heads: [D, C, B], records: [record(A, C, { run: 'r1' }), record(B, S, { run: 'r2' })], runs, atOrBefore: sibling }), null);
+});

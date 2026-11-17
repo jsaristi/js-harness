@@ -1,3 +1,5 @@
+import { recheckAt } from './lib/codex-review-turns.mjs';
+import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -2343,4 +2345,25 @@ test('a clean --again that spans the head owing a correction from inside its ran
   record(root, base, top, { run: 'whole' });
   const settled = checkCodexReviews(root, 'HEAD');
   assert.equal(settled.pass, true, settled.detail);
+});
+
+test('the recheck a spanned debt names is what a run from that head makes, and its record lets the push pass (T5, the reliability lens on 2d0a5ee)', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const middle = commit(root, 'b.js', 'two', 'feat: two');
+  const owing = commit(root, 'c.js', 'three', 'feat: three');
+  run(root, { id: 'owes', base, from: base, head: owing, answer: { verdict: 'incorrect', findings: [finding] } });
+  record(root, base, owing, { run: 'owes' });
+  const fixed = commit(root, 'c.js', 'three, fixed', 'fix: three');
+  run(root, { id: 'span', base: middle, from: middle, head: fixed, answer: { verdict: 'correct', findings: [] } });
+  record(root, middle, fixed, { run: 'span' });
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, false);
+  // What codex-review reads from the head the refusal names: the recheck of that head's findings.
+  const state = recheckAt(root, { from: owing, tip: fixed, runs: readCodexReviewRuns(root) });
+  assert.equal(state.kind, 'recheck', JSON.stringify(state));
+  assert.equal(state.of, owing);
+  run(root, { id: 'recheck', base: owing, from: owing, head: fixed, answer: { verdict: 'correct', findings: [] }, recheck: { of: owing, findings: 1, fixed: 1, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } });
+  record(root, owing, fixed, { run: 'recheck', recheckOf: owing });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
 });
