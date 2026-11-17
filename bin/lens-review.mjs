@@ -26,7 +26,7 @@ import { lensCandidate } from './lib/lens-candidate.mjs';
 import { LENS_NAMES, LENSES, lensPrompt } from './lib/lens-prompts.mjs';
 import { LENS_ANSWER_SCHEMA, lensResult } from './lib/lens-result.mjs';
 import { claudeHome } from './lib/model-home.mjs';
-import { appendLensReview, INCOMPLETE, keepLensAnswer, LENS_REVIEW_SCHEMA, readLensReviews, startLensRun } from './lib/lens-reviews.mjs';
+import { admittedLensReviews, appendLensReview, endLensRun, INCOMPLETE, keepLensAnswer, LENS_REVIEW_SCHEMA, startLensRun } from './lib/lens-reviews.mjs';
 
 // The model each lens runs on: the Claude home's (`rule:session-model`), a full id, read from the declared list
 // wherever the lenses run. Until 2026-11-10 the lenses ran on a short name, and a short name gives whatever the engine
@@ -224,10 +224,17 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
     return 1;
   }
   const range = `${candidate.base.slice(0, 7)}..${candidate.head.slice(0, 7)}`;
-  // A range that starts where a reviewed lens record ended rechecks what each of its lenses found there (spec 7).
-  const earlier = readLensReviews(cwd).findLast((rec) => rec?.outcome === 'reviewed' && rec.head === candidate.base && Array.isArray(rec.results));
-  const priorOf = (lens) => earlier?.results.find((one) => one?.lens === lens)?.findings ?? [];
-  const rechecks = earlier !== undefined && (picked.names ?? []).some((lens) => priorOf(lens).length > 0);
+  // A range that starts where a reviewed lens record ended rechecks what each of its lenses found there (spec 7). Only
+  // a record a run line admits counts (B2-2): one appended by hand would turn the recheck of a correction into a review.
+  const lensRecords = admittedLensReviews(cwd);
+  // Each lens rechecks what every such record of it found there, oldest first, so that no record a lens left owing at
+  // that head is out of reach of the recheck (Codex on S6: two runs ending at one head), and names their runs.
+  const atBase = lensRecords.records.filter((rec) => lensRecords.admitted(rec) && rec.outcome === 'reviewed' && rec.head === candidate.base && Array.isArray(rec.results));
+  const foundBy = (rec, lens) => rec.results.find((one) => one?.lens === lens && one.outcome === 'complete')?.findings ?? [];
+  const runsOf = (lens) => atBase.filter((rec) => foundBy(rec, lens).length > 0).map((rec) => rec.run);
+  const priorOf = (lens) => atBase.flatMap((rec) => foundBy(rec, lens));
+  const rechecked = Object.fromEntries((picked.names ?? []).filter((lens) => priorOf(lens).length > 0).map((lens) => [lens, runsOf(lens)]));
+  const rechecks = Object.keys(rechecked).length > 0;
   const record = {
     schema: LENS_REVIEW_SCHEMA,
     base: candidate.base,
@@ -239,7 +246,13 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
   // The run line goes first, before any lens runs, and the record names it: a check admits no record that names none.
   let runId = null;
   const start = () => (runId ??= startLensRun(cwd, record));
-  const write = (fields) => appendLensReview(cwd, { ...record, run: start(), ...fields, reviewedAt: new Date().toISOString() });
+  // The record first, then the run's last line with its result: a run stopped between the two leaves a record no check
+  // admits, never a result line a record written by hand could name (V2).
+  const write = (fields) => {
+    const file = appendLensReview(cwd, { ...record, run: start(), ...fields, reviewedAt: new Date().toISOString() });
+    endLensRun(cwd, { id: runId, base: record.base, head: record.head, subjectHash: record.subjectHash, outcome: fields.outcome, results: fields.results, recheckOf: fields.recheckOf, rechecked: fields.rechecked });
+    return file;
+  };
   if (skip !== undefined) {
     const file = write({ outcome: 'unavailable', reason: skip });
     stdout(`Recorded a skip of the Claude lenses over ${range} (${skip}) in ${file}: the push lets it through, and check, doctor and merge-queue list it until a review covers the range.`);
@@ -276,7 +289,7 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
     results.push(lensOutcome(lens, run({ lens, prompt: lensPrompt(lens, intent, priorOf(lens)), block: candidate.block, env: lensEnv(env), cwd }), candidate, keep));
   }
   const complete = results.every((result) => result.outcome === 'complete');
-  const file = write({ outcome: complete ? 'reviewed' : INCOMPLETE, lenses: picked.names, lensReason: reason, results, ...(rechecks ? { recheckOf: earlier.run } : {}) });
+  const file = write({ outcome: complete ? 'reviewed' : INCOMPLETE, lenses: picked.names, lensReason: reason, results, ...(rechecks ? { recheckOf: Object.values(rechecked)[0].at(-1), rechecked } : {}) });
   for (const result of results) {
     if (result.outcome !== 'complete') {
       stderr(`${result.lens}: incomplete, ${result.why}${result.answered === undefined ? '' : `; it answered: ${JSON.stringify(result.answered)}`}`);
@@ -289,7 +302,7 @@ export function lensReviewMain(argv = process.argv.slice(2), env = process.env, 
     const prior = priorOf(result.lens);
     if (prior.length > 0) {
       const { fixed, notFixed, blocking } = classifyRecheck({ findings: result.findings.map((one) => ({ title: one.claim })) }, prior.length).counts;
-      stdout(`${result.lens}: rechecked ${prior.length} earlier finding${prior.length === 1 ? '' : 's'} of ${earlier.run}: ${fixed} fixed, ${notFixed} not fixed, ${blocking} blocking`);
+      stdout(`${result.lens}: rechecked ${prior.length} earlier finding${prior.length === 1 ? '' : 's'} of ${rechecked[result.lens].join(', ')}: ${fixed} fixed, ${notFixed} not fixed, ${blocking} blocking`);
     }
   }
   if (!complete) {

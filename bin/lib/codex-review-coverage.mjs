@@ -9,9 +9,11 @@
 // (odd/tasks/codex-review-cost.md). Were the two to count apart, the command would call a range covered
 // that the push then refuses, or pay again for one the push lets through.
 import { spawnSync } from 'node:child_process';
-import { isValidCodexReview, leftMarkedFilesOut, NOTHING_TO_REVIEW, readCodexReviews } from './codex-reviews.mjs';
+import path from 'node:path';
+import { codexReviewsPath, isValidCodexReview, leftMarkedFilesOut, NOTHING_TO_REVIEW, readCodexReviews } from './codex-reviews.mjs';
 import { NO_RENAMES, RENAMES } from './codex-review-parts.mjs';
-import { leftOutOf } from './codex-review-scope.mjs';
+import { readCodexReviewRuns } from './codex-review-runs.mjs';
+import { leftOutOf, rangeFiles, reviewScope } from './codex-review-scope.mjs';
 import { lensCandidate } from './lens-candidate.mjs';
 
 /** Trimmed stdout of a successful `git <args>` run in `cwd`, else `null`. `input`, when given, is what
@@ -194,8 +196,10 @@ function stillHashes(cwd, rec, spawn) {
  * `beyondTip: false` is for the rows that refuse, the push's and the merge door's, and for the command whose record
  * they ask for: a record whose head lies past the tip then covers nothing, and is given back in `beyond`, as
  * `{ rec, covered }`, for a row to name. The door reads a pull request merged onto main, past which no head lies, so a
- * cut inside a reviewed range passed the push and was refused there (docs/FAILURES.md, door-covers-past-tip). */
-export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read = readCodexReviews, isValid = isValidCodexReview, beyondTip = true }) {
+ * cut inside a reviewed range passed the push and was refused there (docs/FAILURES.md, door-covers-past-tip).
+ *
+ * `rangeIds` is every commit of `from..tip`, merges included, for a row that names only the records of its range. */
+export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read, isValid, beyondTip = true }) {
   // Every commit of the range, merges included: a record whose head is one is worth expanding.
   const inRange = gitOut(spawn, cwd, ['rev-list', `${from}..${tip}`]);
   if (inRange === null) return { unknown: COMMITS_UNREAD };
@@ -256,8 +260,13 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read 
   };
   const codeCommits = commits.filter(isCode).map(ownFiles).filter(isCode);
 
-  const records = read(cwd, { spawn, where });
-  const valid = records.filter(isValid);
+  // Codex's records, unless a caller names its own: those a run line admits (`admittedCodexReviews`, S5).
+  const codex = read === undefined && isValid === undefined ? admittedCodexReviews(cwd, { spawn, where }) : null;
+  const records = codex ? codex.records : (read ?? readCodexReviews)(cwd, { spawn, where });
+  // A record of nothing to review covers only where the range holds its head (`onlyWhole` below), so admission, which asks
+  // git of it, is asked of no other: one of them outside the range is taken by its shape and then skipped (lens on S5).
+  const admit = codex ? (rec) => (rec.outcome === NOTHING_TO_REVIEW && !rangeIds.has(rec.head) ? isValidCodexReview(rec) : codex.admitted(rec)) : null;
+  const valid = records.filter(admit ?? isValid ?? isValidCodexReview);
   // A record can cover part of the range only when its head is in it, or lies past the tip (a review of
   // base..D still covers C when C is the tip). Any other record is unrelated, and expanding it would cost
   // one git process per record ever written.
@@ -266,6 +275,19 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read 
   // revert), so a tip short of its head is a patch nobody reviewed. And a review that left out files the
   // project marks (`leftMarkedFilesOut`): the marks are those of its head, and a commit of its range can
   // be the one that adds them, so at a tip short of that head a file it left out can be code.
+  // And the marks a review left out are those of its head, which a later commit can take off: a file code at the tip
+  // but marked at the record's head was read by nobody, so its commit is not covered by that record (B1-1, the full
+  // audit of 2026-11-14). What it left out is read from its range as the review read it (`rangeFiles`), so a file of
+  // code moved into a marked path, which a review reads whole, stays read (Codex on S3). A range that cannot be read
+  // that way covers none of the code commits it reaches.
+  const readAtHead = (rec, covered) => {
+    const reached = codeCommits.filter((commit) => covered.has(commit.id));
+    if (reached.length === 0) return covered;
+    const left = leftByReview(cwd, rec, { spawn, where });
+    const unread = (commit) => left === null || commit.files.some((file) => !leftOut.has(file) && left.has(file));
+    const drop = new Set(reached.filter(unread).map((commit) => commit.id));
+    return drop.size === 0 ? covered : new Set([...covered].filter((id) => !drop.has(id)));
+  };
   const outside = (rec) => !rangeIds.has(rec.head);
   const onlyWhole = (rec) => rec.outcome === NOTHING_TO_REVIEW || leftMarkedFilesOut(rec);
   const mayLiePast = valid.filter((rec) => outside(rec) && !onlyWhole(rec));
@@ -282,10 +304,98 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read 
     }
     const covered = coveredBy(spawn, cwd, rec);
     if (!covered) ignored += 1;
-    else (beyondTip || !outside(rec) ? covers : beyond).push({ rec, covered });
+    else (beyondTip || !outside(rec) ? covers : beyond).push({ rec, covered: leftMarkedFilesOut(rec) ? readAtHead(rec, covered) : covered });
   }
   const uncovered = codeCommits.filter((commit) => !covers.some(({ covered }) => covered.has(commit.id)));
-  return { codeCommits, covers, uncovered, invalid: records.length - valid.length, ignored, stale, ...(beyondTip ? {} : { beyond }) };
+  return { codeCommits, covers, uncovered, invalid: records.length - valid.length, ignored, stale, rangeIds, ...(beyondTip ? {} : { beyond }), ...(codex?.where?.commonGitDir !== undefined ? { where: codex.where } : {}) };
+}
+
+/** The Codex review records of the repository at `cwd` and which of them are evidence, as `admittedLensReviews` says
+ * it of the lenses': `{ records, admitted }`. A review is evidence only where the run log names it: every run it
+ * names (`run`, or `runs` for one in parts) has a line in the log, a line of the last one ends at its head and starts
+ * at its base and says it reviewed; a run in parts is named whole; a recheckOf is the recheck its line ran; and at one head each record names a line newer than the last admitted there (F1, V1). A record anyone could append by hand, as the 78 written before
+ * run lines were, covers nothing (C-3 and B2-12 of the full audit of 2026-11-14; his answers to questions 293 and 299
+ * on 2026-11-15). A skip is admitted as it is, since every row lists it as no review; a range with nothing to review
+ * only where git finds that it changes no file a review reads from the merge base of its ends, asked of such a record
+ * alone. */
+export function admittedCodexReviews(cwd, { spawn = spawnSync, where } = {}) {
+  // Where the two files are is asked of git once, as reading the records alone asked it: the rows count their processes.
+  const file = where?.commonGitDir !== undefined ? null : codexReviewsPath(cwd, { spawn, where });
+  const at = file === null ? where : { ...where, commonGitDir: path.dirname(path.dirname(file)) };
+  const records = readCodexReviews(cwd, { spawn, where: at });
+  const linesOf = new Map();
+  // Where each line stands in the log, which orders the records of one head (R4).
+  const placeOf = new Map();
+  for (const line of readCodexReviewRuns(cwd, { spawn, where: at })) {
+    if (typeof line?.id !== 'string') continue;
+    placeOf.set(line, placeOf.size);
+    if (!linesOf.has(line.id)) linesOf.set(line.id, []);
+    linesOf.get(line.id).push(line);
+  }
+  const lastAt = new Map();
+  const admitted = new Set();
+  const nothing = [];
+  for (const rec of records) {
+    if (!isValidCodexReview(rec)) continue;
+    if (rec.outcome === NOTHING_TO_REVIEW) nothing.push(rec);
+    if (rec.outcome !== 'reviewed') {
+      if (rec.outcome !== NOTHING_TO_REVIEW) admitted.add(rec);
+      continue;
+    }
+    const ids = Array.isArray(rec.runs) ? rec.runs : typeof rec.run === 'string' ? [rec.run] : [];
+    if (ids.length === 0 || !ids.every((id) => typeof id === 'string' && linesOf.has(id))) continue;
+    // The line of each run that states the range says it reviewed: a failed, timed-out or not-inspected run writes its
+    // range too, and a record naming it would cover code no review read (F1).
+    const stating = ids.map((id) => linesOf.get(id).findLast((line) => line.head === rec.head && (line.base === rec.base || line.from === rec.base) && line.outcome === 'reviewed'));
+    if (stating.includes(undefined)) continue;
+    // A run in parts is named whole, its parts 1..of (R1): one part is never a review of the range.
+    const of = stating[0].part?.of;
+    if ((ids.length > 1 || of !== undefined) && !(Number.isInteger(of) && ids.length === of && stating.every((line) => line.part?.of === of) && new Set(stating.map((line) => line.part?.index)).size === of)) continue;
+    // A recheck is one its run ran (R3): a recheckOf no line of its run says reads an owed correction as rechecked.
+    if (typeof rec.recheckOf === 'string' && !stating.some((line) => line.recheck?.of === rec.recheckOf)) continue;
+    // At one head the records come in the order of their runs, each with a line newer than the last admitted there: a
+    // record appended after a review, naming an older run of that head, or mixing older parts with that review's newest
+    // line, would be the last word there and outrank it (R4, the advisor on V1). A line may be named again: an --again
+    // reuses a part kept from an earlier run under its id, with no new line (Codex on c3c95d63).
+    const place = Math.max(...stating.map((line) => placeOf.get(line)));
+    if (place <= (lastAt.get(rec.head) ?? -1)) continue;
+    lastAt.set(rec.head, place);
+    admitted.add(rec);
+  }
+  const asked = new Map();
+  const changesNoCode = (rec) => {
+    if (!asked.has(rec)) {
+      // From the merge base of its two ends, as the review read it when its base had moved past the fork point (Codex on S5).
+      const names = gitOut(spawn, cwd, ['diff', '--name-only', '-z', '--no-renames', '--no-relative', `${rec.base}...${rec.head}`]);
+      const files = names === null ? null : names.split('\0').filter(Boolean);
+      const left = files === null ? null : leftOutOf(files, { cwd, source: rec.head, spawn, where });
+      asked.set(rec, left !== null && files.every((file) => left.has(file)));
+    }
+    return asked.get(rec);
+  };
+  // `where`: where the two files were read, so a caller reads them again without asking git (V3).
+  return { records, admitted: (rec) => admitted.has(rec) || (nothing.includes(rec) && changesNoCode(rec)), where: at };
+}
+
+/** The Codex review records a debt is read from: every record, with a review kept only where a run line admits it
+ * (`admittedCodexReviews`), so the run and the push read what is owed by one evidence rule (F2, the opus verifier on
+ * pull request 896). Admission is asked of reviews alone, a lookup that starts no git. */
+export function admittedRecords(cwd, { spawn = spawnSync, where } = {}) {
+  const codex = admittedCodexReviews(cwd, { spawn, where });
+  return codex.records.filter((rec) => rec.outcome !== 'reviewed' || codex.admitted(rec));
+}
+
+/** The paths the review of `rec` left out, read from its range with the marks of its head as `js-harness codex-review`
+ * reads them (`rangeFiles`, renames on unless one brings a file left out into one read), or `null` when git cannot
+ * say. */
+function leftByReview(cwd, rec, { spawn, where }) {
+  try {
+    const numstatOf = (renames) => gitOut(spawn, cwd, ['diff', '--numstat', '-z', renames, '--no-relative', rec.base, rec.head]);
+    const scope = rangeFiles(numstatOf, (names) => leftOutOf(names, { cwd, source: rec.head, spawn, where }));
+    return scope.failed ? null : new Set(reviewScope(scope.files, scope.why).left);
+  } catch {
+    return null;
+  }
 }
 
 /** The line of each `uncovered` commit that a record of `beyond` (`reviewCoverage` with `beyondTip: false`) covers

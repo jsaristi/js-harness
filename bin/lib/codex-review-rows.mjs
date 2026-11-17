@@ -7,14 +7,14 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { reviewParts } from './codex-review-parts.mjs';
 import { MAX_PARTS_WITHOUT_FLAG, partsBound } from './codex-review-plan.mjs';
-import { beyondLines, defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, remoteHoldsNoBranch, reviewCoverage, reviewStart } from './codex-review-coverage.mjs';
-import { mergeTurn, recheckAt, turnsCheaper } from './codex-review-turns.mjs';
+import { beyondLines, defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REVIEW, notReviews, rangeDiff, rangeStart, remoteHoldsNoBranch, reviewCoverage, reviewStart, admittedRecords } from './codex-review-coverage.mjs';
+import { atOrBeforeIn, mergeTurn, recheckAt, turnsCheaper } from './codex-review-turns.mjs';
 import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './codex-reviews.mjs';
 import { readCodexReviewRuns } from './codex-review-runs.mjs';
-import { classifyRecheck, ESCALATION_SAID, priorLine, recheckState, runAnswerFindings } from './codex-review-recheck.mjs';
+import { classifyRecheck, decidingRecord, ESCALATION_SAID, priorLine, recheckState, runAnswerFindings } from './codex-review-recheck.mjs';
 import { counted, leftOutOf, rangeFiles, reviewScope } from './codex-review-scope.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit, harnessOfTree, workingTree } from './project-functions.mjs';
-import { firstStep, noStep } from './next-step.mjs';
+import { commandStep, firstStep, noStep, reviewCommand } from './next-step.mjs';
 import { reviewStep } from './lens-review-rows.mjs';
 // The Claude lens rows, beside Codex's, for `check` to import from one place (odd/tasks/f8-s1-reviews.md, T4).
 export { checkLensReviews } from './lens-review-rows.mjs';
@@ -65,13 +65,13 @@ function codexReviewCoverage(cwd, head, { spawn, remote }) {
     return unknown(`cannot read which files of ${base}..${head} a Codex review leaves out (\`git check-attr --source\` failed; it needs git 2.40 or later)`, undefined, firstStep('use git 2.40 or later, which reads the marks of the files'));
   }
   if (coverage.unknown) return unknown(`cannot list the commits in ${base}..${head}`, undefined, noStep(`git did not list the commits in ${base}..${head}`));
-  const { codeCommits, covers, uncovered, beyond, invalid, ignored } = coverage;
+  const { codeCommits, covers, uncovered, beyond, invalid, ignored, where } = coverage;
   const noteParts = [
     invalid ? `${invalid} invalid record${invalid === 1 ? '' : 's'} ignored` : '',
     ignored ? `${ignored} record${ignored === 1 ? '' : 's'} ignored (base or head not found)` : '',
   ].filter(Boolean);
   const note = noteParts.length ? `; ${noteParts.join('; ')}` : '';
-  return { tip, baseRef, base, codeCommits, covers, uncovered, beyond, note };
+  return { tip, baseRef, base, codeCommits, covers, uncovered, beyond, note, where };
 }
 
 /** The lines that both rows print for the code commits no Codex review record covers: one per commit, with its
@@ -108,7 +108,7 @@ function coveredDetail({ codeCommits, base }) {
  * the commit the review of the commits no record covers starts at. Read past a merge, a merge's own record that owes
  * joins the debt below it (`recheckThrough`, codex-spend L24): the review after it is the recheck of both. `through`
  * says the debt was read past a merge, or joined there. */
-function correctionOwed(cwd, { codeCommits, covers, tip }, { spawn, below = null }) {
+function correctionOwed(cwd, { codeCommits, covers, tip, where }, { spawn, below = null }) {
   let from = below;
   let last;
   if (below === null) {
@@ -117,14 +117,21 @@ function correctionOwed(cwd, { codeCommits, covers, tip }, { spawn, below = null
     // Only a review of Codex's says what the code owes: a skip or a range that held nothing records no
     // review, so one written later, as to a document commit after the head, must not hide the debt.
     last = covers.filter(({ rec, covered }) => rec.outcome === 'reviewed' && covered.has(newest.id)).at(-1)?.rec;
-    if (last === undefined) return null;
-    from = last.head;
+    if (last !== undefined) from = last.head;
+    // Covered by records that are no review alone, a skip or a range with nothing to review, the newest code commit
+    // pays no correction either: what is owed is read from the tip as the next run reads it (`recheckAt`), and a
+    // commit and its revert above a review that owes leave it owed (Y1, JH 199's verifier on pull request 883).
+    else if (covers.some(({ covered }) => covered.has(newest.id))) [from, below] = [tip, tip];
+    else return null;
   }
   let records;
   let runs;
   try {
-    records = readCodexReviews(cwd, { spawn });
-    runs = readCodexReviewRuns(cwd, { spawn });
+    // Only a review a run line admits says what is owed (F2, the opus verifier on pull request 896): a bare record at
+    // the owing head read as the review the branch ends on, with nothing owed. Admission is asked of reviews alone.
+    // Where the coverage read them, git is not asked again: the plain row counts its processes (V3).
+    records = admittedRecords(cwd, { spawn, where });
+    runs = readCodexReviewRuns(cwd, { spawn, where });
   } catch {
     return null;
   }
@@ -133,9 +140,10 @@ function correctionOwed(cwd, { codeCommits, covers, tip }, { spawn, below = null
   // Git is asked more only past a merge: most pushes end on a record of no merge, and pay nothing for this. So too
   // the head of a recheck of a merge's own record, which may have been the third review of a debt below the merge
   // (`recheckThrough`, codex-spend L26): read alone, it would name a second recheck the run then refuses.
-  const mergeOwnAt = (head) => records.findLast((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed' && rec.head === head)?.diff === 'remerge';
+  const atOrBefore = atOrBeforeIn(cwd, spawn);
+  const mergeOwnAt = (head) => decidingRecord({ from: head, records, runs, atOrBefore }).kept?.diff === 'remerge';
   if (last !== undefined && (last.diff === 'remerge' || (typeof last.recheckOf === 'string' && mergeOwnAt(last.recheckOf)))) below = from;
-  let state = recheckState({ from, records, runs });
+  let state = recheckState({ from, records, runs, atOrBefore });
   if (below !== null) state = recheckAt(cwd, { from, tip, records, runs, spawn }) ?? state;
   const through = state.at !== undefined;
   // The head whose review owes it: found past a merge (`at`), or past documents, where a recheck names it (`of`).
@@ -149,6 +157,7 @@ function correctionOwed(cwd, { codeCommits, covers, tip }, { spawn, below = null
     return {
       refuse: true,
       through,
+      of: from,
       detail: `the Codex review that ended at ${at} owes a correction: ${findings(state.findings.length)} open, not rechecked`,
       lines: state.findings.map(priorLine),
       next: firstStep('fix the open findings above in code and commit the fix'),
@@ -158,7 +167,7 @@ function correctionOwed(cwd, { codeCommits, covers, tip }, { spawn, below = null
   // A recheck that left findings open, which a second recheck may not take up: the recheck is the last
   // reviewed record that ends at `from` when it is one, else the last one of the findings that ended there.
   const reviewed = records.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed');
-  const atFrom = reviewed.filter((rec) => rec.head === from).at(-1);
+  const atFrom = decidingRecord({ from, records, runs, atOrBefore }).kept;
   const recheck = typeof atFrom?.recheckOf === 'string' ? atFrom : reviewed.filter((rec) => rec.recheckOf === from).at(-1);
   // Asked below a merge no record covers, the state may be read past documents from a head that is none of them.
   if (recheck === undefined) return null;
@@ -205,13 +214,77 @@ export function checkCodexReviews(cwd, head = 'HEAD', { spawn = spawnSync, remot
   const tip = git(['rev-parse', '--verify', '--quiet', `${head}^{commit}`])?.trim();
   const atTip = tip ? codexSwitchAt(git, tip) : null;
   if (atTip?.value === 'off') {
+    const madeOn = madeWithReviewOn(cwd, git, head, { spawn, remote });
+    if (madeOn) return madeOn;
+    const owed = owedWhereOff(cwd, git, head, tip, { spawn, remote });
+    if (owed?.refuse) return owed.row;
     const row = { name: 'codex-review', pass: true, detail: `the Codex review is off at the pushed commit (${atTip.because}), so no record is asked for` };
     const turned = turnsReviewOff(cwd, git, spawn, remote, tip);
-    return turned ? { ...row, lines: [turned] } : row;
+    const lines = [...(turned ? [turned] : []), ...(owed?.paid ? [owed.paid] : [])];
+    return lines.length ? { ...row, lines } : row;
   }
   const row = codexCoverageRow(cwd, head, { spawn, remote });
   if (!atTip?.errors.length) return row;
   return { ...row, lines: [...atTip.errors.map((error) => `read as on: ${error}`), ...(row.lines ?? [])] };
+}
+
+/** The failing push row for the code commits no record covers that were made with the Codex review on, read from each
+ * commit's own tree as the lens door reads its switch, where the pushed commit has it off; `null` when there are none,
+ * or the range cannot be read (no remote, no default branch), where the off row passes as it did. Without it, a push
+ * that turns the review off let every commit before it go unread (B2-1, the full audit of 2026-11-14). */
+function madeWithReviewOn(cwd, git, head, { spawn, remote }) {
+  const state = codexReviewCoverage(cwd, head, { spawn, remote });
+  if (state.unknown) return null;
+  const asked = state.uncovered.filter((commit) => codexSwitchAt(git, commit.id).value !== 'off');
+  if (asked.length === 0) return null;
+  const oldest = asked[asked.length - 1];
+  const base = oldest.isRoot ? git(['rev-parse', '--verify', '--quiet', `${state.baseRef}^{commit}`])?.trim() : `${oldest.shortId}^`;
+  const review = { tool: 'codex-review', base };
+  const one = asked.length === 1;
+  return {
+    name: 'codex-review',
+    pass: false,
+    detail: `${asked.length} code commit${one ? '' : 's'} since ${state.base} made with the Codex review on ${one ? 'has' : 'have'} no Codex review record: the review is off at the pushed commit, not at ${one ? 'its' : 'theirs'}`,
+    lines: uncoveredNames(asked),
+    // Bound to the newest of them, where the review is on: `codex-review` records nothing at a head with it off (Codex on S4).
+    next: reviewStep(cwd, { spawn, ...review, tip: asked[0].id }),
+    review,
+  };
+}
+
+/** The correction a Codex review owes where the review is off at the pushed commit `tip` (F3, the opus verifier on pull
+ * request 896; the lead, L34 and L42 of odd/tasks/review-gate.md): `null` when none is owed or the range cannot be
+ * read; `{ paid }`, the line of the skip that pays it; else `{ refuse: true, row }`. It is read from the code commits a
+ * record covers, as `correctionOwed` reads it, since the commits made after the review went off ask for none. While
+ * the review is off `codex-review` records no recheck, so the correction is paid by a recheck made with it on again,
+ * or by a skip from the owing head, recorded on the owner's typed no with his words as its reason; the skip pays it
+ * only here, with the review off at the tip, never with it on. */
+function owedWhereOff(cwd, git, head, tip, { spawn, remote }) {
+  const state = codexReviewCoverage(cwd, head, { spawn, remote });
+  if (state.unknown) return null;
+  // Read from the newest code commit a review covers: a later skip or record of nothing to review, of commits made off,
+  // would put the read past the uncovered commit that turned the review off, where the walk back stops (Codex on F3).
+  const reviewed = new Set(state.covers.filter(({ rec }) => rec.outcome === 'reviewed').flatMap(({ covered }) => [...covered]));
+  const owed = correctionOwed(cwd, { ...state, codeCommits: state.codeCommits.filter((commit) => reviewed.has(commit.id)) }, { spawn });
+  if (!owed?.refuse) return null;
+  const shortOf = (id) => git(['rev-parse', '--short', id])?.trim() ?? id.slice(0, 7);
+  // The record log is shared by every branch and worktree: a skip pays only where it ends on the history pushed, at
+  // or past the owing head (Codex on F3), and only one recorded where the review is off at its own head: a skip made
+  // with the review on never pays, though the review is turned off after it (V4, the lead, L56).
+  const onLine = (older, newer) => spawn('git', ['merge-base', '--is-ancestor', older, newer], { cwd, encoding: 'utf8' }).status === 0;
+  const skip = readCodexReviews(cwd, { spawn }).findLast((rec) => isValidCodexReview(rec) && rec.outcome === 'unavailable' && rec.base === owed.of && onLine(rec.base, rec.head) && onLine(rec.head, tip) && codexSwitchAt(git, rec.head).value === 'off');
+  if (skip !== undefined) return { paid: `skip ${shortOf(skip.base)}..${shortOf(skip.head)} pays the correction the review that ended there owes while the Codex review is off, and stays listed: ${skip.reason}` };
+  const step = reviewCommand('codex-review', { base: shortOf(owed.of), at: tip.slice(0, 12), flags: ['--unavailable "<the owner\'s own words>"'] });
+  return {
+    refuse: true,
+    row: {
+      name: 'codex-review',
+      pass: false,
+      detail: `${owed.detail}; turning the Codex review off at the pushed commit does not pay it`,
+      lines: [...owed.lines, 'it is paid by a recheck made with the review on again, or, on the owner\'s typed no, by a skip from that head with his words as its reason'],
+      next: commandStep(step),
+    },
+  };
 }
 
 /** Whether the Codex review is off at the commit `head` of the repository `cwd` is in, read as `checkCodexReviews`
@@ -373,7 +446,8 @@ function reviewSize(spawn, cwd, from, tip, merge = null) {
  * the record, and says how large the review that covers them is today: the review
  * `js-harness codex-review` would run, which starts where the records end (`reviewStart`, the one rule the
  * two share) and leaves out the files a review leaves out; and it names the command that prints the plan of
- * that review and starts nothing.
+ * that review and starts nothing. Where every code commit has a record, or the review is off here, it says the
+ * correction a review below still owes, which the push refuses, and the skip that pays it with the review off (V3).
  *
  * It fails nothing by throwing either. Every git call under it answers `null` where it fails and the
  * records are read by a reader that passes over what it cannot read, but the plain check ran none of this
@@ -385,7 +459,22 @@ export function checkCodexReviewDebt(cwd, { spawn = spawnSync, remote = 'origin'
   try {
     // Inside the guard: the switch is read from files and git as the rest is, and fails nothing either.
     const here = codexSwitchHere(cwd, spawn);
-    if (here.value === 'off') return row(`the Codex review is off here (${here.because}): no code waits for one`);
+    // Off in the working tree alone, with HEAD on: the push reads HEAD, so this says what it says (e1b, the lead on L76).
+    // Only where HEAD is a commit: with none (no repository, no commit yet) the review is off here, as it was (L81).
+    const git = here.value === 'off' ? gitIn(cwd, spawn) : null;
+    const head = git?.(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'])?.trim();
+    if (head && codexSwitchAt(git, head).value !== 'off') {
+      const said = codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell });
+      return { ...said, detail: `the Codex review is off in the working tree (${here.because}) but on at HEAD, which the push reads: ${said.detail}` };
+    }
+    if (here.value === 'off') {
+      // A correction owed below is still owed with the review off, and the push refuses it: the row says so, and
+      // names the skip that pays it where one does (V3, the opus verifier's second pass on pull request 896).
+      const owed = head ? owedWhereOff(cwd, git, 'HEAD', head, { spawn, remote }) : null;
+      const off = `the Codex review is off here (${here.because})`;
+      if (owed?.refuse) return row(`${off}, and still ${owed.row.detail}`, owed.row.lines);
+      return row(`${off}: no code waits for one`, owed?.paid ? [owed.paid] : undefined);
+    }
     return codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell });
   } catch (err) {
     return cannotTell(`reading the commits, their Codex review records or the size of their review failed (${err instanceof Error ? err.message : String(err)})`);
@@ -403,7 +492,17 @@ function codexReviewDebt(cwd, { spawn, remote }, { row, cannotTell }) {
     // such records there are is said; which they are is the push check's listing, not repeated at every commit.
     const others = notReviews(state).length;
     const said = others ? ` (${others} of the records that cover them ${others === 1 ? 'is' : 'are'} a skip or a range with nothing to review: js-harness check --push lists them)` : '';
-    return row(`${coveredDetail(state)}${said}${note}`);
+    // Covered is not settled: the correction the review they end on owes is what the push refuses, said here too (V3).
+    const owed = correctionOwed(cwd, state, { spawn });
+    if (owed?.refuse) return row(`${owed.detail}, which the push refuses${note}`, owed.lines);
+    return row(`${coveredDetail(state)}${said}${note}`, owed?.lines);
+  }
+  // A merge at the tip alone uncovered, below which a review owes a correction: the push asks for the fix first, since
+  // `codex-review` reviews no such merge before the recheck (`codexCoverageRow`), and so does this (L71 B).
+  const oldest = uncovered[uncovered.length - 1];
+  if (uncovered.length === 1 && oldest.id === tip && oldest.parentCount === 2) {
+    const owedBelow = correctionOwed(cwd, state, { spawn, below: oldest.parent });
+    if (owedBelow?.refuse) return row(`${owedBelow.detail}, which the push refuses before the merge is reviewed${note}`, owedBelow.lines);
   }
   // The review that is sized is the one `js-harness codex-review` would run: it starts where that command
   // starts it (`reviewStart`), from the commit the range of the default branch starts at, which is `null`

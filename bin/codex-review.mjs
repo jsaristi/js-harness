@@ -179,7 +179,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { allowanceLine, readProjectRules, reviewAllowance } from './lib/codex-review-allowance.mjs';
 import { answerFailure, byPlace, findingCounts, findingLine, rolloutAnswer, verdictLine } from './lib/codex-review-answer.mjs';
-import { baseLeftOut, baseLeftOutSaid, gitAnswer, MARKS_UNREAD, mergeStart, notReviewedSaid, rangeDiff, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
+import { admittedRecords, baseLeftOut, baseLeftOutSaid, gitAnswer, MARKS_UNREAD, mergeStart, notReviewedSaid, rangeDiff, reviewCoverage, reviewStart } from './lib/codex-review-coverage.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir, realCodexHome, sweepStaleLeanHomes } from './lib/codex-review-home.mjs';
 import { PART_MAX_CHANGED_LINES, PART_MAX_FILES, RENAMES, reviewParts } from './lib/codex-review-parts.mjs';
 import { counted, MAX_PARTS_WITHOUT_FLAG, methodRecord, methodRecordLine, needsFlagLine, partPlanned, partsBound, planLines, reviewPlan, thousands } from './lib/codex-review-plan.mjs';
@@ -189,7 +189,7 @@ import { EXCUSED_REFUSED_TESTS, excusedByRefusal, isRefusal, NO_TEST_EXIT, noTes
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, keptPartFor, partKey, readCodexReviewRuns, runKept } from './lib/codex-review-runs.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA, NOTHING_TO_REVIEW, readCodexReviews, withSubjectHash } from './lib/codex-reviews.mjs';
 import {
-  addTurnWorktree, afterTurn, answerFrom, gapLeftMerge, MERGE_OWN_PROMPT, mergeReviewSaid, owedBelowMergeSaid, owedBelowUncut, plansAsOne, recheckAt, removeTurnWorktree, snapshotChanged, snapshotChangedAfterReview, snapshotOfHead, turnArgv, turnNamed, turnSaid, turnsAt, turnsCheaper, turnsLines, turnStopped,
+  addTurnWorktree, afterTurn, nothingPaidExit, answerFrom, gapLeftMerge, MERGE_OWN_PROMPT, mergeReviewSaid, owedBelowMergeSaid, owedBelowUncut, plansAsOne, recheckAt, removeTurnWorktree, snapshotChanged, snapshotChangedAfterReview, snapshotOfHead, turnArgv, turnNamed, turnSaid, turnsAt, turnsCheaper, turnsLines, turnStopped,
 } from './lib/codex-review-turns.mjs';
 import {
   againPastThreeReviews, classifyRecheck, openAfterRecheck, priorLine, RECHECK_PROMPT_VERSION, recheckPrompt, recheckTooLarge, REVIEW_FROM_LOOK_BACK, secondRecheckRefused,
@@ -1287,7 +1287,7 @@ async function reviewRun(argv, env, deps, snapshot) {
     const state = recheckFor(from);
     if (!args.again || state.kind === 'refused' || onResult !== null || everyFile) return state;
     // Records that cannot be read leave the range a review, as they do `recheckFor`.
-    const records = (() => { try { return readCodexReviews(root, { spawn, where }); } catch { return []; } })();
+    const records = (() => { try { return admittedRecords(root, { spawn, where }); } catch { return []; } })();
     const held = new Set((git(spawn, root, ['rev-list', `${from}..${head}`]) ?? '').split('\n').filter(Boolean));
     const heads = [...new Set(records.filter((rec) => rec.outcome === 'reviewed' && held.has(rec.head)).map((rec) => rec.head))];
     const left = heads.length === 0 ? null : leftFrom(from);
@@ -1425,8 +1425,8 @@ async function reviewRun(argv, env, deps, snapshot) {
       plan = planOf(split);
       for (const line of planLines(plan)) log(line);
     }
-    // How close the method came on the reviews this machine recorded, said after the estimate it judges. A
-    // plan of no part has no estimate to judge; records that cannot be read are none.
+    // How close the method came on the reviews this machine recorded, said after the estimate it judges: a report of
+    // cost, read from every record as report-feature reads them (F2 leaves it so). A plan of no part has no estimate to judge; records that cannot be read are none.
     if (plan.parts.length > 0) {
       let records;
       try {
@@ -1654,7 +1654,7 @@ async function reviewRun(argv, env, deps, snapshot) {
         return 1;
       }
       log(`${nothing}, and the range was recorded as having nothing to review in ${file}.`);
-      return 0;
+      return nothingPaidExit(recheckFor(head), plan.range, error);
     }
     // A bound of parts. A run over it is one nobody chose the size of: it is not started until it names
     // its count, and the refusal says the count, so that going on is a decision made with the plan above

@@ -9,6 +9,7 @@ import { leftOutSaid } from './codex-review-scope.mjs';
 import { appendCodexReview, CODEX_REVIEW_SCHEMA } from './codex-reviews.mjs';
 import { appendCodexReviewRun, CODEX_REVIEW_RUN_SCHEMA, readCodexReviewRuns } from './codex-review-runs.mjs';
 import { addTurnWorktree, afterTurn, gapBelowMerge, inTurnWorktree, mergeTurn,PART_AS_CHANGED_LINES, plansAsOne, recheckAt, removeTurnWorktree, snapshotOfHead, sweepTurnWorktrees, TURN_WORKTREE_MAX_AGE_MS, turnsCheaper } from './codex-review-turns.mjs';
+import { withRunLine } from './codex-records.testkit.mjs';
 
 // Real git in every test, isolated from the host's config: where a review of a range holding a merge of
 // the default branch below HEAD is cut into turns (odd/tasks/merge-below-head.md, S1).
@@ -42,7 +43,7 @@ function commit(root, file, content, message) {
 }
 
 function record(root, base, head, extra = {}) {
-  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-10-16T00:00:00.000Z', outcome: 'reviewed', ...extra });
+  appendCodexReview(root, withRunLine(root, { schema: CODEX_REVIEW_SCHEMA, base, head, reviewedAt: '2026-10-16T00:00:00.000Z', outcome: 'reviewed', ...extra }));
 }
 
 /** A branch `feat` off `first`: c1, then M, a merge of `trunk` (where `origin/main` points) with a line
@@ -232,7 +233,8 @@ test('gap below a merge: after the turn of the gap, its valid record of nothing 
   assert.deepEqual(afterTurn(root, turns), { stopped: false });
   appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base: first, head: c1, reviewedAt: '2026-10-16T00:00:00.000Z', outcome: 'nothing-to-review' });
   assert.match(afterTurn(root, turns).refused ?? '', /is not in the run log/);
-  record(root, first, c1, { run: 'r1' });
+  // Written bare: `record` would write the run line `codex-review` writes (S5's fixtures), and this one has none.
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base: first, head: c1, reviewedAt: '2026-10-16T00:00:00.000Z', outcome: 'reviewed', run: 'r1' });
   assert.match(afterTurn(root, turns).refused ?? '', /is not in the run log/);
 });
 
@@ -564,4 +566,30 @@ test('reads a snapshot of the head: removal refuses a path that is not absolute,
   assert.equal(fs.existsSync(path.join(outside, 'sentinel.txt')), true);
   removeTurnWorktree(root, read.place, { commonGitDir });
   fs.unlinkSync(path.join(commonGitDir, 'js-harness', 'review-head-1-1'));
+});
+
+test('F2: at the run, a bare record at the head that owes, with no run line, is no word on that head', () => {
+  // The opus verifier on PR 896: recheckAt read every record, so a hand-written recheckOf record at the owing head
+  // turned the recheck the run owes into a refusal with nothing kept. It reads the admitted records only.
+  const { root, first, c1 } = branchWithMerge();
+  record(root, first, c1, { run: 'r1' });
+  const finding = { file: 'm.js', start: 1, end: 1, severity: 'P1', title: 'The line is lost.', body: 'It is.', confidence: 0.9 };
+  appendCodexReviewRun(root, { schema: CODEX_REVIEW_RUN_SCHEMA, id: 'r1', outcome: 'reviewed', answer: { findings: [finding], verdict: 'incorrect' } });
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base: c1, head: c1, reviewedAt: '2026-11-16T00:00:00.000Z', outcome: 'reviewed', run: 'nope', recheckOf: c1 });
+  const state = recheckAt(root, { from: c1, tip: c1, runs: readCodexReviewRuns(root) });
+  assert.deepEqual(state && [state.kind, state.of], ['recheck', c1]);
+});
+
+test('F2: after a turn that owes, a later record of its range whose run line states no range is refused, not read as a clean turn', () => {
+  // The opus verifier on PR 896: afterTurn read every record, so a record of the same range naming a clean run line
+  // that states no range was the last word on the turn, and the run went on past a review that owes a correction.
+  const { root, first, c1, merge } = branchWithMerge();
+  const turns = { gap: true, from: first, at: c1, head: merge, ranges: [{}, {}] };
+  const finding = { file: 'm.js', start: 1, end: 1, severity: 'P1', title: 'The line is lost.', body: 'It is.', confidence: 0.9 };
+  record(root, first, c1, { run: 'r1' });
+  appendCodexReviewRun(root, { schema: CODEX_REVIEW_RUN_SCHEMA, id: 'r1', outcome: 'reviewed', answer: { findings: [finding], verdict: 'incorrect' } });
+  assert.deepEqual(afterTurn(root, turns), { stopped: true });
+  appendCodexReviewRun(root, { schema: CODEX_REVIEW_RUN_SCHEMA, id: 'r2', outcome: 'reviewed', answer: { findings: [], verdict: 'correct' } });
+  appendCodexReview(root, { schema: CODEX_REVIEW_SCHEMA, base: first, head: c1, reviewedAt: '2026-11-16T00:00:00.000Z', outcome: 'reviewed', run: 'r2' });
+  assert.match(afterTurn(root, turns).refused ?? '', /does not state the range its record covers/);
 });

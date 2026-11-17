@@ -11,12 +11,13 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { normalizeAnswer } from './codex-review-answer.mjs';
-import { defaultBranch, gitAnswer, mergeStart, reviewCoverage } from './codex-review-coverage.mjs';
+import { admittedCodexReviews, admittedRecords, defaultBranch, gitAnswer, mergeStart, reviewCoverage } from './codex-review-coverage.mjs';
 import { counted, planLines, thousands } from './codex-review-plan.mjs';
 import { RECHECK_LOOK_BACK, recheckState, recheckThrough, runsLogged, secondRecheckRefused } from './codex-review-recheck.mjs';
 import { readCodexReviewRuns } from './codex-review-runs.mjs';
-import { isValidCodexReview, NOTHING_TO_REVIEW, readCodexReviews } from './codex-reviews.mjs';
+import { isValidCodexReview, NOTHING_TO_REVIEW } from './codex-reviews.mjs';
 import { leftOutOf } from './codex-review-scope.mjs';
+import { firstStep, nextLine } from './next-step.mjs';
 
 /** The merge the review of `given..tip` is cut at, from `uncovered`, the code commits of that range no record
  * covers (`reviewCoverage`, newest first): `{ merge, from, side, branch, auto }`, the merge, its first parent
@@ -45,7 +46,7 @@ export function mergeTurn(cwd, { given, tip, uncovered, spawn = spawnSync, where
   // a correction and the merge would let the cut drop that recheck (verifier B1).
   let state;
   try {
-    state = recheckAt(cwd, { from: atMerge.from, tip, records: readCodexReviews(cwd, { spawn, where }), runs: readCodexReviewRuns(cwd, { spawn, where }), spawn, where });
+    state = recheckAt(cwd, { from: atMerge.from, tip, records: admittedRecords(cwd, { spawn, where }), runs: readCodexReviewRuns(cwd, { spawn, where }), spawn, where });
   } catch {
     return null;
   }
@@ -54,6 +55,9 @@ export function mergeTurn(cwd, { given, tip, uncovered, spawn = spawnSync, where
 }
 
 /** What git prints in `cwd` as it prints it, or `null` when it fails: for output whose spaces may be a name's. */
+/** Whether `older` is at or before `newer` on its line, for `recheckState`: `true`, `false`, or `null` when git cannot say. */
+export const atOrBeforeIn = (cwd, spawn) => (older, newer) => gitAnswer(spawn, cwd, ['merge-base', '--is-ancestor', older, newer]);
+
 const gitText = (cwd, spawn, args) => {
   try {
     const result = spawn('git', args, { cwd, encoding: 'utf8' });
@@ -78,7 +82,7 @@ const gitText = (cwd, spawn, args) => {
 export function recheckAt(cwd, { from, tip, records: given, runs, holds, spawn = spawnSync, where }) {
   let records;
   try {
-    records = given ?? readCodexReviews(cwd, { spawn, where });
+    records = given ?? admittedRecords(cwd, { spawn, where });
   } catch {
     return null;
   }
@@ -93,7 +97,7 @@ export function recheckAt(cwd, { from, tip, records: given, runs, holds, spawn =
     const coverage = reviewCoverage(cwd, { from: `${merge}^`, tip, spawn, where, read: () => [] });
     return coverage.unknown === undefined && !coverage.codeCommits.some((commit) => commit.id === merge);
   };
-  return recheckThrough({ from, rows, records, runs, holds, changedBetween, writesNothing });
+  return recheckThrough({ from, rows, records, runs, holds, atOrBefore: atOrBeforeIn(cwd, spawn), changedBetween, writesNothing });
 }
 
 /** The turns of the review of `given..tip` when HEAD, `tip`, is a merge of the default branch and every other code
@@ -248,6 +252,29 @@ export function owedBelowMergeSaid({ merge, of, cut = false }) {
     : `${owed}, and ${at} is a merge of the default branch above it: its review is no recheck of those findings, so it was not started and nothing was recorded. Commit the correction above the merge; its review then reads the merge by what was written in it, and rechecks the findings in the commits after it.`;
 }
 
+/** Whether `state`, what a range from a commit is (`recheckAt`, `null` where it cannot be read), still owes something
+ * a review must recheck: anything but a review as any other, or a refusal that left nothing open, as the push row
+ * reads it (`correctionOwed` in ./codex-review-rows.mjs). */
+export const stillOwed = (state) => state !== null && state !== undefined && state.kind !== 'review' && !(state.kind === 'refused' && state.open === 0);
+
+/** Why a run that recorded `range` as having nothing to review fails: the review that ended at `of` owes a correction
+ * below it, and a record of nothing to review is no recheck (Y1, JH 199's verifier on pull request 883). `merge`, the
+ * merge at HEAD above a gap, which is then not reviewed either. */
+export function nothingPaysSaid({ of, range, merge = null }) {
+  const notMerge = merge === null ? '' : `, and the merge ${merge.slice(0, 7)} above it was not reviewed`;
+  const where = merge === null ? '' : ' above the merge';
+  return `The review that ended at ${of.slice(0, 7)} owes a correction, and ${range} changes no file, so its record of nothing to review pays none of it${notMerge}. Commit the correction${where}; its review is the recheck of those findings.`;
+}
+
+/** The exit of a run that recorded `range` as having nothing to review, from `state`, what a range from its head is
+ * (`recheckAt`): 0, or 1 once `error` was told the correction owed below it (`nothingPaysSaid`), so neither the person
+ * nor a loop takes that record for the recheck (Y1). */
+export function nothingPaidExit(state, range, error) {
+  if (!stillOwed(state)) return 0;
+  error(`${nothingPaysSaid({ of: state.at ?? state.of, range })}\n${nextLine(firstStep('fix the open findings in code and commit the fix'))}`);
+  return 1;
+}
+
 /** `{ refused }`, the refusal of a range whose oldest code commit no record covers, of `uncovered` (newest first), is
  * a merge below `head` that is no turn (`turnsAt` gave none: its marks differ, or it is no longer read by what was
  * written in it), while the review that ended at its first parent owes a correction (`stateOf`, a run's
@@ -320,22 +347,33 @@ export function turnArgv(turns, place, args) {
  * with nothing to review (a change and its revert), which no Codex session made, and which owes nothing. */
 export function afterTurn(cwd, turns, { spawn = spawnSync, where } = {}) {
   const { turn, notReviewed } = turnNamed(turns);
+  let codex;
   let records;
   let runs;
   try {
-    records = readCodexReviews(cwd, { spawn, where });
+    // What is owed is read from the admitted records (F2, the opus verifier on pull request 896); the turn's own record
+    // from them all, so one whose run line is missing or does not state its range is refused as that, not as no record.
+    codex = admittedCodexReviews(cwd, { spawn, where });
+    records = codex.records.filter((rec) => rec.outcome !== 'reviewed' || codex.admitted(rec));
     runs = readCodexReviewRuns(cwd, { spawn, where });
   } catch (err) {
     return { refused: `Could not read the record of ${turn} (${err.message}), so ${notReviewed}.` };
   }
   // The turn at the merge is named by its commit here; that of a gap by its range, which its name holds.
   const named = turns.gap ? turn : `${turn} ${turns.at.slice(0, 7)}`;
-  const written = records.findLast((record) => record.base === turns.from && record.head === turns.at);
+  const written = codex.records.findLast((record) => record.base === turns.from && record.head === turns.at);
   if (written === undefined) return { refused: `T${named.slice(1)} wrote no record, so ${notReviewed}.` };
   // A gap whose change is reverted inside it changes no file: its turn launched no Codex and logged no run, and owes nothing.
-  if (turns.gap && written.outcome === NOTHING_TO_REVIEW && isValidCodexReview(written)) return { stopped: false };
+  // It pays no correction either: one owed below the gap is still owed, and the merge is no recheck of it (Y1).
+  if (turns.gap && written.outcome === NOTHING_TO_REVIEW && isValidCodexReview(written)) {
+    const owed = recheckAt(cwd, { from: turns.at, tip: turns.at, records, runs, spawn, where });
+    if (!stillOwed(owed)) return { stopped: false };
+    const merge = turns.ranges.length > 1 ? turns.head : null;
+    return { refused: nothingPaysSaid({ of: owed.at ?? owed.of, range: `${turns.from.slice(0, 7)}..${turns.at.slice(0, 7)}`, merge }) };
+  }
   if (!runsLogged(written, runs)) return { refused: `The run line of ${named} is not in the run log, so whether it owes a correction cannot be said and ${notReviewed}: run the review again.` };
-  return { stopped: recheckState({ from: turns.at, records, runs }).kind !== 'review' };
+  if (written.outcome === 'reviewed' && !codex.admitted(written)) return { refused: `The run line of ${named} does not state the range its record covers, so it is no review and ${notReviewed}: run the review again.` };
+  return { stopped: recheckState({ from: turns.at, records, runs, atOrBefore: atOrBeforeIn(cwd, spawn) }).kind !== 'review' };
 }
 
 // The worktree a turn below HEAD is reviewed in: `<common git dir>/js-harness/review-turn-<pid>-<time>` (S7);

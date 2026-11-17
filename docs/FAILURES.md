@@ -389,6 +389,9 @@ forbids: the host's reminder asks for them, and its own text says the user's ins
 - Seen: 2026-10-31 — JH 116, its first commit of worktree-reply-hook-latency, branched before the
   `commit-msg` hook landed — the message carried `Co-Authored-By`; amended before any push (f91cbcc1),
   and the next commits carry neither
+- Seen: 2026-11-15 — JH 210, its first commit of docs/fanout-tree — the message carried `Co-Authored-By`
+  from the host's reminder; the session stopped the commit while its pre-commit gate ran, so none was
+  made, and made it again without it (f84f460b); the `commit-msg` hook would have stripped it anyway
 - Control: check — bin/commit-msg.test.mjs — "commit-msg hook makes the commit without the host's lines" — since
   2026-10-31
 - Was: protocol — bin/lib/rules-block.mjs — "or AI attribution to commits. Use conventional
@@ -1119,6 +1122,12 @@ the console, was still pending.
 - Seen: 2026-10-30 — the lead's note to JH 106 at 17:20Z (claimed; the lead's own) — the land took PR 596; the lead
   stopped it before any push (main unchanged at 04e3d29d) and turned 596 to a draft, which GitHub records at
   17:18:12Z; its timeline has no ready-for-review event, so it was opened ready
+- Seen: 2026-11-15 — channel record, the ready notice for PR 894 at 2026-11-16T03:43:49Z and JH SR's note at
+  03:46:13Z — JH SR took PR 894, a design with 21 review findings open, out of draft to get its ready notice
+  recorded while his approval of the design's page was pending; the lead's message turned it back and
+  `gh pr ready --undo` made it a draft again about three minutes later, before any land ran (state OPEN, not
+  merged). The ready notice stays in the record: no kind withdraws one. The check that would have caught it:
+  `notify --kind ready` refusing a pull request whose feature document's State names an approval of his as pending
 
 ### language-server-load
 A TypeScript language server per session works whenever tests write files, takes up to a whole
@@ -1683,6 +1692,15 @@ cut after a compaction, and no hook asked for it.
   01:44:33Z: "en ningun momento me mostraste que tanto avanzamos"; the page came at 01:47:49Z (line 38120)
 - Control: check — bin/lib/return-report.test.mjs — "a planted return without the page is turned back once, with
   what to run" — since 2026-10-31
+
+### review-slice-read-as-recheck
+A slice reviewed from the head of a review that left findings was read as the recheck of those
+findings, though its range held none of their fix, and spent one of the three reviews a change has.
+- Class: tool
+- Seen: 2026-11-16 — odd/tasks/review-gate.md, L28 — JH 207 reviewed S7 alone from 7030550, the
+  head of S6's review with three findings, without reading its --plan; Codex recorded 0 of 3 fixed,
+  and the fix's review became the second recheck, the last of three
+- Control: protocol — CLAUDE.md — "Read the proof before the command it allows" — since 2026-11-16
 
 ### review-tool-timeout
 The bound status of a gentle-ai review failed with `operation_timeout`, the candidate was left
