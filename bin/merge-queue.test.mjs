@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test, { after, before } from 'node:test';
 import * as queue from './merge-queue.mjs';
-import { actionsState, failedRows, failingTests, landingLines, localSuite, mergeQueueMain, staleBin, tellLeftOut } from './merge-queue.mjs';
+import { actionsState, failedRows, failingTests, landingLines, localSuite, mergeQueueMain, PUSH_MAIN_TIMEOUT_MS, staleBin, tellLeftOut } from './merge-queue.mjs';
 import { appendRecord } from './lib/background.mjs';
 import { appendNotice, newNotice, NOTICE_SCHEMA, NOTICE_TEXT_MAX, readNotices } from './lib/channel.mjs';
 import { checkCodexReviews } from './lib/codex-review-rows.mjs';
@@ -515,6 +515,20 @@ test('--land: a push of main that reports a failure, while origin\'s main is the
   assert.notEqual(landed, main);
   assert.ok(!out.some((line) => line.startsWith('Main moved')), out.join('\n'));
   assert.equal(out.at(-1), `Landed: main ${main.slice(0, 7)} is now ${landed.slice(0, 7)}, with PR 1.`);
+});
+
+test('--land: the push of main waits for a pre-push hook that takes minutes (PR 901, 2026-11-17)', async () => {
+  const { root, heads } = makeQueueRepo();
+  // PR 901's hook, check --push, took 84 and 117 s over its review records; a push given 60 s was killed before origin.
+  const timeouts = [];
+  const wrap = failingGit((args) => args[0] === 'push' && args.includes('origin') && args.at(-1).endsWith(':refs/heads/main'), (run, args, options) => {
+    timeouts.push(options.timeout);
+    return run('git', args, options);
+  });
+  const { code, out } = await land(root, [pr(1, 'feat/a', heads['feat/a'])], { wrap });
+  assert.equal(code, 0, out.join('\n'));
+  assert.deepEqual(timeouts, [PUSH_MAIN_TIMEOUT_MS]);
+  assert.ok(PUSH_MAIN_TIMEOUT_MS >= 300_000, `${PUSH_MAIN_TIMEOUT_MS} ms leaves the hook no room past the 117 s seen`);
 });
 
 test('--land: a push of main the pre-push hook refuses says the hook\'s failing rows, not only git\'s line (PR 658, 2026-10-29)', async () => {
