@@ -451,7 +451,7 @@ test('template ask exits 1 for a question the record does not hold open or the q
   appendNotice(home, 'p', newNotice({ at: '2026-10-29T05:10:00.000Z', from: ASKER, to: 'orchestrator', kind: 'withdrawn', text: 'ya no', question: 1 }));
   const ask = (n) => call(['ask', ...n], { home, slug: 'p' });
   assert.deepEqual([ask(['1']).code, ask(['1']).err], [1, 'template ask: question 1 is withdrawn']);
-  assert.match(ask(['2']).err, /question 2 has 5 options .* ask it in writing/);
+  assert.match(ask(['2']).err, /question 2 has 5 options .*: write it out with its options/);
   assert.deepEqual([ask(['3']).code, ask(['3']).err], [1, 'template ask: the record holds no question 3']);
   assert.equal(ask([]).code, 2);
   assert.equal(ask(['x']).code, 2);

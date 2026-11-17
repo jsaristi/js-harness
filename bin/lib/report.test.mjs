@@ -84,7 +84,7 @@ test('two sessions that share a title are two lines, each by its title', () => {
 // --- S2: questions ---
 
 test('questionsOf gives the questions answered after the cut and every question still open, whenever asked', () => {
-  const ask = (id, text, when) => notice({ at: when, kind: 'question', id, text, options: [], waits: 'the slice' });
+  const ask = (id, text, when) => notice({ at: when, kind: 'question', id, text, options: [{ label: 'Sí' }, { label: 'No' }], waits: 'the slice' });
   const asked = [ask('q-1', 'old and open', '2026-10-10T00:00:00.000Z'), ask('q-2', 'answered today', '2026-10-20T08:00:00.000Z'), ask('q-3', 'answered before', '2026-10-18T08:00:00.000Z')];
   const answers = [
     notice({ at: '2026-10-20T09:00:00.000Z', kind: 'answer', text: 'B, the small one', transcript: 't', line: 4, question: 2, verified: false, copy: null }),
@@ -97,7 +97,7 @@ test('questionsOf gives the questions answered after the cut and every question 
 });
 
 test('an answer that copied his words gives those words', () => {
-  const asked = notice({ kind: 'question', id: 'q-1', text: 'Which?', options: [], waits: 'w' });
+  const asked = notice({ kind: 'question', id: 'q-1', text: 'Which?', options: [{ label: 'Sí' }, { label: 'No' }], waits: 'w' });
   const copy = { tool: 'AskUserQuestion', answers: [{ question: 'Which?', options: ['A', 'B'], answer: 'B', how: 'option' }] };
   const answer = notice({ at: '2026-10-20T11:00:00.000Z', kind: 'answer', text: 'the lead said B', transcript: 't', line: 4, question: 1, verified: true, copy });
   const { answered } = questionsOf({ notices: [asked, answer], questions: [{ number: 1, notice: asked }] }, at('2026-10-20T00:00:00Z'));
@@ -106,7 +106,7 @@ test('an answer that copied his words gives those words', () => {
 
 // Codex review of ddd4058..0bf3ea7, part 1: an answer no transcript confirmed is the sender's claim, not his word.
 test('an answer no transcript confirmed is printed as the sender\'s claim', () => {
-  const asked = notice({ kind: 'question', id: 'q-1', text: 'Which?', options: [], waits: 'w' });
+  const asked = notice({ kind: 'question', id: 'q-1', text: 'Which?', options: [{ label: 'Sí' }, { label: 'No' }], waits: 'w' });
   const claim = notice({ at: '2026-10-20T11:00:00.000Z', kind: 'answer', text: 'B', transcript: 't', line: 4, question: 1, verified: false, copy: null });
   const questions = questionsOf({ notices: [asked, claim], questions: [{ number: 1, notice: asked }] }, at('2026-10-20T00:00:00Z'));
   assert.equal(questions.answered[0].verified, false);

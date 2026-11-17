@@ -54,8 +54,8 @@ test('answeredMoments are the questions answered that the tool could show, recor
 
 test('render refuses a question the tool cannot show, and heads a long number with #', () => {
   const options = (n) => Array.from({ length: n }, (_, i) => ({ label: `Opción ${i + 1}`, description: '' }));
-  assert.throws(() => render({ number: 3, notice: { text: 't', options: options(TOOL_OPTIONS.min - 1) } }), /ask it in writing/);
-  assert.throws(() => render({ number: 3, notice: { text: 't', options: options(TOOL_OPTIONS.max + 1) } }), /ask it in writing/);
+  assert.throws(() => render({ number: 3, notice: { text: 't', options: options(TOOL_OPTIONS.min - 1) } }), /has 1 options .*: withdraw it and record it again with 2 to 4 options$/);
+  assert.throws(() => render({ number: 3, notice: { text: 't', options: options(TOOL_OPTIONS.max + 1) } }), /has 5 options .*: write it out with its options$/);
   assert.equal(JSON.parse(render({ number: 1234, notice: { text: 't', options: options(2) } })).questions[0].header, '#1234');
   assert.equal(JSON.parse(render({ number: 123, notice: { text: 't', options: options(2) } })).questions[0].header, 'Pregunta 123');
 });

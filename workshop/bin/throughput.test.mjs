@@ -116,8 +116,8 @@ test('the questions are read from the channel record of the project, numbered as
   fs.mkdirSync(channel, { recursive: true });
   const from = { host: 'h', id: 's1', source: 'test', title: 'JH 28' };
   const notices = [
-    newNotice({ at: '2026-10-16T10:00:00.000Z', from, to: 'orchestrator', kind: 'question', text: '¿a?', id: 'q1', options: [], waits: 'T4' }),
-    newNotice({ at: '2026-10-16T11:00:00.000Z', from, to: 'orchestrator', kind: 'question', text: '¿b?', id: 'q2', options: [], waits: 'T4' }),
+    newNotice({ at: '2026-10-16T10:00:00.000Z', from, to: 'orchestrator', kind: 'question', text: '¿a?', id: 'q1', options: [{ label: 'Sí' }, { label: 'No' }], waits: 'T4' }),
+    newNotice({ at: '2026-10-16T11:00:00.000Z', from, to: 'orchestrator', kind: 'question', text: '¿b?', id: 'q2', options: [{ label: 'Sí' }, { label: 'No' }], waits: 'T4' }),
     newNotice({ at: '2026-10-16T10:20:00.000Z', from, to: 'orchestrator', kind: 'answer', text: 'a', transcript: 't', line: 3, question: 1, verified: false, copy: null }),
     newNotice({ at: '2026-10-16T11:30:00.000Z', from, to: 'orchestrator', kind: 'withdrawn', text: 'no longer', question: 2 }),
   ];

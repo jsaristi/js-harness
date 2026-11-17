@@ -55,6 +55,9 @@ export const OPENING_TEXT_MAX = 100000;
  * the others: the record is appended with one small write (`appendLine`), and a question with its six
  * options and what waits on it stays far under what that write takes. */
 export const QUESTION_TEXT_MAX = 2000;
+/** The fewest options a question takes: the user's words of 2026-11-17, "siempre dame las preguntas con opciones"
+ * (`rule:questions-one-place`), at the question tool's own floor (`TOOL_OPTIONS`, ./template-question.mjs). */
+export const QUESTION_OPTIONS_MIN = 2;
 export const QUESTION_OPTIONS_MAX = 6;
 export const OPTION_LABEL_MAX = 120;
 export const OPTION_DESCRIPTION_MAX = 500;
@@ -201,8 +204,7 @@ function isQuestionNumber(value) {
 const HAND_NUMBERED = /^pregunta\s+\d+\s*[:.\-–—]/i;
 
 /** The fields of a question as a notice keeps them, checked: `text` one line of `QUESTION_TEXT_MAX`, `options`
- * a list of at most `QUESTION_OPTIONS_MAX` (the recommended one first; an empty list is a question with nothing
- * to tap), no two with one label, `waits` one line, and `applies` absent or `{ pr }`, the number of the pull request
+ * a list of `QUESTION_OPTIONS_MIN` to `QUESTION_OPTIONS_MAX` (the recommended one first), no two with one label, `waits` one line, and `applies` absent or `{ pr }`, the number of the pull request
  * whose change the question asks to apply. It is the one check of a question, whether it comes from standard input
  * (`questionFieldsOf`) or from a caller (`newNotice`). Throws a `ChannelInputError`. */
 function checkedQuestion({ text, options, waits, applies }) {
@@ -215,6 +217,9 @@ function checkedQuestion({ text, options, waits, applies }) {
   for (const { label } of checked) {
     if (labels.has(label)) throw new ChannelInputError(`two options of a question have the label "${label}"`);
     labels.add(label);
+  }
+  if (checked.length < QUESTION_OPTIONS_MIN) {
+    throw new ChannelInputError(`a question has ${checked.length} ${checked.length === 1 ? 'option' : 'options'}, ${QUESTION_OPTIONS_MIN} at least, the recommended one first: what the user may want to write instead goes in the question tool's Other, which still counts as their words`);
   }
   const asked = { text: line, options: checked, waits: oneLine(waits, QUESTION_WAITS_MAX, 'what waits on a question') };
   return applies === undefined ? asked : { ...asked, applies: appliesOf(applies) };

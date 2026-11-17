@@ -133,23 +133,42 @@ test('an answer carries the transcript and the line his words are read at, and n
 
 // --- a question, a withdrawal, and the copy of an answer ---
 
-const asking = (fields = {}) => note({ kind: 'question', text: 'Which budget?', id: 'q-1', options: [], waits: 'the sprint', ...fields });
+const TWO = [{ label: 'Low (Recomendado)', description: 'the cheap one' }, { label: 'High', description: '' }];
+const asking = (fields = {}) => note({ kind: 'question', text: 'Which budget?', id: 'q-1', options: TWO, waits: 'the sprint', ...fields });
 const askingRefused = (fields, pattern) => assert.throws(() => asking(fields), (err) => err instanceof channel.ChannelInputError && pattern.test(err.message), JSON.stringify(Object.keys(fields)));
 const copyOfAnswered = { tool: 'AskUserQuestion', answers: [{ question: '¿Qué presupuesto?', options: ['Low', 'High'], answer: 'Low', how: 'tapped' }] };
 
-test('the limits of a question are 2000 characters of text, six options, 120 characters a label, 500 a description and 500 for what waits, and the copy of an answer keeps 2000', () => {
+test('the limits of a question are 2000 characters of text, two to six options, 120 characters a label, 500 a description and 500 for what waits, and the copy of an answer keeps 2000', () => {
+  assert.equal(channel.QUESTION_OPTIONS_MIN, 2);
   assert.deepEqual([channel.QUESTION_TEXT_MAX, channel.QUESTION_OPTIONS_MAX, channel.OPTION_LABEL_MAX, channel.OPTION_DESCRIPTION_MAX, channel.QUESTION_WAITS_MAX, channel.ANSWER_COPY_TEXT_MAX], [2000, 6, 120, 500, 500, 2000]);
 });
 
-const questionJson = (fields = {}) => JSON.stringify({ text: 'Which budget?', options: [{ label: 'Low (Recomendado)', description: 'the cheap one' }], waits: 'the sprint', ...fields });
+const questionJson = (fields = {}) => JSON.stringify({ text: 'Which budget?', options: TWO, waits: 'the sprint', ...fields });
 const questionRefusedIn = (json, pattern) => assert.throws(() => channel.questionFieldsOf(json), (err) => err instanceof channel.ChannelInputError && pattern.test(err.message), json.slice(0, 80));
 
 test('a question takes its fields from standard input as JSON: its text, its options with a label and a description, and what waits', () => {
-  assert.deepEqual(channel.questionFieldsOf(questionJson({ text: '  ¿Qué presupuesto?  ' })), { text: '¿Qué presupuesto?', options: [{ label: 'Low (Recomendado)', description: 'the cheap one' }], waits: 'the sprint' });
-  assert.deepEqual(channel.questionFieldsOf(questionJson({ options: [] })).options, [], 'a question with nothing to tap is allowed');
-  assert.deepEqual(channel.questionFieldsOf(questionJson({ options: [{ label: 'Otro' }] })).options, [{ label: 'Otro', description: '' }], 'a missing description is stored as an empty text');
+  assert.deepEqual(channel.questionFieldsOf(questionJson({ text: '  ¿Qué presupuesto?  ' })), { text: '¿Qué presupuesto?', options: TWO, waits: 'the sprint' });
+  assert.deepEqual(channel.questionFieldsOf(questionJson({ options: [{ label: 'Sí', description: 'yes' }, { label: 'Otro' }] })).options[1], { label: 'Otro', description: '' }, 'a missing description is stored as an empty text');
   assert.equal(channel.questionFieldsOf(`\uFEFF${questionJson()}`).text, 'Which budget?', 'a byte order mark is not part of the text');
 });
+
+// His words of 2026-11-17, "siempre dame las preguntas con opciones" (transcript 699d7c29, line 7609): a question
+// recorded for him carries at least two options, so the question tool can show it; what he writes goes in its Other.
+test('a question with fewer than two options is refused, from standard input and from a caller, naming the floor and Other', () => {
+  for (const options of [[], [{ label: 'Sí' }]]) {
+    const floor = new RegExp(`a question has ${options.length} options?, 2 at least.*Other`);
+    questionRefusedIn(questionJson({ options }), floor);
+    askingRefused({ options }, floor);
+  }
+  assert.equal(channel.questionFieldsOf(questionJson()).options.length, 2);
+});
+
+test('a question recorded before the floor, with no options, is still read, numbered and closed', withHome((home) => {
+  channel.appendNotice(home, SLUG, { ...asking({ id: 'q-old' }), options: [] });
+  channel.appendNotice(home, SLUG, note({ kind: 'withdrawn', text: 'asked again with options', question: 1 }));
+  const [only] = channel.recordedQuestions(channel.readNotices(home, SLUG));
+  assert.deepEqual([only.number, only.notice.options, only.closed?.by], [1, [], 'withdrawn']);
+}));
 
 test('standard input that is not JSON, or is JSON that is not an object, is refused in words', () => {
   for (const json of ['', 'Which budget?', '{"text":', 'undefined']) questionRefusedIn(json, /what came is not JSON/);
@@ -211,7 +230,7 @@ test('the options of a question are a list of six at most, each a label and a de
   questionRefusedIn(questionJson({ options: [{ label: 'Low', description: 5 }] }), /the description of an option is a text/);
   questionRefusedIn(questionJson({ options: [{ label: 'Low', description: 'two\nlines' }] }), /the description of an option is one line/);
   questionRefusedIn(questionJson({ options: [{ label: 'Low', description: 'x'.repeat(501) }] }), /the description of an option has 501 characters, 500 at most/);
-  assert.equal(channel.questionFieldsOf(questionJson({ options: [{ label: 'Low', description: 'x'.repeat(500) }] })).options[0].description.length, 500);
+  assert.equal(channel.questionFieldsOf(questionJson({ options: [{ label: 'Low', description: 'x'.repeat(500) }, { label: 'High' }] })).options[0].description.length, 500);
   questionRefusedIn(questionJson({ options: [{ label: 'Low' }, { label: ' Low ' }] }), /two options of a question have the label "Low"/);
 });
 

@@ -5,7 +5,8 @@
 // questions (`recordedQuestions`, bin/lib/channel.mjs); the command and the gate read it.
 import { QUESTION_WORD, questionPrefix } from './sessions.mjs';
 
-/** How many options the question tool shows: a question with fewer or more is asked in writing. */
+/** How many options the question tool shows: a question with more is written out with its options, and one with fewer
+ * is only an old record from before `QUESTION_OPTIONS_MIN` (./channel.mjs), recorded again with its options. */
 export const TOOL_OPTIONS = Object.freeze({ min: 2, max: 4 });
 
 /** The longest header the question tool shows. */
@@ -19,7 +20,8 @@ const NUMBERED = new RegExp(`^${QUESTION_WORD} (\\d+): `);
 export function render({ number, notice }) {
   const count = notice.options.length;
   if (count < TOOL_OPTIONS.min || count > TOOL_OPTIONS.max) {
-    throw new Error(`question ${number} has ${count} options and the question tool shows ${TOOL_OPTIONS.min} to ${TOOL_OPTIONS.max}: ask it in writing`);
+    const instead = count < TOOL_OPTIONS.min ? `withdraw it and record it again with ${TOOL_OPTIONS.min} to ${TOOL_OPTIONS.max} options` : 'write it out with its options';
+    throw new Error(`question ${number} has ${count} options and the question tool shows ${TOOL_OPTIONS.min} to ${TOOL_OPTIONS.max}: ${instead}`);
   }
   const named = questionPrefix(number).replace(/: $/, '');
   const question = {
@@ -53,7 +55,7 @@ export function admit({ asked, questions }) {
 
 /** The moments of the `ask` surface since `since` (milliseconds): `[{ template: 'question', subject }]`, a question
  * of the record recorded since then, answered, with options the tool shows. Each was asked, so a `shown` line of its
- * number should hold; one asked in writing (too few or too many options) or withdrawn has none to hold, and one still
+ * number should hold; one written out (too many options), an old one with too few, or one withdrawn has none to hold, and one still
  * open may not have been asked yet. */
 export function answeredMoments(questions, since) {
   const showable = (count) => count >= TOOL_OPTIONS.min && count <= TOOL_OPTIONS.max;

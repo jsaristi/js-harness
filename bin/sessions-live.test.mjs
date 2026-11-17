@@ -233,7 +233,7 @@ test('--out puts every open question of the record into the stamp, oldest first,
   ask('2026-10-26T09:00:00.000Z', '¿Se borra la nota vieja?');
   ask('2026-10-27T05:00:00.000Z', '¿Abrimos el PR?');
   // Written before the check that refuses a hand-numbered question: the board leaves its own number out.
-  fs.appendFileSync(recordPath(dirs.home, dirs.slug),`${JSON.stringify({ ...newNotice({ at: '2026-10-27T05:10:00.000Z', from: FROM, to: 'orchestrator', kind: 'question', text: 'x', id: 'q-old', options: [], waits: 'x' }), text: 'Pregunta 5 (fila N1): ¿Una sola lista?' })}\n`);
+  fs.appendFileSync(recordPath(dirs.home, dirs.slug),`${JSON.stringify({ ...newNotice({ at: '2026-10-27T05:10:00.000Z', from: FROM, to: 'orchestrator', kind: 'question', text: 'x', id: 'q-old', options: [{ label: 'Sí' }, { label: 'No' }], waits: 'x' }), text: 'Pregunta 5 (fila N1): ¿Una sola lista?' })}\n`);
   close('2026-10-25T11:00:00.000Z', 'withdrawn', 2);
   close('2026-10-27T05:20:00.000Z', 'answer', 4);
   assert.equal((await live(['--out', dirs.out], dirs)).code, 0);
