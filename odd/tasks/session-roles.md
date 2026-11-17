@@ -10,7 +10,9 @@ Branch `docs/session-roles`, cut from main at 035a2dcc, worktree `rule-lead-effo
 built. Three things are his ("Ask me before"): at the lead's word they are recorded as questions 316, 317 and
 318 (L7), and he answered A to each by tap (L8): work sessions get a card too, both rules for the senior, and
 `CLAUDE.md` scoped to work sessions. 317 and 318 change a rule and his file: his typed words are still owed
-before either is written. The 21 findings stay open; what to do with them is still his question.
+before either is written. On 2026-11-17 he approved the spend to correct the 21 findings and to run one
+confirming read (question 323, L9): JH SR corrects them here, as version 4, then that one read; a failure it
+finds goes to the lead as a problem, with no further read.
 
 ## Goal
 Each session that holds a role (the lead, the Plan, the senior) reads what its role is, from one text the harness
@@ -316,3 +318,17 @@ card ships without the lines that wait for a rule.
   and no edit of `CLAUDE.md` starts on these taps. No answer approves the design or a build: the 21 findings
   of L6 stay open, and what to do with them and who corrects them is still his to answer (the lead's message,
   2026-11-17, about 01:15 local). Nothing is corrected, no read is run; draft PR 899.
+- L9 His answer to question 323, tapped in the lead's chat (`js-harness sessions --quote
+  699d7c29-54c4-460e-a5e8-700b114eb251 7877`, 2026-11-17T07:10Z, 02:10 local): "A: corregir (unos 2,5-4 M)".
+  What the question said a yes covers: correcting the open findings and then one read that confirms, at about
+  2 to 3.5M Claude tokens and 0.5M of Codex, an estimate taken from the three reads; then the design comes to
+  him for approval. What it does not cover: approving the design or building the cards. What it said is not
+  guaranteed: that a fourth read finds nothing new. The fourth read rests on this answer alone:
+  `rule:double-review` allows three, and where the third still finds a failure the work passes to the model
+  `rule:senior-model` names. The lead's word to JH SR (by message, 02:11 local): correct the findings of L6 with
+  his answers of L8; run one confirming read, its cost said first; record the spend; build nothing; if that
+  read finds real failures, stop and send them as a problem, with no further read. Two things the lead was
+  told before the work began: the question told him "una sesión nueva" and this is the session that wrote the
+  three versions, on claude-fable-5-2 (its transcript's last entry), at 46% of its context; and the read alone
+  was measured at 1.40, 2.14 and 3.45M Claude tokens on this document, so with the correction pass it can pass
+  what he approved.
