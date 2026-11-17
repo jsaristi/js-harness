@@ -113,6 +113,9 @@ landed it; it asks about no pull request, moves nothing, writes no record and ex
 list the worktrees, or claude agents cannot be read when one could be removed.`;
 
 const TIMEOUT_MS = 60_000;
+// The push of main runs the pre-push hook, whose check --push reads every review record of the range: PR 901's took
+// 84 and 117 s, so a push given TIMEOUT_MS was killed before it reached origin (2026-11-17).
+export const PUSH_MAIN_TIMEOUT_MS = 300_000;
 // The open pull requests one landed branch has based on it that a land retargets; gh pages up to this many itself.
 const RETARGET_LIMIT = 1000;
 
@@ -652,7 +655,7 @@ async function landCandidate({ run, gitIn, place, main, defaultBranch, door, mer
     stdout(`The candidate ${candidate.slice(0, 7)} is green on GitHub Actions.`);
     // The one push of main the pre-push hook lets through: it says it is the queue's (S9).
     const pushEnded = log.phase('push');
-    const pushed = answer(run, 'git', ['push', '--quiet', `--force-with-lease=refs/heads/${defaultBranch}:${main}`, 'origin', `${candidate}:refs/heads/${defaultBranch}`], place, TIMEOUT_MS, { JS_HARNESS_MERGE_QUEUE: '1' });
+    const pushed = answer(run, 'git', ['push', '--quiet', `--force-with-lease=refs/heads/${defaultBranch}:${main}`, 'origin', `${candidate}:refs/heads/${defaultBranch}`], place, PUSH_MAIN_TIMEOUT_MS, { JS_HARNESS_MERGE_QUEUE: '1' });
     if (pushed.ok) pushEnded(true);
     else {
       const now = gitIn(place, 'ls-remote', 'origin', `refs/heads/${defaultBranch}`).out.split('\t')[0];
