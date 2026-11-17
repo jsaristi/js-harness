@@ -402,10 +402,12 @@ export function spannedDebt({ heads, records, runs, atOrBefore }) {
   // Only records that end on the history checked: the log is shared, and a record of another branch, or past the tip,
   // neither settles its debt nor asks for one (Codex on 2d0a5ee).
   const onLine = new Set(heads);
-  const reviewed = records.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed' && onLine.has(rec.head));
+  // The state at a head is read from them too: a recheck that names it and ends elsewhere does not settle it (Codex on 6e4f892).
+  const line = records.filter((rec) => onLine.has(rec?.head));
+  const reviewed = line.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed');
   for (const at of heads) {
     if (!reviewed.some((rec) => rec.head === at)) continue;
-    const { kept, owing, state } = decidingRecord({ from: at, records, runs, atOrBefore });
+    const { kept, owing, state } = decidingRecord({ from: at, records: line, runs, atOrBefore });
     if (state.kind !== 'recheck' || state.second === true || typeof kept?.recheckOf === 'string') continue;
     const spans = (rec) => rec.head !== at && rec.base !== at && atOrBefore(rec.base, at) === true && atOrBefore(at, rec.head) === true;
     // What every standing record that owes there read, not the deciding one's alone (Codex on 2d0a5ee).

@@ -2357,9 +2357,15 @@ test('the recheck a spanned debt names is what a run from that head makes, and i
   const fixed = commit(root, 'c.js', 'three, fixed', 'fix: three');
   run(root, { id: 'span', base: middle, from: middle, head: fixed, answer: { verdict: 'correct', findings: [] } });
   record(root, middle, fixed, { run: 'span' });
-  assert.equal(checkCodexReviews(root, 'HEAD').pass, false);
+  const refused = checkCodexReviews(root, 'HEAD');
+  assert.equal(refused.pass, false);
+  // The head the refusal names, read from its command; codex-review run from a head writes `recheckOf` of what
+  // recheckAt reads there (codex-review.test.mjs, the record at RECHECK_ID).
+  const named = JSON.stringify(refused.next).match(/codex-review --base ([0-9a-f]+) --at [0-9a-f]+ --again/)?.[1];
+  assert.equal(named, short(root, owing), JSON.stringify(refused.next));
+  const from = git(root, 'rev-parse', named);
   // What codex-review reads from the head the refusal names: the recheck of that head's findings.
-  const state = recheckAt(root, { from: owing, tip: fixed, runs: readCodexReviewRuns(root) });
+  const state = recheckAt(root, { from, tip: fixed, runs: readCodexReviewRuns(root) });
   assert.equal(state.kind, 'recheck', JSON.stringify(state));
   assert.equal(state.of, owing);
   run(root, { id: 'recheck', base: owing, from: owing, head: fixed, answer: { verdict: 'correct', findings: [] }, recheck: { of: owing, findings: 1, fixed: 1, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } });

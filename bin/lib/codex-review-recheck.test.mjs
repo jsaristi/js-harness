@@ -699,4 +699,7 @@ test('a spanning record settles a head only where it read what every standing re
   const records = [record(A, C, { run: 'r1' }), record(B, D, { run: 'r2' }), record(A, S, { run: 'r2' })];
   assert.equal(spannedDebt({ heads: [D, C, B], records, runs, atOrBefore: sibling })?.at, C);
   assert.equal(spannedDebt({ heads: [D, C, B], records: [record(A, C, { run: 'r1' }), record(B, S, { run: 'r2' })], runs, atOrBefore: sibling }), null);
+  // A clean recheck that names C but ends on that branch is not read either: C still owes (Codex on 6e4f892).
+  const offLine = [...records.slice(0, 2), record(C, S, { run: 'r2', recheckOf: C })];
+  assert.equal(spannedDebt({ heads: [D, C, B], records: offLine, runs, atOrBefore: sibling })?.at, C);
 });
