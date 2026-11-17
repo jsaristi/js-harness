@@ -16,6 +16,7 @@ import path from 'node:path';
 import { endsUnterminated } from './jsonl-tail.mjs';
 import { isSelf, projectSlug, roleNamed, roleOfTitle, sessionFacts } from './sessions.mjs';
 import { readRecord, recordFileOf } from './background.mjs';
+import { TOOL_OPTIONS } from './template-question.mjs';
 
 export const NOTICE_SCHEMA = 'js-harness.channel-notice/v1';
 export const OPENING_SCHEMA = 'js-harness.channel-opening/v1';
@@ -52,13 +53,14 @@ export const OPENING_TITLE_MAX = 120;
  * sent to standard input by mistake. */
 export const OPENING_TEXT_MAX = 100000;
 /** The limits of a question and of the copy of an answer, in characters. They exist for the same reason as
- * the others: the record is appended with one small write (`appendLine`), and a question with its six
+ * the others: the record is appended with one small write (`appendLine`), and a question with its four
  * options and what waits on it stays far under what that write takes. */
 export const QUESTION_TEXT_MAX = 2000;
-/** The fewest options a question takes: the user's words of 2026-11-17, "siempre dame las preguntas con opciones"
- * (`rule:questions-one-place`), at the question tool's own floor (`TOOL_OPTIONS`, ./template-question.mjs). */
-export const QUESTION_OPTIONS_MIN = 2;
-export const QUESTION_OPTIONS_MAX = 6;
+/** How many options a question takes: the question tool's range (`TOOL_OPTIONS`, ./template-question.mjs), since
+ * every question reaches the user through that tool with options, by their words of 2026-11-17, "siempre dame las
+ * preguntas con opciones" (`rule:questions-one-place`). */
+export const QUESTION_OPTIONS_MIN = TOOL_OPTIONS.min;
+export const QUESTION_OPTIONS_MAX = TOOL_OPTIONS.max;
 export const OPTION_LABEL_MAX = 120;
 export const OPTION_DESCRIPTION_MAX = 500;
 export const QUESTION_WAITS_MAX = 500;
@@ -211,7 +213,7 @@ function checkedQuestion({ text, options, waits, applies }) {
   const line = oneLine(text, QUESTION_TEXT_MAX, 'the text of a question');
   if (HAND_NUMBERED.test(line)) throw new ChannelInputError('the text of a question starts with its own "Pregunta <n>": drop it; the record numbers the question and prints the prefix to ask it with');
   if (!Array.isArray(options)) throw new ChannelInputError('the options of a question are a list, the recommended one first');
-  if (options.length > QUESTION_OPTIONS_MAX) throw new ChannelInputError(`a question has ${options.length} options, ${QUESTION_OPTIONS_MAX} at most`);
+  if (options.length > QUESTION_OPTIONS_MAX) throw new ChannelInputError(`a question has ${options.length} options, ${QUESTION_OPTIONS_MAX} at most, as the question tool shows`);
   const checked = options.map(optionOf);
   const labels = new Set();
   for (const { label } of checked) {

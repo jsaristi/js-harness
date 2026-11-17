@@ -447,11 +447,13 @@ test('template ask exits 1 for a question the record does not hold open or the q
   const { home, done } = gateScratch();
   t.after(done);
   recordQuestion(home, '¿Primera?');
-  recordQuestion(home, '¿Cinco opciones?', ['a', 'b', 'c', 'd', 'e'].map((label) => ({ label, description: '' })));
+  // A question of five options, as a record written before 2026-11-17 may hold one: notify takes four at most now.
+  const old = newNotice({ at: '2026-10-29T05:00:00.000Z', from: ASKER, to: 'orchestrator', kind: 'question', text: '¿Cinco opciones?', id: 'id old', options: ASK_OPTIONS, waits: 'slice C' });
+  appendNotice(home, 'p', { ...old, options: ['a', 'b', 'c', 'd', 'e'].map((label) => ({ label, description: '' })) });
   appendNotice(home, 'p', newNotice({ at: '2026-10-29T05:10:00.000Z', from: ASKER, to: 'orchestrator', kind: 'withdrawn', text: 'ya no', question: 1 }));
   const ask = (n) => call(['ask', ...n], { home, slug: 'p' });
   assert.deepEqual([ask(['1']).code, ask(['1']).err], [1, 'template ask: question 1 is withdrawn']);
-  assert.match(ask(['2']).err, /question 2 has 5 options .*: write it out with its options/);
+  assert.match(ask(['2']).err, /question 2 has 5 options .*: withdraw it and record it again with 2 to 4 options/);
   assert.deepEqual([ask(['3']).code, ask(['3']).err], [1, 'template ask: the record holds no question 3']);
   assert.equal(ask([]).code, 2);
   assert.equal(ask(['x']).code, 2);
@@ -465,7 +467,8 @@ test('shown names a question answered with no shown line of its number as an esc
   recordQuestion(home, '¿Antes de la puerta?', ASK_OPTIONS, at(-30));
   closeQuestion(home, 1, 'answer', at(-20));
   for (const text of ['¿Por la puerta?', '¿A mano?', '¿Retirada?', '¿Abierta?']) recordQuestion(home, text, ASK_OPTIONS, at(10));
-  recordQuestion(home, '¿Cinco opciones?', five, at(10));
+  // Five options, as a record written before 2026-11-17 may hold: notify takes four at most now.
+  appendNotice(home, 'p', { ...newNotice({ at: at(10), from: ASKER, to: 'orchestrator', kind: 'question', text: '¿Cinco opciones?', id: 'id five', options: ASK_OPTIONS, waits: 'slice C' }), options: five });
   const input = JSON.parse(call(['ask', '2'], { home, slug: 'p' }).out);
   hook('--hook', asking('q5', input));
   hook('--shown', { ...asking('q5', input), hook_event_name: 'PostToolUse' });

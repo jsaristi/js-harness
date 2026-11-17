@@ -50,7 +50,7 @@ export const USAGE = [
   '    section of that file is empty or missing, or while neither origin\'s default branch, origin/main nor the session\'s',
   '    branch on origin holds it as it is: commit it and push it first.',
   '  A question takes no text on the command line. Its fields are one JSON object on standard input, with the',
-  '    keys text, options (2 to 6, the recommended one first) and waits, for example:',
+  '    keys text, options (2 to 4, the recommended one first) and waits, for example:',
   '    {"text":"Which branch?","options":[{"label":"main","description":"the default branch"},{"label":"dev"}],"waits":"T3"}',
   '    A question that asks the user to let what a pull request changes be applied also takes "applies":{"pr":<n>}:',
   '    while it is open, merge-queue --refresh-copy refuses to install a main that holds that pull request.',

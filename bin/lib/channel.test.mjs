@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as channel from './channel.mjs';
 import { appendRecord, recordFileOf } from './background.mjs';
+import { TOOL_OPTIONS } from './template-question.mjs';
 
 // Every test writes under a home of its own in the temp folder: nothing here reads or writes the real
 // home, and the transcripts are synthetic.
@@ -138,9 +139,9 @@ const asking = (fields = {}) => note({ kind: 'question', text: 'Which budget?', 
 const askingRefused = (fields, pattern) => assert.throws(() => asking(fields), (err) => err instanceof channel.ChannelInputError && pattern.test(err.message), JSON.stringify(Object.keys(fields)));
 const copyOfAnswered = { tool: 'AskUserQuestion', answers: [{ question: '¿Qué presupuesto?', options: ['Low', 'High'], answer: 'Low', how: 'tapped' }] };
 
-test('the limits of a question are 2000 characters of text, two to six options, 120 characters a label, 500 a description and 500 for what waits, and the copy of an answer keeps 2000', () => {
-  assert.equal(channel.QUESTION_OPTIONS_MIN, 2);
-  assert.deepEqual([channel.QUESTION_TEXT_MAX, channel.QUESTION_OPTIONS_MAX, channel.OPTION_LABEL_MAX, channel.OPTION_DESCRIPTION_MAX, channel.QUESTION_WAITS_MAX, channel.ANSWER_COPY_TEXT_MAX], [2000, 6, 120, 500, 500, 2000]);
+test('the limits of a question are 2000 characters of text, two to four options as the question tool shows, 120 characters a label, 500 a description and 500 for what waits, and the copy of an answer keeps 2000', () => {
+  assert.deepEqual([channel.QUESTION_OPTIONS_MIN, channel.QUESTION_OPTIONS_MAX], [TOOL_OPTIONS.min, TOOL_OPTIONS.max]);
+  assert.deepEqual([channel.QUESTION_TEXT_MAX, channel.QUESTION_OPTIONS_MAX, channel.OPTION_LABEL_MAX, channel.OPTION_DESCRIPTION_MAX, channel.QUESTION_WAITS_MAX, channel.ANSWER_COPY_TEXT_MAX], [2000, 4, 120, 500, 500, 2000]);
 });
 
 const questionJson = (fields = {}) => JSON.stringify({ text: 'Which budget?', options: TWO, waits: 'the sprint', ...fields });
@@ -215,13 +216,13 @@ test('the text of a question carries no "Pregunta <n>:" of its own: the record n
   assert.equal(channel.questionFieldsOf(questionJson({ text: 'Preguntas 5 y 6 se parecen: ¿cuál?' })).text, 'Preguntas 5 y 6 se parecen: ¿cuál?');
 });
 
-test('the options of a question are a list of six at most, each a label and a description and no other key, and no two share a label', () => {
+test('the options of a question are a list of four at most, each a label and a description and no other key, and no two share a label', () => {
   const many = (count) => Array.from({ length: count }, (_, i) => ({ label: `Option ${i}` }));
   questionRefusedIn(questionJson({ options: undefined }), /the options of a question are a list, the recommended one first/);
   questionRefusedIn(questionJson({ options: 'Low' }), /the options of a question are a list/);
   questionRefusedIn(questionJson({ options: { label: 'Low' } }), /the options of a question are a list/);
-  questionRefusedIn(questionJson({ options: many(7) }), /a question has 7 options, 6 at most/);
-  assert.equal(channel.questionFieldsOf(questionJson({ options: many(6) })).options.length, 6);
+  questionRefusedIn(questionJson({ options: many(5) }), /a question has 5 options, 4 at most, as the question tool shows/);
+  assert.equal(channel.questionFieldsOf(questionJson({ options: many(4) })).options.length, 4);
   questionRefusedIn(questionJson({ options: ['Low'] }), /an option of a question is an object/);
   questionRefusedIn(questionJson({ options: [{ label: 'Low', color: 'red' }] }), /an option takes no key "color": it takes label and description/);
   questionRefusedIn(questionJson({ options: [{ label: '' }] }), /the label of an option is empty/);
