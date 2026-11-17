@@ -54,14 +54,21 @@ test('a background session is judged by its last reply, by what its start asked 
   ];
   const result = sessionsOffHome(HOME, { background, isLead });
   assert.deepEqual(result.rows.map((row) => [row.id, row.off, row.corrects]), [
-    ['2', { model: null, effort: 'high' }, 'a resume, js-harness sessions start --resume 2'],
-    ['4', { model: null, effort: 'high' }, 'a resume, js-harness sessions start --resume 4'],
-    // Codex on e878d8b..533f8a6: `sessions start --resume` refuses a conversation a job works, so the act says when.
-    ['8', { model: null, effort: 'high' }, 'a resume once its job is no longer at work, which a resume refuses until then: js-harness sessions start --resume 8'],
-    ['9', { model: null, effort: 'high' }, 'a resume, js-harness sessions start --resume 9'],
+    ['2', { model: null, effort: 'high' }, 'closing it, once its work has landed and nothing in its worktree is needed (js-harness sessions stop 2 --remove-worktree), and start_session'],
+    ['4', { model: null, effort: 'high' }, 'closing it, once its work has landed and nothing in its worktree is needed (js-harness sessions stop 4 --remove-worktree), and start_session'],
+    // Codex on e878d8b..533f8a6: a job at work is closed only once it is no longer at work, so the act says when.
+    ['8', { model: null, effort: 'high' }, 'closing it once its job is no longer at work, once its work has landed and nothing in its worktree is needed (js-harness sessions stop 8 --remove-worktree), and start_session'],
+    ['9', { model: null, effort: 'high' }, 'closing it, once its work has landed and nothing in its worktree is needed (js-harness sessions stop 9 --remove-worktree), and start_session'],
+  ]);
+  // Where rule sessions-open-in-sidebar is not declared, a resume still runs and is the act (lens on 9fc30a0..1e19075).
+  assert.deepEqual(sessionsOffHome(HOME, { background, isLead, resumes: true }).rows.map((row) => row.corrects), [
+    'a resume, js-harness sessions start --resume 2',
+    'a resume, js-harness sessions start --resume 4',
+    'a resume once its job is no longer at work, which a resume refuses until then: js-harness sessions start --resume 8',
+    'a resume, js-harness sessions start --resume 9',
   ]);
   assert.equal(result.removedOff, 1, 'a removed job off the home is counted, and is no row: nothing corrects a job that is gone');
-  assert.deepEqual(result.rows[0], { kind: 'background', id: '2', title: 'JH 2 · job', asked: on, replied: { ...on, effort: 'high' }, state: 'idle', held: on, off: { model: null, effort: 'high' }, corrects: 'a resume, js-harness sessions start --resume 2' });
+  assert.deepEqual(result.rows[0], { kind: 'background', id: '2', title: 'JH 2 · job', asked: on, replied: { ...on, effort: 'high' }, state: 'idle', held: on, off: { model: null, effort: 'high' }, corrects: 'closing it, once its work has landed and nothing in its worktree is needed (js-harness sessions stop 2 --remove-worktree), and start_session' });
   assert.deepEqual(result.on, { desktop: 0, background: 3 }, 'a start that asked another model and now replies on the home is on it; a removed job is not counted');
 });
 
@@ -83,8 +90,8 @@ test('the block says of each session what its source gives, what it is held to a
     '',
     'Sessions off the home: a session is held to claude-fable-5-2 at medium, and the lead to high',
     '  desktop  "JH ORQ · lead"  its menu holds claude-fable-5-2 at xhigh; held to claude-fable-5-2 at high; corrected by his menu',
-    '  background  "JH 3 · job" (j1)  its last reply ran on claude-fable-5-2 at high; its start named no model and no level; its job: busy; held to claude-fable-5-2 at medium; corrected by a resume once its job is no longer at work, which a resume refuses until then: js-harness sessions start --resume j1',
-    '  background  "(no title)" (j3)  no reply of it was read; its start asked for claude-opus-5-5 at no level; its job: not read; held to claude-fable-5-2 at medium; corrected by a resume, js-harness sessions start --resume j3',
+    '  background  "JH 3 · job" (j1)  its last reply ran on claude-fable-5-2 at high; its start named no model and no level; its job: busy; held to claude-fable-5-2 at medium; corrected by closing it once its job is no longer at work, once its work has landed and nothing in its worktree is needed (js-harness sessions stop j1 --remove-worktree), and start_session',
+    '  background  "(no title)" (j3)  no reply of it was read; its start asked for claude-opus-5-5 at no level; its job: not read; held to claude-fable-5-2 at medium; corrected by closing it, once its work has landed and nothing in its worktree is needed (js-harness sessions stop j3 --remove-worktree), and start_session',
     '  1 archived desktop session is off it too (1 at claude-opus-5-5 at high): nothing corrects one while it is archived; he can unarchive it, and it is then listed',
     '  1 background job the harness removed ran off it too: nothing corrects a job that is gone',
     '  on the home: 1 desktop, not archived, and 0 background',
@@ -120,7 +127,7 @@ test('where the home declares an advisor, a background session is on it only whe
     ['7', { model: 'claude-fable-5-2', effort: null, advisor: null }],
   ]);
   assert.deepEqual(result.rows[0].held, { ...opus, advisor: 'claude-fable-5-2' });
-  assert.equal(result.rows[0].corrects, 'a resume, js-harness sessions start --resume 3');
+  assert.equal(result.rows[0].corrects, 'closing it, once its work has landed and nothing in its worktree is needed (js-harness sessions stop 3 --remove-worktree), and start_session');
   assert.deepEqual(result.on, { desktop: 0, background: 2 });
   assert.equal(result.removedOff, 1);
   assert.deepEqual(result.unknownAdvisor, [
@@ -139,8 +146,8 @@ test('the block says the advisor a session is held to, what its last reply named
   });
   const lines = offHomeLines(result, ADVISED);
   assert.equal(lines[1], 'Sessions off the home: a session is held to claude-opus-5-5 at medium, and the lead to high; a background session to the advisor claude-fable-5-2');
-  assert.equal(lines[2], '  background  "JH j1 · job" (j1)  its last reply ran on claude-opus-5-5 at medium with no advisor; its start named no model and no level; its job: idle; held to claude-opus-5-5 at medium with the advisor claude-fable-5-2; corrected by a resume, js-harness sessions start --resume j1');
-  assert.equal(lines[3], '  background  "JH j3 · job" (j3)  its last reply ran on claude-opus-5-5 at high with an advisor not known (its last reply holds no advisorModel); its start named no model and no level; its job: idle; held to claude-opus-5-5 at medium with the advisor claude-fable-5-2; corrected by a resume, js-harness sessions start --resume j3');
+  assert.equal(lines[2], '  background  "JH j1 · job" (j1)  its last reply ran on claude-opus-5-5 at medium with no advisor; its start named no model and no level; its job: idle; held to claude-opus-5-5 at medium with the advisor claude-fable-5-2; corrected by closing it, once its work has landed and nothing in its worktree is needed (js-harness sessions stop j1 --remove-worktree), and start_session');
+  assert.equal(lines[3], '  background  "JH j3 · job" (j3)  its last reply ran on claude-opus-5-5 at high with an advisor not known (its last reply holds no advisorModel); its start named no model and no level; its job: idle; held to claude-opus-5-5 at medium with the advisor claude-fable-5-2; corrected by closing it, once its work has landed and nothing in its worktree is needed (js-harness sessions stop j3 --remove-worktree), and start_session');
   assert.ok(lines.includes('  not read: the advisor of "JH j2 · job" (j2): its last reply holds no advisorModel, so it is not counted on the home'), lines.join('\n'));
   assert.ok(lines.includes('  on the home: 0 desktop, not archived, and 0 background'), lines.join('\n'));
   // odd/tasks/lead-effort-split.md: the reviewers' level is said apart from the lead's where the home declares it.

@@ -3328,7 +3328,8 @@ test('the orchestrator skill says how a model or an effort is switched, beside t
   // Step 4 has the lead make the commit the switch prints, so the one exception to "never commit" names the switch
   // beside `rules change` (his answer to question 270, 2026-11-11).
   assert.ok(text.includes("you may run `js-harness rules change`, or `js-harness rules switch` for a home's model and effort, from a checkout of a `rule/` branch and commit what it writes."), 'the exception names rules switch');
-  at('`js-harness sessions start --title "<title>" --brief <file>` instead, which takes the model and the effort the rules give (`rule:session-model`, `rule:session-effort`) and refuses another,');
+  // T7 of odd/tasks/senior-orchestrator.md: no background start; the card is the way where the user did not type.
+  at('the card is the way there: no session runs in the background, out of the user\'s sidebar, so the guard refuses `js-harness sessions start` and `claude --bg` wherever `rule:sessions-open-in-sidebar` is declared;');
 });
 
 // rule:restart-announce. On 2026-10-20 he asked to be told in capitals when to restart, with everything paused first
@@ -3360,7 +3361,7 @@ test('the orchestrator skill gives Remote Control to no session it tasks', () =>
   const text = components[1].content('0.1.0');
   assert.doesNotMatch(text, /with Remote Control on \(claude\.ai\/code/);
   assert.doesNotMatch(text, /then turn its Remote Control back on/);
-  assert.ok(text.includes('runs it in the background with no Remote Control, since the user talks only to you (`--remote-control` turns it on),'), 'the start line');
+  assert.ok(!text.includes('runs it in the background'), 'no background start (T7)');
   const restart = text.slice(text.indexOf('\n## The restart\n'), text.indexOf('\n## The recap\n'));
   assert.ok(restart.includes('then turn your own Remote Control back on (`rule:remote-control-yes`): no session you task has it.'), restart);
 });
