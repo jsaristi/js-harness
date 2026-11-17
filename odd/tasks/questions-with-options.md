@@ -3,13 +3,10 @@
 ## State
 Worktree `D:/js-harness-worktrees/questions-with-options`, branch `rule/questions-with-options`. Commits: `66e7420e`
 (doc), `82fbf051` + `924c1114` (T2, 2 to 4 options; Codex 0.94 and lenses clean on 9fc30a07..924c1114),
-`263c2933` (T3, the hook's question state names `Pregunta <n>`; Codex 0.9 clean). The reliability lens on
-924c1114..263c2933 found that a self-numbered question passes: fix built, uncommitted: `questionNamed` in
-`bin/lib/reply.mjs` and pure `bin/lib/reply-question.mjs`, both tests green (24 and 4); `bin/reply.mjs`
-`questionRecordOf` wired on the first stop. Left: in `bin/reply.test.mjs` the test "a decision or a question close"
-needs its record to hold question 7 (a `newNotice` question line, 2 options, in `wakeHook`'s `record`), plus a test
-that an unrecorded "Pregunta 1" close is blocked; copy `bin/lib/reply.mjs` over the grader copy; commit; review
-the fix (Codex + reliability lens, base 263c2933). The rule commits
+`263c2933` (T3, the hook's question state names `Pregunta <n>`; Codex 0.9 clean), `5c6a8d60` (the reliability
+lens's fix: the named question must be open in the record; lenses clean), `3d245683` (Codex P2 on 5c6a8d60: the
+corrected stop runs the record check too; Codex 0.98, the P2 rechecked fixed; reliability lens 0 findings). T2
+and T3 done. The rule commits
 (T4) wait for PR 901, whose `rule/sessions-visible-only` holds the rule change open on another branch (`js-harness
 rules change questions-one-place --dry-run`, 2026-11-17); the lead's order: 901 first, then these.
 
@@ -99,8 +96,8 @@ Changing any rule other than these two (it goes to the lead as a question first)
 
 ## Tasks
 - [x] T1 (kind: docs) this document; spec 1, 2; inline
-- [ ] T2 (kind: build) 2 to 4 options in `checkedQuestion`, its tests first, the usage example and "ask it in writing"; spec 1, 2; inline
-- [ ] T3 (kind: build) the reply's question state names `Pregunta <n>`, its tests first, its grader copy, the refusal and help text; spec 3; inline
+- [x] T2 (kind: build) 2 to 4 options in `checkedQuestion`, its tests first, the usage example and "ask it in writing"; spec 1, 2; inline
+- [x] T3 (kind: build) the reply's question state names `Pregunta <n>`, its tests first, its grader copy, the refusal and help text; spec 3; inline
 - [ ] T4 (kind: build) `js-harness rules change` for both rules after PR 901 lands, pair 9 with them; spec 3, 4, 5; inline
 - [ ] T5 (kind: verify) Codex and lenses per slice, an independent verifier, PR, `notify --kind ready`
 
