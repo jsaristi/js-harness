@@ -380,3 +380,8 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   (7a7eb7cc) was not fixed, since it ignores position and quotes (Codex and both lenses); b54476e6 scans the text, quote
   aware, and writes each unquoted `&>` as ` >` before `shellWords` reads it: Codex recheck correct 0.98, both lenses 0
   findings, the earlier one fixed. The suites one file at a time: background-launch 3, lib/guard 51, guard 47 pass.
+  A third verifier pass at 640bdcc6 (read-only, opus; only the reader changed since d27dd75f): nothing blocking; the 12
+  commands that must pass pass through guardMain, the 7 launches are refused, the five suites pass (3, 3, 51, 47, 62).
+  Named as the reader's limits, not changed: one apostrophe in a `#` comment or a heredoc body throws the `&>` scan's
+  quote tracking, so a later `claude &>log --bg` is missed (never a false refusal); `
+…'` quoting and an escaped `>`.
