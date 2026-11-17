@@ -1,9 +1,15 @@
 # again-subrange: an --again over part of a range does not clear an owed correction
 
 ## State
-JH 207, worktree D:/js-harness-worktrees/lens-older-writer, branch feat/lens-older-writer from main 6bd49076. T3 (L84)
-done in 6eba0f3f (L32), reviewed, its PR ready for the lead to land. T5 stays open for his report. The session waits on
-its notices (rule:wait-for).
+JH 207, worktree D:/js-harness-worktrees/spanning-review, branch feat/spanning-review from main f3c650b (PR 900 landed).
+T5 (L33): plan first in this document, then tests first. Rule to test (advisor): a record at H stands unless a later
+one read at least its range, base at or before and head at H or above it on the line; a standing debt is owed until a
+recheck names H. One rule in recheckThrough, correctionOwed through recheckAt; git only where a record of the push range
+owes (V3 counts processes). Red tests: chain M..H2 then K..H3; base..H2 then M..H2 passes; base..H2 alone settles; a
+recheck naming H ends it; S..M (question 320) still owes. Check: againPastThreeReviews (recheck.mjs ~377, codex-review.mjs
+1294) may be the command's guard to amend; the a-span probe through verify898's kit; consumers of at/merge/through
+(codex-review.mjs:1384); follow the flow to a passing row; row-level recount on open PR tips. Read codex-meter before
+each Codex review; stop and tell the lead near the 2% floor (weekly 92% at 20:44). Ready --pr <n> when done.
 
 ## Goal
 A clean Codex review at a head that owes a correction settles that correction only where it reads the whole range the
@@ -56,7 +62,7 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
 - [x] T1 (kind: design) count the real records, depth pass
 - [x] T2 (kind: build) spec 1, tests first
 - [x] T4 (kind: build) spec 1, open: a test that fails without `decidingRecord` in the merge walk's `lastAt` and the row's `mergeOwnAt` (L14)
-- [ ] T5 (kind: build) open, for the lead: a clean review M..H2 that spans the owing head H from inside its range and ends above it clears the correction (L12)
+- [ ] T5 (kind: build) in progress (L33), for the lead: a clean review M..H2 that spans the owing head H from inside its range and ends above it clears the correction (L12)
 - [ ] T6 (kind: build) open, for the lead: where a plain review decides, a standing recheck's open finding joins a first recheck and can get a fourth review (L27)
 - [x] T3 (kind: build) spec 2, done in 6eba0f3f (L32): the lens rows' older-writer note counts only records of the range checked
 
@@ -99,3 +105,4 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
 - L30 2026-11-16, T6 checked further: the verifier's probes rerun on the fixed code through real git; only q3 changed, where the fourth review (A3, B3) is now refused as main refuses A3. The fix also refuses a third review of findings reviewed twice where the last record at the head rechecked is a clean recheck and a plain review there owes: main refuses it the same way, so it is meant (the lead on T6). Codex ea7a235..5d09384 correct (0.87); lenses reliability and risk 0 findings, run without --doc, so they judged the code alone.
 - L31 2026-11-16, the lead: "PR 898 landed. main is 6bd49076 and the installed copy is refreshed. T3 (L84) goes as its own PR from main; run js-harness codex-meter before its Codex review and tell me the figure. T5 stays open for his report." T3's test was red first: a record of another branch, of an older writer, was named in the note of a range it has nothing in. The fix counts only those whose head is in the range checked; the no-evidence note still subtracts every older writer's record, so none of the rest is named as another kind.
 - L32 2026-11-16, T3 checked: the tests of coverage, turns, lens records and rows, check-codex-reviews, codex-review and lens-review, 515 tests, 0 failed. js-harness codex-meter before Codex: five-hour 16% used, weekly 92% used (resets 23:15 local). Codex 6bd4907..6eba0f3 correct (0.94), 110,749 input tokens; lenses reliability and risk 0 findings.
+- L33 2026-11-16, the lead: "PR 900 (T3) landed at 20:44 local (main f3c650b ...). Next: T5 (a spanning review still clears a correction), which predates the branch. Plan it in odd/tasks/again-subrange.md from main f3c650b, tests first. Read codex-meter before each Codex review, and stop and tell me if it nears the floor. Send ready --pr <n> when done."
