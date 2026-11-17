@@ -1,25 +1,23 @@
 # session-roles — a role of its own for each session, beyond its opening (JH SR, design only)
 
 ## State
-Design only, no code. Version 3, 2026-11-16, by JH SR at the lead's word (T12 of
-`odd/tasks/plan-orchestrator.md`, its Spec 9). Read twice: read d8b87396 found 14 failures and read 7d891ab3
-found 13, all 27 taken (L4, L5). Version 3 is the second correction: one delivery path for every role in place of
-four. The third and last read (ea3a7283) still finds 21 real failures, four of them high (L6): they are open,
-not corrected, and go to him as problems (`rule:double-review`: no fourth read). The design is not approved.
-Branch `docs/session-roles`, cut from main at 035a2dcc, worktree `rule-lead-effort-split-aac740`. Nothing is
-built. Three things are his ("Ask me before"): at the lead's word they are recorded as questions 316, 317 and
-318 (L7), and he answered A to each by tap (L8): work sessions get a card too, both rules for the senior, and
-`CLAUDE.md` scoped to work sessions. 317 and 318 change a rule and his file: his typed words are still owed
-before either is written. On 2026-11-17 he approved the spend to correct the 21 findings and to run one
-confirming read (question 323, L9). VERSION 4 IS NOT WRITTEN: this session's own tokens used what he approved
-before a line of it existed (L10), and the lead stopped the work (L12). Version 3 stands, its 21 findings are
-open, and no fourth read has run. Finishing version 4 and the confirming read wait for his return and his word
-on new spend. He typed words for the first of the senior's two rules (L11); the second and the scope of
-`CLAUDE.md` are tap-only and open.
+Design only, no code. Version 4, 2026-11-17, written by JH 213, a senior session opened fresh for it (his answer
+to question 328, L16). It answers each of the 21 findings of the third read (L17), redoes L4 finding by finding
+(L18) and carries his answers: the numbered work sessions get a card (316, L8); the senior does one task at a
+time, in a queue, only for what needs more than Opus (324, L11, L13); the senior closes when its task ends and a
+new one opens (329, L14, which replaces the tap A of 317 on how a senior's task ends); "How sessions run" is for
+work sessions only (330, L15). THE CONFIRMING READ HAS NOT RUN (L19): this session's own tokens and the smallest
+read measured on this document do not fit together under the 3M he approved, so the read waits for his word. The
+design is not approved and nothing is built. The rule changes his answers 324, 329 and 330 ask for are the
+lead's, on a `rule/` branch (T5); none is written here. Branch `docs/session-roles`, cut from main at 035a2dcc,
+draft PR 899. Versions 1 to 3 and their three reads are L4 to L6; the stop of the first attempt at version 4 is
+L10 to L12.
 
 ## Goal
-Each session that holds a role (the lead, the Plan, the senior) reads what its role is, from one text the harness
-owns, when it starts working, after every compaction and in a new session under the same title.
+Each session that holds a role (the lead, the Plan, the senior, a work session) is given what its role is, from
+one text the harness owns: after every compaction and every clear, at the first turn or tool call where the
+harness knows its title, and whenever it asks. What a new session knows before the harness knows its title is
+its brief or its opening, as today; the design says where that leaves a gap and does not claim to close it.
 
 ## Why
 His words (Spec 1): each session must know its role and its function, with a specific role and not only an opening
@@ -60,21 +58,22 @@ senior nothing of what it is, and told this senior to work as a work session.
   `set_session_output_style` asks him with a card and is refused in an unattended session.
 - A text every session reads costs tokens each time, on every model, Fable included — so a card has a budget a
   test holds and is given once a session and once after each compaction, never on every call.
+- A rule's sentence stays in its home: `js-harness rules check` reads the home's own text for each phrase and
+  fails when it is gone (read 3's citation of `bin/lib/rules-check.mjs:191-198`), so a design that moves a
+  sentence moves a rule of his. Version 4 moves none.
+- His answer to question 307 moves his questions to the Plan and its typed line is owed: a text that says who
+  puts a question to him goes stale that day, so no card says it.
+- A hook has seconds, not a search: two after a tool call, five at a turn's start
+  (`bin/lib/hook-entries.mjs:44-48`, `:172-178`), and a failure there is silent (`|| exit 0`, `:37`, `:164`).
 
 ## Ask me before
-Three things are his, drafted for the lead, one at a time:
-1. "cada sesion por ejemplo Orquestador, Orquestador Plan y Senior" names three as examples. Do the numbered work
-   sessions get a role card too? Proposed: yes, one short card. A no is written as a named exemption with his
-   answer's line.
-2. Two lines the senior's card needs are in no rule today: a senior works one task at a time, and a senior's task
-   ends with `waiting`, never `closed`. Each is a new rule, his to approve, changed by the lead on a `rule/`
-   branch; until then neither is in the card. With the second, `notify --kind closed` from a senior's title is
-   refused, so the line is held by a check and not by the card.
-3. `CLAUDE.md` says every session holds one feature and commits on its feature branch ("How sessions run"); that
-   is a work session's way, and it contradicts a lead, which never commits, and a standing senior. Proposed: that
-   paragraph says it speaks of work sessions. It is his file.
-Not his, said with its cost: read 1 cost 1,397,745 Claude tokens and 477,121 of Codex; read 2 cost 2,143,025 and
-472,024; the command states 1.1M and 0.9M. The third read is estimated at 1.4 to 2.2M Claude and 0.5M Codex.
+Nothing in this design waits for a new answer of his except its approval. The three questions of version 3 are
+answered: 316 (L8), 317 by his typed words of 324 and 329 (L13, L14), 318 by his typed words of 330 (L15). Each
+of those changes a rule of his or his file, so the lead writes it on a `rule/` branch with his words and their
+date (T5); a card carries a line only once its rule exists.
+Not his, said with its cost: the reads of versions 1 to 3 measured 1,397,745, 2,143,025 and 3,445,474 Claude
+tokens and 477,121, 472,024 and 767,513 of Codex; the command states 1.1M and 0.9M. A read of version 4 is
+forecast from those three, 1.4 to 3.4M Claude and 0.5 to 0.8M Codex: an estimate.
 
 ## Depth pass
 - 1. Method: an organization gives each post a job description apart from the day's assignment: its purpose, its
@@ -89,14 +88,16 @@ Not his, said with its cost: read 1 cost 1,397,745 Claude tokens and 477,121 of 
   two hooks already speak to a session by themselves and already know its title, the one after a tool call, which
   resolves the role for the inbox, and the one after a compaction. Weighed and left out, each for what rests on
   it: the card inside `sessions --opening`, inside the senior's wait brief, at the head of the skill, and from the
-  resume hook on a plain `startup`, when a title is usually not set yet (`bin/resume.mjs:840`).
+  resume hook on a plain `startup`, when a title is usually not set yet (`bin/resume.mjs:840`). Weighed again for version 4 and used as a
+  second carrier: the turn's start, where `rules --hook` already runs (The design).
 - 2. Raw material (the explorer's and the two reads' citations; this session checked `bin/resume.mjs:874` and
   `:905`, `bin/lib/lead-prompt.mjs:4`, `bin/lib/lead-protocols.mjs:12-16`, `bin/lib/manifest.mjs:134` and
   `:154-156`; the rest are theirs, not rechecked):
   - His words: `js-harness sessions --quote 699d7c29-54c4-460e-a5e8-700b114eb251 5054`.
   - Titles hold three roles: `bin/lib/sessions.mjs:1248-1261` (`orchestrator`, `senior`, and `work` for a
-    number); a Plan's title holds none; no list of the roles is exported; `roleOfTitle` has 42 callers
-    (`odd/tasks/senior-orchestrator.md`, D17).
+    number); a Plan's title holds none; no list of the roles is exported; D17 of `odd/tasks/senior-orchestrator.md` gives `roleOfTitle` 42 callers; counted on 2026-11-17 by
+    the explorer of L12 (its command is item 6 of `session-roles-v4-facts.md`; not run again): 31 call lines in
+    16 modules, tests apart.
   - At a start. The lead: `LEAD_OPENING_PROMPT`, "Follow the js-harness-orchestrator skill"
     (`bin/lib/lead-prompt.mjs:4`). The senior: `SENIOR_WAIT_BRIEF`, "Run nothing", its first turn being on the
     lead's model (`bin/lib/lead-protocols.mjs:9-16`); `js-harness sessions start` still takes any brief for a
@@ -108,11 +109,13 @@ Not his, said with its cost: read 1 cost 1,397,745 Claude tokens and 477,121 of 
     the charter. Every other session gets the work session's mode line (`:943`).
   - After a tool call. `resume --pause` runs on PostToolUse, adds context to the session (this session read its
     pause notice that way on 2026-11-16) and resolves the session's title and role for the inbox
-    (`bin/lib/inbox.mjs:171`).
+    (`bin/lib/inbox.mjs:171`). What it has said it keeps in a state file of the session, not in the transcript
+    (`bin/lib/pause.mjs:347-371`), and it has two seconds (`bin/lib/hook-entries.mjs:44-48`).
   - The other hooks (`bin/lib/hook-entries.mjs`): `resume --hook` and `backup --session-start` on SessionStart;
     `rules --hook` on SessionStart, UserPromptSubmit and SubagentStart, with no title logic; `doctor --hook` on
-    SessionStart and the entry on a failed tool call (`:8-13`, `:55-60`), which print a message for him and give
-    the model no context.
+    SessionStart (`:8-13`), which prints a message for him and gives the model no context; and the pause command
+    again on a failed WebFetch (`:55-60`), which does give the model context, the web notice, and gives it to a
+    sub-agent too (`bin/resume.mjs:1009-1013`, `:1038`).
   - The senior's limits are decisions D1 to D14 of `odd/tasks/senior-orchestrator.md:171-232` and guard refusals:
     no text tells the senior itself. What the lead's skill says of it: "it reports through the same notices as any
     work session", and that its sub-agents name the work sessions' model and never inherit its own
@@ -127,11 +130,12 @@ Not his, said with its cost: read 1 cost 1,397,745 Claude tokens and 477,121 of 
   this session's own transcript (285fc2c7-d588-4b0c-bef5-ded03fe6b04c under the worktree's project folder, lines
   1649 and 1669): the block the hook gave this senior after the compaction of 2026-11-16 00:57 local names its
   opening and its feature document and says "Mode of the next open task: T10 (kind: verify): the session and
-  every sub-agent on claude-opus-5-5 at medium". This session is the senior, on `rule:senior-model` at high: the
-  hook read it as a work session. And one cost already paid for a role nobody had written down: on 2026-11-15
+  every sub-agent on claude-opus-5-5 at medium". This session is the senior, on `rule:senior-model` at high: the hook read it as a work session. It did so at each of its three compactions: the blocks at lines 882, 1649
+  and 2783 all name claude-opus-5-5 at medium (the explorer of L12, item 11; 882 and 2783 not reread here). And one cost already paid for a role nobody had written down: on 2026-11-15
   this senior ended its task with a `closed` notice (the channel's record, 2026-11-16T03:44Z), which is what the
-  one sentence the harness has on a senior's notices told it to do; the lead's correction, "you are the standing
-  senior", came by message. What this does not show: that a role text would have prevented it, or that a lead or
+  one sentence the harness has on a senior's notices told it to do; the lead's correction, "you are the standing senior", came by message. His answer to question 329 (L14) has since made `closed` the
+  right end of a senior's task: the event still shows a session acting on a role nobody had written down, and
+  no longer shows a wrong act. What this does not show: that a role text would have prevented it, or that a lead or
   a Plan loses its role the same way; one session, one day.
   Verdict: supports
 - 5. Request: "Give each role one short text the harness owns, apart from the opening: who the session is, what
@@ -147,99 +151,184 @@ Not his, said with its cost: read 1 cost 1,397,745 Claude tokens and 477,121 of 
    question 315; whole in Log L17 of `odd/tasks/plan-orchestrator.md`)
 
 ## The design
-- **A role card.** One constant a role, in one new module, `bin/lib/role-cards.mjs`, beside its test. Six parts,
-  always in this order: who you are; what you do; what you never do; whom you hand work to and who sends you
-  work; where his questions go; your limits. A budget of 1,500 characters a card is a constant the test reads.
-- **Which title gets which card.** `bin/lib/sessions.mjs` exports one frozen list of the roles a title can hold,
-  which `roleOfTitle` is built from, with no caller's result changed. The cards module gives every role on it a
-  card or a named exemption with its reason, so a role added to the parser with neither fails the test. Two
-  titles hold no role and still get a card, by a match of the cards module alone: a Plan's, `<code> PLAN · …`,
-  from the first build, and a drifted lead's, by the reading D17 already has. That match gives no role anywhere
-  else: no inbox, no guard, no board. When T5 of `plan-orchestrator.md` makes `PLAN` a role, the list gains it and
-  the card is already there; that task names this module (its Log L18).
-- **The senior's card, drafted, 778 characters**, each line with its source:
-  > You are this project's senior (`<code> SR`): one standing session, on `rule:senior-model` at
-  > `rule:senior-effort`.
-  > What you do: the tasks the lead sends you as messages, where more intelligence or complexity is needed, such
-  > as a design or a hard diagnosis.
-  > What you never do: start a session; take work from anyone but the lead; let a sub-agent inherit your model:
-  > each names the model `rule:session-model` gives its work.
-  > Whom you hand work to: the lead, by `js-harness notify --to orchestrator`. The lead is your one sender.
-  > His questions: you ask him nothing. Record a question with `notify --kind question` and the lead puts it to
-  > him (`rule:questions-one-place`).
-  > Your limits: decisions D1 to D14 of `odd/tasks/senior-orchestrator.md` say how you are started and sent work.
-  Sources: one alive, D4; tasks as the lead's messages, D3, D5 and D6; starts no session, D3; the sub-agents'
-  model, `bin/lib/lead-protocols.mjs:43`. Two lines wait for his rules (question 2) and are not in the draft.
-- **The other cards, in outline**, written at the build under the same budget:
-  - The lead: leads this project's sessions; opens the work sessions and the senior, sends them work, puts every
-    question to him and carries his answer, lands ready PRs; never implements, commits or writes in a worktree,
-    except what `rules change` and `rules switch` write from a `rule/` checkout, and never answers for him
-    (`bin/lib/manifest.mjs:154-156`); receives the plan from the Plan where one holds its role; its long text is
-    the skill's lead part and the charter at the head of its relief file (`rule:lead-charter`).
-  - The Plan: who it is, that it plans and does not execute, hands plans to the lead alone and reads no code
-    (`odd/tasks/plan-orchestrator.md`, "The role"; his answers in its Log L15 and L16).
-  - A work session, on a yes to question 1: owns one feature, its document, its branch and its PR; reports to
-    the lead; records its questions for the lead (`rule:questions-one-place`, `bin/lib/manifest.mjs:134`).
-- **One home, in practice.** Where a card's sentence stands today in another text, that text renders it from the
-  constant and keeps no copy: the who, does and never sentences of the skill's lead part
-  (`bin/lib/manifest.mjs:154-156`) and the senior's sentence in the lead's protocols
-  (`bin/lib/lead-protocols.mjs:43`). The skill's "Two kinds of session" (`:120`) names the roles and points to
-  their cards. A check refuses a card's sentence copied anywhere else in the skill, and a test holds that the
-  work session's part carries no line of the lead's card.
-- **Delivery, one path at the start.** The hook that runs after a tool call already knows the session's title.
-  The first time it sees a title that gets a card, it adds the card to the session, once: it finds its own
-  earlier line in the session's transcript, as the pause notice is found, and says nothing again. So every role
-  gets its card when it starts working, whoever started it and whatever its brief or opening said: a senior on
-  its first task and its own model, never on the wait turn, which calls no tool; a Plan he opens by hand and
-  titles afterwards; a new session under an old title. Not checked, and T3's first step: what that hook reads of
-  the transcript on each call today, and what one more search of it costs.
-- **Delivery after a compaction or a clear: the resume block.** `resumeLines` prints the card itself for every
-  title that gets one, the lead's included, with two more lines in the lead's branch: the skill to load again,
-  and that its charter is at the head of the relief file. The mode line reads the senior's own home. For a title
-  that is not known or holds no card, the block says so in one line and names the command below.
+Version 4 adds as little as it can: four constants, one small state file a session, and a few lines in three
+commands that already speak to a session. Nothing moves out of the skill, no hook entry is added, the guard and
+`roleOfTitle`'s results are not touched. Where a sentence below rests on code, the line was read by this session
+on 2026-11-17 at head 74b10f43 unless it says "the explorer's" (`session-roles-v4-facts.md`, checked by nobody
+else) or "not known".
+- **A role card.** One constant a role, in one new module, `bin/lib/role-cards.mjs`, beside its test. The module
+  imports nothing: what it needs (a role's name, a rule's value) is passed in by whoever prints the card. Six
+  parts, always in this order: who you are; what you do; what you never do; whom you hand work to and who sends
+  you work; where his questions go; your limits. A budget of 1,500 characters a card is a constant the test reads.
+- **A card names rules and holds none of their text.** A card is new text in its own words. Where a rule
+  governs a part, the card names it, `rule:<id>`, and stops. So every sentence of the skill stays where it is:
+  `bin/lib/manifest.mjs:154-156` stays the home of `rule:lead-charter` and `:249` of `rule:questions-one-place`
+  (the phrases and their homes: read 3's citation of `bin/lib/rules-data.mjs:319-328` and `:453-461`), and
+  `bin/lib/lead-protocols.mjs` gains no import. Nothing refuses a rule's phrases copied outside their home today
+  (the explorer's, item 4), so the cards' test does it for the cards: it reads every rule's phrases and fails on
+  a card that holds one, and it runs `js-harness rules check` clean. What this costs, said: a card and the skill
+  speak of the same role in two texts. One home holds for a rule's sentence and for a value; a card's own
+  sentence has its home in the card and its source in this Log, and the skill is not rewritten to render it.
+- **His questions, in every card**, is one line: "His questions: as `rule:questions-one-place` says." It does
+  not say who puts them to him, because his answer to question 307 moves that to the Plan and his typed line is
+  still owed (`odd/tasks/plan-orchestrator.md`, its Log on question 307; read 3's citation of `:480-483`). The
+  test holds that line equal in the four cards, so a card cannot go stale when the rule changes.
+- **Which title gets which card.** `bin/lib/sessions.mjs` exports one frozen list of the role names
+  `roleOfTitle` returns (`orchestrator`, `senior`, `work`: `:1248-1261`, the explorer's), with no caller's result
+  changed; the cards' test fails for a name on it with no card. A Plan's title holds no role today, so the cards
+  module has one pattern of its own for `<code> PLAN · …`, used only to pick a card: it gives no role to the
+  inbox, the guard or the board. When T5 of `plan-orchestrator.md` makes `PLAN` a role, the list gains it and the
+  pattern leaves. Every other title gets no card and one line that names `js-harness sessions --role`: a title
+  not known, one off its shape, and a relieved lead's (`<code> ORQ relevada`), which holds no role by design.
+  Declined, against version 3: a card for a lead whose title drifted. Its title holds no role for the inbox or
+  the guard either, and a card would tell it otherwise; the fix for a drifted title is the rename
+  `rule:session-title` asks for.
+- **The senior's card, drafted, under 900 characters before its two values are filled.** It is given only where
+  the project declares `rule:senior-model`, which is how the lead's senior section opens
+  (`bin/lib/lead-protocols.mjs:43`); the two rules are of this repository only (the explorer's, item 5). The
+  printer fills `{model}` and `{effort}` from `ruleHere` (`bin/lib/rules.mjs:399`).
+  > You are a senior session of this project (`<code> SR`), on {model} at {effort} (`rule:senior-model`,
+  > `rule:senior-effort`).
+  > What you do: the task the lead gave you, one the lead judged to need more intelligence or complexity than a
+  > work session's model gives, such as a design, an audit or the strongest reader of a proposal.
+  > What you never do: start a session; let a sub-agent inherit your model: each names the model
+  > `rule:session-model` gives its work.
+  > Whom you hand work to: the lead, by `js-harness notify --to orchestrator`. The lead sends you your task.
+  > His questions: as `rule:questions-one-place` says.
+  > Your limits: at most one senior is alive, since the weekly meter of your model is not read per call. Your
+  > first turn ran on the lead's model, so it carried no task.
+  Sources, each a decision of `odd/tasks/senior-orchestrator.md` (the explorer's, item 14) or a line of the
+  skill: the lead's judgment is the condition, D5; the three examples, as `bin/lib/lead-protocols.mjs:43` gives
+  them (read 3, Claude 5); starts no session, D3; the sub-agents' model, `:43`; reports to the lead, D6; the lead
+  sends the task, D3 and D6, which name the sender and forbid no one, so the card forbids no one; one alive and
+  why, D4; the first turn, D11. No line says "you ask him nothing": the rule's own sentence is conditional.
+  Two lines wait for the rule the lead writes from his words (T5) and enter the card with it, not before:
+  "One task at a time: the next one waits in the lead's queue" (324, L13) and "When your task is done you close,
+  `notify --kind closed`; the next task opens a new senior" (329, L14). With them "long-lived" in D3 and "one
+  senior session stands beside the work sessions" in `:43` change; both are in T5, neither is changed here.
+- **The other cards, in outline**, written at the build under the same budget and the same test:
+  - The lead: who it is; that it leads the project's sessions and what it never does, in the card's words, with
+    `rule:lead-charter` and `rule:away-autonomy` named for what it may do alone; that its long text is the lead
+    part of the skill `js-harness-orchestrator` and the charter at the head of its relief file.
+  - The Plan: that it plans and does not execute, hands plans to the lead alone and reads no code. Its sources
+    are in this Log (`odd/tasks/plan-orchestrator.md`, "The role", its Log L15 and L16), not in the card: that
+    document does not ship to another project.
+  - A work session (316): owns one feature, its document, its branch and its PR; reports to the lead by
+    `js-harness notify --to orchestrator`; its long text is the work session's part of the same skill.
+- **Delivery: one state file, three carriers.** The state is `<home>/.js-harness/channel/role-card/<session
+  id>.json`, beside the pause's and the rules' own per-session files (`bin/lib/pause.mjs:347-351`;
+  `bin/lib/rules-reach.mjs:191`), holding `{ role, stretch, compaction }`. A card is owed while no file
+  `<session id>.<stretch>.told` exists beside it. To give a card is to create that file with the exclusive flag
+  and print only if the creation succeeded, so two calls at once give one card. To owe it again is to add one to
+  `stretch`. Version 3's "finds its own earlier line in the transcript, as the pause notice is found" was false:
+  the pause keeps `armed` and `compaction` in its state file (`bin/lib/pause.mjs:351-362`) and no hook searches
+  the transcript.
+
+  | When | Carrier | The title comes from | What it does |
+  |---|---|---|---|
+  | After a compaction or a clear | the resume block, `resumeLines` (`bin/resume.mjs:872-874`) | `titleOf` (`:881`) | First adds one to `stretch` and writes `compaction: "pending"`. Then, where the title gets a card, prints it and creates the marker. A block that fails, or knows no title, leaves the card owed. |
+  | At a turn's start | `rules --hook` on UserPromptSubmit (`bin/lib/hook-entries.mjs:168-178`, five seconds) | the title the hook after a tool call keeps for the inbox (`bin/lib/inbox.mjs:160-171`); else the app's record (`appSessions`, `bin/lib/app-record.mjs:81-104`, the explorer's) | Where a card is owed and the title gets one: prints it and creates the marker. |
+  | After a tool call | `resume --pause`, the session's own branch (`bin/resume.mjs:1011`, two seconds) | the same kept title (`bin/lib/inbox.mjs:170-171`) | The same; and it reads the boundary below. |
+
+  - No new hook entry: `rules --hook` already runs on UserPromptSubmit, reads the session's id and stays quiet
+    for a sub-agent's own events (`bin/lib/rules-reach.mjs:173-180`). Its wrapper prints one text today
+    (`:268-270`); joining the card to it is a code change of T3, and the card is said even on a turn where the
+    rules have nothing to say or the folder is no git checkout. `bin/lib/rules-reach.mjs` or the new module then
+    prints a hook message, so it is registered where `bin/lib/rules-sources.test.mjs` asks (the explorer's,
+    item 4).
+  - A role that changes. The state's `role` differs from the title's: a title that now gets another card is
+    given that card; a title that now gets none, where `role` was set, is told once "Your title no longer holds
+    the role <role>" and `role` is cleared. That is the relieved lead (read 3, Claude 8).
+  - A compaction whose resume block never ran. The hook after a tool call already reads the last compaction
+    boundary in the transcript's end (`end.compaction`, `bin/lib/pause.mjs:349`, `:358`). Where the state holds
+    `"pending"` it stores that value and owes nothing; where the value differs from the stored one, it adds one
+    to `stretch`; where the end holds no boundary (null), it changes nothing. The boundary is written after the
+    resume hook runs (the explorer's, items 3 and 11), which is why the block writes `"pending"` and not a value.
+  - A clear gives a new session id (not known: read in T3's first step), so no state: the block gives the card
+    and the marker, and the next turn's start and tool call give nothing.
+- **What is guaranteed, and what is not.** Guaranteed, by tests: the card is in the resume block after a
+  compaction or a clear whose title is known; and it is given once at the first turn's start or tool call at
+  which the title is known, whichever comes first. Not known, and T3's first step: whether a title is known at a
+  new session's first UserPromptSubmit. The resume hook's own code treats a title as usually not set at a plain
+  start (version 3's reading of `bin/resume.mjs:840`); a session started with `start_session` and a title may
+  have it in the app's record by then, and nobody has looked. Until that is measured the design claims this and
+  no more: a session whose title is not known at its first turn gets its card after the first tool call that
+  follows the title, and one that answers that turn in text alone gets none on it. Its brief or opening is what
+  it has before that, as today. The only hook that runs before a session's first act is the guard
+  (PreToolUse), and the guard is out of scope here; read 3's Codex 1 stands as a limit of this design, said in
+  the Goal, not as something it fixes.
+- **The resume block, by role.** The role the card resolved picks the whole block, with `roleOfTitle` as it is:
+  - A lead's: as today (`bin/resume.mjs:905-909`), with its card and two more lines: the skill to load again,
+    and that its charter is at the head of the relief file (`bin/lib/manifest.mjs:155`).
+  - A senior's: a work session's block, since it holds a feature document and a task, with its card and with
+    the mode line read from the senior's home (`SENIOR_HOME`, `bin/lib/model-shape.mjs:15`). Today every title
+    that is not a lead's gets `nextModeLines` (`bin/resume.mjs:943`, `:976-985`), which reads the work sessions'
+    home (the explorer's, item 2): that is the wrong model this senior was told three times.
+  - A Plan's: its card, its opening and the questions. No search for a feature document and no mode line: it
+    owns no feature and reads no code. Where a Plan keeps its state is `plan-orchestrator.md`'s to say and was
+    not read here (not known); the block names that place once that document's T5 gives one.
+  - A work session's: as today, with its card. A title with no card: as today, with the one line.
 - **To read a card again.** `js-harness sessions --role <title>` prints the card for that title: exit 0 with the
   card; 1 for a title that gets none; 2 for a call it cannot read (no title, or an option it does not take
-  with). It records no reading.
-- **What a check holds, and what stays unmeasured.** Held by tests: every role has a card or an exemption; six
-  parts; the budget; one home; the card in the first hook line and in the resume block, on a compaction and on a
-  clear, for each role, for a Plan's title, a drifted lead's and no title; the senior's rendered text keeps the
-  sub-agents' line; the three exits. Held by code once his rule exists (question 2): a senior's `closed` notice
-  is refused. Not measured: whether a session that has read its card works better. One event on one day is the
-  whole record, so no count over the next tasks could tell the card from chance; T5 reads delivery, and says so.
-- **Not proposed, and why.** A reminder on every tool call: it spends tokens on each call for a text lost only
-  where memory is cut. An output style a role: the one carrier at the system level on every turn, but it needs
-  his tap at each start, is refused when he is away, replaces the project's one style, and its surviving a
-  compaction is not checked; his to reopen if the cards prove too weak. An agent type for a top-level session:
+  with). It records no reading and writes no state.
+- **The Plan's stored opening.** By the lead's word its phase 0 opening carries a role section
+  (`odd/tasks/plan-orchestrator.md`, its Log L17). That is a second copy of the Plan's role, known and owned by
+  the lead, until T4 shows the Plan's card delivered; then the lead stores that opening again without the
+  section (T4's last step).
+- **What a check holds, and what stays unmeasured.** Held by tests: every role name has a card; six parts; the
+  budget; no rule's phrase in a card; the questions line; `rules check` clean; the senior's card only where its
+  rule is declared, with its values filled; the state table row by row (owed, given, two calls at once, a role
+  that changes, pending, a boundary that differs, no boundary); the block for each role on a compaction and on
+  a clear, with the senior's mode line; the three exits. Not measured: whether a session that has read its card
+  works better. Three wrong blocks in one session are the whole record, so no count over the next tasks could
+  tell the card from chance; T4 reads delivery, and says so.
+- **Not proposed, and why.** Moving the skill's sentences into the constants: it moves the homes of two of his
+  rules (read 3, Claude 1 and Codex 5). A new hook entry at the turn's start: five files and a counted limit
+  (the explorer's, item 7) for what an entry that already runs there can carry. A card from the guard, before
+  the first tool call: the guard is out of scope. A refusal of a senior's `closed` notice: his answer to 329
+  makes `closed` the right end. A reminder on every tool call: tokens on each call for a text lost only where
+  memory is cut. An output style a role: it needs his tap at each start, is refused when he is away, replaces
+  the project's one style, and its surviving a compaction is not checked. An agent type for a top-level session:
   `start_session` takes none. A role section inside each stored opening: it goes stale with the opening.
 - **Cost.** To read: a card of 1,500 characters is about 400 tokens, once a session and once after each
-  compaction; an estimate. The skill does not grow: its sentences move into the constants it renders. To build:
-  three small tasks on five files other sessions also hold, with two verifiers; not estimated in hours, since no
-  closed stretch measures work of this kind.
-- **Reach.** The cards ship with the harness, so every project gets them; the Plan's card is read only by a
-  session titled as a Plan.
+  compaction or clear; an estimate. To run: one small state file read after each tool call and at each turn's
+  start, inside budgets of two and five seconds, and one read of the app's record only while a card is owed and
+  no title is kept; neither is measured, and T3's first step measures both. To build: three small tasks, with
+  two verifiers; not estimated in hours, since no closed stretch measures work of this kind.
+- **Reach.** The lead's, the Plan's and the work session's cards ship to every project: they name only rules in
+  force project-wide (`rule:questions-one-place`, `rule:lead-charter`, `rule:away-autonomy`; the explorer's,
+  item 5) and a skill installed in every home (the explorer's, item 9). The senior's is given only where the
+  project declares `rule:senior-model`. No card names a feature document.
 
 ## Tasks
-One chain: T2, then T3, then T4. The board is checked before each. His three answers do not hold T2 to T4: a
+One chain: T2, then T3, then T4. The board is checked before each. T5 is the lead's and holds none of them: a
 card ships without the lines that wait for a rule.
-- [ ] T1 (kind: design) (1) This document, its double reviews, the three questions for him. Route: inline, JH SR.
-- [ ] T2 (kind: build) (1) The exported list of roles (`bin/lib/sessions.mjs`); `bin/lib/role-cards.mjs` and its
-  test: the cards of the lead, the senior and the Plan (a work session's, or its exemption, by question 1), the
-  match for a Plan's and a drifted lead's title, the six parts, the budget, the source of each line in this Log;
-  the skill and the lead's protocols render what the cards now hold and lose those sentences, named in the
-  commit (`bin/lib/manifest.mjs`, `bin/lib/lead-protocols.mjs`), with the check against a copy; `:120` names the
-  roles. High risk 3 (a function with 42 callers; texts that ship to every project): a verifier.
-- [ ] T3 (kind: build) (1) Delivery. First, read what the hook after a tool call reads today and measure one more
-  search of the transcript; then the once-a-session line (`bin/resume.mjs`, `bin/lib/inbox.mjs`), the resume
-  block for every title that gets a card, the lead's two lines, the mode line from the senior's home, the line
-  for a title not known; `js-harness sessions --role` with its three exits (`bin/sessions.mjs`). Tests first, on
-  a compaction and on a clear for each role; fixture: this session's block of 2026-11-16 00:57 local. High risk
-  3 (texts every session already reads): a verifier.
-- [ ] T4 (kind: verify) (1) From real sessions, the transcript lines in this Log: the card at the first tool call
-  of a lead, of a senior and of a Plan, at whatever start comes next by itself (a senior is one alive, D4, so
-  none is stopped to make a start), and in the block after a real compaction of each. It reads delivery only.
-- [ ] T5 (kind: build) (1) Only on his answers, by the lead on a `rule/` branch: the two rules of question 2, the
-  two lines in the senior's card, `notify --kind closed` refused for a senior's title with its test, and the
-  sentence of `bin/lib/lead-protocols.mjs:43` that says the opposite; the paragraph of `CLAUDE.md` of question 3.
+- [ ] T1 (kind: design) (1) This document, its double reviews, his answers. Route: inline, JH SR, then JH 213.
+- [ ] T2 (kind: build) (1) The exported list of role names (`bin/lib/sessions.mjs`); `bin/lib/role-cards.mjs`,
+  with no import, and its test: the four cards, the pattern for a Plan's title, the six parts, the budget, no
+  rule's phrase in a card, the questions line, the senior's card only where its rule is declared, `rules check`
+  clean, the source of each line in this Log. No sentence leaves `bin/lib/manifest.mjs` or
+  `bin/lib/lead-protocols.mjs`. High risk 3 (an export of a function with 31 call lines in 16 modules; texts
+  that ship to every project): a verifier.
+- [ ] T3 (kind: build) (1) Delivery. First, measure and write here: whether a title is known at a new session's
+  first UserPromptSubmit, started by `start_session` and by hand; what a clear gives the hooks; the time of the
+  state read and of the app's record read against two and five seconds. Then, tests first: the state file and
+  its marker; the card from `rules --hook` at a turn's start, from the hook after a tool call and in the resume
+  block, each row of the state table; the block by role, the senior's mode line, the lead's two lines, the line
+  for a title with no card; `js-harness sessions --role` with its three exits (`bin/sessions.mjs`); the hook
+  message registered. Fixtures: the three blocks this project's senior was given (transcript 285fc2c7, lines
+  882, 1649 and 2783). High risk 3 and 4 (texts every session already reads; two hooks writing one state): a
+  verifier.
+- [ ] T4 (kind: verify) (1) From real sessions, the transcript lines in this Log: the card at the first turn or
+  tool call of a lead, of a senior, of a Plan and of a work session, at whatever start comes next by itself, and
+  in the block after a real compaction of each. It reads delivery only. Last step, the lead's: the Plan's
+  phase 0 opening stored again without its role section.
+- [ ] T5 (kind: build) (1) The lead's, on a `rule/` branch, with his words and their dates: the senior's rule
+  from 324 and 329 (one task at a time, in a queue; only for work that needs more than Opus; it closes when its
+  task ends and a new one opens), and with it the two lines of the senior's card, the sentence of
+  `bin/lib/lead-protocols.mjs:43` that says one senior stands, "long-lived" in D3 of
+  `odd/tasks/senior-orchestrator.md`, and the stored opening of the earlier JH SR, which says "never `closed`";
+  the "How sessions run" paragraph of `CLAUDE.md` from 330.
 
 ## Log
 - L1 2026-11-16, his words: Spec 1, read with `sessions --quote` by this session. The lead's message to JH SR
@@ -393,3 +482,71 @@ card ships without the lines that wait for a rule.
   needs its id in `docs/SPEC.md`. What is his when he returns: whether to spend on finishing version 4 and on
   its read, and in which session; a fresh senior session is what question 323 told him and what L10
   recommends for its cost.
+- L13 Version 4, by JH 213 (a senior session on claude-fable-5-2, opened fresh on 2026-11-17 with the opening
+  `js-harness sessions --opening "JH 213 · senior: session-roles v4"`). His answer to question 324 is whole in
+  L11 (line 7921, 2026-11-17T07:14Z, typed) and was read again by this session. Carried into the design: a
+  senior does one task at a time and the next waits in a queue; it is used only for complex tasks that need
+  more power than Opus. Both wait for the lead's rule (T5) before they are a line of the card.
+- L14 His answer to question 329 (`js-harness sessions --quote 699d7c29-54c4-460e-a5e8-700b114eb251 10115`,
+  2026-11-17T14:25Z, typed): "El señor se cierra al terminar y se abre uno nuevo". The question asked whether a
+  senior that ends a task waits for the next or closes; "señor" is read as the senior (the lead's reading, in
+  this session's opening). It replaces the tap A of question 317 on that point (L8): "a senior's task ends with
+  `waiting`, never `closed`" and the refusal of `notify --kind closed` from a senior's title leave the design.
+  A senior ends its one task with `closed`, as a work session does, and the next task opens a new senior. What
+  his words do not say: whether the senior's start (the wait brief, D11 and D14) changes; the design leaves it
+  as it is.
+- L15 His answer to question 330 (`js-harness sessions --quote 699d7c29-54c4-460e-a5e8-700b114eb251 10155`,
+  2026-11-17T14:28Z, typed): "how sessions run es solo para sesiones de trabajo". It gives the words question
+  318's tap lacked (L8): the "How sessions run" paragraph of `CLAUDE.md` speaks of work sessions. It is his
+  file: the lead changes it (T5), not this document.
+- L16 His answer to question 328 (`js-harness sessions --quote 699d7c29-54c4-460e-a5e8-700b114eb251 10046`,
+  2026-11-17T14:19Z, tapped): "B: sí, con el senior (Fable)". What the question said a yes covers: finishing
+  version 4 in a new session and one confirming read, forecast at 1.5 to 3M Claude tokens and about 0.4M of
+  Codex, an estimate; "Si pasa de 3 M, paro y te aviso". It approves no design and no build.
+- L17 The 21 findings of read ea3a7283 (L6), each answered in version 4. Claude 1 and Codex 5, taken: no
+  sentence leaves the skill, a card names a rule and holds none of its phrases, and T2 tests `rules check`
+  clean. Claude 2 and Codex 2, taken: the false precedent is named as false; the state is a per-session file
+  with an exclusive marker; the table says what each carrier writes, a compaction owes the card again, a clear
+  gives one card, two calls at once give one; T3 tests each row and the time against the hooks' budgets; no
+  transcript is searched. Claude 3, taken: the senior's card only where `rule:senior-model` is declared, its
+  values filled by `ruleHere`, its limits written as sentences; no card names a feature document. Codex 1,
+  taken in part: a carrier at the turn's start is added and a text-only turn is covered where the title is
+  known; that a session knows its role before its first act is not claimed, the Goal says so, and whether a
+  title is known at the first turn is T3's first step. Claude 4, taken: every card's questions part is one line
+  that names the rule; the dependency on question 307 is a constraint. Claude 5, taken: no "you ask him
+  nothing", no sender forbidden, the examples as the source gives them. Claude 6, taken: the Plan's opening is
+  named as a second copy with its owner and T4's last step removes it. Claude 7 and Codex 4, settled by his
+  answer to 316 (L8): the work session's card is in T2. Codex 3, taken: the role picks the whole resume block;
+  the Plan's state is said to be not known. Claude 8, taken: the turn's start is weighed and used, and a title
+  that leaves a role is told once; a card from the guard before the first call is declined, the guard being
+  out of scope. Claude 9 and Codex 6, taken: Depth pass item 2. Claude 10, taken: 31 call lines in 16 modules,
+  with the command's place. Claude 11, taken: three blocks, lines 882, 1649 and 2783. Claude 12 and Codex 7,
+  taken: T4. Claude 13, taken: L18. Claude 14, taken: `bin/lib/role-cards.mjs` imports nothing and
+  `bin/lib/lead-protocols.mjs` gains no import. Not recorded with `double-review take`: this session ran no
+  command on read ea3a7283, and whether the earlier session recorded its takes was not read (not known).
+- L18 L4 again, finding by finding (read d8b87396 of version 1; the findings as the explorer of L12 copied
+  them, item 13; what version 2 did is L4's own account, not reread). Claude 1 and Codex 4, the lead's card at
+  the skill's head reaching work sessions and making a second home: version 2 moved it to the lead's part;
+  version 4 puts no card in the skill. Claude 2 and Codex 2, the coverage test against "a no keeps three
+  cards": an exported list of roles with named exemptions; since his answer to 316 every name has a card.
+  Claude 3 and Codex 1, a command named in a brief that says "Run nothing": version 2 made the brief the card;
+  since version 3 the brief is not touched. Claude 4, the contract of `sessions --opening`: not changed since
+  version 2, which added `--role` in its place. Claude 5 and Codex 5, the start not weighed, pointers in place
+  of a card for the lead, a clear not tested: the card is in the resume block for every role since version 2;
+  version 4 adds the state table and its tests on a clear. Claude 6, the senior's lines without sources: each
+  line has one since version 2, and version 4 quotes the examples. Claude 7 and Claude 8, wrong citations
+  (`docs/FAILURES.md`, the place of D1 to D14, `bin/lib/manifest.mjs:133`, a missed hook): the "three
+  citations" of L4, corrected in version 2. Claude 9, no check of the effect: version 2 added an outcome to a
+  task; since version 3 the effect is said to be unmeasured. Codex 3, the lead's exception for `rules change`
+  and `rules switch`: version 4 writes none of the lead's duties in its card, which names `rule:lead-charter`.
+- L19 2026-11-17, the confirming read is not run, and why. Measured before this version was written, from this
+  session's transcript, each message once: 1,169,272 Claude tokens in 10 calls, about 117k a call (the
+  session's fixed context is large; question 328's forecast took 50 to 100k). The three reads of this document
+  measured 1.40, 2.14 and 3.45M Claude tokens. The smallest of them, with what this session has spent and the
+  calls that writing, committing and taking the findings need, passes the 3M of his answer to 328 (L16); the
+  opening says to stop there. So version 4 is written, committed and pushed, and no read is started: a fourth
+  read rests on his answer to question 323 (L9) and waits for his word on its spend, forecast at 1.4 to 3.4M
+  Claude and 0.5 to 0.8M Codex. The final measure of this session's spend is in its closing notice to the lead.
+  What a later session needs for the read: `js-harness double-review read odd/tasks/session-roles.md` on this
+  commit, its findings answered with `double-review take`; if it finds real failures they go to him as a
+  problem, with no further read (L9).
