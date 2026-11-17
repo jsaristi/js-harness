@@ -12,47 +12,51 @@ const CONDITIONS = new Set(['if', 'elif', 'while', 'until']);
 // The options of xargs, GNU's and BSD's, that take the next word as their value.
 const XARGS_VALUES = new Set(['-n', '-L', '-P', '-s', '-d', '-E', '-a', '-I', '-J', '-R', '-S', '--max-args', '--max-lines', '--max-procs', '--max-chars', '--delimiter', '--eof', '--arg-file', '--replace']);
 
-// A redirection's operator at a word's start: `>`, `>>`, `<`, with a descriptor (`2>`) or `&` (`&>`) before it.
-const REDIRECT = /^(?:\d+|&)?(?:>>?|<)/;
-
-/** `words` without their redirections (Codex P2 of 2026-11-17): an operator alone takes the next word as its target,
- * one written against its target goes with it, and one written after a word (`--bg>log`, `claude>log`) leaves that
- * word. */
-function withoutRedirections(words) {
-  const kept = [];
-  for (let at = 0; at < words.length; at += 1) {
-    const lead = REDIRECT.exec(words[at]);
-    if (lead !== null) {
-      if (lead[0] === words[at]) at += 1;
+/** The words of `command`, as `shellWords` gives them with its `redirections`, with each unquoted `>`, `>>` or `>|`
+ * taken out with its target: the next word, or `&` and a descriptor (`2>&1`). A quoted `'>'` is a word, not a
+ * redirection (the verifier of 2026-11-17), so the launch after it is read, and a target is no option of claude's
+ * (Codex P2s of 2026-11-17). */
+function withoutRedirections(command) {
+  const read = shellWords(command, { groups: true, redirections: true });
+  const words = [];
+  words.operators = new Set();
+  for (let at = 0; at < read.length; at += 1) {
+    if (read.redirections.has(at)) {
+      if (read[at + 1] === '&' && read.operators.has(at + 1)) at += 2;
+      else if (!read.operators.has(at + 1)) at += 1;
       continue;
     }
-    const cut = words[at].search(/[<>]/);
-    kept.push(cut > 0 ? words[at].slice(0, cut) : words[at]);
+    if (read.operators.has(at)) words.operators.add(words.length);
+    words.push(read[at]);
   }
-  return kept;
+  return words;
 }
 
 /** Whether `args` hold the option `name`, alone or with its value after `=`. */
 const hasOption = (args, name) => args.some((arg) => arg === name || arg.startsWith(`${name}=`));
+
+/** The name a word gives a program: its last part, in lower case, with no `.exe`, `.cmd` or `.bat`. */
+const programName = (word) => word.replace(/^.*[\\/]/, '').toLowerCase().replace(/\.(?:exe|cmd|bat)$/, '');
 
 /** The launch of a session out of his sidebar the words of one simple command make, or null
  * (odd/tasks/senior-orchestrator.md, T7): `claude --bg`, `claude respawn` (which restarts background sessions),
  * `claude --cloud`, or `js-harness sessions start`, behind `js-harness gate --` or `xargs` too. The guard reads
  * launches written out in an ordinary shape. It does not read text the shell computes (`eval`, `$C`, `bash -c`, a
  * `$( )` or backtick substitution), nor a wrapper it does not know (`setsid`, `stdbuf`, `cmd /c`, `powershell
- * -Command`), as the verifier of 2026-11-17 listed. Nor does it read a launch after a quoted `'>'`: quotes are gone
- * when redirections are read, so `claude -p '>' --bg` is the same words as `claude -p > --bg`, whose `--bg` is the
- * output file, and the guard, which runs for every session, holds both as no launch (Codex on cae9bd7..ef1bf49). */
+ * -Command`), as the verifier of 2026-11-17 listed. */
 function launchOf(words) {
-  const { program, args } = programOf(withoutRedirections(words));
+  const { program, args } = programOf(words);
   if (program === 'xargs') {
     let at = 0;
     while (at < args.length && args[at].startsWith('-')) at += XARGS_VALUES.has(args[at]) ? 2 : 1;
     return launchOf(args.slice(at));
   }
   if (program === 'claude') {
-    if (hasOption(args, '--bg') || hasOption(args, '--background')) return 'claude --bg';
-    if (hasOption(args, '--cloud')) return 'claude --cloud';
+    // claude's options are the words after it: programOf drops a word it takes for a redirection, a quoted '>' too,
+    // and a wrapper's own argument before it (exec -a --bg claude) is none of claude's.
+    const own = words.slice(words.findIndex((word) => programName(word) === 'claude') + 1);
+    if (hasOption(own, '--bg') || hasOption(own, '--background')) return 'claude --bg';
+    if (hasOption(own, '--cloud')) return 'claude --cloud';
     return args[0] === 'respawn' ? 'claude respawn' : null;
   }
   if (program !== 'js-harness') return null;
@@ -64,7 +68,7 @@ function launchOf(words) {
  * simple command is read, joined however it is; text in quotes or in a heredoc's body is no step, so a command that
  * only names one (a grep, a commit message) launches none. */
 export function backgroundLaunch(command) {
-  const words = shellWords(command, { groups: true });
+  const words = withoutRedirections(command);
   let start = 0;
   for (let i = 0; i <= words.length; i += 1) {
     if (i < words.length && !words.operators.has(i)) continue;
