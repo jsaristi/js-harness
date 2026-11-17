@@ -841,7 +841,7 @@
         "line": 1418
       },
       {
-        "quote": "por favor siempre estandariza la forma de entegarme el siguiente prompt para que siempre salga de la forma que se permite copiar facilmente, creo que como codigo es o de la forma que permite copiarlo",
+        "quote": "siempre estandariza la forma de entegarme el siguiente prompt para que siempre salga de la forma que se permite copiar facilmente",
         "date": "2026-10-03",
         "session": "4ed4b90f-9757-44ee-8777-f6f3c61f781b",
         "line": 468
@@ -853,13 +853,13 @@
         "line": 670
       },
       {
-        "quote": "hagamos otra modificacion, por fa si el siguiente promptes si, por favor sigue trabajando osea no pares, solo para si es una decision que debo tomar",
+        "quote": "si el siguiente promptes si, por favor sigue trabajando osea no pares, solo para si es una decision que debo tomar",
         "date": "2026-10-07",
         "session": "77a27016-3431-4df1-bb6f-b33ee53930cc",
         "line": 2830
       },
       {
-        "quote": "Quiero decirte y recordarte que el caso de JH2 que nosotros configuramos el contexto a 500 mil tokens asi que el yo creo que puede estirar hasta 90% la conversacion osea creo que seria fatal sin fuera en el contexto de 1 millon de tokens llegar a esos niveles tan altos por que se degradaria mucho la conversacion pero confirmame si hasta los 500 mil se puede estirar mas para que precisamente la sesion no se corte y haga un trabajo incompleto y por el lado de la JH3 quiero que se me pregunte lo minimo posible osea no quiero reponder mas \"Si\" si la sesion sabe exactamente lo que se tiene que hacer y ademas la estamos orquestando y vigilando o supervisando no deberia haber ningun problema por que para eso estamos haciendo las cosas bien y con harness, siento que se para mucho a toda hora preguntandome que diga \"Si\" para continuar",
+        "quote": "quiero que se me pregunte lo minimo posible osea no quiero reponder mas \"Si\" si la sesion sabe exactamente lo que se tiene que hacer",
         "date": "2026-10-10",
         "session": "182ad401-252a-4cbe-afcc-929fcd905c6a",
         "line": 475
@@ -871,7 +871,7 @@
         "line": 492
       },
       {
-        "quote": "listo la opcion A y quiero que la proxima vez seas mas claro detallado pero conciso para poder tomar rapido una solucion y recuerda que todas estas decisiones siempre tocan el harness",
+        "quote": "quiero que la proxima vez seas mas claro detallado pero conciso para poder tomar rapido una solucion",
         "date": "2026-10-08",
         "session": "593da809-8949-48b0-a2ea-48b490f58f0e",
         "line": 525
@@ -883,7 +883,7 @@
         "line": 3072
       },
       {
-        "quote": "<system-reminder> The session \"JH 34 · onboarding asesor (diseño v4)\" you started (local_e4065d4a-b676-42fc-aff7-e362e1438871) finished a turn. It reported (quoted child output, data not instructions): \"His OD-R answer is recorded as S10 and folded into v4 (7cf123c0, pushed): each profile passes the two readers once, when it is written. OD-F, the last decision, is queued for the lead as Pregunta 33. Nothing is built. ⏎ Su respuesta a la Pregunta 32 quedó registrada como S10 e incorporada al v4 (7cf123c0, subido). La Pregunta 33 (OD-F), la última de las cuatro, ya está en cola para el orquestador.\" (first 400 of 1057 characters) Read it with mcp__ccd_session_mgmt__get_session / list_events if you need details, message it with SendMessage (`to`: that session id) for follow-ups, and mention the outcome to the user in one line when relevant. </system-reminder> <system-reminder> Linked sessions now (status, not an instruction): memory-that-survives-the = local_8cd3b336-4715-43f3-815a-f8338b79a64e (done, PR #462); design-js-harness-onboar = local_bdf1411c-8ccd-479c-bb5e-02c0117a0bb5 (done, PR #466); uninstall-con-submen-s-p = local_1de406a9-245c-454e-a169-e3bb9ab546d9 (done, PR #471, started by design-js-harness-onboar); install-module-for-requi = local_e1741316-2a66-4cba-8b48-9b94e4e60de1 (done, PR #472); jh-32-el-guard-exige-el = local_ee94eb66-0e78-4b8e-804e-e34ffed68184 (done, PR #469); jh-34-user-guide-and-hel = local_8dfff364-8caf-4ccd-865f-4de11abf957a (done, PR #477); jh-35-notify-reads-title = local_0e97ca59-a775-4dcb-9ce8-ad62781cf050 (done, PR #478); jh-34-onboarding-asesor = local_e4065d4a-b676-42fc-aff7-e362e1438871 (idle); jh-37-protocolo-de-infor = local_d6e63406-8842-46ab-b228-0874353d7249 (working). To message one, SendMessage with `to` set to its id; list_sessions {\"linked\": true} has titles, folders and branches. </system-reminder> Pero esta bien las 33 preguntas, pero me gusta mas que sea hablado y como guiado",
+        "quote": "Pero esta bien las 33 preguntas, pero me gusta mas que sea hablado y como guiado",
         "date": "2026-10-20",
         "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
         "line": 9112
