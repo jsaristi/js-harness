@@ -11,11 +11,11 @@ built. Three things are his ("Ask me before"): at the lead's word they are recor
 318 (L7), and he answered A to each by tap (L8): work sessions get a card too, both rules for the senior, and
 `CLAUDE.md` scoped to work sessions. 317 and 318 change a rule and his file: his typed words are still owed
 before either is written. On 2026-11-17 he approved the spend to correct the 21 findings and to run one
-confirming read (question 323, L9). This session's own tokens used what he approved before version 4 was
-written (L10). At the lead's word (L11) JH SR goes on with version 4 here, and the confirming read waits for
-his return, since nothing of the approved figure is left for it. Until version 4 is committed, version 3
-stands and the findings are open; no fourth read has run. He typed words for the first of the senior's two
-rules (L11); the second and the scope of `CLAUDE.md` are still tap-only and open.
+confirming read (question 323, L9). VERSION 4 IS NOT WRITTEN: this session's own tokens used what he approved
+before a line of it existed (L10), and the lead stopped the work (L12). Version 3 stands, its 21 findings are
+open, and no fourth read has run. Finishing version 4 and the confirming read wait for his return and his word
+on new spend. He typed words for the first of the senior's two rules (L11); the second and the scope of
+`CLAUDE.md` are tap-only and open.
 
 ## Goal
 Each session that holds a role (the lead, the Plan, the senior) reads what its role is, from one text the harness
@@ -374,3 +374,22 @@ card ships without the lines that wait for a rule.
   cases authorize no spend. Send a note either way." Read by this session as: version 4 is written here, at
   about 230k tokens a call on Fable, which the lead decided knowing the figures of L10; nothing of the approved
   figure is left, so the read does not start and waits for him. That reading was sent to the lead in a note.
+- L12 2026-11-17, 02:37 local, the lead's word, by message: "STOP now. The approved figure is used up, so the
+  roughly 8 more calls for version 4 (about 1.8M on Fable) would be spend he did not approve. Commit what is
+  written, mark version 4 as unfinished in State, push, and send waiting. Finishing version 4 and the confirming
+  read wait for his return and his word on new spend. Nothing more runs." It replaces the third message of L11.
+  Where the work stands: of version 4 nothing is in this document; its approach is in L10 and in this session's
+  stored opening; the 21 findings of L6 are open, and L4 is not yet redone finding by finding. Measured spend of
+  the work on question 323: this session's own tokens on Fable, from the lead's message of 02:13 local to this
+  entry, the call that wrote it not counted, 6,795,693 in 28 calls, 6,629,771 of them cache
+  reads; one read-only explorer on claude-opus-5-5, 209,428 tokens and 79 tool calls; no read ran, so no Codex
+  tokens. That explorer was started before the stop and ended as the stop arrived: its fourteen answers, each
+  with path:line and checked by nobody else, are `session-roles-v4-facts.md` in the sessions' shared notes
+  folder, beside the findings of read 3. Among them, for whoever writes version 4: the mode line of the resume
+  block always reads the work sessions' model, so a senior is told the wrong one at every compaction (three
+  times in this session, transcript lines 882, 1649 and 2783); the compact boundary is written after the
+  resume hook runs; a new module that prints a hook message must be registered or a test fails; no check
+  refuses a rule's phrases restated outside their home; one more hook entry also raises a counted limit and
+  needs its id in `docs/SPEC.md`. What is his when he returns: whether to spend on finishing version 4 and on
+  its read, and in which session; a fresh senior session is what question 323 told him and what L10
+  recommends for its cost.
