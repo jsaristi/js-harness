@@ -21,8 +21,14 @@ function withoutRedirections(command) {
   const read = shellWords(command, { groups: true, redirections: true });
   const words = [];
   words.operators = new Set();
+  // shellWords keeps no spacing, so an & is taken for the one of &> only while the text holds an &> written so; one
+  // apart from the > (echo ok & >log claude) is a separator (Codex on d27dd75..0b7d607).
+  let joined = (String(command ?? '').match(/&>/g) ?? []).length;
   for (let at = 0; at < read.length; at += 1) {
-    if (read[at] === '&' && read.operators.has(at) && read.redirections.has(at + 1)) continue;
+    if (joined > 0 && read[at] === '&' && read.operators.has(at) && read.redirections.has(at + 1)) {
+      joined -= 1;
+      continue;
+    }
     if (read.redirections.has(at)) {
       if (read[at + 1] === '&' && read.operators.has(at + 1)) at += 2;
       else if (!read.operators.has(at + 1)) at += 1;

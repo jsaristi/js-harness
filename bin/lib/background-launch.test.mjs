@@ -37,6 +37,9 @@ test('a step that launches claude --bg or js-harness sessions start is found, ho
     ['claude &>log --bg x', 'claude --bg'],
     ['claude &>> log --bg x', 'claude --bg'],
     ['claude.bat --bg x', 'claude --bg'],
+    // Codex on d27dd75..0b7d607: an & apart from the > is a separator, not the & of &>.
+    ['echo ok & >log claude --bg x', 'claude --bg'],
+    ['echo ok & 2>log claude --bg x', 'claude --bg'],
   ]) {
     assert.equal(backgroundLaunch(command), launch, command);
   }
