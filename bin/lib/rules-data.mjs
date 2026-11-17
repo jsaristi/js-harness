@@ -47,9 +47,9 @@ export const RULES = [
   },
   {
     "id": "away-autonomy",
-    "subject": "once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once; before he leaves it shows the stretch's departure, led by the migration's share now and the share expected at the return, with its goals, and when he is back its return checked against them; while he is away a reply closes in the working state, or once in the cut that gives his block, and a question of his waits in the relief file for his return",
+    "subject": "once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once; before he leaves it shows the stretch's departure, led by the migration's share now and the share expected at the return, with its goals and the few forks it pre-decides, cases of his it answers alone once he approves or corrects them at once in his own words before he leaves, an unapproved one waiting like any other, no other case of his and no spend or publishing by them, and when he is back its return checked against them; while he is away a reply closes in the working state, or once in the cut that gives his block, and a question of his waits in the relief file for his return",
     "owner": "sebastian",
-    "since": "2026-10-29",
+    "since": "2026-11-15",
     "path": "bin/lib/manifest.mjs",
     "phrases": [
       "When the user says they leave you alone or will be away, ask nothing and seek no permission",
@@ -62,7 +62,9 @@ export const RULES = [
       "before they are due back, so the time they take is known before the return",
       "Both are shown as a visual page in the chat, never drawn by hand",
       "a reply closes in the working state, saying what wakes you, or once in the cut that gives that block",
-      "first the migration's share now and the share expected at the return"
+      "first the migration's share now and the share expected at the return",
+      "The plan also carries 2 to 4 forks, each a case that would otherwise wait for their return and the answer you propose",
+      "you answer the approved cases, the one exception to holding what is theirs, and no other case of theirs; the forks authorize no spend and no publishing"
     ]
   },
   {
