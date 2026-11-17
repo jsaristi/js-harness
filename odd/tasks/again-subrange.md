@@ -1,10 +1,11 @@
 # again-subrange: an --again over part of a range does not clear an owed correction
 
 ## State
-JH 207, worktree D:/js-harness-worktrees/spanning-review, branch feat/spanning-review from main f3c650b. T5 done and
-reviewed, PR 902 open, ready sent to the lead; it waits for the land. Open: the reliability lens's --at follow-up
-(L38), answered and not built. Nothing of this feature runs in the background; js-harness wait --notice-to 207 is
-the session's own and it stops it when the session closes.
+JH 207, worktree D:/js-harness-worktrees/spanning-review, branch feat/spanning-review, PR 902. The verifier pass at c821306e
+found one false refusal, fixed in 3c3d6da6 and 3904aa05 (L40-L42); main 3a2a14e merged in (8e7dfe93), check --push
+passes, PR 902 marked ready. Next: the probes rerun at the final head (verify902 *.fin.out vs *.fix.out), L43, then
+ready --pr 902 to the lead, who lands it alone after reading L42 (a lens warning, open for him). js-harness wait
+--notice-to 207 runs in the background; the session stops it when it closes.
 
 ## Goal
 A clean Codex review at a head that owes a correction settles that correction only where it reads the whole range the
@@ -78,7 +79,7 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
 - [x] T1 (kind: design) count the real records, depth pass
 - [x] T2 (kind: build) spec 1, tests first
 - [x] T4 (kind: build) spec 1, open: a test that fails without `decidingRecord` in the merge walk's `lastAt` and the row's `mergeOwnAt` (L14)
-- [x] T5 (kind: build) spec 3, done in 2d0a5ee5, 6e4f8926, 1b6225df, 763fe64 (L34-L38), for the lead: a clean review M..H2 that spans the owing head H from inside its range and ends above it clears the correction (L12)
+- [x] T5 (kind: build) spec 3, done in 2d0a5ee5, 6e4f8926, 1b6225df, 763fe64, 3c3d6da6, 3904aa05 (L34-L42), for the lead: a clean review M..H2 that spans the owing head H from inside its range and ends above it clears the correction (L12)
 - [ ] T6 (kind: build) open, for the lead: where a plain review decides, a standing recheck's open finding joins a first recheck and can get a fourth review (L27)
 - [x] T3 (kind: build) spec 2, done in 6eba0f3f (L32): the lens rows' older-writer note counts only records of the range checked
 
@@ -131,3 +132,4 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
 - L40 2026-11-17, the lead held PR 902 for an independent verifier pass at c821306e (opus, read-only, scratchpad verify902). It found one false refusal: base..H owes, main is merged in at Mg whose own record owes, the joined recheck Mg..F (clean, naming Mg) rechecks both, then a clean X..G spanning H was refused, where main passes, because decidingRecord at H cannot see a join across a merge. Fixed tests first (the row test was red): a debt is settled where a recheck on the line names a merge at or above the head and, read as its run read it (recheckAt from the merge over the records before it), held all of that head's findings. Probes rerun on the fix: only v1 E2c, E2d and v3 J2 change, to pass as main does; verify898's probes (q3, T6's fourth review, among them), t5-span and v2 unchanged. Also meant, the verifier's reading: q2 S2a and q4 R3b now refuse, a recheck spanning another owing head and a review from main's side of a merge's own debt (L22). Touched tests 228, 226 pass, 0 failed.
 - L41 2026-11-17, Codex c821306..3c3d6da (meter before it: weekly 2%; 133,207 input tokens), one P2: matching findings alone let a clean recheck of another head J, whose narrow review found the same finding, settle H. Reliability lens, a WARNING: no test of the refusing side. Both tests first: J's case was red; a recheck of a merge whose walk stopped at a narrow record above H, joining the merge's own finding alone, still refuses. Fixed: the recheck must name a merge's own record (remerge) and no reviewed record may end between H and that merge, beside the findings held. check-codex-reviews 156 tests, 0 failed.
 - L42 2026-11-17, Codex 3c3d6da..3904aa0 (meter before it: five-hour 2%, weekly 2%; 73,797 input tokens) correct (0.9), its P2 fixed; risk 0 findings. Reliability, a WARNING answered, not built: not every guard of settled has a test of its own. A recheck naming the owing head itself settles it before settled is asked (spannedDebt skips a head whose state is not a first recheck; the unit test 'A recheck that names C settles it'). The findings check and atOrBefore(head, merge) are each backed by mergeOwn and between, so removing one alone leaves the tests green; a test isolating each needs a merge whose walk does not reach the head with no record between, which no probe built. Open for the lead.
+- L43 2026-11-17, the probes rerun at the final head (8e7dfe93, after 3904aa05 and main's merge): verify898's set, t5-span, v1, v2 and v3 are the same as on 3c3d6da (verify902 *.fin.out against *.fix.out), so the false refusal stays fixed and nothing else moved. Known and not built: settled does not read the outcome of the merge's recheck, so a joined recheck that left the head's finding open settles the spanned debt by this check and leaves it to that recheck's own state; between counts a clean merge's own record between the head and the owing merge, which fails closed at the cost of one review. L39's 0 holds: settled only removes refusals. No independent verifier pass ran after the fix.
