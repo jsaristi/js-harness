@@ -40,6 +40,9 @@ test('a step that launches claude --bg or js-harness sessions start is found, ho
     // Codex on d27dd75..0b7d607: an & apart from the > is a separator, not the & of &>.
     ['echo ok & >log claude --bg x', 'claude --bg'],
     ['echo ok & 2>log claude --bg x', 'claude --bg'],
+    // The lenses on 0b7d607..7a7eb7c: a separator before a real &>, or an &> in quotes, is still a separator.
+    ['echo ok & >log claude --bg x; node y &>out', 'claude --bg'],
+    ['echo "&>" & >log claude --bg x', 'claude --bg'],
   ]) {
     assert.equal(backgroundLaunch(command), launch, command);
   }
