@@ -8,7 +8,7 @@ JH 192, slice 3 of the lead's brief. Delivery: this design, then one pull reques
 Now (2026-11-17 ~05:10Z): `rule/away-autonomy` landed (PR 897, main 9fc30a07) and is merged into T7's branch
 (15c9bd39). Both rule changes are committed: `sessions-open-in-sidebar` drops its exception (715f2ab2) and
 `senior-model`'s subject names start_session (ca8fba11). Next: Codex and lenses from ee0fb395 (the merge resolution and
-both rules), then the review fixes 1e190752, eb4d8e6b and 043ce46a, all reviewed (L11), and the provenance fixes 0976dcb1, 76fd3e63, c3066640 (L12). T7 is at PR 901, ready for the lead to land. The paragraphs below are each task's record, T8's first.
+both rules), then the review fixes 1e190752, eb4d8e6b and 043ce46a, all reviewed (L11), and the provenance fixes 0976dcb1, 76fd3e63, c3066640 (L12). T7 is at PR 901; the lead held it for a verifier pass on the guard, done with its fixes (L13), and it is ready again. The paragraphs below are each task's record, T8's first.
 
 T8 (2026-11-16 ~03:00Z, JH 211), branch `feat/lead-held-high` from origin/main b3a73245, in worktree
 `tui-gentle-level-a6afd3`; T7 waits on branch `rule/sessions-visible-only` (its State is there; the second branch to land
@@ -361,3 +361,18 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   first change had stored two short excerpts, and its source now keeps both quotes whole (c3066640). README and SPEC no
   longer say the lead uses `sessions start` where start_session leaves a card (76fd3e63). Codex correct 0.97, lenses 0
   findings on 6823af0..c306664. PR 901 opened.
+- L13 2026-11-17, the lead held PR 901 for one independent verifier pass on the guard (high risk), at cae9bd7e, read-only,
+  over refusals and false refusals. It found nothing blocking: the lead's list (a background `js-harness wait`,
+  `merge-queue --land --refresh-copy`, `quiet --wait`, `node --test` of several files, `git -C`, `gh pr` after `&&`)
+  passes through the whole guard, and the guard suites passed (background-launch 3, chained-step-guard 3, lib/guard 51,
+  guard 47, sessions-background 62). Fixed: a quoted `'>'` hid the `--bg` after it; a first fix (ef1bf49f) read every
+  word and Codex found it refused `claude -p x > --bg` and `exec -a --bg claude`; d27dd75f reads redirections by
+  position (`shellWords`' `redirections`) and claude's options after claude (Codex recheck correct 0.97). Named as the
+  reader's limits, not changed: `$( )` and backtick substitution, wrappers it does not know (`setsid`, `stdbuf`, `cmd
+  /c`, `powershell -Command`). Not changed: `sessions start --help` is refused; a `"$(cat <<'EOF' …)"` commit message
+  with a quoted separator inside reads as steps (`shellWords`, older than T7). Answered: the readability lens called the
+  `own` comment false; `programOf(['claude','-p','>','--bg','x'])` gives args `['-p','x']`, so it holds; reworded so it reads so.
+  A second verifier pass at d27dd75f (only the reader changed since cae9bd7e; chained-step-guard, guard and bin/guard
+  unchanged, `git diff --quiet`): the lead's list unchanged, no false refusal, the redirection forms (`2>&1`, `>&2`,
+  `&>`, `>>`, `>|`, before `&&` and `|`, PowerShell `2>$null` and `*>`) pass; two missed launches, `claude &>log
+  --bg` (shellWords gives the `&` of `&>` as an operator) and `claude.bat --bg`, fixed in 1a2806ea with tests.
