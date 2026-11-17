@@ -25,10 +25,12 @@ function advisorOf(replied, advisor) {
 /** True when `home` (`{ model, effort, lead, advisor }`, each a value or null) holds something a session can be off. */
 export const homeInForce = (home) => home !== null && typeof home === 'object' && [home.model, home.effort, home.lead, home.lenses, home.advisor].some((value) => typeof value === 'string');
 
-/** The act that puts the background job `job` on the home: closing it once what it holds is committed, and opening it
- * again with start_session, since a background resume is refused where rule sessions-open-in-sidebar is declared
- * (odd/tasks/senior-orchestrator.md, T7) and a message resumes it on the model it ran. */
-const correctionOf = (job) => `closing it${job.working === true ? ' once its job is no longer at work' : ''}, once what it holds is committed (js-harness sessions stop ${job.id}), and start_session`;
+/** The act that puts the background job `job` on the home: closing it once its work has landed and nothing in its
+ * worktree is needed, with --remove-worktree since `sessions stop` refuses a worktree that holds files (Codex P2 of
+ * 2026-11-17), and opening it again with start_session, since a background resume is refused where rule
+ * sessions-open-in-sidebar is declared (odd/tasks/senior-orchestrator.md, T7) and a message resumes it on the model it
+ * ran. */
+const correctionOf = (job) => `closing it${job.working === true ? ' once its job is no longer at work' : ''}, once its work has landed and nothing in its worktree is needed (js-harness sessions stop ${job.id} --remove-worktree), and start_session`;
 
 /** The sessions off `home`, as `{ rows, archived, removedOff, on }`.
  *

@@ -22,6 +22,13 @@ test('a step that launches claude --bg or js-harness sessions start is found, ho
     ['claude respawn --all', 'claude respawn'],
     ['claude --cloud "fix the tests"', 'claude --cloud'],
     ['claude --cloud="fix"', 'claude --cloud'],
+    // Codex P2 of 2026-11-17: a redirection written against a word, or before the command.
+    ['claude --bg>session.log "p"', 'claude --bg'],
+    ['claude>session.log --bg "p"', 'claude --bg'],
+    ['claude 2>err.log --bg "p"', 'claude --bg'],
+    ['>session.log claude --bg "p"', 'claude --bg'],
+    ['2> err.log js-harness sessions start "JH 9 · x"', 'js-harness sessions start'],
+    ['js-harness sessions start>out.log "JH 9 · x"', 'js-harness sessions start'],
   ]) {
     assert.equal(backgroundLaunch(command), launch, command);
   }

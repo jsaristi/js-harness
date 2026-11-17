@@ -12,6 +12,26 @@ const CONDITIONS = new Set(['if', 'elif', 'while', 'until']);
 // The options of xargs, GNU's and BSD's, that take the next word as their value.
 const XARGS_VALUES = new Set(['-n', '-L', '-P', '-s', '-d', '-E', '-a', '-I', '-J', '-R', '-S', '--max-args', '--max-lines', '--max-procs', '--max-chars', '--delimiter', '--eof', '--arg-file', '--replace']);
 
+// A redirection's operator at a word's start: `>`, `>>`, `<`, with a descriptor (`2>`) or `&` (`&>`) before it.
+const REDIRECT = /^(?:\d+|&)?(?:>>?|<)/;
+
+/** `words` without their redirections (Codex P2 of 2026-11-17): an operator alone takes the next word as its target,
+ * one written against its target goes with it, and one written after a word (`--bg>log`, `claude>log`) leaves that
+ * word. */
+function withoutRedirections(words) {
+  const kept = [];
+  for (let at = 0; at < words.length; at += 1) {
+    const lead = REDIRECT.exec(words[at]);
+    if (lead !== null) {
+      if (lead[0] === words[at]) at += 1;
+      continue;
+    }
+    const cut = words[at].search(/[<>]/);
+    kept.push(cut > 0 ? words[at].slice(0, cut) : words[at]);
+  }
+  return kept;
+}
+
 /** Whether `args` hold the option `name`, alone or with its value after `=`. */
 const hasOption = (args, name) => args.some((arg) => arg === name || arg.startsWith(`${name}=`));
 
@@ -20,7 +40,7 @@ const hasOption = (args, name) => args.some((arg) => arg === name || arg.startsW
  * `claude --cloud`, or `js-harness sessions start`, behind `js-harness gate --` or `xargs` too. The guard reads
  * launches written out in an ordinary shape; text the shell computes (`eval`, `$C`, `bash -c`) it does not read. */
 function launchOf(words) {
-  const { program, args } = programOf(words);
+  const { program, args } = programOf(withoutRedirections(words));
   if (program === 'xargs') {
     let at = 0;
     while (at < args.length && args[at].startsWith('-')) at += XARGS_VALUES.has(args[at]) ? 2 : 1;

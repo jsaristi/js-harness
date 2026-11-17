@@ -359,7 +359,7 @@ export function outsideLines({ home, sessions, settings, isLead = () => false, i
   lines.push(...offHomeLines(sessionsOffHome(home, { desktop: sessions.desktop, background: sessions.background, isLead, isSenior }), home, { unread: sessions.unread }).slice(1));
   lines.push('  the lead\'s session tools are set_session_model and set_session_effort, called by the lead on another open session: a session changes neither of its own');
   if (typeof home.model === 'string' && typeof (home.lead ?? home.effort) === 'string') lines.push(`  only he changes the lead's own session. To give him: ${menuLine({ model: home.model, effort: home.lead ?? home.effort })}`);
-  lines.push('  a background session is closed once what it holds is committed, and opened again with start_session on the home\'s model and level: a background resume is refused where rule sessions-open-in-sidebar is declared');
+  lines.push('  a background session is closed once its work has landed and nothing in its worktree is needed, and opened again with start_session on the home\'s model and level: a background resume is refused where rule sessions-open-in-sidebar is declared');
   const notes = settingsNotes(home, settings ?? {});
   if (notes.length === 0) lines.push('  his settings: nothing read holds what the new home does not');
   for (const note of notes) lines.push(`  ${note}`);
