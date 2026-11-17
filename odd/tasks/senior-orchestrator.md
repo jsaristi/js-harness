@@ -385,3 +385,8 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   Named as the reader's limits, not changed: one apostrophe in a `#` comment or a heredoc body throws the `&>` scan's
   quote tracking, so a later `claude &>log --bg` is missed (never a false refusal); `
 …'` quoting and an escaped `>`.
+- L14 2026-11-17, after PR 901 landed the lead asked for the apostrophe fix as its own PR from 9f54eb4. cc31281d reads
+  the & of &> in shellWords, under its redirections option, where comments and heredoc bodies are known, and drops the
+  launch reader's own scan: the comment and heredoc apostrophe launches are refused, tests first. Codex correct 0.88, both
+  lenses 0 findings; the third verifier's lists rerun at cc31281d by this session (not independent) flip only those. Left as
+  limits: $'…' quoting and an escaped >. The PR stays a draft until an independent verifier runs.
