@@ -8,7 +8,8 @@ lens's fix: the named question must be open in the record; lenses clean), `3d245
 corrected stop runs the record check too; Codex 0.98, the P2 rechecked fixed; reliability lens 0 findings). T2
 and T3 done; T4 done after PR 901 (L6); left: the verifier, the draft PR, the ready notice. The verifier
 (read-only, 9 test files, the notify probe, rules, old records, the hook end to end) passed all but README.md's
-reply section, which still said "not with buttons": rewritten in the same commit as this state.
+reply section, which still said "not with buttons": rewritten in the same commit as this state. Draft PR 906 at dfff9ab7, the affected tests 315/315; the lead
+told by note (`notify --kind ready` refuses a draft). Waiting on the lead (`js-harness wait --notice-to 212`).
 
 ## Goal
 Every question the harness puts to the user reaches him through the question tool with options, the written ones
@@ -99,7 +100,7 @@ Changing any rule other than these two (it goes to the lead as a question first)
 - [x] T2 (kind: build) 2 to 4 options in `checkedQuestion`, its tests first, the usage example and "ask it in writing"; spec 1, 2; inline
 - [x] T3 (kind: build) the reply's question state names `Pregunta <n>`, its tests first, its grader copy, the refusal and help text; spec 3; inline
 - [x] T4 (kind: build) `js-harness rules change` for both rules after PR 901 lands, pair 9 with them; spec 3, 4, 5; inline
-- [ ] T5 (kind: verify) Codex and lenses per slice, an independent verifier, PR, `notify --kind ready`
+- [x] T5 (kind: verify) Codex and lenses per slice, an independent verifier, PR, `notify --kind ready`
 
 ## Log
 - L1 (2026-11-17, his request as written): "siempre dame las preguntas con opciones" (line 7609) and "hazme todas
