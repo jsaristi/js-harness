@@ -46,6 +46,7 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
 - 3. The bar:
   spec 1: `node --test --test-name-pattern="again of a sub-range" bin/check-codex-reviews.test.mjs`: none, new behaviour
   spec 2: left out because it is an open task, built after spec 1
+  spec 3: `node --test --test-name-pattern="spans the head owing" bin/check-codex-reviews.test.mjs`: none, new behaviour
 - 4. Refutation: `node a-again-subrange.mjs` (the verifier's probe, run on main and on the branch): after a clean
   --again of M..H the push row went from "owes a correction: 1 finding open" to pass.
   Verdict: supports
@@ -57,6 +58,26 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
    first."
 2. L84, the lead's words: "Add L84 (olderWriter counts the whole log, so after the cut the lens note can name an
    unrelated record) to that slice as an open task."
+
+3. T5, the lead's words (L33): "Next: T5 (a spanning review still clears a correction), which predates the branch. Plan it
+   in odd/tasks/again-subrange.md from main f3c650b, tests first."
+
+### T5 plan (depth pass)
+- Reproduced on main f3c650b (scratchpad verify898/t5-span.mjs, through the kit that writes only what the command would):
+  base..H owes f0; a clean `--again` M..H2, M between base and H, is written and the push row passes. Without
+  `--again` the run starts after what the records cover, so only `--again` reaches it.
+- Rule, spec 1 carried across heads: a debt owed at a head X stands until a recheck names X, or until a record whose head
+  is X or above it on the line read at least X's owing range (its base at or before that record's base). A record that
+  read less (M after base) settles nothing, however many follow (a chain M..H2, K..H3 still owes). No recursion: each
+  owing head is checked against the records once.
+- Two readers, one helper in codex-review-recheck.mjs: the push row (`correctionOwed`) asks it of the heads of the
+  range it checks (coverage's `rangeIds`), from the records alone first, git (`atOrBefore`) only where a head there
+  owes, so the plain row asks git nothing more (V3); its refusal names `codex-review --again --base X`, the recheck from
+  X. The command's `--again` guard is left as it is (L34): the push is the door, and the spanning record it lets be
+  written is refused there.
+- Tests first, both directions: M..H2 refused; base..H2 settles; a chain still refused; a recheck naming X settles;
+  the refusal's command, run, gives a passing row; question 320's S..M still owes.
+- Cost: one Codex run per slice after the probes are clean; codex-meter read before each.
 
 ## Tasks
 - [x] T1 (kind: design) count the real records, depth pass
@@ -106,3 +127,4 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
 - L31 2026-11-16, the lead: "PR 898 landed. main is 6bd49076 and the installed copy is refreshed. T3 (L84) goes as its own PR from main; run js-harness codex-meter before its Codex review and tell me the figure. T5 stays open for his report." T3's test was red first: a record of another branch, of an older writer, was named in the note of a range it has nothing in. The fix counts only those whose head is in the range checked; the no-evidence note still subtracts every older writer's record, so none of the rest is named as another kind.
 - L32 2026-11-16, T3 checked: the tests of coverage, turns, lens records and rows, check-codex-reviews, codex-review and lens-review, 515 tests, 0 failed. js-harness codex-meter before Codex: five-hour 16% used, weekly 92% used (resets 23:15 local). Codex 6bd4907..6eba0f3 correct (0.94), 110,749 input tokens; lenses reliability and risk 0 findings.
 - L33 2026-11-16, the lead: "PR 900 (T3) landed at 20:44 local (main f3c650b ...). Next: T5 (a spanning review still clears a correction), which predates the branch. Plan it in odd/tasks/again-subrange.md from main f3c650b, tests first. Read codex-meter before each Codex review, and stop and tell me if it nears the floor. Send ready --pr <n> when done."
+- L34 2026-11-16, T5 built tests first: the row test and the spannedDebt unit test were red, then pass. The rule asks only the T5 shape: a record spanning the owing head (base before it, head above it) that read less, and none spanning it or at it that read all; a recheck after a merge names the merge and spans nothing below, so codex-spend's walk is untouched. Through the guard kit (scratchpad verify898/t5-span.mjs): main passes M..H2; the branch refuses it, names codex-review --again --base H, and that recheck, run, passes. Targeted files 484 tests, 0 failed. Real records: 0 of 1,411 heads have this shape, so no branch's records gain a refusal. Not built: the command's --again guard; the push refuses what it writes, at the cost of one review.

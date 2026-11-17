@@ -11,6 +11,7 @@ import {
   recheckAnchor,
   recheckPrompt,
   recheckState,
+  spannedDebt,
   recheckThrough,
   runAnswerFindings,
   runsLogged,
@@ -649,4 +650,31 @@ test('a recheck of a head where a plain review decides and a recheck left a find
   // Where a wider plain review read all the recheck read, the recheck no longer stands: C..D is a first recheck of f0.
   const wider = [record(A, B, { run: 'r1' }), record(B, C, { run: 'r3', recheckOf: B }), record(A, C, { run: 'r2' }), record(C, D, { run: 'r4', recheckOf: C })];
   assert.equal(recheckState({ from: D, records: wider, runs, atOrBefore }).kind, 'recheck');
+});
+
+test('a head whose correction a record spanning it read only part of still owes it; one that read all, or a recheck of it, settles it (T5)', () => {
+  // base A, M = B, the owing head H = C, above it D and E.
+  const order = [A, B, C, D, E];
+  const atOrBefore = (older, newer) => order.indexOf(older) <= order.indexOf(newer);
+  const f0 = finding('[P2] Loses a record');
+  const runs = [
+    runLine('r1', { answer: { findings: [f0], verdict: 'incorrect' } }),
+    runLine('r2', { answer: { findings: [], verdict: 'correct' } }),
+    runLine('r3', { answer: { findings: [], verdict: 'correct' }, recheck: { findings: 1, fixed: 1, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } }),
+  ];
+  const heads = [E, D, C, B];
+  const owes = record(A, C, { run: 'r1' });
+  const narrow = [owes, record(B, D, { run: 'r2' })];
+  assert.deepEqual(spannedDebt({ heads, records: narrow, runs, atOrBefore }), { at: C, state: { kind: 'recheck', of: C, findings: [f0] } });
+  // A chain of narrow ones still owes.
+  assert.equal(spannedDebt({ heads, records: [...narrow, record(D, E, { run: 'r2' })], runs, atOrBefore })?.at, C);
+  // One that read all of A..C, at a head above it, settles it, before or after the narrow one.
+  assert.equal(spannedDebt({ heads, records: [owes, record(A, E, { run: 'r2' }), record(B, E, { run: 'r2' })], runs, atOrBefore }), null);
+  assert.equal(spannedDebt({ heads, records: [...narrow, record(A, D, { run: 'r2' })], runs, atOrBefore }), null);
+  // A recheck that names C settles it, though a narrow review spans it too.
+  assert.equal(spannedDebt({ heads, records: [...narrow, record(C, E, { run: 'r3', recheckOf: C })], runs, atOrBefore }), null);
+  // A record that starts at C, or above it, spans nothing: the run from C is its recheck, and the push reads it there.
+  assert.equal(spannedDebt({ heads, records: [owes, record(C, E, { run: 'r2' })], runs, atOrBefore }), null);
+  // No record spans it: the push reads it where it covers the newest commit, as before.
+  assert.equal(spannedDebt({ heads, records: [owes], runs, atOrBefore }), null);
 });

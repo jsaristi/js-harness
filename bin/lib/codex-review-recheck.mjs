@@ -390,6 +390,27 @@ export function againPastThreeReviews({ heads, stateOf, uncovered, reviewFromOf,
   return null;
 }
 
+/** The head among `heads` (newest first) whose review owes a first recheck that a record spanning it read only part of:
+ * a review whose base lies before that head and whose head lies above it, with its base after the base of the record
+ * that owes (`atOrBefore(older, newer)` as `recheckState` takes it), cleared that correction at the push, since the
+ * push reads the record that covers its newest commit (odd/tasks/again-subrange.md T5, L12). A record spanning it, or
+ * at it, that read all the owing record read settles it; a recheck that names it is read by `recheckState`. Only that
+ * shape is asked: a recheck after a merge names the merge and spans nothing below it (codex-spend L24). Git is asked
+ * only of a head that owes. `{ at, state }`, or `null`. */
+export function spannedDebt({ heads, records, runs, atOrBefore }) {
+  const reviewed = records.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed');
+  for (const at of heads) {
+    if (!reviewed.some((rec) => rec.head === at)) continue;
+    const { kept, state } = decidingRecord({ from: at, records, runs, atOrBefore });
+    if (state.kind !== 'recheck' || state.second === true || typeof kept?.recheckOf === 'string') continue;
+    const spans = (rec) => rec.head !== at && rec.base !== at && atOrBefore(rec.base, at) === true && atOrBefore(at, rec.head) === true;
+    const readAll = (rec) => typeof rec.recheckOf !== 'string' && (rec.base === kept.base || atOrBefore(rec.base, kept.base) === true);
+    const spanning = reviewed.filter(spans);
+    if (spanning.length > 0 && !spanning.some(readAll)) return { at, state };
+  }
+  return null;
+}
+
 /** One earlier finding on one line: `file:lines severity title`. */
 export function priorLine(finding) {
   const lines = finding.start === finding.end || finding.end === undefined ? `${finding.start}` : `${finding.start}-${finding.end}`;

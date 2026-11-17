@@ -2316,3 +2316,31 @@ test('a clean --again over part of a recheck that left a finding open keeps the 
   const row = checkCodexReviews(root, 'HEAD');
   assert.ok((row.lines ?? []).join('\n').includes(`warning: the Codex recheck that ended at ${short(root, fix)} left 1 finding open`), JSON.stringify(row));
 });
+
+test('a clean --again that spans the head owing a correction from inside its range does not settle it; one that read all of it does (T5)', () => {
+  // odd/tasks/again-subrange.md T5 (L12, L33): base..H owes; a clean M..H2, M between base and H, read only part of what
+  // base..H read, and cleared its correction at the push. A record above H settles it only where it read all of it.
+  const { root, base } = makeRepo();
+  feature(root);
+  const middle = commit(root, 'b.js', 'two', 'feat: two');
+  const owing = commit(root, 'c.js', 'three', 'feat: three');
+  run(root, { id: 'owes', base, from: base, head: owing, answer: { verdict: 'incorrect', findings: [finding] } });
+  record(root, base, owing, { run: 'owes' });
+  const above = commit(root, 'd.js', 'four', 'feat: four');
+  run(root, { id: 'span', base: middle, from: middle, head: above, answer: { verdict: 'correct', findings: [] } });
+  record(root, middle, above, { run: 'span' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, owing)} owes a correction: 1 finding open`));
+  assert.match(JSON.stringify(row.next), new RegExp(`codex-review --base ${short(root, owing)} --at [0-9a-f]+ --again`));
+  // A chain of such records still reads less: K..H3, K between H and H2.
+  const top = commit(root, 'e.js', 'five', 'feat: five');
+  run(root, { id: 'chain', base: above, from: above, head: top, answer: { verdict: 'correct', findings: [] } });
+  record(root, above, top, { run: 'chain' });
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, false);
+  // A clean review of base..top read all base..H read, and the fix above it: it settles the correction.
+  run(root, { id: 'whole', base, from: base, head: top, answer: { verdict: 'correct', findings: [] } });
+  record(root, base, top, { run: 'whole' });
+  const settled = checkCodexReviews(root, 'HEAD');
+  assert.equal(settled.pass, true, settled.detail);
+});
