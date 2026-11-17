@@ -38,17 +38,25 @@ const hasOption = (args, name) => args.some((arg) => arg === name || arg.startsW
 /** The launch of a session out of his sidebar the words of one simple command make, or null
  * (odd/tasks/senior-orchestrator.md, T7): `claude --bg`, `claude respawn` (which restarts background sessions),
  * `claude --cloud`, or `js-harness sessions start`, behind `js-harness gate --` or `xargs` too. The guard reads
- * launches written out in an ordinary shape; text the shell computes (`eval`, `$C`, `bash -c`) it does not read. */
+ * launches written out in an ordinary shape. It does not read text the shell computes (`eval`, `$C`, `bash -c`, a
+ * `$( )` or backtick substitution), nor a wrapper it does not know (`setsid`, `stdbuf`, `cmd /c`, `powershell
+ * -Command`), as the verifier of 2026-11-17 listed. The words are read with their redirections taken out and as
+ * written, since quotes are gone by then and a quoted `'>'` would take the word after it as its target. */
 function launchOf(words) {
-  const { program, args } = programOf(withoutRedirections(words));
+  return launchIn(withoutRedirections(words)) ?? launchIn(words);
+}
+
+function launchIn(words) {
+  const { program, args } = programOf(words);
   if (program === 'xargs') {
     let at = 0;
     while (at < args.length && args[at].startsWith('-')) at += XARGS_VALUES.has(args[at]) ? 2 : 1;
     return launchOf(args.slice(at));
   }
   if (program === 'claude') {
-    if (hasOption(args, '--bg') || hasOption(args, '--background')) return 'claude --bg';
-    if (hasOption(args, '--cloud')) return 'claude --cloud';
+    // Its options are looked for in every word, since programOf takes redirections out of the args too.
+    if (hasOption(words, '--bg') || hasOption(words, '--background')) return 'claude --bg';
+    if (hasOption(words, '--cloud')) return 'claude --cloud';
     return args[0] === 'respawn' ? 'claude respawn' : null;
   }
   if (program !== 'js-harness') return null;

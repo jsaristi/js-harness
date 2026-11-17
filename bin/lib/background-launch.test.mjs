@@ -29,6 +29,9 @@ test('a step that launches claude --bg or js-harness sessions start is found, ho
     ['>session.log claude --bg "p"', 'claude --bg'],
     ['2> err.log js-harness sessions start "JH 9 · x"', 'js-harness sessions start'],
     ['js-harness sessions start>out.log "JH 9 · x"', 'js-harness sessions start'],
+    // The verifier of 2026-11-17: a quoted ">" is no redirection, so it does not take the --bg after it as a target.
+    ["claude -p '>' --bg x", 'claude --bg'],
+    ['claude -p ">" --bg x', 'claude --bg'],
   ]) {
     assert.equal(backgroundLaunch(command), launch, command);
   }
