@@ -291,6 +291,9 @@ test('the hook turns back a question state that names no recorded question, and 
   // The reliability lens on 924c111..263c293: a question the reply numbers itself is no recorded question.
   const numbered = await wakeHook({ payload: { last_assistant_message: 'Hecho.\n\nTe pregunto: Pregunta 1, ¿biblioteca o aplicación?' } });
   assert.match(numbered.answer.reason, /"Te pregunto" names Pregunta 1, and the record holds no question 1/);
+  // Codex P2 on c9d7399..5c6a8d6: the stop already turned back says the record's miss too, as every other miss.
+  const repeated = await wakeHook({ payload: { stop_hook_active: true, last_assistant_message: 'Hecho.\n\nTe pregunto: Pregunta 1, ¿biblioteca o aplicación?' } });
+  assert.match(repeated.answer.systemMessage, /"Te pregunto" names Pregunta 1, and the record holds no question 1/);
 });
 
 test('a close that is also refused gets one block holding both reasons, the warning still found once', async () => {

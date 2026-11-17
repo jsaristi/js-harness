@@ -270,11 +270,15 @@ export async function replyMain(argv, {
       if (config?.error) stderr(`js-harness reply: ${config.error}; the reply check did not run\n`);
       else if (config !== null && again) {
         // The corrected reply's own checks run again; the wake, board and return checks each turned back once by
-        // their own record already, so they do not (the Fable 5.2 audit, M6).
+        // their own record already, so they do not (the Fable 5.2 audit, M6). The question record is the reply's own
+        // check, so it runs again (Codex on 5c6a8d6).
         reason = replyRefusal(message, config, { running: runningOf(payload.background_tasks), questionWord: await questionWordOf(stderr) });
         const times = utcTimeWarning(message, { now: now() });
+        const recorded = questionNamed(message, config, await questionWordOf(stderr)) === null
+          ? null
+          : await questionRecordOf(payload, message, config, await stopIo({ readFile, readdir, run, env, homedir, now }, stderr), stderr);
         const commands = commandsOf(payload, message, { readFile, platform, parse, now, started }, stderr);
-        for (const warning of [times, commands]) {
+        for (const warning of [recorded, times, commands]) {
           if (warning !== null) reason = reason === null ? warning : `${reason}\n\n${warning}`;
         }
       } else if (config !== null) {
