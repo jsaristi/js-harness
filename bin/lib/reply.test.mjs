@@ -130,6 +130,36 @@ test('a question closes a reply that leaves the user an open question to answer 
   assert.match(refusal('Hecho.\n\n**Te pregunto**'), /what you ask/, 'the question is written on its line');
 });
 
+// His answer to question 325 (2026-11-17, transcript 699d7c29, line 8070): the written question stays, but it reaches
+// him through the question tool with options that give examples, answered in its Other. The tool holds a session until
+// he answers, so a reply waits only on a question recorded and not yet put to him: its line names that question.
+const named = (text, extra) => replyRefusal(text, config, { questionWord: 'Pregunta', ...extra });
+
+test('with the record\'s question word, the question state names the recorded question it waits on', () => {
+  // The close he answered with "siempre dame las preguntas con opciones" (line 7609): a question asked on the line.
+  const before7609 = 'Te pregunto: ¿la regla questions-one-place dice que las decisiones con opciones van por la herramienta y las preguntas abiertas por escrito? Si sí, escríbelo en una frase tuya.';
+  const reason = named(`Para avanzar me faltan tres respuestas tuyas.\n\n${before7609}`);
+  assert.match(reason, /"Te pregunto" names no recorded question/);
+  assert.match(reason, /notify --to orchestrator --kind question/);
+  assert.match(reason, /examples/);
+  assert.match(reason, /Other/);
+  assert.match(reason, /"Pregunta <n>"/);
+  assert.equal(named('Registré la pregunta.\n\n**Te pregunto:** Pregunta 326, tu respuesta va en Otro.'), null);
+  assert.equal(named('Hecho.\n\nTe pregunto: la Pregunta 12 espera tu respuesta escrita.', { running: 1 }), null, 'work may run while he answers');
+  assert.match(named('Hecho.\n\nTe pregunto: la Pregunta espera.'), /names no recorded question/, 'the word alone names no question');
+  assert.match(named('Hecho.\n\nTe pregunto: Preguntas 5 y 6.'), /names no recorded question/, 'a longer word is not the word');
+});
+
+test('without a question word the question state is checked as before, so the eval graders\' copy reads alike', () => {
+  assert.equal(refusal('Leí tu respuesta.\n\nTe pregunto: ¿el proyecto es una biblioteca o una aplicación?'), null);
+  assert.equal(named('Hecho.\n\nSigo solo: espero el gate.'), null, 'only the question state asks for the word');
+});
+
+test('the shape every refusal ends with says a question is recorded with example options and answered in Other', () => {
+  const reason = refusal('Hecho.');
+  assert.match(reason, /Te pregunto \(a question the user answers in writing: recorded with options that give examples, put to them through the question tool and answered in its Other; name it on that line\)/);
+});
+
 test('a question closes a reply while background work runs; only a decision is turned back then', () => {
   const text = 'Hecho.\n\nTe pregunto: ¿qué nombre lleva el proyecto?';
   assert.equal(refusal(text, { running: 1 }), null, 'a question is asked of the person; the work it waits on keeps running');

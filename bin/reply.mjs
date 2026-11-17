@@ -115,6 +115,19 @@ export async function stopIo({ readFile, readdir, run, env, homedir, now, templa
   return { readFile: readOnce, readdir, run: runOnce, env, homedir, now, templates, readNotices, mainCheckout };
 }
 
+/** The word the record's questions are named by (`QUESTION_WORD`, bin/lib/sessions.mjs), which makes the question
+ * state name the recorded question it waits on (his answer to question 325, 2026-11-17); loaded only where the reply
+ * check is on, as the wake check's module is, and the same module `stopIo` loads, so a stop loads it once. When it
+ * cannot be loaded it is said on standard error and the question state is checked without it. */
+async function questionWordOf(stderr) {
+  try {
+    return (await import('./lib/sessions.mjs')).QUESTION_WORD;
+  } catch (err) {
+    stderr(`js-harness reply: ${err?.message ?? err}; the question state was checked without the record's question word\n`);
+    return null;
+  }
+}
+
 /** The wake check's warning (bin/lib/stop-wake.mjs), or `null`; a record it cannot read is said on standard error
  * and costs nothing else: the reply check above still answers. */
 async function wakeOf(payload, state, io, stderr) {
@@ -236,14 +249,14 @@ export async function replyMain(argv, {
       else if (config !== null && again) {
         // The corrected reply's own checks run again; the wake, board and return checks each turned back once by
         // their own record already, so they do not (the Fable 5.2 audit, M6).
-        reason = replyRefusal(message, config, { running: runningOf(payload.background_tasks) });
+        reason = replyRefusal(message, config, { running: runningOf(payload.background_tasks), questionWord: await questionWordOf(stderr) });
         const times = utcTimeWarning(message, { now: now() });
         const commands = commandsOf(payload, message, { readFile, platform, parse, now, started }, stderr);
         for (const warning of [times, commands]) {
           if (warning !== null) reason = reason === null ? warning : `${reason}\n\n${warning}`;
         }
       } else if (config !== null) {
-        reason = replyRefusal(message, config, { running: runningOf(payload.background_tasks) });
+        reason = replyRefusal(message, config, { running: runningOf(payload.background_tasks), questionWord: await questionWordOf(stderr) });
         const times = utcTimeWarning(message, { now: now() });
         const state = closingState(message, config);
         const io = await stopIo({ readFile, readdir, run, env, homedir, now, templates: harness?.templates === true }, stderr);

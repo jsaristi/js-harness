@@ -268,7 +268,7 @@ test('only a work session is warned: the orchestrator, another title and an unti
 test('a decision or a question close, a stop already turned back and Codex are not warned', async () => {
   const decision = await wakeHook({ payload: { last_assistant_message: 'Hecho.\n\nNecesito tu decisión: el orquestador te la pregunta.' } });
   assert.deepEqual(decision.answer, {});
-  const question = await wakeHook({ payload: { last_assistant_message: 'Hecho.\n\nTe pregunto: ¿el proyecto es una biblioteca?' } });
+  const question = await wakeHook({ payload: { last_assistant_message: 'Hecho.\n\nTe pregunto: Pregunta 7, ¿el proyecto es una biblioteca? Tu respuesta va en Otro.' } });
   assert.deepEqual(question.answer, {}, 'his written answer is what wakes the session');
   const again = await wakeHook({ payload: { stop_hook_active: true } });
   assert.deepEqual(again.answer, {});
@@ -276,6 +276,16 @@ test('a decision or a question close, a stop already turned back and Codex are n
   assert.deepEqual(codex.answer, {}, 'Codex sends no background tasks, so it cannot say nothing runs');
   const off = await wakeHook({ files: { [path.join(PROJECT, 'harness.json')]: JSON.stringify({ documents: ['docs/'] }) } });
   assert.deepEqual(off.answer, {}, 'a project with no reply key');
+});
+
+// His answer to question 325 (2026-11-17, line 8070): a question reaches him recorded, with options, through the tool.
+test('the hook turns back a question state that names no recorded question, and says the miss on a stop already turned back', async () => {
+  const unnamed = 'Hecho.\n\nTe pregunto: ¿el proyecto es una biblioteca?';
+  const first = await wakeHook({ payload: { last_assistant_message: unnamed } });
+  assert.equal(first.answer.decision, 'block');
+  assert.match(first.answer.reason, /"Te pregunto" names no recorded question: .*"Pregunta <n>"/);
+  const again = await wakeHook({ payload: { stop_hook_active: true, last_assistant_message: unnamed } });
+  assert.match(again.answer.systemMessage, /"Te pregunto" names no recorded question/);
 });
 
 test('a close that is also refused gets one block holding both reasons, the warning still found once', async () => {
