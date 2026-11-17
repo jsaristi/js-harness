@@ -1413,8 +1413,10 @@ figures are measured against `--context-window`, with the pause at `--context-pa
 
 `js-harness sessions start --title <title> --brief <file>` starts a work session in the background
 with `claude --bg`, from any turn: the desktop app's `start_session` starts one only on a turn the
-user typed, and leaves a card the user must tap on a turn a notice or a compaction started. The lead uses
-it only there, since a background session is not a row in the user's sidebar; Remote Control is off unless
+user typed, and leaves a card the user must tap on a turn a notice or a compaction started. Where
+`rule:sessions-open-in-sidebar` is declared, as in this repository, it refuses itself, a start or a resume, and the
+guard refuses a step that launches it or `claude --bg`, since a background session is not a row in the user's
+sidebar: `start_session` is the one way there. Remote Control is off unless
 `--remote-control` (a resume too, whatever its record holds): the user talks only to the lead, the
 sessions it tasks report by notices and messages, and one that ends with Remote Control on stays an
 offline row in the user's sidebar (his words of 2026-11-14); `--no-remote-control` is still taken. The session reads a copy of the
