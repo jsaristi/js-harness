@@ -1446,22 +1446,22 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "Quiero que que puedas iniciarla sin el mensaje mio escrito",
-        "date": "2026-10-24",
-        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
-        "line": 37182
+        "quote": "nunca debemos permitir eso",
+        "date": "2026-11-15",
+        "session": "69918425-3b43-430f-9f50-62b6422422ce",
+        "line": 21275
       },
       {
-        "quote": "yo solo me comunico directamente con el orquestador entonces nisiquiera necesito teners a las demas con remote control",
-        "date": "2026-11-14",
-        "session": "69918425-3b43-430f-9f50-62b6422422ce",
-        "line": 7262
+        "quote": "no se puede abrir ninguna sesion en segundo plano",
+        "date": "2026-11-15",
+        "session": "699d7c29-54c4-460e-a5e8-700b114eb251",
+        "line": 402
       }
     ],
-    "reading": "His words of 2026-10-24 ask that a session can start another without his typed message: start_session stays the way a session opens another wherever it starts one, and js-harness sessions start (claude --bg) is the way where start_session would only leave a card. The rule's purpose, that he can see every session, is kept by the session board and the lead, and by the sidebar for the sessions start_session opens; by his words of 2026-11-14 he talks only to the orchestrator, so Remote Control is the orchestrator's alone and the sessions it tasks have none. They extend his two answers of 2026-10-15 to the lead's question tool on T16 layer 3 (odd/tasks/session-channel.md, section 17, \"Open for him\"), \"Solo donde se declara (Recomendada)\" and \"Rechazar y nombrar start_session (Recomendada)\" (transcript e152c9d8-53bc-4366-8fa5-526b1576bcb6, lines 3689 and 3702, no longer on disk, so not quoted here): the guard refuses the tools that open a session in the app's Routines or in the cloud only in a project that declares this rule, and a scheduled task he asks for himself is refused too, with start_session named as the way.",
-    "accepted": "Messages he typed to the lead, sent as he wrote them: the one of 2026-10-24 (transcript 908805db, line 37182) and the one of 2026-11-14 (transcript 69918425, line 7262), carried by JH 200 (odd/tasks/remote-control-lead-only.md, L1).",
+    "reading": "His words of 2026-11-15 forbid any session he cannot see: no session opens in the background. They supersede his words of 2026-10-24 (transcript 908805db, line 37182), which let a session start another without his typed message by js-harness sessions start (claude --bg): that start is now refused, by the command itself and by the guard for a Bash or Terminal step that launches it or claude --bg. start_session stays the one way: a row in his sidebar on a turn he typed, a card he taps on any other. The tools that open a session in the app's Routines or in the cloud stay refused, and Remote Control stays the orchestrator's alone (his words of 2026-11-14).",
+    "accepted": "His tap on question 306, 2026-11-16 (lead transcript 699d7c29, line 505): \"Sí, quita la excepción (Recomendada)\", to a question that named this change, the guard's refusal of js-harness sessions start for every title and for a resume, and the senior-model text; carried by JH 211 (odd/tasks/senior-orchestrator.md, T7, L5).",
     "checked": {
-      "date": "2026-11-14",
+      "date": "2026-11-17",
       "by": "command"
     }
   },
