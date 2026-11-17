@@ -6,8 +6,9 @@ to question 328, L16). It answers each of the 21 findings of the third read (L17
 (L18) and carries his answers: the numbered work sessions get a card (316, L8); the senior does one task at a
 time, in a queue, only for what needs more than Opus (324, L11, L13); the senior closes when its task ends and a
 new one opens (329, L14, which replaces the tap A of 317 on how a senior's task ends); "How sessions run" is for
-work sessions only (330, L15). THE CONFIRMING READ HAS NOT RUN (L19): this session's own tokens and the smallest
-read measured on this document do not fit together under the 3M he approved, so the read waits for his word. The
+work sessions only (330, L15). THE CONFIRMING READ RAN AND DID NOT CONFIRM (L20, by JH 214): read bdef7ebc found
+21 findings, four of them high between the two readers, 20 taken and one not; none is corrected, and version 4
+stands as read. Correcting them and any further read are his to decide, with the forecast of L20. The
 design is not approved and nothing is built. The rule changes his answers 324, 329 and 330 ask for are the
 lead's, on a `rule/` branch (T5); none is written here. Branch `docs/session-roles`, cut from main at 035a2dcc,
 draft PR 899. Versions 1 to 3 and their three reads are L4 to L6; the stop of the first attempt at version 4 is
@@ -550,3 +551,59 @@ card ships without the lines that wait for a rule.
   What a later session needs for the read: `js-harness double-review read odd/tasks/session-roles.md` on this
   commit, its findings answered with `double-review take`; if it finds real failures they go to him as a
   problem, with no further read (L9).
+- L20 2026-11-17, the confirming read of version 4, by JH 214 (a senior session on claude-fable-5-2, opened
+  fresh for it; his yes to question 331, the lead's transcript 699d7c29 line 11011, as the session's opening
+  gives it). Read bdef7ebc-59e4-49a0-a09a-12577ac1abe8 of this document at 9d1e031e: Claude 15 findings, three
+  high, 3,307,277 tokens; Codex 6, one high, 921,331 tokens. It finds real failures, so version 4 is not
+  confirmed and nothing is corrected here. The session's own tokens before its stop notice, each message once:
+  991,856 in 10 calls; with the read that is 4.30M Claude against the 3.4M of question 331, so it stopped and
+  told the lead (the channel's note of 18:16 local). His yes to question 334 (`js-harness sessions --quote
+  699d7c29-54c4-460e-a5e8-700b114eb251 11387`, 2026-11-17T23:48Z, tapped): "A: que los anote (Recomendado)";
+  what the question said a yes covers: writing the findings, answering each, the Log and the push, about 0.9M
+  of Fable, an estimate; not correcting version 4 and not reading it again. Recorded with `double-review take`:
+  Claude 14 of 15 taken, Codex 6 of 6, five shared. No taken finding was rechecked against the code by this
+  session: each is the reader's claim with the reader's citations, whole in the read's record
+  (`double-reviews.jsonl` under the git common dir).
+  High. (Claude 1, Codex 4, shared) The senior's mode line read from `SENIOR_HOME` keeps the formatter's
+  sentence "the session and every sub-agent on" (`bin/lib/contract.mjs:316-319`), so a senior is told to run
+  its sub-agents on its own model, against its card and `bin/lib/lead-protocols.mjs:43`; T3's test would lock
+  it in. (Claude 3, Codex 1, shared) The marker is created before the card is printed, so a hook that fails or
+  runs out of time after it loses the card for good, against the table's "leaves the card owed" and the
+  guarantee. (Claude 2) The gap at a session's start is conceded on a misread citation: `bin/resume.mjs:840`
+  tests whether a start is a clear and says nothing of titles; SessionStart and UserPromptSubmit hooks do run
+  before the first act; the app's record holds the title and is already read at a start
+  (`bin/resume.mjs:831-838`, `bin/lib/app-record.mjs:97`); the measurement that settles it is cheap and was
+  left to T3.
+  Medium. (Claude 4, Codex 2, shared) `end.compaction` is the `preTokens` of the last automatic compaction in
+  the transcript's end, not a boundary's identity: a manual compaction is not seen, and a `pending` state can
+  take a later compaction as its own and owe no card. (Claude 8, Codex 3, shared) Three hooks read and write
+  one JSON state with no lock, and `rules --hook` also runs at SubagentStart and at SessionStart on a
+  compaction, so it can spend the owed card or take it from the resume block. (Claude 5) A senior under a
+  numbered title, as JH 213 and JH 214 are, holds the role `work` and would get the work session's card and
+  mode line. (Claude 6, Codex 6, shared) His typed answer to question 307 is recorded
+  (`odd/tasks/plan-orchestrator.md`, L19, "Solo en el Plan") and this document says it is owed; no test holds
+  that a rule a card names is live. (Claude 7) What the card and the mode line do when `ruleHere` answers
+  `behind` or `elsewhere` is not said. (Claude 9) The forecast's lower bound ignored that each read cost more
+  than the one before, which this read's 3.31M bears out; "Ask me before" said nothing waits while State said
+  the read does. (Claude 10) The lead's card is pointers, which read 1 objected to; a rule's sentence can be
+  rendered from its home at print time. (Codex 5) The senior's card may ship before T5 while
+  `bin/lib/lead-protocols.mjs:43` still describes a standing senior.
+  Low. (Claude 12) the line for a title with no card names a command that exits 1 for it; (Claude 13) what a
+  clear gives is in the code (`bin/resume.mjs:825-829`), not "not known"; (Claude 14) citations off by lines
+  and "this session" meaning two sessions; (Claude 15) the state files are never pruned, the role list can
+  drift from `roleOfTitle`, `PLAN nueva` must get no card, the Plan's card ships everywhere with its sources
+  here.
+  Not taken: Claude 11, no criterion or proxy for "que haga que funcione mejor". The design says the effect is
+  unmeasured and why (the "What a check holds" part: three wrong blocks in one session are the whole record),
+  and T4 says it reads delivery only; a proxy the finding itself calls weak adds a record and no criterion.
+  What a correction would change and cost, every figure an estimate, none approved. Claude 1 with Codex 4: the
+  senior's paragraph of "The resume block, by role" and one line of T3; small, a call or two. Claude 2: a
+  read-only measurement over existing transcripts and app records first (one explorer, about 0.2M on Opus, as
+  L2 and L12 measured theirs), then the Goal, Depth pass item 1, "What is guaranteed" and T3's first step.
+  Claude 3 with Codex 1: the order of marker and print, with a claimed state apart from a delivered one; it
+  sits in the same part as the shared mediums on the state and the boundary, so "Delivery" is rewritten once
+  for all five, with its table and T3's rows. In a fresh senior at about 100k a call (this session's measure),
+  the highs alone about 1 to 1.5M of Fable; all 20 taken findings about 1.5 to 2.5M, with the explorer. A read
+  after that is not less than this one, 3.3M Claude and 0.9M Codex, and it would be the fifth:
+  `rule:double-review` allows three and L9 said no further read. Both are his to decide. The final measure of
+  this session's spend is in its closing notice.
