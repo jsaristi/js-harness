@@ -5,10 +5,10 @@ JH 192, slice 3 of the lead's brief. Delivery: this design, then one pull reques
 (`rules change` runs only on a `rule/` branch, `bin/lib/rules-change-run.mjs:170`). Runner: `node --test`.
 
 ## State
-Now (2026-11-16 ~04:00Z): T8 landed (PR 895, 83252acb); main is merged into T7's branch `rule/sessions-visible-only`
-(this State and Log hold both). T7 is reviewed clean and waits only on JH 208's `rule/away-autonomy`; then the two
-`rules change` (`sessions-open-in-sidebar` with the scratchpad's `sidebar.json`, then `senior-model`), gate, reviews, PR,
-`ready`. The paragraphs below are each task's record, T8's first.
+Now (2026-11-17 ~05:10Z): `rule/away-autonomy` landed (PR 897, main 9fc30a07) and is merged into T7's branch
+(15c9bd39). Both rule changes are committed: `sessions-open-in-sidebar` drops its exception (715f2ab2) and
+`senior-model`'s subject names start_session (ca8fba11). Next: Codex and lenses from ee0fb395 (the merge resolution and
+both rules), push, PR, `ready`. The paragraphs below are each task's record, T8's first.
 
 T8 (2026-11-16 ~03:00Z, JH 211), branch `feat/lead-held-high` from origin/main b3a73245, in worktree
 `tui-gentle-level-a6afd3`; T7 waits on branch `rule/sessions-visible-only` (its State is there; the second branch to land
@@ -221,7 +221,7 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
 - [ ] T5 (kind: docs) (2) `bin/lib/lead-protocols.mjs`: when and how the lead sends a senior a task. Route: inline.
 - [ ] T6 (kind: build) (3, 4) The lead starts the senior visibly with `start_session`; the guard holds the start and
   the messages to it. Route: inline, then one verifier. Commits: cb830c3e, the D11 fix.
-- [ ] T7 (kind: build) (5) The guard refuses `js-harness sessions start` for every title; `rule:sessions-open-in-sidebar`
+- [x] T7 (kind: build) (5) The guard refuses `js-harness sessions start` for every title; `rule:sessions-open-in-sidebar`
   drops its exception by `rules change`, his to approve. Route: inline.
 - [x] T8 (kind: build) (6) The lead held to `rule:lead-effort`: a lead whose title drifts off `<code> ORQ · …` keeps
   its role or is named (channel `--address orchestrator` still resolves it, `heldOfRole` does not), and the board,
@@ -344,3 +344,8 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   `<code> ORQ · …`; his menu for the level). The harness does not set the level itself: no session changes its own, and
   only his menu changes a lead's (`home-sessions.mjs` `corrects: his menu`). "Start" is read as the lead's session
   start (the resume hook), since L6's case was a lead already running; the new lead's `start_session` is held already.
+- L10 2026-11-17, the lead: PR 897 landed at main 9fc30a0, so T7 is unblocked; reviews per slice; read codex-meter
+  before each Codex review (weekly near its floor; read at 0% after its reset). The two `rules change` ran from
+  scratchpad inputs: `sessions-open-in-sidebar` with his words of 2026-11-15 (the command dated both quotes that day,
+  so the reading says 2026-11-15 only) and his tap on question 306; `senior-model` keeps its two quotes and adds the
+  tap to `accepted`, its reading saying the lead opens the senior with start_session.
