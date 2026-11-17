@@ -6,10 +6,11 @@ findings are taken (L9, L10); the third's 21 are open in L11 and told to him as 
 (https://claude.ai/artifact/1ppv1NAxbrfv3THX96Gt7b), with no fourth round. Everything from L12 on was added after
 the last read and no reader has read it: Spec 8 (L12), his line on the advisor and the swarms (L14), his four
 answers (L15, L16: the lead opens the work sessions; Fable 5.2 at high; sub-agents inside each session; his
-questions only in the Plan, by a tap, the typed line still owed), T11 and Spec 9. On 2026-11-16 he typed yes to
+questions only in the Plan, by a tap and, on 2026-11-17, by his typed line, L19), T11 and Spec 9. On 2026-11-16 he typed yes to
 starting phase 0 with those problems said (L17, question 315), so PR 894 (branch `claude/dreamy-nash-50fa03`,
 worktree `rule-lead-effort-split-aac740`) goes ready and the lead lands it. Left: the lead stores the Plan's
-opening and tells him (phase 0's step 1, T10); his typed line for question 1; T11, how the lead knows he is away;
+opening and tells him (phase 0's step 1, T10); T6's question part, which now waits for JH 212 and T11 and no
+longer for his typed line (L19); T11, how the lead knows he is away;
 T12, how each role reaches its session (Spec 9), JH SR's; a session for T3. The measures:
 `odd/tasks/plan-orchestrator-evidence/measures.md`.
 
@@ -329,8 +330,9 @@ while the next task's design is read. The board is checked before each task star
   `rule:remote-control-yes` and `rule:sessions-open-in-sidebar` by `rules change`, source line 1389); and, only on
   his typed line (question 1), a question addressed to the session that holds his chat (`bin/lib/channel.mjs:131`,
   `bin/notify.mjs`) with `rule:questions-one-place`, `rule:lead-charter` and `rule:away-autonomy`. One commit a
-  rule. After T4. High risk 3: a verifier. Question 1 is answered A by a tap (L16): his typed line is still owed,
-  and the question part also waits for T11.
+  rule. After T4. High risk 3: a verifier. Question 1 is answered A by a tap (L16) and by his typed line of
+  2026-11-17 (L19). The question part still waits for T11, and for JH 212's change of `rule:questions-one-place`
+  to land first: T6 is rebased on it (the lead's word, L19).
 - [ ] T7 (kind: docs) (1, 2) The texts: "The plan orchestrator" in `bin/lib/lead-protocols.mjs` and the Plan's part
   of the orchestrator skill (`bin/lib/manifest.mjs`), conditional on a Plan holding its role. After T6. High risk
   3: a verifier.
@@ -509,3 +511,15 @@ while the next task's design is read. The board is checked before each task star
   adds it to that list and finds its card there, and whichever of the two lands second carries the other's
   change; T7 here renders the Plan's role sentences from the card's constant and writes no second copy. Added
   after the last read of this document and read by no reader.
+- L19 His typed line for question 1 (307), the one L16 said was owed. The lead asked it again as question 322,
+  saying that `rule:questions-one-place` rests on his words of 2026-10-13 and that a tap does not change it. He
+  tapped "A: solo en el Plan (escríbelo)" (lead transcript 699d7c29-54c4-460e-a5e8-700b114eb251, line 7705,
+  2026-11-17T06:38:44Z) and then typed, read with `js-harness sessions --quote
+  699d7c29-54c4-460e-a5e8-700b114eb251 7720` ("sent by the user", 2026-11-17T06:38:53Z, 01:38 local): "Solo en
+  el Plan". What the question said a yes covers: only where his questions reach him, changed on a `rule/`
+  branch with his phrase and its date; it changes who decides nothing and authorizes no spend; and until the
+  Plan's session is open his questions keep reaching him in the lead's chat. So T6's question part no longer
+  waits for his words. It is not built yet, at the lead's word (by message, 2026-11-17): JH 212 changes
+  `rule:questions-one-place` first, so that every question comes with options, and T6 is rebased on it after it
+  lands; T11 is still open and still comes before T6's question part. Entered after the last read of this
+  document and read by no reader.
