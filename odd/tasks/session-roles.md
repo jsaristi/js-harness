@@ -8,7 +8,9 @@ four. The third and last read (ea3a7283) still finds 21 real failures, four of t
 not corrected, and go to him as problems (`rule:double-review`: no fourth read). The design is not approved.
 Branch `docs/session-roles`, cut from main at 035a2dcc, worktree `rule-lead-effort-split-aac740`. Nothing is
 built. Three things are his ("Ask me before"): at the lead's word they are recorded as questions 316, 317 and
-318, the first with the last read's dispute in its text (L7). The lead puts them to him one at a time.
+318 (L7), and he answered A to each by tap (L8): work sessions get a card too, both rules for the senior, and
+`CLAUDE.md` scoped to work sessions. 317 and 318 change a rule and his file: his typed words are still owed
+before either is written. The 21 findings stay open; what to do with them is still his question.
 
 ## Goal
 Each session that holds a role (the lead, the Plan, the senior) reads what its role is, from one text the harness
@@ -301,3 +303,16 @@ card ships without the lines that wait for a rule.
   question 318 (scoping the "one feature a session" paragraph of `CLAUDE.md` to work sessions). Each says the
   design is not approved and that a yes authorizes no build. L6's last sentence, that the questions are not
   recorded, held until this line. Nothing is corrected; draft PR 899.
+- L8 His answers to the three questions, each tapped in the lead's chat (read with `js-harness sessions --quote
+  699d7c29-54c4-460e-a5e8-700b114eb251 <line>`; the records keep UTC). Question 316, line 7242,
+  2026-11-17T05:56Z: "A: sí, también las de trabajo", so the numbered work sessions get a short role card and
+  "Ask me before" 1 is closed; it also settles the last read's Claude 7 and Codex 4, though nothing in the
+  design is changed for it here. Question 317, line 7285, 05:59Z: "A: las dos reglas", a senior works one task
+  at a time, and a senior's task ends with `waiting`, never `closed`, with `notify --kind closed` refused
+  from a senior's title. Question 318, line 7306, 06:14Z: "A: sí, acotarlo a las de trabajo", the "How sessions
+  run" paragraph of `CLAUDE.md` says it speaks of work sessions. What the taps do not cover: 317 makes two
+  rules of his and 318 changes his file, and a tap changes neither (`js-harness-protocols`, section 4: his
+  words, quoted with their date); the lead asks for his typed line when that work comes, so no `rule/` branch
+  and no edit of `CLAUDE.md` starts on these taps. No answer approves the design or a build: the 21 findings
+  of L6 stay open, and what to do with them and who corrects them is still his to answer (the lead's message,
+  2026-11-17, about 01:15 local). Nothing is corrected, no read is run; draft PR 899.
