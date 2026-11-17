@@ -601,6 +601,14 @@ test('applied lists the sessions off the home, desktop and background, with what
       '  The app\'s record does not say whether a session that is not archived is running. Nothing was written.',
     ]);
   });
+  // Where sessions-open-in-sidebar is not declared, a resume still runs and is the act (Codex on 1e19075..eb4d8e6).
+  await withHome({ 'bin/lib/rules-data.mjs': writeRules(RULES.filter((rule) => rule.id !== 'sessions-open-in-sidebar')) }, async (project, home) => {
+    const model = declared('session-model').value;
+    const other = LEVELS.find((level) => level !== declared('session-effort').value && level !== declared('lead-effort').value);
+    appendRecord(home, { event: 'started', at: new Date(NOW).toISOString(), id: 'job-1', sessionId: null, title: 'JH 8 · job', root: project, cwd: project, worktree: null, worktreePath: null, model, effort: other });
+    const { out } = await applied(project, home, undefined, { readApp: () => new Map(), agents: () => [{ id: 'job-1', status: 'busy' }] });
+    assert.ok(out.some((line) => line.endsWith('corrected by a resume once its job is no longer at work, which a resume refuses until then: js-harness sessions start --resume job-1')), out.join('\n'));
+  });
   await withHome({}, async (project, home) => {
     const { out } = await applied(project, home, undefined, { readApp: () => assert.fail('no home, so no record is read') });
     assert.ok(!out.some((line) => line.startsWith('Sessions off the home')), out.join('\n'));

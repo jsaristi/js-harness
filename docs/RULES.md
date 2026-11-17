@@ -223,7 +223,7 @@ The shape of the title of a session started with start_session: <code> is the pr
 ### sessions-open-in-sidebar
 The way a session opens another in this repository, so that the user can see every session: start_session, a row in his sidebar on a turn he typed and a card he taps on any other; js-harness sessions start, claude --bg and the tools that open one in the app's Routines or in the cloud are refused: start_session.
 - Of this repository only: not in force in a project that installs the harness.
-- Read by: `bin/lib/guard.mjs`, `bin/rules.mjs`.
+- Read by: `bin/lib/guard.mjs`.
 - Since 2026-10-15. Row: reports, against the failure `session-opened-unseen`. Source: his words of 2026-11-15, 2026-11-15, checked by the command on 2026-11-17.
 
 ### status-report
