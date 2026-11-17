@@ -376,3 +376,7 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   unchanged, `git diff --quiet`): the lead's list unchanged, no false refusal, the redirection forms (`2>&1`, `>&2`,
   `&>`, `>>`, `>|`, before `&&` and `|`, PowerShell `2>$null` and `*>`) pass; two missed launches, `claude &>log
   --bg` (shellWords gives the `&` of `&>` as an operator) and `claude.bat --bg`, fixed in 1a2806ea with tests.
+  Codex on 1a2806ea found it took a separate `&` (`echo ok & >log claude --bg`) for the one of `&>`; a count of `&>`
+  (7a7eb7cc) was not fixed, since it ignores position and quotes (Codex and both lenses); b54476e6 scans the text, quote
+  aware, and writes each unquoted `&>` as ` >` before `shellWords` reads it: Codex recheck correct 0.98, both lenses 0
+  findings, the earlier one fixed. The suites one file at a time: background-launch 3, lib/guard 51, guard 47 pass.
