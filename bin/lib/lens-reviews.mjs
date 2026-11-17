@@ -95,7 +95,7 @@ const runKey = ({ id, base, head, subjectHash }) => JSON.stringify([id, base, he
  * where it says the same outcome and findings, and a run with two results admits none. A run with no result line was
  * written before runs had one, or stopped before its end: its record is admitted only where it stands before the first
  * record a result line admits, so the records of the shared log stay as they were and none written after is (V2, L66 of
- * odd/tasks/review-gate.md). A record of another read is never admitted, so `records` is what a check reads with it. The git
+ * odd/tasks/review-gate.md); `olderWriter` counts those records and `isOlderWriter(rec)` names one. A record of another read is never admitted, so `records` is what a check reads with it. The git
  * common dir is asked once for both files (`where`, as `jsonLinesPath` takes it). */
 export function admittedLensReviews(root, { spawn = spawnSync, where, ...rest } = {}) {
   const deps = { ...rest, spawn, where: where ?? { commonGitDir: gitDirs(root, spawn).commonGitDir ?? null } };
@@ -108,7 +108,7 @@ export function admittedLensReviews(root, { spawn = spawnSync, where, ...rest } 
   const admitted = new Set();
   let resulted = false;
   // Records refused only for standing after that first one, as an older js-harness writes them: the rows say so (L71 D).
-  let olderWriter = 0;
+  const olderWriter = new Set();
   for (const rec of records) {
     const key = runKey({ ...rec, id: rec.run });
     if (typeof rec.run !== 'string' || claimed.has(rec.run) || !runs.has(key)) continue;
@@ -117,7 +117,7 @@ export function admittedLensReviews(root, { spawn = spawnSync, where, ...rest } 
     const ends = endsOf.get(rec.run) ?? [];
     if (ends.length === 0) {
       if (!resulted) admitted.add(rec);
-      else olderWriter += 1;
+      else olderWriter.add(rec);
       continue;
     }
     const [end] = ends;
@@ -126,7 +126,7 @@ export function admittedLensReviews(root, { spawn = spawnSync, where, ...rest } 
     admitted.add(rec);
     resulted = true;
   }
-  return { records, admitted: (rec) => admitted.has(rec), olderWriter };
+  return { records, admitted: (rec) => admitted.has(rec), olderWriter: olderWriter.size, isOlderWriter: (rec) => olderWriter.has(rec) };
 }
 
 const COMMIT_ID = /^[0-9a-f]{40,64}$/;
