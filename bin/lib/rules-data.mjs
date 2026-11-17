@@ -655,7 +655,7 @@ export const RULES = [
   },
   {
     "id": "senior-model",
-    "subject": "the model a senior session runs on, titled <code> SR · <purpose>, which the lead starts with js-harness sessions start and sends tasks needing more intelligence or complexity",
+    "subject": "the model a senior session runs on, titled <code> SR · <purpose>, which the lead opens with start_session and sends tasks needing more intelligence or complexity",
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-11-12",

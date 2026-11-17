@@ -184,10 +184,10 @@ The effort a senior session runs at, titled <code> SR · <purpose>; its model is
 - Since 2026-11-12. Row: reports. Source: his words of 2026-11-11, 2026-11-12, checked by the command on 2026-11-12.
 
 ### senior-model
-The model a senior session runs on, titled <code> SR · <purpose>, which the lead starts with js-harness sessions start and sends tasks needing more intelligence or complexity: claude-fable-5-2.
+The model a senior session runs on, titled <code> SR · <purpose>, which the lead opens with start_session and sends tasks needing more intelligence or complexity: claude-fable-5-2.
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: `bin/lib/model-home.mjs`.
-- Since 2026-11-12. Row: reports. Source: his words of 2026-11-11, 2026-11-12, checked by the command on 2026-11-12.
+- Since 2026-11-12. Row: reports. Source: his words of 2026-11-11, 2026-11-12, checked by the command on 2026-11-17.
 
 ### session-effort
 The effort every work session and every sub-agent the harness starts runs at; the lead's session runs at rule:lead-effort, and the lenses and the double review's Claude reader at rule:lens-effort: medium.
