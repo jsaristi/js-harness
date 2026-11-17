@@ -11,9 +11,11 @@ built. Three things are his ("Ask me before"): at the lead's word they are recor
 318 (L7), and he answered A to each by tap (L8): work sessions get a card too, both rules for the senior, and
 `CLAUDE.md` scoped to work sessions. 317 and 318 change a rule and his file: his typed words are still owed
 before either is written. On 2026-11-17 he approved the spend to correct the 21 findings and to run one
-confirming read (question 323, L9). STOPPED before version 4 was written (L10): this session's own tokens had
-already used what he approved, so the spend past it is his to decide and the lead routes the work. Version 3
-stands; the findings are open; no fourth read has run.
+confirming read (question 323, L9). This session's own tokens used what he approved before version 4 was
+written (L10). At the lead's word (L11) JH SR goes on with version 4 here, and the confirming read waits for
+his return, since nothing of the approved figure is left for it. Until version 4 is committed, version 3
+stands and the findings are open; no fourth read has run. He typed words for the first of the senior's two
+rules (L11); the second and the scope of `CLAUDE.md` are still tap-only and open.
 
 ## Goal
 Each session that holds a role (the lead, the Plan, the senior) reads what its role is, from one text the harness
@@ -354,3 +356,21 @@ card ships without the lines that wait for a rule.
   version 4 is in this session's stored opening (`js-harness sessions --opening "JH SR · diseño del
   Orquestador Plan"`), and one read-only opus explorer is checking fourteen facts in the code, its answers to
   be saved in the sessions' shared notes folder.
+- L11 2026-11-17, three messages of the lead, read together at 02:30 local. First, his typed answer to question
+  324, which asked for his words for 317 and 318 (`js-harness sessions --quote
+  699d7c29-54c4-460e-a5e8-700b114eb251 7921`, 2026-11-17T07:14Z, 02:14 local, typed): "El SR hace una tarea a
+  la vez en fila ya que este solo se va a utilizar para cosas que necesitemos mejor poder que opus pero nla
+  idea no es que se utilice todo el tiempo, osea solo para tareas complejas que necesiten mas poder que opus".
+  What it words: the first rule of 317, a senior does one task at a time, in a queue; and one thing more, that
+  the senior is not for use all the time, only for complex tasks that need more power than Opus. What it does
+  not word: the second rule of 317, a task ends with `waiting` and never `closed`, and 318, the scope of the
+  "How sessions run" paragraph of `CLAUDE.md`. He chose A on both and never chose "not yet", so both are open,
+  waiting for words, not dropped (the lead's correction, its second message). Whoever writes them runs the
+  dry run of `js-harness rules change` first, to see whether his lines 5054 and 7921 with the taps satisfy the
+  source. Nothing is written as a rule here. Third message, after this session's stop of L10: "you keep the
+  Q323 work, since you are on claude-fable-5-2. Go on with version 4. Start the confirming read only if its
+  forecast fits what is left of the approved figure (2 to 3.5M Claude plus 0.5M Codex, correction and read
+  together). If it does not fit, the read waits for his return, not for me: he is away for some hours, and my
+  cases authorize no spend. Send a note either way." Read by this session as: version 4 is written here, at
+  about 230k tokens a call on Fable, which the lead decided knowing the figures of L10; nothing of the approved
+  figure is left, so the read does not start and waits for him. That reading was sent to the lead in a note.
