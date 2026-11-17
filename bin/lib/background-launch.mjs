@@ -12,46 +12,12 @@ const CONDITIONS = new Set(['if', 'elif', 'while', 'until']);
 // The options of xargs, GNU's and BSD's, that take the next word as their value.
 const XARGS_VALUES = new Set(['-n', '-L', '-P', '-s', '-d', '-E', '-a', '-I', '-J', '-R', '-S', '--max-args', '--max-lines', '--max-procs', '--max-chars', '--delimiter', '--eof', '--arg-file', '--replace']);
 
-/** `command` with each unquoted `&>` written as ` >`: `shellWords` keeps no spacing, so it gives the `&` of `&>` as a
- * separator of its own, and only the text says whether the `&` was written against the `>` (the verifier's second
- * pass; Codex and the lenses on 0b7d607..7a7eb7c: `echo ok & >log claude --bg` keeps its separator). The scan follows
- * quotes and backslashes as the shell does, so an `&>` in quotes stays text; `&&` and `|&` are left as they are. */
-function ampersandRedirections(command) {
-  const text = String(command ?? '');
-  let out = '';
-  let quote = null;
-  for (let at = 0; at < text.length; at += 1) {
-    const char = text[at];
-    if (quote === "'") {
-      if (char === "'") quote = null;
-    } else if (char === '\\') {
-      out += char + (text[at + 1] ?? '');
-      at += 1;
-      continue;
-    } else if (quote === '"') {
-      if (char === '"') quote = null;
-    } else if (char === "'" || char === '"') {
-      quote = char;
-    } else if (char === '&' && (text[at + 1] === '&' || text[at - 1] === '|' || text[at - 1] === '>')) {
-      out += char + (text[at + 1] === '&' ? '&' : '');
-      if (text[at + 1] === '&') at += 1;
-      continue;
-    } else if (char === '&' && text[at + 1] === '>') {
-      out += ' ';
-      continue;
-    }
-    out += char;
-  }
-  return out;
-}
-
 /** The words of `command`, as `shellWords` gives them with its `redirections`, with each unquoted `>`, `>>` or `>|`
- * taken out with its target: the next word, or `&` and a descriptor (`2>&1`); an unquoted `&>` or `&>>` is read as
- * `>` or `>>` (`ampersandRedirections` above). A quoted `'>'` is a
- * word, not a redirection (the verifier of 2026-11-17), so the launch after it is read, and a target is no option of
- * claude's (Codex P2s of 2026-11-17). */
+ * taken out with its target: the next word, or `&` and a descriptor (`2>&1`); `shellWords` reads an unquoted `&>`
+ * or `&>>` as `>` or `>>`. A quoted `'>'` is a word, not a redirection (the verifier of 2026-11-17), so the launch
+ * after it is read, and a target is no option of claude's (Codex P2s of 2026-11-17). */
 function withoutRedirections(command) {
-  const read = shellWords(ampersandRedirections(command), { groups: true, redirections: true });
+  const read = shellWords(command, { groups: true, redirections: true });
   const words = [];
   words.operators = new Set();
   for (let at = 0; at < read.length; at += 1) {

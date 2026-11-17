@@ -7,7 +7,7 @@ import { ruleHere, writeRules } from './rules.mjs';
 import { EFFORTS, menuLine } from './model-home.mjs';
 import { agentEffortRefusal, allowedModels, denial, hourRefusal, openingRefusal, sessionStartHome, sessionStartRefusal, stampedHour, starterRefusal } from './guard.mjs';
 import { backtickRefusal, backticksInDoubleQuotes, driveRootRemovalRefusal, modelRefusal, onFirstParentLine, reviewBaseRefusal, terminalNoteRefusal } from './guard.mjs';
-import { RECORD_HANDLES, REVIEW_RECORD_FILES, reviewRecordOf, reviewRecordWriteRefusal } from './guard.mjs';
+import { RECORD_HANDLES, REVIEW_RECORD_FILES, reviewRecordOf, reviewRecordWriteRefusal, shellWords } from './guard.mjs';
 import { codexReviewsPath } from './codex-reviews.mjs';
 import { codexReviewRunsPath } from './codex-review-runs.mjs';
 import { LENS_REVIEW_RUNS_FILE, LENS_REVIEWS_FILE } from './lens-reviews.mjs';
@@ -1078,4 +1078,21 @@ test('reading a record, the commands that write one, and text that only names on
     `node -e "const t = fs.readFileSync('${RECORD}', 'utf8'); console.log(RegExp('rename').exec(t))"`,
     `node -e "const t = fs.readFileSync('${RECORD}', 'utf8'); console.log(new RegExp('writeFileSync', 'g').exec(t))"`,
   ]) assert.equal(reviewRecordWriteRefusal(command), null, command);
+});
+
+test('shellWords with redirections reads &> and &>> as a redirection, past comments and heredoc bodies', () => {
+  const read = (command) => {
+    const words = shellWords(command, { groups: true, redirections: true });
+    return { words: [...words], operators: [...words.operators], redirections: [...words.redirections] };
+  };
+  // The & of &> is the redirection's, not a separator (the verifier's passes on background-launch, 2026-11-17).
+  assert.deepEqual(read('a &>log b'), { words: ['a', '>', 'log', 'b'], operators: [], redirections: [1] });
+  assert.deepEqual(read('a &>> log'), { words: ['a', '>>', 'log'], operators: [], redirections: [1] });
+  // An & apart from the > separates, && stays one operator, and an &> in quotes or a comment is text.
+  assert.deepEqual(read('a & >log b'), { words: ['a', '&', '>', 'log', 'b'], operators: [1], redirections: [2] });
+  assert.deepEqual(read('a &&>log b'), { words: ['a', '&&', '>', 'log', 'b'], operators: [1], redirections: [2] });
+  assert.deepEqual(read('echo "&>" x'), { words: ['echo', '&>', 'x'], operators: [], redirections: [] });
+  assert.deepEqual(read("# it's &>\na &>log"), { words: [';', 'a', '>', 'log'], operators: [0], redirections: [2] });
+  // Without redirections the & is an operator, as every other caller has read it.
+  assert.deepEqual([...shellWords('a &>log b')], ['a', '&', '>log', 'b']);
 });
