@@ -33,6 +33,10 @@ test('a step that launches claude --bg or js-harness sessions start is found, ho
     // The verifier of 2026-11-17: a quoted ">" is no redirection, so the --bg after it is read.
     ["claude -p '>' --bg x", 'claude --bg'],
     ['claude -p ">" --bg x', 'claude --bg'],
+    // The verifier's second pass, 2026-11-17: the & of &> is the redirection's, and a .bat names claude too.
+    ['claude &>log --bg x', 'claude --bg'],
+    ['claude &>> log --bg x', 'claude --bg'],
+    ['claude.bat --bg x', 'claude --bg'],
   ]) {
     assert.equal(backgroundLaunch(command), launch, command);
   }
@@ -51,6 +55,7 @@ test('a command that only names a launch, in quotes or a heredoc body, launches 
     'claude -p x > --bg',
     'exec -a --bg claude -p x',
     'node x.mjs > out.log 2>&1',
+    'node x.mjs &> out.log && gh pr view 1',
   ]) {
     assert.equal(backgroundLaunch(command), null, command);
   }

@@ -13,14 +13,16 @@ const CONDITIONS = new Set(['if', 'elif', 'while', 'until']);
 const XARGS_VALUES = new Set(['-n', '-L', '-P', '-s', '-d', '-E', '-a', '-I', '-J', '-R', '-S', '--max-args', '--max-lines', '--max-procs', '--max-chars', '--delimiter', '--eof', '--arg-file', '--replace']);
 
 /** The words of `command`, as `shellWords` gives them with its `redirections`, with each unquoted `>`, `>>` or `>|`
- * taken out with its target: the next word, or `&` and a descriptor (`2>&1`). A quoted `'>'` is a word, not a
- * redirection (the verifier of 2026-11-17), so the launch after it is read, and a target is no option of claude's
- * (Codex P2s of 2026-11-17). */
+ * taken out with its target: the next word, or `&` and a descriptor (`2>&1`); the `&` of `&>` and `&>>`, which
+ * `shellWords` gives as an operator of its own, goes with it (the verifier's second pass). A quoted `'>'` is a
+ * word, not a redirection (the verifier of 2026-11-17), so the launch after it is read, and a target is no option of
+ * claude's (Codex P2s of 2026-11-17). */
 function withoutRedirections(command) {
   const read = shellWords(command, { groups: true, redirections: true });
   const words = [];
   words.operators = new Set();
   for (let at = 0; at < read.length; at += 1) {
+    if (read[at] === '&' && read.operators.has(at) && read.redirections.has(at + 1)) continue;
     if (read.redirections.has(at)) {
       if (read[at + 1] === '&' && read.operators.has(at + 1)) at += 2;
       else if (!read.operators.has(at + 1)) at += 1;
@@ -45,7 +47,9 @@ const programName = (word) => word.replace(/^.*[\\/]/, '').toLowerCase().replace
  * `$( )` or backtick substitution), nor a wrapper it does not know (`setsid`, `stdbuf`, `cmd /c`, `powershell
  * -Command`), as the verifier of 2026-11-17 listed. */
 function launchOf(words) {
-  const { program, args } = programOf(words);
+  const { program: named, args } = programOf(words);
+  // programOf keeps a .bat on the name (claude.bat), which names the program too.
+  const program = programName(named);
   if (program === 'xargs') {
     let at = 0;
     while (at < args.length && args[at].startsWith('-')) at += XARGS_VALUES.has(args[at]) ? 2 : 1;
