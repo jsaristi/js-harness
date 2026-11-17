@@ -8,7 +8,7 @@ JH 192, slice 3 of the lead's brief. Delivery: this design, then one pull reques
 Now (2026-11-17 ~05:10Z): `rule/away-autonomy` landed (PR 897, main 9fc30a07) and is merged into T7's branch
 (15c9bd39). Both rule changes are committed: `sessions-open-in-sidebar` drops its exception (715f2ab2) and
 `senior-model`'s subject names start_session (ca8fba11). Next: Codex and lenses from ee0fb395 (the merge resolution and
-both rules), then the review fixes 1e190752, eb4d8e6b and 043ce46a, all reviewed (L11). Next: push, PR, `ready`. The paragraphs below are each task's record, T8's first.
+both rules), then the review fixes 1e190752, eb4d8e6b and 043ce46a, all reviewed (L11), and the provenance fixes 0976dcb1, 76fd3e63, c3066640 (L12). T7 is at PR 901, ready for the lead to land. The paragraphs below are each task's record, T8's first.
 
 T8 (2026-11-16 ~03:00Z, JH 211), branch `feat/lead-held-high` from origin/main b3a73245, in worktree
 `tui-gentle-level-a6afd3`; T7 waits on branch `rule/sessions-visible-only` (its State is there; the second branch to land
@@ -356,3 +356,8 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   null) in 043ce46a (correct 0.99). Answered, not changed: `doctor` does not call `sessionsOffHome` (only `rules
   applied` and `rules switch`); line 402 of 699d7c29 is `2026-11-16T00:10Z`, 2026-11-15 19:10 local, so the rule's
   date holds; `rules switch` keeps the closing text, since it runs only in this checkout, which declares the rule.
+- L12 2026-11-17, before the PR (advisor): his tap on question 306 (699d7c29 line 505) is `2026-11-16T00:17Z`,
+  2026-11-15 19:17 local, so both rules' `accepted` date it 2026-11-15 by local day (0976dcb1, c3066640); senior-model's
+  first change had stored two short excerpts, and its source now keeps both quotes whole (c3066640). README and SPEC no
+  longer say the lead uses `sessions start` where start_session leaves a card (76fd3e63). Codex correct 0.97, lenses 0
+  findings on 6823af0..c306664. PR 901 opened.
