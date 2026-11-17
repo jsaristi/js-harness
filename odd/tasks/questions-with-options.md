@@ -4,12 +4,12 @@
 Worktree `D:/js-harness-worktrees/questions-with-options`, branch `rule/questions-with-options`. Commits: `66e7420e`
 (doc), `82fbf051` + `924c1114` (T2, 2 to 4 options; Codex 0.94 and lenses clean on 9fc30a07..924c1114),
 `263c2933` (T3, the hook's question state names `Pregunta <n>`; Codex 0.9 clean). The reliability lens on
-924c1114..263c2933 found that a self-numbered question passes: fix in progress, uncommitted: `questionNamed` exported
-from `bin/lib/reply.mjs` (test written, code not yet), new pure `bin/lib/reply-question.mjs`
-(`questionRecordRefusal({ number, label, word, questions })`, test written at `bin/lib/reply-question.test.mjs`, module
-not yet), then `bin/reply.mjs` looks the number up in the record (first stop only, through `stopIo`'s `readNotices`),
-copy `bin/lib/reply.mjs` to the grader, the hook test "a decision or a question close" needs a record holding
-question 7; then review the fix (Codex + reliability lens, base 263c2933). The rule commits
+924c1114..263c2933 found that a self-numbered question passes: fix built, uncommitted: `questionNamed` in
+`bin/lib/reply.mjs` and pure `bin/lib/reply-question.mjs`, both tests green (24 and 4); `bin/reply.mjs`
+`questionRecordOf` wired on the first stop. Left: in `bin/reply.test.mjs` the test "a decision or a question close"
+needs its record to hold question 7 (a `newNotice` question line, 2 options, in `wakeHook`'s `record`), plus a test
+that an unrecorded "Pregunta 1" close is blocked; copy `bin/lib/reply.mjs` over the grader copy; commit; review
+the fix (Codex + reliability lens, base 263c2933). The rule commits
 (T4) wait for PR 901, whose `rule/sessions-visible-only` holds the rule change open on another branch (`js-harness
 rules change questions-one-place --dry-run`, 2026-11-17); the lead's order: 901 first, then these.
 

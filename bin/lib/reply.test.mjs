@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_REPLY, replyConfig, replyRefusal } from './reply.mjs';
+import { DEFAULT_REPLY, questionNamed, replyConfig, replyRefusal } from './reply.mjs';
 
 // The labels this repository's own replies use (odd/tasks/rule-hierarchy.md, C1): the tests read them as a project
 // that names its states in Spanish would declare them.
@@ -148,6 +148,13 @@ test('with the record\'s question word, the question state names the recorded qu
   assert.equal(named('Hecho.\n\nTe pregunto: la Pregunta 12 espera tu respuesta escrita.', { running: 1 }), null, 'work may run while he answers');
   assert.match(named('Hecho.\n\nTe pregunto: la Pregunta espera.'), /names no recorded question/, 'the word alone names no question');
   assert.match(named('Hecho.\n\nTe pregunto: Preguntas 5 y 6.'), /names no recorded question/, 'a longer word is not the word');
+});
+
+test('questionNamed gives the number a question close names, for the hook to look up in the record', () => {
+  assert.equal(questionNamed('Hecho.\n\n**Te pregunto:** Pregunta 326, tu respuesta va en Otro.', config, 'Pregunta'), 326);
+  assert.equal(questionNamed('Hecho.\n\nTe pregunto: ¿biblioteca o aplicación?', config, 'Pregunta'), null, 'none named');
+  assert.equal(questionNamed('Pregunta 4 lista.\n\nSigo solo: espero el gate.', config, 'Pregunta'), null, 'only a question close names one');
+  assert.equal(questionNamed('Hecho.\n\nTe pregunto: Pregunta 3 o Pregunta 4.', config, 'Pregunta'), 3, 'the first it names');
 });
 
 test('without a question word the question state is checked as before, so the eval graders\' copy reads alike', () => {

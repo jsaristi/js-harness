@@ -30,7 +30,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { closingState, fencedBlocks, replyConfig, replyRefusal } from './lib/reply.mjs';
+import { closingState, fencedBlocks, questionNamed, replyConfig, replyRefusal } from './lib/reply.mjs';
 import { COMMANDS_DEADLINE_MS, commandBlocks, commandRefusals, commandsWarning, shellParser } from './lib/reply-commands.mjs';
 import { utcTimeWarning } from './lib/reply-time.mjs';
 
@@ -124,6 +124,28 @@ async function questionWordOf(stderr) {
     return (await import('./lib/sessions.mjs')).QUESTION_WORD;
   } catch (err) {
     stderr(`js-harness reply: ${err?.message ?? err}; the question state was checked without the record's question word\n`);
+    return null;
+  }
+}
+
+/** The record check of a question close (bin/lib/reply-question.mjs), or `null`: the question the close names must be
+ * an open question of the record with the options the question tool shows. Read as the wake check reads the record;
+ * one it cannot read is said on standard error and turns nothing back. */
+async function questionRecordOf(payload, message, config, io, stderr) {
+  try {
+    const [sessions, channel, { harnessHome }, { questionRecordRefusal }] = await Promise.all([
+      import('./lib/sessions.mjs'), import('./lib/channel.mjs'), import('./lib/home.mjs'), import('./lib/reply-question.mjs'),
+    ]);
+    const number = questionNamed(message, config, sessions.QUESTION_WORD);
+    if (number === null) return null;
+    const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
+    const home = harnessHome({ env: io.env, homedir: io.homedir });
+    const slug = sessions.projectSlug(io.mainCheckout?.(cwd) ?? sessions.mainCheckout(io.run, cwd));
+    const record = (io.readNotices ?? channel.readNotices)(home, slug, { readFile: io.readFile });
+    if (record.unavailable !== undefined) throw new Error(`the record of notices (${record.path}): ${record.unavailable}`);
+    return questionRecordRefusal({ number, label: config.states.question, word: sessions.QUESTION_WORD, questions: channel.recordedQuestions(record) });
+  } catch (err) {
+    stderr(`js-harness reply: ${err?.message ?? err}; the question's record check did not run\n`);
     return null;
   }
 }
@@ -260,13 +282,14 @@ export async function replyMain(argv, {
         const times = utcTimeWarning(message, { now: now() });
         const state = closingState(message, config);
         const io = await stopIo({ readFile, readdir, run, env, homedir, now, templates: harness?.templates === true }, stderr);
+        const recorded = await questionRecordOf(payload, message, config, io, stderr);
         const wake = await wakeOf(payload, state, io, stderr);
         const stale = await staleOf(payload, state, io, stderr);
         const back = await returnOf(payload, state, io, stderr);
         const stretch = await returnStretchOf(payload, state, io, stderr);
         // Last, so its one deadline, counted from the hook's start, holds the other checks' time too.
         const commands = commandsOf(payload, message, { readFile: io.readFile, platform, parse, now, started }, stderr);
-        for (const warning of [times, commands, wake, stale, back, stretch]) {
+        for (const warning of [recorded, times, commands, wake, stale, back, stretch]) {
           if (warning !== null) reason = reason === null ? warning : `${reason}\n\n${warning}`;
         }
       }

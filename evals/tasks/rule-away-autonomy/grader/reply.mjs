@@ -159,6 +159,17 @@ function namesQuestion(rest, word) {
   return new RegExp(`(?<![\\p{L}\\p{N}])${escaped} \\d+(?![\\p{L}\\p{N}])`, 'u').test(rest);
 }
 
+/** The number of the question a reply `text` closing on the question state names by `word` (`Pregunta 12` gives 12,
+ * the first it names), or `null` when it closes on another state or names none: the hook looks it up in the record. */
+export function questionNamed(text, config, word) {
+  const { lines, fenced } = linesOf(String(text ?? ''));
+  const { found } = closesOf(lines, fenced, config);
+  if (found.length !== 1 || found[0].state !== 'question') return null;
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const named = new RegExp(`(?<![\\p{L}\\p{N}])${escaped} (\\d+)(?![\\p{L}\\p{N}])`, 'u').exec(found[0].rest);
+  return named === null ? null : Number(named[1]);
+}
+
 /** Why the reply `text` does not close as the project's labels in `config` ask, or `null` when it does. `running`
  * is how many background tasks of the session run as it stops (the host's `background_tasks`; Codex sends none).
  * `questionWord`, the word the record's questions are named by (`QUESTION_WORD`, ./sessions.mjs, which the hook
