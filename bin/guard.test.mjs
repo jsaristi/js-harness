@@ -801,3 +801,45 @@ test('a message to a senior whose app record is off rule:senior-model or rule:se
   await hook({ tool_name: 'SendMessage', cwd: 'D:/project', tool_input: { to: 'researcher', message: 'x' } }, { app: counted });
   assert.equal(reads, 0);
 });
+
+// odd/tasks/senior-orchestrator.md, T7 (spec 5; his words of 2026-11-16, lead transcript 699d7c29 line 402: no session
+// opens in the background): a Bash step that launches claude --bg or js-harness sessions start is denied where the rule
+// sessions-open-in-sidebar is declared; a command that only names one is not.
+test('a Bash step that launches a background session is denied, and a command that only names one passes', async () => {
+  const run = (command, rulesText) => hook({ tool_name: 'Bash', cwd: 'D:/project', tool_input: { command } }, rulesText === undefined ? {} : { rulesText });
+  for (const command of [
+    'claude --bg -n "JH 7 · x" "do it"',
+    'claude.exe --bg "do it"',
+    'C:/tools/claude --model x --bg "p"',
+    'FOO=1 claude --bg "p"',
+    'env A=1 claude --bg "p"',
+    'cd D:/project && claude --bg "p"',
+    'git status\nclaude --bg "p"',
+    'js-harness sessions start --title "JH 7 · x" --brief b.md',
+    'js-harness sessions start --resume 0db8bc5e',
+    'node bin/js-harness.mjs sessions start --title "JH 7 · x" --brief b.md',
+    'node D:/js-harness/bin/js-harness.mjs sessions start --resume 0db8bc5e',
+    'npx js-harness sessions start --resume 0db8bc5e',
+    'js-harness gate -- js-harness sessions start --resume 0db8bc5e',
+  ]) {
+    assert.match(denied(await run(command)).permissionDecisionReason, /in the background.*rule sessions-open-in-sidebar.*start_session/s, command);
+  }
+  const passes = { code: 0, out: '', err: '' };
+  for (const command of [
+    'grep -rn "claude --bg" bin',
+    'grep -n "js-harness sessions start" bin/lib/manifest.mjs',
+    'git commit -m "refuse js-harness sessions start and claude --bg"',
+    'echo "claude --bg"',
+    'claude agents',
+    'claude --print "hi"',
+    'js-harness sessions stop 0db8bc5e',
+    'js-harness sessions --opening "JH 7 · x"',
+    'js-harness sessions',
+  ]) {
+    assert.deepEqual(await run(command), passes, command);
+  }
+  assert.deepEqual(await run('claude --bg "p"', writeRules(RULES.filter((rule) => rule.id !== 'sessions-open-in-sidebar'))), passes, 'no rule, no refusal');
+  // The user's Terminal panel runs a command as Bash does.
+  const terminal = await hook({ tool_name: 'mcp__terminal__run_in_terminal', cwd: 'D:/project', tool_input: { command: 'js-harness sessions start --resume 0db8bc5e', note: 'resume it' } });
+  assert.match(denied(terminal).permissionDecisionReason, /in the background.*rule sessions-open-in-sidebar/s);
+});

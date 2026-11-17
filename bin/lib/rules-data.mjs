@@ -655,7 +655,7 @@ export const RULES = [
   },
   {
     "id": "senior-model",
-    "subject": "the model a senior session runs on, titled <code> SR · <purpose>, which the lead starts with js-harness sessions start and sends tasks needing more intelligence or complexity",
+    "subject": "the model a senior session runs on, titled <code> SR · <purpose>, which the lead opens with start_session and sends tasks needing more intelligence or complexity",
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-11-12",
@@ -763,7 +763,7 @@ export const RULES = [
   },
   {
     "id": "sessions-open-in-sidebar",
-    "subject": "the way a session opens another in this repository, so that the user can see every session: start_session wherever it starts one, and js-harness sessions start where start_session would only leave a card; the tools that open one in the app's Routines or in the cloud are refused",
+    "subject": "the way a session opens another in this repository, so that the user can see every session: start_session, a row in his sidebar on a turn he typed and a card he taps on any other; js-harness sessions start, claude --bg and the tools that open one in the app's Routines or in the cloud are refused",
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-15",
