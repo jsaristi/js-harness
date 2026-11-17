@@ -5,7 +5,8 @@
 // questions (`recordedQuestions`, bin/lib/channel.mjs); the command and the gate read it.
 import { QUESTION_WORD, questionPrefix } from './sessions.mjs';
 
-/** How many options the question tool shows: a question with fewer or more is asked in writing. */
+/** How many options the question tool shows, and so how many a question of the record takes (`QUESTION_OPTIONS_MIN`
+ * and `QUESTION_OPTIONS_MAX`, ./channel.mjs): one outside it is an old record from before 2026-11-17, recorded again. */
 export const TOOL_OPTIONS = Object.freeze({ min: 2, max: 4 });
 
 /** The longest header the question tool shows. */
@@ -19,7 +20,7 @@ const NUMBERED = new RegExp(`^${QUESTION_WORD} (\\d+): `);
 export function render({ number, notice }) {
   const count = notice.options.length;
   if (count < TOOL_OPTIONS.min || count > TOOL_OPTIONS.max) {
-    throw new Error(`question ${number} has ${count} options and the question tool shows ${TOOL_OPTIONS.min} to ${TOOL_OPTIONS.max}: ask it in writing`);
+    throw new Error(`question ${number} has ${count} options and the question tool shows ${TOOL_OPTIONS.min} to ${TOOL_OPTIONS.max}: withdraw it and record it again with ${TOOL_OPTIONS.min} to ${TOOL_OPTIONS.max} options`);
   }
   const named = questionPrefix(number).replace(/: $/, '');
   const question = {
@@ -53,7 +54,7 @@ export function admit({ asked, questions }) {
 
 /** The moments of the `ask` surface since `since` (milliseconds): `[{ template: 'question', subject }]`, a question
  * of the record recorded since then, answered, with options the tool shows. Each was asked, so a `shown` line of its
- * number should hold; one asked in writing (too few or too many options) or withdrawn has none to hold, and one still
+ * number should hold; an old one with too few or too many options, or one withdrawn, has none to hold, and one still
  * open may not have been asked yet. */
 export function answeredMoments(questions, since) {
   const showable = (count) => count >= TOOL_OPTIONS.min && count <= TOOL_OPTIONS.max;

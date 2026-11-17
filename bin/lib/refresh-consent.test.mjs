@@ -27,7 +27,7 @@ function scratch() {
   return { home: path.join(root, 'home'), cwd, slug: projectSlug(cwd) };
 }
 
-const ask = (place, fields = {}) => appendNotice(place.home, place.slug, newNotice({ at: AT, from: FROM, to: 'orchestrator', kind: 'question', text: '¿Quito las skills de Codex?', id: `q-${Math.random()}`, options: [], waits: 'PR 729', ...fields }));
+const ask = (place, fields = {}) => appendNotice(place.home, place.slug, newNotice({ at: AT, from: FROM, to: 'orchestrator', kind: 'question', text: '¿Quito las skills de Codex?', id: `q-${Math.random()}`, options: [{ label: 'Sí' }, { label: 'No' }], waits: 'PR 729', ...fields }));
 const withdraw = (place, question) => appendNotice(place.home, place.slug, newNotice({ at: AT, from: FROM, to: 'orchestrator', kind: 'withdrawn', question, text: 'no longer needed' }));
 const COPY = { tool: 'AskUserQuestion', answers: [{ question: 'Pregunta 1: ¿Quito las skills de Codex?', options: ['Sí', 'No'], answer: 'Sí', how: 'tapped' }] };
 /** His answer to `question`, read at its line (`verified`), or the sender's claim of one, which no transcript confirmed. */

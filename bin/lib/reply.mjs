@@ -8,8 +8,11 @@
 // its replies in Spanish declares the Spanish ones. What each state needs, from protocol 2:
 //   - working: what wakes the session, written after the label on its line;
 //   - decision: never while background work runs (the host's count of running tasks);
-//   - question: an open question the user answers in writing, not with the question tool's buttons, written after
-//     the label on its line; it may close while background work runs, since the person answers it, not the work;
+//   - question: a question the user answers in writing, recorded with options that give examples and put to them
+//     through the question tool, answered in its Other (his answer to question 325, 2026-11-17); its line says what it
+//     waits on and, where the caller gives the record's question word, names the recorded question (`Pregunta 12`),
+//     since the tool holds a session until he answers and a reply waits only on one not yet put to him; it may close
+//     while background work runs, since the person answers it, not the work;
 //   - cut: one fenced block of what the user sends, under the three labels (what it is, where it goes, what sending it
 //     does), each once;
 //   - finished: the session to return to, written after the label on its line.
@@ -119,7 +122,7 @@ export const fencedBlocks = (text) => linesOf(String(text ?? '')).blocks;
 function shapeOf({ states, labels }) {
   return `End the reply with one line that starts with one of: ${states.working} (say what wakes you), `
     + `${states.decision} (never while background work runs; the question itself goes through the question tool), `
-    + `${states.question} (an open question the user answers in writing, asked on that line), `
+    + `${states.question} (a question the user answers in writing: recorded with options that give examples, put to them through the question tool and answered in its Other; name it on that line), `
     + `${states.cut} (one code block of only what the user sends, under the lines ${labels.what}:, ${labels.where}: and ${labels.effect}:), `
     + `${states.finished} (name the session to return to). Your reply is already shown: write the close again in your next words.`;
 }
@@ -149,9 +152,30 @@ export function closingState(text, config) {
   return found.length === 1 ? found[0].state : null;
 }
 
+/** Whether `rest`, the words after a question state's label, name a question by `word` and its number (`Pregunta 12`),
+ * the word whole: not a longer word, and not the word with no number. */
+function namesQuestion(rest, word) {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escaped} \\d+(?![\\p{L}\\p{N}])`, 'u').test(rest);
+}
+
+/** The number of the question a reply `text` closing on the question state names by `word` (`Pregunta 12` gives 12,
+ * the first it names), or `null` when it closes on another state or names none: the hook looks it up in the record. */
+export function questionNamed(text, config, word) {
+  const { lines, fenced } = linesOf(String(text ?? ''));
+  const { found } = closesOf(lines, fenced, config);
+  if (found.length !== 1 || found[0].state !== 'question') return null;
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const named = new RegExp(`(?<![\\p{L}\\p{N}])${escaped} (\\d+)(?![\\p{L}\\p{N}])`, 'u').exec(found[0].rest);
+  return named === null ? null : Number(named[1]);
+}
+
 /** Why the reply `text` does not close as the project's labels in `config` ask, or `null` when it does. `running`
- * is how many background tasks of the session run as it stops (the host's `background_tasks`; Codex sends none). */
-export function replyRefusal(text, config, { running = 0 } = {}) {
+ * is how many background tasks of the session run as it stops (the host's `background_tasks`; Codex sends none).
+ * `questionWord`, the word the record's questions are named by (`QUESTION_WORD`, ./sessions.mjs, which the hook
+ * gives), makes the question state name the recorded question it waits on; with none it is not asked, so a copy of
+ * this file that imports nothing (the eval graders') reads a close alike. */
+export function replyRefusal(text, config, { running = 0, questionWord = null } = {}) {
   const { lines, fenced, blocks } = linesOf(String(text ?? ''));
   const { states, labels } = config;
   const turned = (why) => `js-harness reply: ${why}. ${shapeOf(config)}`;
@@ -175,6 +199,9 @@ export function replyRefusal(text, config, { running = 0 } = {}) {
   if (state === 'working' && rest === '') return turned(`"${states.working}" says nothing after it: say on that line what wakes you`);
   if (state === 'finished' && rest === '') return turned(`"${states.finished}" says nothing after it: name on that line the session to return to`);
   if (state === 'question' && rest === '') return turned(`"${states.question}" says nothing after it: write on that line what you ask`);
+  if (state === 'question' && typeof questionWord === 'string' && questionWord !== '' && !namesQuestion(rest, questionWord)) {
+    return turned(`"${states.question}" names no recorded question: record it with js-harness notify --to orchestrator --kind question, its options giving examples of the answer and its text saying plainly that the user writes it in the question tool's Other, and name it on that line as "${questionWord} <n>"`);
+  }
   if (state === 'decision' && running > 0) {
     return turned(`"${states.decision}" while ${running} background ${running === 1 ? 'task runs' : 'tasks run'}: a decision is never asked while work runs; wait for it, or close with ${states.working}`);
   }
