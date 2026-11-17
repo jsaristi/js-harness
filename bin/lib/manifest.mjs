@@ -131,7 +131,7 @@ A change does not exist until it is in a file. Where each thing lives:
 
 ## Questions to the user
 
-Every question of the project reaches the user in one place: the orchestrator's chat, through the host's question tool, one question a call, the recommended option first. Only where the host has no question tool is a question written out with its options.
+Every question of the project reaches the user in one place: the orchestrator's chat, through the host's question tool, one question a call, the recommended option first. Only where the host has no question tool is a question written out with its options. Every question carries 2 to 4 options, the written ones included: a question the user answers in writing gives options that are examples of the answer, and says plainly that the answer goes in the tool's Other.
 
 - Every question opens with what it is for: the work it belongs to, by the name the user knows (the project, the feature, the session), and what its answer changes. The user runs several works at once and answers from the phone; a question that does not say which work it serves gets answered for the wrong one.
 - A question is recorded before it is asked: \`js-harness notify --to orchestrator --kind question\`, with its fields (\`text\`, \`options\`, \`waits\`) as JSON on standard input. It prints the question's number and the words its text is headed by in the tool: that heading is how the answer is joined to its question.

@@ -453,13 +453,14 @@ export const RULES = [
   },
   {
     "id": "questions-one-place",
-    "subject": "every question of the project reaches the user in the orchestrator's chat, through the host's question tool, recorded before it is asked",
+    "subject": "every question of the project reaches the user in the orchestrator's chat, through the host's question tool with options, recorded before it is asked",
     "owner": "sebastian",
-    "since": "2026-10-14",
+    "since": "2026-11-17",
     "path": "bin/lib/manifest.mjs",
     "phrases": [
       "Every question of the project reaches the user in one place",
-      "Ask the user nothing while an orchestrator holds its role"
+      "Ask the user nothing while an orchestrator holds its role",
+      "Every question carries 2 to 4 options, the written ones included"
     ]
   },
   {
@@ -484,12 +485,13 @@ export const RULES = [
     "id": "reply-five-states",
     "subject": "a reply ends in one of five states, and a question is his decision alone, explained before it is asked",
     "owner": "sebastian",
-    "since": "2026-10-24",
+    "since": "2026-11-17",
     "path": "bin/lib/protocols-skill.mjs",
     "phrases": [
       "A reply ends in one of five states.",
       "One decision a question, one question at a time, never while work runs.",
-      "Before the question, say what a yes covers in everyday words"
+      "Before the question, say what a yes covers in everyday words",
+      "Question: an open question that the user answers in writing, recorded with options that are examples of the answer"
     ]
   },
   {

@@ -2124,7 +2124,7 @@ test('--land --refresh-copy lands, then refreshes nothing, exit 77, while an ope
   const { root, heads } = makeQueueRepo();
   const home = harnessHome();
   const from = { host: 'h', id: 'jh117-0000', source: 'claude-code', title: 'JH 117 · install' };
-  appendNotice(home, slugOf(root), newNotice({ at: '2026-10-31T05:00:00.000Z', from, to: 'orchestrator', kind: 'question', text: '¿Quito las skills de Codex?', id: 'q-1', options: [], waits: 'PR 1', applies: { pr: 1 } }));
+  appendNotice(home, slugOf(root), newNotice({ at: '2026-10-31T05:00:00.000Z', from, to: 'orchestrator', kind: 'question', text: '¿Quito las skills de Codex?', id: 'q-1', options: [{ label: 'Sí' }, { label: 'No' }], waits: 'PR 1', applies: { pr: 1 } }));
   const view_pr = (args) => ({ status: 0, stdout: JSON.stringify({ headRefOid: args[2] === '1' ? heads['feat/a'] : '0'.repeat(40), mergeCommit: null }), stderr: '' });
   const { code, out, asked } = await landRefreshing(root, [pr(1, 'feat/a', heads['feat/a'])], { env: { JS_HARNESS_HOME: home }, gh: { view_pr } });
   assert.equal(code, 77, out.join('\n'));

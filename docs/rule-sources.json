@@ -758,13 +758,31 @@
         "date": "2026-10-13",
         "session": "65318fd5-80e7-4bb8-92b5-06737140185b",
         "line": 13110
+      },
+      {
+        "quote": "siempre dame las preguntas con opciones",
+        "date": "2026-11-17",
+        "session": "699d7c29-54c4-460e-a5e8-700b114eb251",
+        "line": 7609
+      },
+      {
+        "quote": "hazme todas la pregunta y por favor cementa que siempre me debes pasar las preguntas con opciones",
+        "date": "2026-11-17",
+        "session": "699d7c29-54c4-460e-a5e8-700b114eb251",
+        "line": 7752
+      },
+      {
+        "quote": "Dejarlo con Opciones pero especificando con ejemplos en las opciones y Dejando muy Claro que se tiene que repsonder en la casilla de \"Otro\"",
+        "date": "2026-11-17",
+        "session": "699d7c29-54c4-460e-a5e8-700b114eb251",
+        "line": 8070
       }
     ],
-    "reading": "Every question of every session is put to him in the orchestrator's chat, and only there; he answers there and the orchestrator carries the answer back. His first line asks that the questions come as he asked for them, which is the question tool (the orchestrator skill, \"Questions to the user\"). Both read with sessions --quote; written in the skill by JH 5 (pull request 127).",
-    "accepted": "Not put to him as a reading: the skill text that carries it is JH 5's, merged by the lead, and his to correct.",
+    "reading": "Every question of every session is put to him in the orchestrator's chat, and only there; he answers there and the orchestrator carries the answer back, through the question tool (the 2026-10-13 lines). On 2026-11-17 he asked that every question come with options (7609, 7752), and, asked whether the state of a question answered in writing goes (question 325), typed that it stays with options that give examples and very clear that he answers in the Other box (8070): every question carries 2 to 4 options, the question tool's range, and a written one says so. These supersede the tapped answer A to question 229 (2026-11-08), under which an open question carried no options.",
+    "accepted": "Line 8070 is his own typed answer, in the question tool's Other, to question 325, which put this reading to him; the lead (JH ORQ) relayed it as the reading on 2026-11-17.",
     "checked": {
-      "date": "2026-10-14",
-      "by": "session"
+      "date": "2026-11-17",
+      "by": "command"
     }
   },
   "recap-effort-line": {
@@ -869,12 +887,30 @@
         "date": "2026-10-20",
         "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
         "line": 9112
+      },
+      {
+        "quote": "siempre dame las preguntas con opciones",
+        "date": "2026-11-17",
+        "session": "699d7c29-54c4-460e-a5e8-700b114eb251",
+        "line": 7609
+      },
+      {
+        "quote": "hazme todas la pregunta y por favor cementa que siempre me debes pasar las preguntas con opciones",
+        "date": "2026-11-17",
+        "session": "699d7c29-54c4-460e-a5e8-700b114eb251",
+        "line": 7752
+      },
+      {
+        "quote": "Dejarlo con Opciones pero especificando con ejemplos en las opciones y Dejando muy Claro que se tiene que repsonder en la casilla de \"Otro\"",
+        "date": "2026-11-17",
+        "session": "699d7c29-54c4-460e-a5e8-700b114eb251",
+        "line": 8070
       }
     ],
-    "reading": "He approved the closing format and asked it cemented: a reply ends in one of five states (working, decision, question, cut, finished; the question, an open question of the conversation that he answers in writing rather than with buttons, since 2026-10-23, so a session that waits for his written answer is taken as neither working nor finished: he asked that a pre-project be talked through and guided, and a guided talk asks him questions in writing); text he copies sits in one code block holding only his answer, never an instruction to him; a step whose only answer is yes is not asked but done, its cost said; a question is one decision, never while work runs, explained first in everyday words (what a yes covers, what it does not authorize, the other option) so he can decide quickly, talked through and guided rather than a list. Where questions reach him is rule:questions-one-place; what a question opens with is rule:question-context.",
-    "accepted": "He tapped \"Sí, sumalo\" to Pregunta 48 (transcript 908805db-d0b9-4c2f-a9e6-f828b6bf1e41, line 20667, 2026-10-23), which put the fifth state to him as proposal B of JH 43's finding 8. Before that the four states were not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried them out of a memory note of the same subject.",
+    "reading": "He approved the closing format and asked it cemented: a reply ends in one of five states (working, decision, question, cut, finished; the question, an open question that he answers in writing, since 2026-10-23, and since 2026-11-17 recorded with options that are examples of the answer, put through the question tool and answered in its Other, its number named on the closing line, so a session that waits for his written answer is taken as neither working nor finished: he asked that a pre-project be talked through and guided, and a guided talk asks him questions in writing); text he copies sits in one code block holding only his answer, never an instruction to him; a step whose only answer is yes is not asked but done, its cost said; a question is one decision, never while work runs, explained first in everyday words (what a yes covers, what it does not authorize, the other option) so he can decide quickly, talked through and guided rather than a list. Where questions reach him is rule:questions-one-place; what a question opens with is rule:question-context. On 2026-11-17 he asked that every question come with options (699d7c29 lines 7609, 7752) and, asked whether the written state goes (question 325), typed that it stays with examples in the options and very clear that he answers in Other (line 8070); these supersede the tapped answer A to question 229.",
+    "accepted": "He tapped \"Sí, sumalo\" to Pregunta 48 (transcript 908805db-d0b9-4c2f-a9e6-f828b6bf1e41, line 20667, 2026-10-23), which put the fifth state to him as proposal B of JH 43's finding 8. Before that the four states were not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried them out of a memory note of the same subject. The 2026-11-17 reading: line 8070 is his own typed answer, in the question tool's Other, to question 325, which put it to him; the lead (JH ORQ) relayed it on 2026-11-17.",
     "checked": {
-      "date": "2026-10-24",
+      "date": "2026-11-17",
       "by": "command"
     }
   },
