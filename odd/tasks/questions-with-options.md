@@ -6,9 +6,9 @@ Worktree `D:/js-harness-worktrees/questions-with-options`, branch `rule/question
 `263c2933` (T3, the hook's question state names `Pregunta <n>`; Codex 0.9 clean), `5c6a8d60` (the reliability
 lens's fix: the named question must be open in the record; lenses clean), `3d245683` (Codex P2 on 5c6a8d60: the
 corrected stop runs the record check too; Codex 0.98, the P2 rechecked fixed; reliability lens 0 findings). T2
-and T3 done. The rule commits
-(T4) wait for PR 901, whose `rule/sessions-visible-only` holds the rule change open on another branch (`js-harness
-rules change questions-one-place --dry-run`, 2026-11-17); the lead's order: 901 first, then these.
+and T3 done; T4 done after PR 901 (L6); left: the verifier, the draft PR, the ready notice. The verifier
+(read-only, 9 test files, the notify probe, rules, old records, the hook end to end) passed all but README.md's
+reply section, which still said "not with buttons": rewritten in the same commit as this state.
 
 ## Goal
 Every question the harness puts to the user reaches him through the question tool with options, the written ones
@@ -98,7 +98,7 @@ Changing any rule other than these two (it goes to the lead as a question first)
 - [x] T1 (kind: docs) this document; spec 1, 2; inline
 - [x] T2 (kind: build) 2 to 4 options in `checkedQuestion`, its tests first, the usage example and "ask it in writing"; spec 1, 2; inline
 - [x] T3 (kind: build) the reply's question state names `Pregunta <n>`, its tests first, its grader copy, the refusal and help text; spec 3; inline
-- [ ] T4 (kind: build) `js-harness rules change` for both rules after PR 901 lands, pair 9 with them; spec 3, 4, 5; inline
+- [x] T4 (kind: build) `js-harness rules change` for both rules after PR 901 lands, pair 9 with them; spec 3, 4, 5; inline
 - [ ] T5 (kind: verify) Codex and lenses per slice, an independent verifier, PR, `notify --kind ready`
 
 ## Log
@@ -119,3 +119,10 @@ Changing any rule other than these two (it goes to the lead as a question first)
   most, since `template ask` runs only where the tool is and no question of the record had 5 or 6; a stored one
   with more or fewer is withdrawn and recorded again. Onboarding's "open questions in plain chat" is no rule's of
   these two: told to the lead as open, not changed here.
+- L6 (2026-11-17, T4): PR 901 landed (main 9f54eb4), merged in at 88866654. `f281c998` (questions-one-place: a
+  manifest sentence and phrase, "Every question carries 2 to 4 options, the written ones included"), `2a964537`
+  (reply-five-states: the protocols' question sentence, pair 9 now his 2026-11-17 words and refusing "not with
+  buttons"); Codex 0.92 clean. The readability and reliability lenses found that `rules change` had re-read five
+  earlier quotes as whole transcript lines, two taking in system-reminder text: `efda3949` passes their stored
+  excerpts, the old quotes now byte-equal to main's (lenses rechecked fixed, Codex 0.98). The gap stays in the tool:
+  a change that names a quote without its excerpt widens it; told to the lead as a follow-up.

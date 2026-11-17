@@ -1874,8 +1874,10 @@ it acts only in a project whose nearest `harness.json` holds a `reply` key, and 
 everywhere else. There it reads the reply that ends the turn and turns the stop back, with the
 hooks contract's `decision: "block"` and the shape to follow, when the reply does not close with
 exactly one state line: working (with what wakes the session on that line), decision (never while
-a background task runs), question (an open question the user answers in writing, not with
-buttons, asked on that line and never while a background task runs), cut (one code block of what the user sends, under the three labels what
+a background task runs), question (an open question the user answers in writing, recorded
+with options that give examples of the answer, put through the question tool and answered in its
+Other, its number named on that line as `Pregunta <n>` and checked against the record, and never
+while a background task runs), cut (one code block of what the user sends, under the three labels what
 it is, where it goes and what sending it does, each once) or finished (with the session to return
 to on that line). A block under those labels in any other state is turned back too: a decision is
 asked with the question tool. A state line is a line that starts with a state's label once its
@@ -1923,7 +1925,7 @@ already on his screen, so the session tells him not to run it and gives the corr
 
 ```console
 $ js-harness reply --hook < stop.json
-{"decision":"block","reason":"js-harness reply: the reply has no state line. End the reply with one line that starts with one of: Sigo solo (say what wakes you), Necesito tu decisión (never while background work runs; the question itself goes through the question tool), Te pregunto (an open question the user answers in writing, asked on that line), Corte (one code block of only what the user sends, under the lines Qué es:, Dónde: and Qué pasa:), Terminado (name the session to return to). Your reply is already shown: write the close again in your next words."}
+{"decision":"block","reason":"js-harness reply: the reply has no state line. End the reply with one line that starts with one of: Sigo solo (say what wakes you), Necesito tu decisión (never while background work runs; the question itself goes through the question tool), Te pregunto (a question the user answers in writing: recorded with options that give examples, put to them through the question tool and answered in its Other; name it on that line), Corte (one code block of only what the user sends, under the lines Qué es:, Dónde: and Qué pasa:), Terminado (name the session to return to). Your reply is already shown: write the close again in your next words."}
 ```
 
 ### js-harness commit-msg
