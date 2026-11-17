@@ -1,5 +1,5 @@
 // A session opened in the background runs where the user does not see it (odd/tasks/senior-orchestrator.md, T7: his
-// words of 2026-11-15 and 2026-11-16, "nunca debemos permitir eso", "no se puede abrir ninguna sesion en segundo
+// words of 2026-11-15, "nunca debemos permitir eso", "no se puede abrir ninguna sesion en segundo
 // plano"). Where the rule sessions-open-in-sidebar is declared, the guard refuses a Bash or Terminal step that launches
 // `claude --bg` or `js-harness sessions start`, and the command refuses itself. It lives apart from ./guard.mjs, which
 // is at a module's size limit (bin/conventions-structure.test.mjs).
@@ -91,7 +91,7 @@ export function backgroundLaunchRefusal(launch, projectData) {
 
 /** Why `js-harness sessions start` (a start or a `--resume`) is refused in the project whose rules file has the text
  * `projectData`, or null: where the rule `sessions-open-in-sidebar` gives a value, no session runs in the background,
- * out of his sidebar (odd/tasks/senior-orchestrator.md, T7: his words of 2026-11-15 and 2026-11-16). */
+ * out of his sidebar (odd/tasks/senior-orchestrator.md, T7: his words of 2026-11-15). */
 export function backgroundStartRefusal(projectData) {
   const rule = sidebarRule(projectData);
   if (rule === null) return null;

@@ -153,7 +153,7 @@ export function starterRefusal(starter, projectData, { lead = false, starterLead
   const who = starterLead
     ? `Only the user changes a lead's own: ${menuLine({ model: home.model?.value ?? starter.model, effort: own?.value ?? starter.effort })}`
     : 'The lead sets that session\'s with its session tools.';
-  return `js-harness guard: start_session is called from a session whose own record holds ${off}, and a start is capped at the session that makes it. ${who} Where the user is not there to type, start_session leaves a card he taps.`;
+  return `js-harness guard: start_session is called from a session whose own record holds ${off}, and a start is capped at the session that makes it. ${who}`;
 }
 
 /** The model, the level and the advisor a start takes where its call names none, as `{ model, effort, advisor }`:

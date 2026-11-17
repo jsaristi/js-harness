@@ -56,9 +56,16 @@ test('a background session is judged by its last reply, by what its start asked 
   assert.deepEqual(result.rows.map((row) => [row.id, row.off, row.corrects]), [
     ['2', { model: null, effort: 'high' }, 'closing it, once its work has landed and nothing in its worktree is needed (js-harness sessions stop 2 --remove-worktree), and start_session'],
     ['4', { model: null, effort: 'high' }, 'closing it, once its work has landed and nothing in its worktree is needed (js-harness sessions stop 4 --remove-worktree), and start_session'],
-    // Codex on e878d8b..533f8a6: `sessions start --resume` refuses a conversation a job works, so the act says when.
+    // Codex on e878d8b..533f8a6: a job at work is closed only once it is no longer at work, so the act says when.
     ['8', { model: null, effort: 'high' }, 'closing it once its job is no longer at work, once its work has landed and nothing in its worktree is needed (js-harness sessions stop 8 --remove-worktree), and start_session'],
     ['9', { model: null, effort: 'high' }, 'closing it, once its work has landed and nothing in its worktree is needed (js-harness sessions stop 9 --remove-worktree), and start_session'],
+  ]);
+  // Where rule sessions-open-in-sidebar is not declared, a resume still runs and is the act (lens on 9fc30a0..1e19075).
+  assert.deepEqual(sessionsOffHome(HOME, { background, isLead, resumes: true }).rows.map((row) => row.corrects), [
+    'a resume, js-harness sessions start --resume 2',
+    'a resume, js-harness sessions start --resume 4',
+    'a resume once its job is no longer at work, which a resume refuses until then: js-harness sessions start --resume 8',
+    'a resume, js-harness sessions start --resume 9',
   ]);
   assert.equal(result.removedOff, 1, 'a removed job off the home is counted, and is no row: nothing corrects a job that is gone');
   assert.deepEqual(result.rows[0], { kind: 'background', id: '2', title: 'JH 2 · job', asked: on, replied: { ...on, effort: 'high' }, state: 'idle', held: on, off: { model: null, effort: 'high' }, corrects: 'closing it, once its work has landed and nothing in its worktree is needed (js-harness sessions stop 2 --remove-worktree), and start_session' });

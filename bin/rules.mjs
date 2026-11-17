@@ -456,7 +456,7 @@ function appliedForm({ cwd, env, homedir, now, run, readApp, agents }, stdout) {
   if (homeInForce(home)) {
     const claudeDir = env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude');
     const read = readHomeSessions({ main, home: harnessHome({ env, homedir }), claudeDir, now: at, days: APPLIED_DAYS, env, homedir, ...(readApp && { readApp }), ...(agents && { agents }) });
-    for (const line of offHomeLines(sessionsOffHome(home, { ...read, isLead: heldAsLead, isSenior: seniorTitle }), home, { unread: read.unread })) stdout(line);
+    for (const line of offHomeLines(sessionsOffHome(home, { ...read, isLead: heldAsLead, isSenior: seniorTitle, resumes: ruleHere('sessions-open-in-sidebar', undefined, projectData) === null }), home, { unread: read.unread })) stdout(line);
   }
   return records.exists ? result.exit : 0;
 }
