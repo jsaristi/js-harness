@@ -83,7 +83,7 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
 - [x] T1 (kind: design) count the real records, depth pass
 - [x] T2 (kind: build) spec 1, tests first
 - [x] T4 (kind: build) spec 1, open: a test that fails without `decidingRecord` in the merge walk's `lastAt` and the row's `mergeOwnAt` (L14)
-- [ ] T5 (kind: build) in progress (L33), for the lead: a clean review M..H2 that spans the owing head H from inside its range and ends above it clears the correction (L12)
+- [x] T5 (kind: build) spec 3, done in 2d0a5ee5, 6e4f8926, 1b6225df, 763fe64 (L34-L38), for the lead: a clean review M..H2 that spans the owing head H from inside its range and ends above it clears the correction (L12)
 - [ ] T6 (kind: build) open, for the lead: where a plain review decides, a standing recheck's open finding joins a first recheck and can get a fourth review (L27)
 - [x] T3 (kind: build) spec 2, done in 6eba0f3f (L32): the lens rows' older-writer note counts only records of the range checked
 
