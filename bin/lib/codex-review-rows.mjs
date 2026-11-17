@@ -122,7 +122,16 @@ function correctionOwed(cwd, given, options) {
     return owed;
   }
   if (runs.length === 0) return owed;
-  const spanned = spannedDebt({ heads: [...given.rangeIds], records, runs, atOrBefore: atOrBeforeIn(cwd, options.spawn) });
+  const atOrBefore = atOrBeforeIn(cwd, options.spawn);
+  const onLine = new Set(given.rangeIds);
+  // A debt at `at` rechecked with a merge of main above it: a recheck on the line that names a merge at or above it, read
+  // as its run read it (the records before it), was the recheck of those findings, joined below the merge.
+  const settled = (at, state) => records.some((rec, index) => isValidCodexReview(rec) && rec.outcome === 'reviewed' && onLine.has(rec.head) &&
+    typeof rec.recheckOf === 'string' && rec.recheckOf !== at && atOrBefore(at, rec.recheckOf) === true && (() => {
+      const then = recheckAt(cwd, { from: rec.recheckOf, tip: given.tip, records: records.slice(0, index), runs, spawn: options.spawn, where: given.where });
+      return then?.kind === 'recheck' && state.findings.every((one) => then.findings.some((other) => JSON.stringify(other) === JSON.stringify(one)));
+    })());
+  const spanned = spannedDebt({ heads: [...given.rangeIds], records, runs, atOrBefore, settled });
   if (spanned === null) return owed;
   const at = gitOut(options.spawn, cwd, ['rev-parse', '--short', spanned.at]) ?? spanned.at.slice(0, 7);
   const n = spanned.state.findings.length;

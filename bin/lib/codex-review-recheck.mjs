@@ -397,8 +397,10 @@ export function againPastThreeReviews({ heads, stateOf, uncovered, reviewFromOf,
  * at it, that read all the owing record read settles it; a recheck that names it is read by `recheckState`. Only that
  * shape is asked: a recheck after a merge names the merge and spans nothing below it (codex-spend L24). Git is asked
  * only of a head that owes. `heads` are the commits of the history checked: a record ending elsewhere is not read.
+ * `settled(at, state)` says whether a recheck that names a later merge rechecked that debt, joined there (the walk of
+ * `recheckThrough`, which needs git): `decidingRecord` at the head cannot see it (the verifier on c821306e).
  * `{ at, state }`, or `null`. */
-export function spannedDebt({ heads, records, runs, atOrBefore }) {
+export function spannedDebt({ heads, records, runs, atOrBefore, settled = () => false }) {
   // Only records that end on the history checked: the log is shared, and a record of another branch, or past the tip,
   // neither settles its debt nor asks for one (Codex on 2d0a5ee).
   const onLine = new Set(heads);
@@ -414,7 +416,7 @@ export function spannedDebt({ heads, records, runs, atOrBefore }) {
     const owed = owing.length > 0 ? owing : [kept];
     const readAll = (rec) => typeof rec.recheckOf !== 'string' && owed.every((one) => rec.base === one.base || atOrBefore(rec.base, one.base) === true);
     const spanning = reviewed.filter(spans);
-    if (spanning.length > 0 && !spanning.some(readAll)) return { at, state };
+    if (spanning.length > 0 && !spanning.some(readAll) && settled(at, state) !== true) return { at, state };
   }
   return null;
 }
