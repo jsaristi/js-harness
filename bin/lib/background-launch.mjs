@@ -56,8 +56,9 @@ function launchOf(words) {
     return launchOf(args.slice(at));
   }
   if (program === 'claude') {
-    // claude's options are the words after it: programOf drops a word it takes for a redirection, a quoted '>' too,
-    // and a wrapper's own argument before it (exec -a --bg claude) is none of claude's.
+    // claude's options are the words after it, not programOf's args: withoutRedirections keeps a quoted '>' as a
+    // word, and programOf still drops any '>' word with the word after it (['-p', '>', '--bg', 'x'] gives
+    // ['-p', 'x']); and a wrapper's own argument before claude (exec -a --bg claude) is none of claude's.
     const own = words.slice(words.findIndex((word) => programName(word) === 'claude') + 1);
     if (hasOption(own, '--bg') || hasOption(own, '--background')) return 'claude --bg';
     if (hasOption(own, '--cloud')) return 'claude --cloud';
