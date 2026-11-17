@@ -1,9 +1,15 @@
 # Questions with options
 
 ## State
-T1 committed (`66e7420e`). T2 built and its suite running: a recorded question takes 2 to 4 options
-(`QUESTION_OPTIONS_MIN`, `QUESTION_OPTIONS_MAX`), its tests red then green, the fixtures that recorded fewer given
-two. Next: commit T2, review it, then T3 (the reply's question state names a recorded question). The rule commits
+Worktree `D:/js-harness-worktrees/questions-with-options`, branch `rule/questions-with-options`. Commits: `66e7420e`
+(doc), `82fbf051` + `924c1114` (T2, 2 to 4 options; Codex 0.94 and lenses clean on 9fc30a07..924c1114),
+`263c2933` (T3, the hook's question state names `Pregunta <n>`; Codex 0.9 clean). The reliability lens on
+924c1114..263c2933 found that a self-numbered question passes: fix in progress, uncommitted: `questionNamed` exported
+from `bin/lib/reply.mjs` (test written, code not yet), new pure `bin/lib/reply-question.mjs`
+(`questionRecordRefusal({ number, label, word, questions })`, test written at `bin/lib/reply-question.test.mjs`, module
+not yet), then `bin/reply.mjs` looks the number up in the record (first stop only, through `stopIo`'s `readNotices`),
+copy `bin/lib/reply.mjs` to the grader, the hook test "a decision or a question close" needs a record holding
+question 7; then review the fix (Codex + reliability lens, base 263c2933). The rule commits
 (T4) wait for PR 901, whose `rule/sessions-visible-only` holds the rule change open on another branch (`js-harness
 rules change questions-one-place --dry-run`, 2026-11-17); the lead's order: 901 first, then these.
 
