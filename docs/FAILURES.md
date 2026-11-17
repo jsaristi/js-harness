@@ -691,6 +691,10 @@ on it.
   the worst of the eleven values of p a test read, written as the largest into the header of
   evals/rule-proof.mjs and the roadmap's row "Rule proof", and sent to the lead in a notice; the
   largest is 9.4 %, near one pass in four, found by the lens review of 9bea5422..61dfd09d
+- Seen: 2026-11-17 — the channel's notes of JH SR of 2026-11-16 15:02 local and question 323 — "three
+  double reviews 6,986,244 Claude and 1,716,658 Codex tokens" was told as what the role-card design cost,
+  and he approved 2 to 3.5M more on it; the senior session's own tokens were never counted: 17,992,257 on
+  Fable for that task, read from its transcript's usage fields (odd/tasks/session-roles.md, L10)
 - Control: check — bin/guard.test.mjs — "a reply whose stated own share is more than 2 points off
   the recorded one is blocked from stopping, with the reason" — since 2026-10-15
 

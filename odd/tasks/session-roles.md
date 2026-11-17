@@ -11,8 +11,9 @@ built. Three things are his ("Ask me before"): at the lead's word they are recor
 318 (L7), and he answered A to each by tap (L8): work sessions get a card too, both rules for the senior, and
 `CLAUDE.md` scoped to work sessions. 317 and 318 change a rule and his file: his typed words are still owed
 before either is written. On 2026-11-17 he approved the spend to correct the 21 findings and to run one
-confirming read (question 323, L9): JH SR corrects them here, as version 4, then that one read; a failure it
-finds goes to the lead as a problem, with no further read.
+confirming read (question 323, L9). STOPPED before version 4 was written (L10): this session's own tokens had
+already used what he approved, so the spend past it is his to decide and the lead routes the work. Version 3
+stands; the findings are open; no fourth read has run.
 
 ## Goal
 Each session that holds a role (the lead, the Plan, the senior) reads what its role is, from one text the harness
@@ -332,3 +333,24 @@ card ships without the lines that wait for a rule.
   three versions, on claude-fable-5-2 (its transcript's last entry), at 46% of its context; and the read alone
   was measured at 1.40, 2.14 and 3.45M Claude tokens on this document, so with the correction pass it can pass
   what he approved.
+- L10 2026-11-17, 02:26 local: the correction is stopped before version 4, and a mistake of this session, told.
+  What happened: every cost this session reported for the design (L4 to L6, its notes to the lead, and so the
+  7.0M he read in question 323) counted the reads and the sub-agents and never the session's own tokens. Read
+  now from its transcript's usage fields, each message once: 17,992,257 tokens on Fable between his line of
+  2026-11-16 13:58 local and the lead's message on question 323, 17.4M of them cache reads; and 2,983,482 in
+  the 13 calls after that message, about 230k a call, since the session holds 238k of context (68%, the app's
+  usage tool). So what he approved for the correction and its read together, 2 to 3.5M Claude tokens, was used
+  before a line of version 4 was written. The meter, for every session of the account together: weekly Fable
+  21% against 17% at 2026-11-16 01:00 local, all models 44% against 38%. The fix now, sent and not yet
+  answered: the work stops; three notes tell the lead the figures, that spend past the approved is his, and
+  the recommendation that a fresh senior session writes version 4, as question 323 told him ("una sesión
+  nueva"), since its calls cost about a fifth of these; an estimate, from 238k of context against about 50k.
+  What stops it recurring: a cost report names the session's own tokens beside its reads, read by a command
+  and not by hand; today a throwaway script in this session's scratchpad does it, a manual workaround, so the
+  follow-up is a figure of `js-harness sessions` or of the closing summary, which the lead assigns
+  (`js-harness-protocols`, section 4). Where it enters: `docs/FAILURES.md`, a `- Seen:` line under
+  `estimate-passed-as-fact`, in this commit. Proof later: `js-harness failures` lists that entry with no new
+  `- Seen:` line after the control lands. What was done before the stop and stays useful: the approach of
+  version 4 is in this session's stored opening (`js-harness sessions --opening "JH SR · diseño del
+  Orquestador Plan"`), and one read-only opus explorer is checking fourteen facts in the code, its answers to
+  be saved in the sessions' shared notes folder.
