@@ -21,7 +21,7 @@ import { gatesOf, readGateLog } from './lib/gate-log.mjs';
 import { reviewEvidence } from './lib/merge-queue-reviews.mjs';
 import { nextLine } from './lib/next-step.mjs';
 import { defaultBranchOf } from './lib/default-branch.mjs';
-import { mergeMessage, pullRequestProblems } from './lib/pull-request.mjs';
+import { conflictSaid, mergeMessage, pullRequestProblems } from './lib/pull-request.mjs';
 import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug, roleOfTitle } from './lib/sessions.mjs';
 import { refreshCopy as refreshInstalledCopy } from './lib/refresh-copy.mjs';
@@ -897,8 +897,12 @@ async function queueRun(args, { run = spawnSync, covered = null, suite = null, e
       continue;
     }
     const coverage = isCovered(pr.headRefOid, onto);
-    const files = onto !== main && coverage?.conflicted?.length ? coverage.conflicted : null;
-    if (files) leaveOut(log, stdout, pr, 'conflict', `it conflicts with the candidate so far in ${files.join(', ')}.`, { files, next: coverage?.next });
+    // git may report a conflict and name no file of it (merge-tree, some rename conflicts): it is a conflict still.
+    const files = Array.isArray(coverage?.conflicted) ? coverage.conflicted : null;
+    // A conflict is with main itself where the candidate is still main, or where the pull request does not merge onto
+    // main alone either: then its line names the fix; else it waits for the pull requests before it (spec 3).
+    const withMain = files && (onto === main || coverage.conflictOnto === 'main');
+    if (files) leaveOut(log, stdout, pr, 'conflict', conflictSaid({ base: defaultBranch, branch: pr.headRefName, files, earlier: withMain ? [] : candidates.map((one) => one.number) }), { files });
     else if (!coverage?.pass) leaveOut(log, stdout, pr, 'review', `${String(coverage?.detail ?? 'its Codex review records could not be read').replace(/\.$/, '')}.`, { next: coverage?.next });
     if (files || !coverage?.pass) continue;
     for (const line of coverage.lines?.length ? [`PR ${pr.number}, commit by commit:`, ...coverage.lines.map((said) => `  ${said}`)] : []) stdout(line);
@@ -933,7 +937,9 @@ async function queueRun(args, { run = spawnSync, covered = null, suite = null, e
       if (step.kind === 'merged') merged.push({ ...pr, merge: step.merge });
       else if (step.kind === 'broken') return fail(step.line);
       else if (step.kind === 'door') leaveOut(log, stdout, pr, 'door', `${step.line}.`);
-      else if (step.conflicted.length) leaveOut(log, stdout, pr, 'conflict', `it conflicts with the candidate so far in ${step.conflicted.join(', ')}.`, { files: step.conflicted });
+      // By the reviews' rule: with main itself while the candidate is still main (every merge before brought nothing),
+      // or where the pull request does not merge onto main alone either; else it waits for the ones before it.
+      else if (step.conflicted.length) leaveOut(log, stdout, pr, 'conflict', conflictSaid({ base: defaultBranch, branch: pr.headRefName, files: step.conflicted, earlier: merged.every((one) => one.merge === main) || Array.isArray(isCovered(pr.headRefOid, main)?.conflicted) ? [] : merged.map((one) => one.number) }), { files: step.conflicted });
       else leaveOut(log, stdout, pr, 'merge', `it does not merge into the candidate so far: ${step.said}.`);
     }
     if (merged.length === 0) {

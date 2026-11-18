@@ -411,7 +411,8 @@ L10 (24,950 and 14,060), L11's fix (4,430), L13 (5,040, 3,800; the probe's own, 
 run (L14): 13 of 20, against L 13 and the worse line of 10, no worse.
 
 ## Next step
-T7 done (JH 69, 2026-10-28 ~15:00Z), branch `f8-s1-records` in worktree `.claude/worktrees/f8-s1-records`, 17
+Landed (2026-11-18, JH 222, read with `gh`): T7 as PR 630 (79e34308) on 2026-10-28, PR 614 before it (d6867d86). What
+follows is the step as written before. T7 done (JH 69, 2026-10-28 ~15:00Z), branch `f8-s1-records` in worktree `.claude/worktrees/f8-s1-records`, 17
 commits from e7bc4215 to d81ca0f2 and this record's, each reviewed (the gentle-ai lines above). Left: push
 `f8-s1-records`, open the PR, `js-harness notify --to orchestrator --kind ready --pr <n>` saying the bad news: nothing
 works until a release with it is installed, and every in-flight branch reruns `lens-review` over its range once it is

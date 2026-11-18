@@ -148,6 +148,7 @@ test('a pull request that conflicts with the candidate so far names the files, a
   const said = reviewEvidence(root, main, c, sibling);
   assert.equal(said.pass, false);
   assert.deepEqual(said.conflicted, ['c.txt']);
+  assert.equal(said.conflictOnto, 'candidate', 'the queue names the fix by where the conflict is, without asking main again (Codex, c3385fc0)');
 });
 
 test('a pull request that conflicts with main is refused, naming the files, and no review is read', () => {
@@ -160,10 +161,26 @@ test('a pull request that conflicts with main is refused, naming the files, and 
   assert.deepEqual(reviewEvidence(root, moved, c), {
     pass: false,
     conflicted: ['c.txt'],
+    conflictOnto: 'main',
     detail: 'it does not merge onto main without a conflict (in c.txt), so its reviews cannot be read as the push of main reads them',
     next: firstStep('settle the conflict with main in c.txt, by merging or rebasing the branch'),
   });
   assert.notEqual(main, moved);
+});
+
+test('a pull request read onto a candidate that conflicts with main itself says the conflict is main\'s (conflictOnto, spec 3 of codex-spend)', () => {
+  const { root, main, c, record } = makeRepo();
+  record(main, c);
+  fs.writeFileSync(path.join(root, 'c.txt'), 'main has its own c\n', 'utf8');
+  git(root, 'add', 'c.txt');
+  git(root, 'commit', '--quiet', '-m', 'main writes c.txt too');
+  const moved = git(root, 'rev-parse', 'HEAD');
+  fs.writeFileSync(path.join(root, 'd.txt'), 'a sibling\n', 'utf8');
+  git(root, 'add', 'd.txt');
+  git(root, 'commit', '--quiet', '-m', 'a sibling on the moved main');
+  const said = reviewEvidence(root, moved, c, git(root, 'rev-parse', 'HEAD'));
+  assert.equal(said.pass, false);
+  assert.deepEqual([said.conflicted, said.conflictOnto], [['c.txt'], 'main']);
 });
 
 // B2-1 at the merge door: "commits before a `codexReview: false` commit are asked by no review". The door reads the

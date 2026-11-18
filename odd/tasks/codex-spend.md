@@ -182,7 +182,7 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
 ## Tasks
 - [x] T1 (kind: build) spec 1 — PR 878 — `bin/codex-review.mjs`, `bin/lib/codex-review-turns.mjs` + tests — commit `fix(codex-review): read a snapshot of the head, not the live folder`
 - [x] T2 (kind: build) spec 2 — PR 883, main c7afe0be — `bin/lib/codex-review-turns.mjs`, `bin/codex-review.mjs` + tests — commit `fix(codex-review): review the gap below a merge of main alone`
-- [ ] T3 (kind: build) spec 3 — `bin/merge-queue.mjs`, `bin/lib/pull-request.mjs` (clearance asked) + tests — commit `fix(merge-queue): a conflict with main names its fix`
+- [x] T3 (kind: build) spec 3 — branch fix/codex-spend-t3 (L34-L37) — `bin/merge-queue.mjs`, `bin/lib/pull-request.mjs`, `bin/lib/merge-queue-reviews.mjs:97` (cleared L36) + tests — commit `fix(merge-queue): a conflict with main names its fix`
 - [ ] T4 (kind: build) specs 4, 5 — `rules change double-review` on `rule/double-review-sequence`, `bin/double-review.mjs`, `bin/js-harness.mjs` usage + tests — commits `chore(rules): a question's double review reads Claude first` and `feat(double-review): Codex reads what Claude passed`
 - [ ] T5 (kind: build) spec 6 — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
 - [ ] T6 (kind: verify) — the measure after the slices land, against the baseline, by Done-when's T6 line; result in the Log
@@ -445,3 +445,45 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   it; Y1 goes to JH 207. The lead also asked whether Y1 is on main: yes, C1f (no merge) on main 7de0b95's own bin
   passes the push row after a nothing-to-review record over an owed review (JH 199 scratchpad verify5,
   out-C1f-main.txt). JH 199 closes with its summary, docs/sessions/2026-11-15-jh-199-sin-desperdicio-de-codex.md.
+- L34 2026-11-18, JH 220 (item `codexspend` of the plan of 2026-11-18, v4): T3 and T5, worktree
+  `.claude/worktrees/codex-spend-t3-t5-9335da` from main b044dbf7. L12's cleared lines were counted at main 4187cb1;
+  at b044dbf7 they are `:896` (GitHub's answer), `:900-902` (the reviews read onto the candidate) and `:936` (the merge
+  into it), plus the import line `:24` for the one new name. `bin/notify.test.mjs`: the one assertion of
+  `readyProblems`' CONFLICTING words changes (`:429`), no test added. T3's decisions: the words have one home,
+  `conflictSaid` in `bin/lib/pull-request.mjs`. GitHub's CONFLICTING is computed against the branch the pull request
+  targets, so its fix names that branch. In the reviews' loop a conflict onto main is now a `conflict` (it was left out
+  as `review`, with a "merging or rebasing" next step); onto a candidate with earlier pull requests, main alone is asked
+  again (`isCovered(head, main)`, only on that path), since `reviewEvidence` returns main's own conflict first and the
+  line called it the candidate's. At the merge, the candidate is still main while every merge before it brought
+  nothing (`merge === main`), not only while none was made. A conflict with the batch names the pull requests merged
+  so far, not the one it meets: git does not say which, and they land together. The one reader of a land record's
+  `leftOut` reason is `leftOutText` (`bin/merge-queue.mjs:264`), which prints it in brackets before `said` and branches
+  on nothing (`grep -rn "leftOut\|\.reason\b"` over `bin/merge-queue.mjs`, `bin/lib/merge-queue-*.mjs`,
+  `bin/lib/stretch*.mjs`, `bin/stretch.mjs` and `workshop/`, non-test files, unbounded). Left: `README.md:1308` shows the old
+  CONFLICTING line, and `bin/lib/merge-queue-reviews.mjs:75` still says "by merging or rebasing" for `check`'s own
+  use; both outside T3's files.
+- L35 2026-11-18, T3's reviews on b044dbf..c3385fc. Codex (915,136 input tokens, 818,816 cached; its plan said about
+  1.9M, over the 300,000 allowance, sent to the lead before it ran): five P2, verdict incorrect. Lenses risk 0,
+  readability 1 warning. Verifier (opus, read-only): clean, probe on a real repository reproduced the old misnaming
+  and the fix; five low notes. Taken in one commit, tests first: a conflict git names no file of is still a
+  conflict (`Array.isArray`, Codex 1); the step comes before the lists, which a notice cuts at its length (Codex 4);
+  CONFLICTING against a branch the queue refuses as base names no merge of it (Codex 5); the wait names "the one of"
+  the earlier pull requests it conflicts with, not all of them (Codex 3, verifier 1); the merge loop decides "with
+  main" by the reviews' rule, asking main alone where earlier merges moved the candidate (lens). Answered, not
+  taken: Codex 2 (carry the conflict's base in `reviewEvidence`'s result instead of asking main alone again) needs
+  `bin/lib/merge-queue-reviews.mjs`, outside the cleared files; the second ask runs only on a conflict with the
+  batch. Verifier 2 (`readyProblems` asks gh for no `headRefName`, so notify's line names no branch) needs
+  `bin/notify.mjs`; verifier 3 (an UNKNOWN conflict found by the reviews keeps `reviewEvidence`'s words in notify)
+  is `merge-queue-reviews.mjs` too. Both go to the lead as follow-ups with README.md:1308.
+- L36 2026-11-18, Codex's recheck of c3385fc..1dbba7f (297,006 input tokens): 3 fixed, 2 not fixed. Finding 4 (a long
+  list still came before the wait's condition) and finding 2 (ask main again) both taken. For finding 2 the lead
+  cleared, 16:24 local: "You may edit bin/lib/merge-queue-reviews.mjs at line 97 and its test, adding only the
+  optional field conflictOnto." `reviewEvidence`'s conflict now says whose it is, `main` or `candidate`, and the
+  reviews' loop reads it; the merge loop still asks main alone, since a `git merge` there has no such result. Lenses
+  on 1dbba7f: risk 0; readability a follow-up, answered: at the merge a failed `git merge` with no unmerged file is not
+  a conflict (the test "a merge that fails with no conflict says what git said"), while `merge-tree`'s exit 1 is.
+  The lead holds T5's Codex review (planned 7.5M to 17.3M input tokens) for the owner's answer.
+- L37 2026-11-18, the second recheck, 1dbba7f..6bf60cc (195,381 input tokens): both findings fixed, verdict correct
+  (0.99). T3's reviews end at three: Codex 915,136 + 297,006 + 195,381 = 1,407,523 input tokens; lenses risk 0 each
+  round, readability's follow-up (say in a comment why the two loops count an empty conflict list apart) left for
+  the next change of those lines, since a code edit now would need a fourth review. Merge-queue tests 133 of 133.
