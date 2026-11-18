@@ -105,24 +105,33 @@ export function readRecordLines(file, fileSystem) {
 export const BASELINE = { prs: [864, 865, 866, 867, 868], day: '2026-11-14' };
 
 /** The subject the merge queue writes on the merge of a PR (bin/lib/pull-request.mjs, `mergeMessage`), which
- * GitHub's merge button writes too. */
+ * GitHub's merge button writes too. bin/lib/report-git.mjs reads the same subject with a regex it does not export. */
 const MERGE_OF_PR = /^Merge pull request #(\d+) from /;
 
-const tokensOf = (run) => (Number.isFinite(run.usage?.inputTokens) ? run.usage.inputTokens : 0);
-const tally = (runs) => ({ runs: runs.length, inputTokens: runs.reduce((sum, run) => sum + tokensOf(run), 0) });
+const countOf = (run) => (Number.isFinite(run.usage?.inputTokens) ? run.usage.inputTokens : null);
+/** `{ runs, inputTokens }` of `runs`, the tokens of those with a count, and `uncounted`, the runs with none, where any. */
+const tally = (runs) => {
+  const uncounted = runs.filter((run) => countOf(run) === null).length;
+  return { runs: runs.length, inputTokens: runs.reduce((sum, run) => sum + (countOf(run) ?? 0), 0), ...(uncounted > 0 ? { uncounted } : {}) };
+};
 const namesOf = (rec) => [...(Array.isArray(rec?.runs) ? rec.runs : []), ...(typeof rec?.run === 'string' ? [rec.run] : [])];
 
-/** The commits of the default branch `defaultRef` and of the lands' candidates, as `git` reads them: a map of each
- * id to `{ parents, subject }`. A candidate git does not hold is left out (one `cat-file`); the revisions go on
- * standard input, so their number meets no command-line limit. Throws where git cannot read them. */
+/** The commits of the default branch `defaultRef` and of the lands' candidates, as `git` reads them: `graph`, a map of
+ * each id to `{ parents, subject }`, and `tip`, the commit `defaultRef` names (`null` without one). A candidate git
+ * does not hold is left out (one `cat-file`); the revisions go on standard input, so their number meets no
+ * command-line limit. Throws where git cannot read them. */
 function commitGraph(git, lands, defaultRef) {
   const candidates = [...new Set(lands.map((land) => land?.candidate).filter((id) => typeof id === 'string'))];
-  const checked = candidates.length === 0 ? '' : git(['cat-file', '--batch-check'], `${candidates.join('\n')}\n`);
+  const asked = [...(defaultRef ? [`${defaultRef}^{commit}`] : []), ...candidates];
+  const checked = asked.length === 0 ? '' : git(['cat-file', '--batch-check'], `${asked.join('\n')}\n`);
   if (checked === null) throw new Error('git could not tell which commits of the lands it holds');
-  const held = checked.split('\n').map((line) => line.trim().split(' ')).filter(([, type]) => type === 'commit').map(([id]) => id);
-  const revisions = [...(defaultRef ? [defaultRef] : []), ...held];
+  const answers = checked.split('\n').filter((line) => line.trim() !== '').map((line) => line.trim().split(' '));
+  const isCommit = ([, type]) => type === 'commit';
+  const tip = defaultRef && answers[0] && isCommit(answers[0]) ? answers[0][0] : null;
+  const held = answers.slice(defaultRef ? 1 : 0).filter(isCommit).map(([id]) => id);
+  const revisions = [...(tip ? [tip] : []), ...held];
   const graph = new Map();
-  if (revisions.length === 0) return graph;
+  if (revisions.length === 0) return { graph, tip };
   const log = git(['log', '--stdin', '--format=%H %P%x09%s'], `${revisions.join('\n')}\n`);
   if (log === null) throw new Error('git could not read the commits of the lands');
   for (const line of log.split('\n')) {
@@ -131,7 +140,7 @@ function commitGraph(git, lands, defaultRef) {
     const [id, ...parents] = line.slice(0, tab).trim().split(' ').filter(Boolean);
     graph.set(id, { parents, subject: line.slice(tab + 1) });
   }
-  return graph;
+  return { graph, tip };
 }
 
 /** Every commit of `graph` reachable from `start` without entering `stop` (a set): `git rev-list start ^stop`, over
@@ -148,24 +157,43 @@ function reachable(graph, start, stop = new Set()) {
   return seen;
 }
 
+/** The merges of `graph` on the first-parent line from `from` down to `to` (not included), oldest first. */
+function firstParentMerges(graph, from, to) {
+  const line = [];
+  const seen = new Set();
+  for (let id = from; id && id !== to && graph.has(id) && !seen.has(id); id = graph.get(id).parents[0]) {
+    seen.add(id);
+    if (graph.get(id).parents.length >= 2) line.push(id);
+  }
+  return line.reverse();
+}
+
 /** The PR each commit landed with: for each land that landed (exit 0), oldest first, the merges on its candidate's
  * first-parent line above the main it started from whose subject names a PR it landed, and the commits each merge
- * brought in, `<merge>^1..<merge>^2`. A commit two lands brought in is the first one's. */
-function landedOwners(graph, lands) {
+ * brought in, `<merge>^1..<merge>^2`. A commit two lands brought in is the first one's. Then, as `pullRequestsOf`
+ * (bin/lib/report-git.mjs) joins the commits of every merge of one PR, the other merges on the default branch's
+ * first-parent line (`tip`) that name a PR a land landed: PR 731 was merged by hand (bd45a5b2) and then by its land
+ * (d0cc6e69), which brought in only what the first had not. */
+function landedOwners(graph, lands, tip) {
   const owner = new Map();
+  const claim = (merge, pr) => {
+    const { parents } = graph.get(merge);
+    for (const id of reachable(graph, parents[1], reachable(graph, parents[0]))) if (!owner.has(id)) owner.set(id, pr);
+  };
+  const prOf = (merge) => Number(MERGE_OF_PR.exec(graph.get(merge).subject)?.[1]);
   const landed = lands
     .filter((land) => land?.exit === 0 && Array.isArray(land.landed) && land.landed.length > 0 && typeof land.candidate === 'string')
     .sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
+  const claimed = new Set();
   for (const land of landed) {
-    const merges = [];
-    for (let id = land.candidate; id !== land.main && graph.has(id) && !merges.includes(id); id = graph.get(id).parents[0]) merges.push(id);
-    for (const merge of merges.reverse()) {
-      const { parents, subject } = graph.get(merge);
-      const pr = Number(MERGE_OF_PR.exec(subject)?.[1]);
-      if (parents.length < 2 || !land.landed.includes(pr)) continue;
-      for (const id of reachable(graph, parents[1], reachable(graph, parents[0]))) if (!owner.has(id)) owner.set(id, pr);
+    for (const merge of firstParentMerges(graph, land.candidate, land.main)) {
+      if (!land.landed.includes(prOf(merge))) continue;
+      claimed.add(merge);
+      claim(merge, prOf(merge));
     }
   }
+  const landedPrs = new Set(landed.flatMap((land) => land.landed));
+  for (const merge of firstParentMerges(graph, tip, null)) if (!claimed.has(merge) && landedPrs.has(prOf(merge))) claim(merge, prOf(merge));
   return owner;
 }
 
@@ -175,20 +203,25 @@ function landedOwners(graph, lands) {
  * evidence (`admittedCodexReviews`), and `coverage({ from, tip, records })` what `reviewCoverage` says of `from..tip`
  * with those records alone. All are handed in, so this module asks nothing of git or the disk itself.
  *
- * A run counts for the PR whose land's merge brought its head in. One of no landed PR is pending (its head on a branch
- * not merged into the default branch), on the default branch by no land record (before lands.jsonl, or merged by
- * hand), or orphaned (its head on no branch: rebased away, or gone). What bought no new reading, each run in the first
+ * A run counts for the PR whose land's merge brought its head in (`landedOwners`). One of no landed PR is pending (its
+ * head on a branch not merged into the default branch), on the default branch by no land record (before lands.jsonl,
+ * or merged by hand only), or orphaned (its head on no branch: rebased away, or gone). Each run of a PR is in the first
  * class that holds it: failed (any outcome but `reviewed`), no record (a `reviewed` run no record names, by `run` or
- * `runs`), and re-read (a code commit of its range covered by a `reviewed` record written before it started, as the
- * push counts it, `beyondTip` off). A remerge run (`diff: 'remerge'`) is no re-read, and a skip record is no reading;
- * `--again` runs are not marked in the run log, so none is left out. A round is a run after a clean pass of the same
- * PR at or below its head on its first-parent line: a record whose runs all found nothing, or a run of a whole range
- * that found nothing, after it ended, whose record may have been refused (L5 counts such a run). The lines reviewed are
- * those of the runs that bought new reading (`part.changedLines`, else `coverage.total`), and tokens a line divide all
- * the PR's input by them. */
+ * `runs`), re-read (a code commit of its range covered by a `reviewed` record written before it started, as the push
+ * counts it, `beyondTip` off), or the rest. A re-read whose code commits were all covered bought no new reading; one
+ * that also read code no record covered is counted apart, with how many of its code commits were covered. A remerge
+ * run (`diff: 'remerge'`) is no re-read, and a skip record is no reading; `--again` runs are not marked in the run log,
+ * so none is left out. A run with no token count is counted as a run and its tokens as unknown (`uncounted`).
+ *
+ * The runs that bought new reading are the `reviewed` runs a record names that are no re-read of covered code alone;
+ * tokens a line are their input over their changed lines (`coverage.total`, which every run line carries; `part`
+ * lacks on lines of whole ranges written before parts). A round, as L5 measured it, is a fresh review (`reviewed`, no
+ * `recheck`, no remerge) whose head lies above a clean pass of the same PR on its first-parent line, started after
+ * that pass: a record whose runs all found nothing, or a run of a whole range that found nothing, whose record may
+ * have been refused (L4). Rounds overlap the classes above. */
 export function perLandedPr({ runs, records = [], lands, doubleReviews = [], git, defaultRef = null, admitted = () => true, coverage, baseline = BASELINE }) {
-  const graph = commitGraph(git, lands, defaultRef);
-  const owner = landedOwners(graph, lands);
+  const { graph, tip } = commitGraph(git, lands, defaultRef);
+  const owner = landedOwners(graph, lands, tip);
   const unlanded = defaultRef ? git(['rev-list', '--branches', '--remotes', '--not', defaultRef]) : '';
   if (unlanded === null) throw new Error('git could not list the commits of the branches not landed');
   const pending = new Set(unlanded.split('\n').map((line) => line.trim()).filter(Boolean));
@@ -213,7 +246,7 @@ export function perLandedPr({ runs, records = [], lands, doubleReviews = [], git
   const prs = [...byPr].sort(([a], [b]) => a - b).map(([pr, own]) => prFigures(pr, own, { named, reread, graph, owner, cleanPasses }));
   const baselineRuns = prs.filter((one) => baseline.prs.includes(one.pr)).flatMap((one) => one.ids.map((id) => runById.get(id)));
   const onDay = baselineRuns.filter((run) => String(run.startedAt).startsWith(baseline.day));
-  const listed = (bucket) => ({ ...tally(bucket), ids: bucket.map((run) => run.id), list: bucket.map((run) => ({ id: run.id, startedAt: run.startedAt, head: run.head, inputTokens: tokensOf(run) })) });
+  const listed = (bucket) => ({ ...tally(bucket), ids: bucket.map((run) => run.id), list: bucket.map((run) => ({ id: run.id, startedAt: run.startedAt, head: run.head, inputTokens: countOf(run) })) });
   return {
     prs,
     unattributed: Object.fromEntries(Object.entries(unattributed).map(([kind, bucket]) => [kind, listed(bucket)])),
@@ -222,11 +255,11 @@ export function perLandedPr({ runs, records = [], lands, doubleReviews = [], git
   };
 }
 
-/** `run => true | false | null`: whether a code commit of the run's range was covered by a `reviewed` record written
- * before it started, `null` where coverage cannot tell. Only the records whose head lies in the range are handed to
- * `coverage`: with `beyondTip` off one past the tip covers nothing, and a range none reaches is asked nothing. A range
- * the graph cannot walk hands every earlier record. Asked once per range and set of records, which a range's parts
- * share. */
+/** `run => { covered, code } | false | null`: how many of the code commits of the run's range a `reviewed` record
+ * written before it started covered, of how many, where any was; `false` where none was, `null` where coverage cannot
+ * tell. Only the records whose head lies in the range are handed to `coverage`: with `beyondTip` off one past the tip
+ * covers nothing, and a range none reaches is asked nothing. A range the graph cannot walk hands every earlier record.
+ * Asked once per range and set of records, which a range's parts share. */
 function rereadOf({ graph, reviewed, coverage }) {
   const asked = new Map();
   return (run) => {
@@ -239,7 +272,8 @@ function rereadOf({ graph, reviewed, coverage }) {
     if (!asked.has(key)) {
       const said = coverage({ from, tip: run.head, records: before });
       const known = !said?.unknown && Array.isArray(said?.codeCommits) && Array.isArray(said.covers);
-      asked.set(key, known ? said.codeCommits.some((commit) => said.covers.some(({ rec, covered }) => rec?.outcome === 'reviewed' && covered.has(commit.id))) : null);
+      const covered = known ? said.codeCommits.filter((commit) => said.covers.some(({ rec, covered: ids }) => rec?.outcome === 'reviewed' && ids.has(commit.id))).length : null;
+      asked.set(key, covered === null ? null : covered > 0 && { covered, code: said.codeCommits.length });
     }
     return asked.get(key);
   };
@@ -252,36 +286,44 @@ function prFigures(pr, own, { named, reread, graph, owner, cleanPasses }) {
   const unnamed = sorted.filter((run) => run.outcome === 'reviewed' && !named.has(run.id));
   const rest = sorted.filter((run) => run.outcome === 'reviewed' && named.has(run.id));
   const said = new Map(rest.map((run) => [run, run.diff === 'remerge' ? false : reread(run)]));
-  const rereads = rest.filter((run) => said.get(run) === true);
-  const bought = rest.filter((run) => said.get(run) !== true);
-  // The first-parent line at and below a head, while it stays among the PR's own commits.
+  const onlyCovered = (run) => said.get(run) && said.get(run).covered === said.get(run).code;
+  const rereadOnly = rest.filter(onlyCovered);
+  const rereadBeside = rest.filter((run) => said.get(run) && !onlyCovered(run));
+  const bought = rest.filter((run) => !onlyCovered(run));
+  // The first-parent line below a head, while it stays among the PR's own commits.
   const lineBelow = (head) => {
     const line = new Set();
-    for (let id = head; owner.get(id) === pr && !line.has(id); id = graph.get(id)?.parents[0]) line.add(id);
+    for (let id = graph.get(head)?.parents[0]; owner.get(id) === pr && !line.has(id); id = graph.get(id)?.parents[0]) line.add(id);
     return line;
   };
   const passes = cleanPasses.filter((pass) => owner.get(pass.head) === pr);
+  const fresh = (run) => run.outcome === 'reviewed' && run.recheck === undefined && run.diff !== 'remerge';
+  // Commits above a clean pass: the range starts at the pass's head or above it, so a range from below it is no round.
   const rounds = sorted.filter((run) => {
-    const line = lineBelow(run.head);
-    return passes.some((pass) => pass.at < Date.parse(run.startedAt) && line.has(pass.head));
+    if (!fresh(run)) return false;
+    const from = run.from ?? run.base;
+    const startLine = new Set([from, ...lineBelow(from)]);
+    return passes.some((pass) => pass.at < Date.parse(run.startedAt) && pass.head !== run.head && startLine.has(pass.head));
   });
-  const linesOf = (run) => (Number.isFinite(run.part?.changedLines) ? run.part.changedLines : Number.isFinite(run.coverage?.total) ? run.coverage.total : 0);
-  const reviewedLines = bought.reduce((sum, run) => sum + linesOf(run), 0);
-  const { inputTokens } = tally(sorted);
+  const reviewedLines = bought.reduce((sum, run) => sum + (Number.isFinite(run.coverage?.total) ? run.coverage.total : 0), 0);
+  const boughtInputTokens = tally(bought).inputTokens;
+  const sum = (list, field) => list.reduce((total, run) => total + said.get(run)[field], 0);
   return {
     pr,
     ...tally(sorted),
-    cachedInputTokens: sorted.reduce((sum, run) => sum + (Number.isFinite(run.usage?.cachedInputTokens) ? run.usage.cachedInputTokens : 0), 0),
+    cachedInputTokens: sorted.reduce((total, run) => total + (Number.isFinite(run.usage?.cachedInputTokens) ? run.usage.cachedInputTokens : 0), 0),
     days: [...new Set(sorted.map((run) => String(run.startedAt).slice(0, 10)))],
     ids: sorted.map((run) => run.id),
     failed: tally(failed),
     unnamed: tally(unnamed),
-    rereads: tally(rereads),
+    rereadOnly: tally(rereadOnly),
+    rereadBeside: { ...tally(rereadBeside), covered: sum(rereadBeside, 'covered'), code: sum(rereadBeside, 'code') },
     coverageUnknown: rest.filter((run) => said.get(run) === null).length,
     rounds: tally(rounds),
     roundIds: rounds.map((run) => run.id),
     reviewedLines,
-    tokensPerLine: reviewedLines > 0 ? Math.round(inputTokens / reviewedLines) : null,
+    boughtInputTokens,
+    tokensPerLine: reviewedLines > 0 ? Math.round(boughtInputTokens / reviewedLines) : null,
   };
 }
 
@@ -295,23 +337,31 @@ function doubleReviewFigures(lines) {
 
 const count = (value) => value.toLocaleString('en-US');
 const runsWord = (n) => `${count(n)} ${n === 1 ? 'run' : 'runs'}`;
-const spent = ({ runs, inputTokens }) => `${runsWord(runs)} ${count(inputTokens)}`;
+/** A tally as `<n> runs <tokens>`, saying where runs had no count. */
+function spent({ runs, inputTokens, uncounted = 0 }) {
+  if (uncounted === 0) return `${runsWord(runs)} ${count(inputTokens)}`;
+  if (uncounted === runs) return `${runsWord(runs)}, tokens unknown`;
+  return `${runsWord(runs)} ${count(inputTokens)} and ${runsWord(uncounted)} with no count`;
+}
 
 /** The lines `js-harness codex-meter --per-pr` prints of `report` (`perLandedPr`). */
 export function perPrLines(report) {
   const lines = ['Codex input per landed PR, over all its days (input tokens, the cached ones among them):'];
   for (const pr of report.prs) {
-    const perLine = pr.tokensPerLine === null ? 'no line reviewed' : `${count(pr.reviewedLines)} lines reviewed, ${count(pr.tokensPerLine)} tokens a line`;
+    const perLine = pr.tokensPerLine === null ? 'no line reviewed' : `${count(pr.reviewedLines)} lines reviewed by the runs that bought new reading, ${count(pr.boughtInputTokens)} tokens of theirs, ${count(pr.tokensPerLine)} a line`;
     const unknown = pr.coverageUnknown > 0 ? `; ${runsWord(pr.coverageUnknown)} whose coverage could not be told` : '';
-    lines.push(`PR ${pr.pr}: ${runsWord(pr.runs)}, ${count(pr.inputTokens)} input tokens (${pr.days.join(', ')}); bought no new reading: failed ${spent(pr.failed)}, no record ${spent(pr.unnamed)}, re-read ${spent(pr.rereads)}; rounds after a clean pass ${spent(pr.rounds)}; ${perLine}${unknown}`);
+    const beside = `re-read covered code beside new ${spent(pr.rereadBeside)} (${count(pr.rereadBeside.covered)} of ${count(pr.rereadBeside.code)} code commits already covered)`;
+    const tokens = pr.uncounted ? `${count(pr.inputTokens)} input tokens and ${runsWord(pr.uncounted)} with no count` : `${count(pr.inputTokens)} input tokens`;
+    lines.push(`PR ${pr.pr}: ${runsWord(pr.runs)}, ${tokens}, ${count(pr.cachedInputTokens)} of them cached (${pr.days.join(', ')}); bought no new reading: failed ${spent(pr.failed)}, no record ${spent(pr.unnamed)}, re-read of covered code alone ${spent(pr.rereadOnly)}; ${beside}; ${perLine}${unknown}`);
+    lines.push(`  rounds after a clean pass (they overlap the classes above; do not add them): ${spent(pr.rounds)}`);
   }
   const { baseline } = report;
   lines.push(`Baseline, PRs ${baseline.prs[0]}-${baseline.prs.at(-1)}: ${runsWord(baseline.runs)}, ${count(baseline.inputTokens)} input tokens over all their days; of them on ${baseline.day} alone: ${count(baseline.dayInputTokens)}`);
   const words = { pending: 'Pending, on a branch not landed', byNoLand: 'On the default branch by no land record', orphaned: 'Orphaned, on no branch (rebased away or gone)' };
   for (const [kind, label] of Object.entries(words)) {
     const bucket = report.unattributed[kind];
-    lines.push(`${label}: ${runsWord(bucket.runs)}, ${count(bucket.inputTokens)} input tokens`);
-    if (kind !== 'byNoLand') for (const run of bucket.list) lines.push(`  ${run.startedAt} ${String(run.head).slice(0, 12)} ${count(run.inputTokens)}`);
+    lines.push(`${label}: ${runsWord(bucket.runs)}, ${count(bucket.inputTokens)} input tokens${bucket.uncounted ? ` and ${runsWord(bucket.uncounted)} with no count` : ''}`);
+    if (kind !== 'byNoLand') for (const run of bucket.list) lines.push(`  ${run.startedAt} ${String(run.head).slice(0, 12)} ${run.inputTokens === null ? 'unknown' : count(run.inputTokens)}`);
   }
   const doubles = report.doubleReviews;
   lines.push(`Double reviews: ${count(doubles.reads)} reads, ${count(doubles.codexReads)} with a Codex reader, ${count(doubles.codexInputTokens)} Codex input tokens`);

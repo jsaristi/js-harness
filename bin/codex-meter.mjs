@@ -20,6 +20,7 @@
 // ./lib/land-records.mjs), so it starts no app-server. It exits 0 with its report, 1 when the records cannot be read.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
 import { unknownArgument } from './lib/args.mjs';
 import { failureLine, humanLines, parseRateLimits, readRateLimits } from './lib/codex-meter.mjs';
 import { floorDebtLines } from './lib/codex-meter.mjs';
@@ -28,6 +29,7 @@ import { codexReviewRunsPath } from './lib/codex-review-runs.mjs';
 import { isValidCodexReview, jsonLinesPath, readCodexReviews } from './lib/codex-reviews.mjs';
 import { DOUBLE_REVIEWS_FILE } from './lib/double-review-records.mjs';
 import { perLandedPr, perPrLines, readLandRecord, readRecordLines } from './lib/land-records.mjs';
+import { gitDirs } from './lib/project.mjs';
 import { branchCodexSkips, codexSkipsOwed, skipLine } from './lib/lens-review-rows.mjs';
 
 /** What `fn` gives, or `fallback` when it throws: a debt that cannot be read must not cost the reading. */
@@ -60,19 +62,24 @@ function debtLines(debts) {
 
 /** Codex input per landed PR in the repository of `cwd`, read from its records: the run log and the land records read
  * so that a file there that cannot be read throws, the Codex review records with the run log's admission, and git
- * for the commits each land brought in. Each re-read is counted by `reviewCoverage` as the push counts it. */
+ * for the commits each land brought in. Each re-read is counted by `reviewCoverage` as the push counts it, handed
+ * where the repository is (`where`: its top, its common git dir, and the marks it was told), as a `codex-review` run
+ * hands it, so each of its calls asks git none of that again. */
 function workingPerPr(cwd = process.cwd()) {
   const git = (args, input) => gitOut(spawnSync, cwd, args, input);
-  const { records, admitted } = admittedCodexReviews(cwd);
+  const top = gitOut(spawnSync, cwd, ['rev-parse', '--show-toplevel']);
+  const { commonGitDir } = gitDirs(cwd, spawnSync);
+  const where = top && commonGitDir ? { top: path.resolve(top), marks: new Map(), commonGitDir } : undefined;
+  const { records, admitted } = admittedCodexReviews(cwd, { where });
   return perLandedPr({
-    runs: readRecordLines(codexReviewRunsPath(cwd), fs),
+    runs: readRecordLines(codexReviewRunsPath(cwd, { where }), fs),
     records,
     admitted,
     lands: readLandRecord(cwd, spawnSync, fs),
-    doubleReviews: readRecordLines(jsonLinesPath(cwd, DOUBLE_REVIEWS_FILE), fs),
+    doubleReviews: readRecordLines(jsonLinesPath(cwd, DOUBLE_REVIEWS_FILE, { where }), fs),
     git,
     defaultRef: defaultBranch(spawnSync, cwd, 'origin')?.ref ?? null,
-    coverage: ({ from, tip, records: before }) => reviewCoverage(cwd, { from, tip, read: () => before, isValid: () => true, beyondTip: false }),
+    coverage: ({ from, tip, records: before }) => reviewCoverage(cwd, { from, tip, where, read: () => before, isValid: () => true, beyondTip: false }),
   });
 }
 

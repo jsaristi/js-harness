@@ -157,7 +157,11 @@ test('the usage line names the command and its two options', () => {
 
 // Spec 6 of odd/tasks/codex-spend.md: --per-pr reads the records alone, so it needs no app-server.
 const PER_PR = {
-  prs: [{ pr: 864, runs: 3, inputTokens: 230_174, days: ['2026-11-13', '2026-11-14'], failed: { runs: 0, inputTokens: 0 }, unnamed: { runs: 0, inputTokens: 0 }, rereads: { runs: 0, inputTokens: 0 }, rounds: { runs: 1, inputTokens: 69_498 }, reviewedLines: 272, tokensPerLine: 846, coverageUnknown: 0 }],
+  prs: [{
+    pr: 864, runs: 3, inputTokens: 230_174, cachedInputTokens: 150_000, days: ['2026-11-13', '2026-11-14'], failed: { runs: 0, inputTokens: 0 }, unnamed: { runs: 0, inputTokens: 0 },
+    rereadOnly: { runs: 0, inputTokens: 0 }, rereadBeside: { runs: 0, inputTokens: 0, covered: 0, code: 0 }, rounds: { runs: 1, inputTokens: 69_498 },
+    reviewedLines: 272, boughtInputTokens: 230_174, tokensPerLine: 846, coverageUnknown: 0,
+  }],
   unattributed: Object.fromEntries(['pending', 'byNoLand', 'orphaned'].map((kind) => [kind, { runs: 0, inputTokens: 0, ids: [], list: [] }])),
   baseline: { prs: [864, 865, 866, 867, 868], runs: 3, inputTokens: 230_174, day: '2026-11-14', dayInputTokens: 110_158 },
   doubleReviews: { reads: 0, codexReads: 0, codexInputTokens: 0 },
@@ -168,7 +172,7 @@ test('--per-pr prints Codex input per landed PR from the records and starts no c
   const { code, out, err } = await run(['--per-pr'], fake, { perPr: () => PER_PR });
   assert.equal(code, 0, err);
   assert.equal(fake.spawned.length, 0, 'no app-server is started');
-  assert.match(out, /^PR 864: 3 runs, 230,174 input tokens \(2026-11-13, 2026-11-14\); /m);
+  assert.match(out, /^PR 864: 3 runs, 230,174 input tokens, 150,000 of them cached \(2026-11-13, 2026-11-14\); /m);
   assert.match(out, /^Baseline, PRs 864-868: 3 runs, 230,174 input tokens over all their days; of them on 2026-11-14 alone: 110,158$/m);
   assert.doesNotMatch(out, /five-hour|Codex debt/);
 });

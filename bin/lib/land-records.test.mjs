@@ -80,13 +80,16 @@ const commitText = (mark, ref, subject, from, merge) => [
   `commit ${ref}`, `mark :${mark}`, `committer T <t@example.com> ${1_700_000_000 + mark * 60} +0000`, data(subject),
   ...(from ? [`from :${from}`] : []), ...(merge ? [`merge :${merge}`] : []), `M 644 inline f${mark}.mjs`, data(`export const n = ${mark};`), '',
 ].join('\n');
-// main: m0, then the merges of PR 1, of PR 2 (stacked on PR 1), of PR 3 (rebased onto PR 2's merge) and of PR 5, which
-// no land record names. PR 3's head from before its rebase stays on a ref that is no branch; PR 4 is an open branch.
+// main: m0, then the merges of PR 1, of PR 2 (stacked on PR 1), of PR 3 (rebased onto PR 2's merge), of PR 5, which only a
+// failed land names, and PR 7 twice: by hand (13), then by its land (15). PR 3's head from before its rebase stays on a ref
+// that is no branch; PR 4 is an open branch; 16 is the candidate of a later land that brought PR 3's commit in again.
 const LAYOUT = [
   [1, 'refs/heads/main', 'm0'], [2, 'refs/heads/a', 'a1', 1], [3, 'refs/heads/b', 'b1', 2],
   [4, 'refs/heads/main', 'Merge pull request #1 from a', 1, 2], [5, 'refs/heads/main', 'Merge pull request #2 from b', 4, 3],
   [6, 'refs/before-rebase/r', 'r1', 1], [7, 'refs/heads/r', 'r1', 5], [8, 'refs/heads/main', 'Merge pull request #3 from r', 5, 7],
   [9, 'refs/heads/d', 'd1', 8], [10, 'refs/heads/main', 'Merge pull request #5 from d', 8, 9], [11, 'refs/heads/open', 'p1', 10],
+  [12, 'refs/heads/h', 'h1', 10], [13, 'refs/heads/main', 'Merge pull request #7 from h', 10, 12], [14, 'refs/heads/h', 'h2', 12],
+  [15, 'refs/heads/main', 'Merge pull request #7 from h', 13, 14], [16, 'refs/heads/other', 'Merge pull request #6 from r', 5, 7],
 ];
 let built = null;
 function layoutRepo() {
@@ -105,8 +108,13 @@ function layoutRepo() {
     const result = spawnSync('git', args, { cwd: repo, encoding: 'utf8', input });
     return result.status === 0 ? result.stdout : null;
   };
-  const land = (startedAt, main, candidate, landed) => ({ startedAt, main: id[main], candidate: id[candidate], landed, exit: 0 });
-  built = { id, git, lands: [land('2026-11-01T01:00:00Z', 1, 4, [1]), land('2026-11-01T02:00:00Z', 4, 5, [2]), land('2026-11-01T03:00:00Z', 5, 8, [3])] };
+  const land = (startedAt, main, candidate, landed, exit = 0) => ({ startedAt, main: id[main], candidate: id[candidate], landed, exit });
+  // Out of time order on purpose: the land of PR 6, later than PR 3's, comes first in the file.
+  const lands = [
+    land('2026-11-01T04:00:00Z', 5, 16, [6]), land('2026-11-01T01:00:00Z', 1, 4, [1]), land('2026-11-01T02:00:00Z', 4, 5, [2]),
+    land('2026-11-01T03:00:00Z', 5, 8, [3]), land('2026-11-01T03:30:00Z', 8, 10, [5], 1), land('2026-11-01T05:00:00Z', 13, 15, [7]),
+  ];
+  built = { id, git, lands };
   return built;
 }
 const layoutRun = (name, mark, from, extra = {}) => ({ id: name, startedAt: '2026-11-01T00:30:00Z', from, base: from, head: mark, outcome: 'reviewed', usage: { inputTokens: 1000 }, ...extra });
@@ -140,47 +148,123 @@ test('per landed PR: a run of no landed PR is pending on an open branch, on the 
   assert.equal(report.unattributed.orphaned.inputTokens, 1000);
 });
 
-test('per landed PR: failed, unnamed and re-read runs apart, remerge runs and skip records left out of re-reads, and rounds after a clean pass', () => {
+test('per landed PR: a merge brings in only what its first parent lacks, so the first land does not claim the history below it', () => {
+  const report = layoutReport([layoutRun('root', 1, 1)]);
+  assert.deepEqual(report.prs, []);
+  assert.deepEqual(report.unattributed.byNoLand.ids, ['root']);
+});
+
+test('per landed PR: a land that failed lands nothing, though its record names a PR', () => {
+  // PR 5's merge is on main, but the only land that names it exited 1.
+  const report = layoutReport([layoutRun('direct', 9, 8)]);
+  assert.equal(prOf(report, 5), undefined);
+  assert.deepEqual(report.unattributed.byNoLand.ids, ['direct']);
+});
+
+test('per landed PR: a commit two lands brought in is the first land\'s, whatever the order of the file', () => {
+  const report = layoutReport([layoutRun('on-r', 7, 5)]);
+  assert.deepEqual(prOf(report, 3).ids, ['on-r']);
+  assert.equal(prOf(report, 6), undefined);
+});
+
+test('per landed PR: a PR merged twice, by hand and then by its land, keeps the runs of both merges', () => {
+  const report = layoutReport([layoutRun('by-hand', 12, 10), layoutRun('by-land', 14, 12)]);
+  assert.deepEqual(prOf(report, 7).ids, ['by-hand', 'by-land']);
+  assert.deepEqual(report.unattributed.byNoLand.ids, []);
+});
+
+test('per landed PR: failed, unnamed and re-read runs apart, re-reads beside new code apart from those of covered code alone, remerge runs and skip records left out', () => {
   const { id } = layoutRepo();
-  const at = (minute) => `2026-11-01T02:${minute}:00Z`;
+  const at = (minute) => `2026-11-01T06:${minute}:00Z`;
+  const lines = (total) => ({ coverage: { seen: total, total } });
   const runs = [
-    layoutRun('first', 7, 5, { startedAt: at(10), findings: { total: 0 }, part: { index: 1, of: 1, files: 1, changedLines: 40 } }),
-    layoutRun('failed', 7, 5, { startedAt: at(30), outcome: 'failed', usage: { inputTokens: 300 } }),
-    layoutRun('unnamed', 7, 5, { startedAt: at(40), usage: { inputTokens: 400 }, findings: { total: 0 } }),
-    layoutRun('again', 7, 5, { startedAt: at(50), usage: { inputTokens: 600 }, findings: { total: 0 } }),
-    layoutRun('remerge', 7, 5, { startedAt: at(54), usage: { inputTokens: 700 }, diff: 'remerge', findings: { total: 0 } }),
+    layoutRun('first', 12, 10, { startedAt: at(10), findings: { total: 0 }, ...lines(40) }),
+    layoutRun('failed', 14, 12, { startedAt: at(20), outcome: 'failed', usage: { inputTokens: 300 } }),
+    layoutRun('unnamed', 14, 12, { startedAt: at(22), usage: { inputTokens: 400 }, findings: { total: 0 } }),
+    layoutRun('fresh', 14, 12, { startedAt: at(24), usage: { inputTokens: 500 }, findings: { total: 1 }, ...lines(10) }),
+    layoutRun('recheck', 14, 12, { startedAt: at(26), usage: { inputTokens: 200 }, findings: { total: 0 }, recheck: { of: 'x' }, ...lines(5) }),
+    layoutRun('remerge', 14, 12, { startedAt: at(28), usage: { inputTokens: 700 }, diff: 'remerge', findings: { total: 0 }, ...lines(25) }),
+    layoutRun('again', 14, 12, { startedAt: at(30), usage: { inputTokens: 600 }, findings: { total: 0 }, ...lines(10) }),
+    layoutRun('beside', 14, 10, { startedAt: at(40), usage: { inputTokens: 800 }, findings: { total: 0 }, ...lines(20) }),
+    layoutRun('same', 12, 10, { startedAt: at(45), usage: { inputTokens: 100 }, findings: { total: 0 }, ...lines(40) }),
+    layoutRun('no-count', 14, 12, { startedAt: at(50), outcome: 'failed', usage: {} }),
   ];
-  const record = (run, minute, outcome = 'reviewed') => ({ base: id[5], head: id[7], reviewedAt: at(minute), outcome, ...(run ? { run } : {}) });
-  const records = [record('first', 20), record(null, 45, 'unavailable'), record('again', 52), record('remerge', 56)];
+  const record = (run, head, minute, outcome = 'reviewed') => ({ base: id[10], head: id[head], reviewedAt: at(minute), outcome, ...(run ? { run } : {}) });
+  const records = [record('first', 12, 12), record(null, 14, 23, 'unavailable'), record('fresh', 14, 25), record('recheck', 14, 27), record('remerge', 14, 29), record('again', 14, 31), record('beside', 14, 41), record('same', 12, 46)];
+  // How many of its code commits each range asked held covered, by its tip and the records handed in.
+  const answers = { [`${id[14]}:1`]: [0, 1], [`${id[14]}:3`]: [1, 1], [`${id[14]}:5`]: [1, 2], [`${id[12]}:1`]: [1, 1] };
   const asked = [];
   const coverage = ({ tip, records: before }) => {
     asked.push(before.map((rec) => rec.reviewedAt));
-    return { codeCommits: [{ id: tip }], covers: before.map((rec) => ({ rec, covered: new Set([tip]) })) };
+    const [covered, code] = answers[`${tip}:${before.length}`];
+    const ids = Array.from({ length: code }, (_, n) => `c${n}`);
+    return { codeCommits: ids.map((one) => ({ id: one })), covers: [{ rec: before[0], covered: new Set(ids.slice(0, covered)) }] };
   };
-  const pr = prOf(layoutReport(runs, { records, coverage }), 3);
-  assert.equal(pr.runs, 5);
-  assert.equal(pr.inputTokens, 3000);
-  assert.deepEqual(pr.failed, { runs: 1, inputTokens: 300 });
+  const pr = prOf(layoutReport(runs, { records, coverage }), 7);
+  assert.equal(pr.runs, 10);
+  assert.deepEqual({ inputTokens: pr.inputTokens, uncounted: pr.uncounted }, { inputTokens: 4600, uncounted: 1 });
+  assert.deepEqual(pr.failed, { runs: 2, inputTokens: 300, uncounted: 1 });
   assert.deepEqual(pr.unnamed, { runs: 1, inputTokens: 400 });
-  assert.deepEqual(pr.rereads, { runs: 1, inputTokens: 600 });
-  // Every run after the clean pass of `first`, at its head, is a round; a skip record is no clean pass.
-  assert.deepEqual(pr.rounds, { runs: 4, inputTokens: 2000 });
-  // Only `reviewed` records written before the run are asked of, never the skip; the remerge run is asked nothing.
-  assert.deepEqual(asked, [[at(20)]]);
-  assert.equal(pr.reviewedLines, 40);
-  assert.equal(pr.tokensPerLine, 75);
+  assert.deepEqual(pr.rereadOnly, { runs: 2, inputTokens: 700 });
+  assert.deepEqual(pr.rereadBeside, { runs: 1, inputTokens: 800, covered: 1, code: 2 });
+  // Only `reviewed` records written before each run, never the skip; the remerge run is asked nothing.
+  assert.equal(asked.length, 4);
+  assert.ok(!asked.flat().includes(at(23)), 'the skip record is handed to no coverage');
+  // Tokens a line: the runs that bought new reading, both sides: first, fresh, recheck, remerge and beside.
+  assert.deepEqual({ lines: pr.reviewedLines, tokens: pr.boughtInputTokens, perLine: pr.tokensPerLine }, { lines: 100, tokens: 3200, perLine: 32 });
+});
+
+test('per landed PR: a round is a fresh review that passed no failure, above a clean pass on the PR\'s first-parent line', () => {
+  const { id } = layoutRepo();
+  const at = (minute) => `2026-11-01T07:${minute}:00Z`;
+  const runs = [
+    layoutRun('clean', 12, 10, { startedAt: at(10), findings: { total: 0 } }),
+    layoutRun('above', 14, 12, { startedAt: at(20), findings: { total: 2 } }),
+    layoutRun('failed-above', 14, 12, { startedAt: at(22), outcome: 'failed' }),
+    layoutRun('recheck-above', 14, 12, { startedAt: at(24), recheck: { of: 'x' }, findings: { total: 0 } }),
+    layoutRun('remerge-above', 14, 12, { startedAt: at(26), diff: 'remerge', findings: { total: 0 } }),
+    layoutRun('at-the-pass', 12, 10, { startedAt: at(28), findings: { total: 0 } }),
+    layoutRun('from-below', 14, 10, { startedAt: at(30), findings: { total: 0 } }),
+  ];
+  const records = runs.filter((run) => run.outcome === 'reviewed').map((run) => ({ base: id[run.from], head: id[run.head], reviewedAt: at(Number(run.startedAt.slice(14, 16)) + 1), outcome: 'reviewed', run: run.id }));
+  const coverage = () => ({ codeCommits: [], covers: [] });
+  const pr = prOf(layoutReport(runs, { records, coverage }), 7);
+  assert.deepEqual(pr.roundIds, ['above']);
+  assert.deepEqual(pr.rounds, { runs: 1, inputTokens: 1000 });
+});
+
+test('per landed PR: a clean part of a range in parts is no clean pass, and a pass counts only for a run started after it ended', () => {
+  const { id } = layoutRepo();
+  const at = (minute) => `2026-11-01T08:${minute}:00Z`;
+  const runs = [
+    layoutRun('part-1', 12, 10, { startedAt: at(10), findings: { total: 0 }, part: { index: 1, of: 2, files: 1, changedLines: 5 } }),
+    layoutRun('part-2', 12, 10, { startedAt: at(11), findings: { total: 1 }, part: { index: 2, of: 2, files: 1, changedLines: 5 } }),
+    layoutRun('after-parts', 14, 12, { startedAt: at(20), findings: { total: 0 } }),
+    // A whole range Codex passed, with no record, that ran from 08:22 to 08:32.
+    layoutRun('long-pass', 12, 10, { startedAt: at(22), durationMs: 10 * 60_000, findings: { total: 0 } }),
+    layoutRun('during-pass', 14, 12, { startedAt: at(25), findings: { total: 0 } }),
+  ];
+  const records = [
+    { base: id[10], head: id[12], reviewedAt: at(12), outcome: 'reviewed', runs: ['part-1', 'part-2'] },
+    { base: id[12], head: id[14], reviewedAt: at(21), outcome: 'reviewed', run: 'after-parts' },
+    { base: id[12], head: id[14], reviewedAt: at(26), outcome: 'reviewed', run: 'during-pass' },
+  ];
+  const coverage = () => ({ codeCommits: [], covers: [] });
+  assert.deepEqual(prOf(layoutReport(runs, { records, coverage }), 7).roundIds, []);
 });
 
 test('per landed PR: the fixture of PRs 864-868 gives the baseline, 3,173,294 over all their days and 3,053,278 on 2026-11-14', () => {
-  const runs = BASELINE_RUNS.map(([id, startedAt, from, head, outcome, inputTokens, changedLines, findings]) => ({
-    id, startedAt, from, base: from, head, outcome, usage: { inputTokens }, part: { index: 1, of: 1, files: 1, changedLines }, findings: { total: findings },
+  const runs = BASELINE_RUNS.map(([id, startedAt, durationMs, from, head, outcome, inputTokens, total, findings, recheck, , , of]) => ({
+    id, startedAt, durationMs, from, base: from, head, outcome, usage: inputTokens === null ? {} : { inputTokens }, coverage: { seen: total, total },
+    findings: { total: findings }, ...(recheck ? { recheck: { of: from } } : {}), ...(of === null ? {} : { part: { of } }),
   }));
   const records = BASELINE_RECORDS.map(([base, head, reviewedAt, names]) => ({ base, head, reviewedAt, outcome: 'reviewed', runs: names }));
-  // What `reviewCoverage` gave for each range on the real records: how many of its code commits a record covered.
-  const covered = new Map(BASELINE_RUNS.map((run) => [`${run[2]}..${run[3]}`, run[8]]));
+  // What `reviewCoverage` gave for each range on the real records: how many of its code commits a record covered, of how many.
+  const counts = new Map(BASELINE_RUNS.map((run) => [`${run[3]}..${run[4]}`, [run[10], run[11]]]));
   const coverage = ({ from, tip }) => {
-    const ids = Array.from({ length: 9 }, (_, n) => `c${n}`);
-    return { codeCommits: ids.map((one) => ({ id: one })), covers: [{ rec: { outcome: 'reviewed' }, covered: new Set(ids.slice(0, covered.get(`${from}..${tip}`))) }] };
+    const [covered, code] = counts.get(`${from}..${tip}`);
+    const ids = Array.from({ length: code }, (_, n) => `c${n}`);
+    return { codeCommits: ids.map((one) => ({ id: one })), covers: [{ rec: { outcome: 'reviewed' }, covered: new Set(ids.slice(0, covered)) }] };
   };
   const git = (args, input) => {
     if (args[0] === 'cat-file') return input.split('\n').filter(Boolean).map((one) => `${one} commit 1`).join('\n');
@@ -190,35 +274,42 @@ test('per landed PR: the fixture of PRs 864-868 gives the baseline, 3,173,294 ov
   const report = perLandedPr({ runs, records, lands: BASELINE_LANDS, git, defaultRef: null, coverage });
   // L3: PR 864 counts its run of 2026-11-13 (230,174; 110,158 without it).
   assert.deepEqual(report.prs.map((pr) => [pr.pr, pr.runs, pr.inputTokens]), [[864, 3, 230_174], [865, 2, 172_425], [866, 12, 1_280_533], [867, 11, 1_025_087], [868, 7, 465_075]]);
-  assert.deepEqual(report.baseline, { prs: [864, 865, 866, 867, 868], runs: 35, inputTokens: 3_173_294, day: '2026-11-14', dayInputTokens: 3_053_278 });
+  assert.deepEqual(report.baseline, { prs: [864, 865, 866, 867, 868], runs: 35, inputTokens: 3_173_294, uncounted: 1, day: '2026-11-14', dayInputTokens: 3_053_278 });
   assert.deepEqual(prOf(report, 866).failed, { runs: 1, inputTokens: 220_599 });
   assert.deepEqual(prOf(report, 867).failed, { runs: 1, inputTokens: 65_993 });
-  assert.deepEqual(prOf(report, 868).failed, { runs: 1, inputTokens: 0 });
+  assert.deepEqual(prOf(report, 868).failed, { runs: 1, inputTokens: 0, uncounted: 1 });
   assert.deepEqual(prOf(report, 867).unnamed, { runs: 1, inputTokens: 79_096 });
-  // 6ba747e..4977072's passing parts (306,981, the depth pass's item 4) and cc54678..13fba26's, which read main's code.
-  assert.deepEqual(prOf(report, 866).rereads, { runs: 3, inputTokens: 528_631 });
-  assert.deepEqual(prOf(report, 867).rereads, { runs: 3, inputTokens: 383_029 });
-  // L5's fresh reviews of small follow-ups after a clean pass are rounds.
-  const rounds = new Set(report.prs.flatMap((pr) => pr.roundIds));
-  const l5 = ['2026-11-14T09:00', '2026-11-14T09:50', '2026-11-14T10:01', '2026-11-14T08:17', '2026-11-14T09:46', '2026-11-14T09:55', '2026-11-14T10:05', '2026-11-14T10:52'];
-  assert.deepEqual(l5.filter((start) => !runs.some((run) => run.startedAt.startsWith(start) && rounds.has(run.id))), []);
+  // Each re-read also read one code commit no record covered (1de6ed65; 1d982b38; 2e3b9f94), so none is of covered code alone.
+  assert.deepEqual(report.prs.map((pr) => pr.rereadOnly), report.prs.map(() => ({ runs: 0, inputTokens: 0 })));
+  assert.deepEqual(prOf(report, 866).rereadBeside, { runs: 3, inputTokens: 528_631, covered: 21, code: 24 });
+  assert.deepEqual(prOf(report, 867).rereadBeside, { runs: 3, inputTokens: 383_029, covered: 11, code: 14 });
+  // L5's fresh reviews of small follow-ups after a clean pass, PR by PR: 864 and 867 as L5 lists them; 866 has 09:28
+  // and 868 three that L5 does not list, each a fresh review whose range starts above a clean recheck of its PR.
+  const startsOf = (pr) => prOf(report, pr).roundIds.map((one) => runs.find((run) => run.id === one).startedAt.slice(11, 16));
+  assert.deepEqual([864, 865, 866, 867, 868].map(startsOf), [['08:17'], [], ['09:00', '09:28', '09:50', '10:01'], ['09:46', '09:55', '10:05', '10:52'], ['11:42', '11:49', '12:10']]);
 });
 
-test('per landed PR: the report prints a line for each PR, the baseline with its day apart, the runs of no landed PR, and the double reviews', () => {
-  const pr = { pr: 867, runs: 11, inputTokens: 1_025_087, days: ['2026-11-14'], failed: { runs: 1, inputTokens: 65_993 }, unnamed: { runs: 1, inputTokens: 79_096 }, rereads: { runs: 3, inputTokens: 383_029 }, rounds: { runs: 4, inputTokens: 268_342 }, reviewedLines: 1_000, tokensPerLine: 1_025, coverageUnknown: 0 };
+test('per landed PR: the report prints a line for each PR, its rounds apart, the baseline with its day apart, the runs of no landed PR, and the double reviews', () => {
+  const pr = {
+    pr: 867, runs: 11, inputTokens: 1_025_087, cachedInputTokens: 600_000, days: ['2026-11-14'], failed: { runs: 1, inputTokens: 0, uncounted: 1 }, unnamed: { runs: 1, inputTokens: 79_096 },
+    rereadOnly: { runs: 0, inputTokens: 0 }, rereadBeside: { runs: 3, inputTokens: 383_029, covered: 11, code: 14 }, rounds: { runs: 4, inputTokens: 268_342 },
+    reviewedLines: 1_000, boughtInputTokens: 700_000, tokensPerLine: 700, coverageUnknown: 0,
+  };
   const none = { runs: 0, inputTokens: 0, ids: [], list: [] };
   const report = {
     prs: [pr],
-    unattributed: { pending: { runs: 1, inputTokens: 10, ids: ['p'], list: [{ id: 'p', startedAt: '2026-11-15T00:00:00Z', head: 'abcdef1234567', inputTokens: 10 }] }, byNoLand: none, orphaned: none },
+    unattributed: { pending: { runs: 2, inputTokens: 10, uncounted: 1, ids: ['p', 'q'], list: [{ id: 'p', startedAt: '2026-11-15T00:00:00Z', head: 'abcdef1234567', inputTokens: 10 }, { id: 'q', startedAt: '2026-11-15T01:00:00Z', head: 'abcdef1234567', inputTokens: null }] }, byNoLand: none, orphaned: none },
     baseline: { prs: [864, 865, 866, 867, 868], runs: 35, inputTokens: 3_173_294, day: '2026-11-14', dayInputTokens: 3_053_278 },
     doubleReviews: { reads: 2, codexReads: 1, codexInputTokens: 720_239 },
   };
   const lines = perPrLines(report);
   const has = (line) => assert.ok(lines.includes(line), `${line}\nnot in\n${lines.join('\n')}`);
-  has('PR 867: 11 runs, 1,025,087 input tokens (2026-11-14); bought no new reading: failed 1 run 65,993, no record 1 run 79,096, re-read 3 runs 383,029; rounds after a clean pass 4 runs 268,342; 1,000 lines reviewed, 1,025 tokens a line');
+  has('PR 867: 11 runs, 1,025,087 input tokens, 600,000 of them cached (2026-11-14); bought no new reading: failed 1 run, tokens unknown, no record 1 run 79,096, re-read of covered code alone 0 runs 0; re-read covered code beside new 3 runs 383,029 (11 of 14 code commits already covered); 1,000 lines reviewed by the runs that bought new reading, 700,000 tokens of theirs, 700 a line');
+  has('  rounds after a clean pass (they overlap the classes above; do not add them): 4 runs 268,342');
   has('Baseline, PRs 864-868: 35 runs, 3,173,294 input tokens over all their days; of them on 2026-11-14 alone: 3,053,278');
-  has('Pending, on a branch not landed: 1 run, 10 input tokens');
+  has('Pending, on a branch not landed: 2 runs, 10 input tokens and 1 run with no count');
   has('  2026-11-15T00:00:00Z abcdef123456 10');
+  has('  2026-11-15T01:00:00Z abcdef123456 unknown');
   has('Double reviews: 2 reads, 1 with a Codex reader, 720,239 Codex input tokens');
   assert.ok(lines.some((line) => /--again/.test(line) && /not mark/.test(line)), lines.join('\n'));
 });
@@ -319,43 +410,43 @@ const BASELINE_LANDS = [
   { startedAt: '2026-11-14T10:58:07.668Z', main: '96ce3c90920cb5c0ee7de2e18607efd80081bc9b', candidate: 'b07c7b5195a7d966cf99529e36b0fc2a10b5f049', landed: [867], exit: 0 },
   { startedAt: '2026-11-14T18:24:25.035Z', main: 'b07c7b5195a7d966cf99529e36b0fc2a10b5f049', candidate: '67455a84b51170e92670d07520b89e0d9fac0509', landed: [868], exit: 0 },
 ];
-// [id, startedAt, from, head, outcome, inputTokens, changedLines, findings, re-read code commits]
+// [id, startedAt, durationMs, from, head, outcome, inputTokens, coverage.total, findings, a recheck, covered code commits, of code commits, part.of]
 const BASELINE_RUNS = [
-  ['95e28a5c-f9f1-4a74-8c31-1a678103f0a3', '2026-11-13T22:54:40.704Z', '0375349227735ca9bb8b7d25c2519dc32bfa2d76', '8bbbdbf334e063310c6d457113fb1e97a6b049f8', 'reviewed', 120016, 175, 2, 0],
-  ['4b7e7b16-efcd-489a-b65f-ebd78949b2b1', '2026-11-14T08:03:05.353Z', '8bbbdbf334e063310c6d457113fb1e97a6b049f8', '0444b5ded113aed21143b4bb571a977325ce57ec', 'reviewed', 40660, 37, 0, 0],
-  ['ea26b053-6204-41f6-b1a9-b9385bc1e366', '2026-11-14T08:15:01.340Z', 'cc5467815fb50ae21f5536e1d96ac20dd9dff5a8', 'af986f036b14c2052c1bd21c3ab5d0c04342a524', 'failed', 220599, 277, 1, 7],
-  ['8d8eb8e9-3236-46c8-aba2-ee105c4e3617', '2026-11-14T08:17:32.905Z', '0444b5ded113aed21143b4bb571a977325ce57ec', 'c4990e930b53cb18e8669e527bb1bdfafe72f431', 'reviewed', 69498, 60, 0, 0],
-  ['def9752e-ebb0-45d3-97aa-5decf15ec37a', '2026-11-14T08:19:22.742Z', 'cc5467815fb50ae21f5536e1d96ac20dd9dff5a8', '13fba2604b08241ab0ee664f8bb60c05e6d1b0ba', 'reviewed', 202957, 277, 2, 7],
-  ['57afa766-c385-41c1-9727-4e8a87450423', '2026-11-14T08:20:22.726Z', 'cc5467815fb50ae21f5536e1d96ac20dd9dff5a8', '13fba2604b08241ab0ee664f8bb60c05e6d1b0ba', 'reviewed', 136175, 396, 0, 7],
-  ['334f58db-0c54-4bee-9d60-a16c5fef2f65', '2026-11-14T08:21:06.004Z', 'cc5467815fb50ae21f5536e1d96ac20dd9dff5a8', '13fba2604b08241ab0ee664f8bb60c05e6d1b0ba', 'reviewed', 189499, 295, 0, 7],
-  ['0a71377b-8ffc-4f9c-81f3-d6fd70b8c741', '2026-11-14T08:40:20.502Z', '13fba2604b08241ab0ee664f8bb60c05e6d1b0ba', '12942c95e217b53cb62b943e7cfc90dc3d680153', 'reviewed', 42196, 30, 1, 0],
-  ['9512a2e6-6083-454e-af40-da8218ba843f', '2026-11-14T08:40:31.211Z', 'c4990e930b53cb18e8669e527bb1bdfafe72f431', '16b63f65e09b83d10e617c5fa0a367262e7cfc2b', 'reviewed', 133896, 64, 1, 0],
-  ['5891e75f-0005-446b-aa06-e7f981f0951e', '2026-11-14T08:47:02.735Z', '12942c95e217b53cb62b943e7cfc90dc3d680153', 'b91cde56784740e884d2c041e701628cf1b0dc27', 'reviewed', 34054, 13, 0, 0],
-  ['39c32b27-6f37-4af9-91ef-a80676f19063', '2026-11-14T08:49:27.016Z', '16b63f65e09b83d10e617c5fa0a367262e7cfc2b', '9cba75011026a74076e273e81d2fb4a3762a1484', 'reviewed', 38529, 49, 0, 0],
-  ['1f2a7ad6-e191-48c6-a550-acf4971da024', '2026-11-14T09:00:40.721Z', 'b91cde56784740e884d2c041e701628cf1b0dc27', 'df02895434114e42529eb0b69a41e794dfd6c6fd', 'reviewed', 83867, 3, 1, 0],
-  ['02866c50-0cd3-4ed0-b7d3-17690b06cf1a', '2026-11-14T09:06:43.821Z', 'df02895434114e42529eb0b69a41e794dfd6c6fd', 'cec00bb7f8dcbc9247269be1f68f18655d46ce6e', 'reviewed', 39922, 5, 0, 0],
-  ['9e40c7c2-06e1-4668-9889-65bc569b2b63', '2026-11-14T09:13:44.367Z', '9cba75011026a74076e273e81d2fb4a3762a1484', 'f71380ea46103fd3680ffb7f2f0ceebc50ec9ec1', 'reviewed', 170735, 265, 3, 0],
-  ['596fcae6-c4d5-4bae-b1cf-65664a3efdbb', '2026-11-14T09:28:54.109Z', '75a0fbb636d1568efbb8a871d9e2d24fcf5a55f8', 'f281d01312e014ddbff4c19cc3b7fdca038ea6c2', 'reviewed', 170246, 148, 3, 0],
-  ['4ef92ac5-9b04-49ea-878d-c641fbaeed07', '2026-11-14T09:32:01.307Z', 'f71380ea46103fd3680ffb7f2f0ceebc50ec9ec1', '1d982b38907a5274a261efc9012b78afefd042bc', 'reviewed', 79096, 227, 0, 0],
-  ['581dc6fb-ae23-4b23-8074-e4af2258ca57', '2026-11-14T09:43:43.573Z', 'f281d01312e014ddbff4c19cc3b7fdca038ea6c2', '4c7f22be81b623937901b1c95357b378a254f313', 'reviewed', 50139, 326, 0, 0],
-  ['a28af8f2-d95c-4f09-9303-303c0f07e0f2', '2026-11-14T09:46:09.851Z', 'b1e2fd5ebd087ad6534d01d5f3f79d96f9e785d9', '4ee5ec6193affe61d84241b0cbada8ac58270a75', 'reviewed', 72086, 57, 0, 0],
-  ['df2d3ccd-ef12-49b3-8ca0-d4a13a5ee1f9', '2026-11-14T09:50:35.422Z', '4c7f22be81b623937901b1c95357b378a254f313', 'c88de83543d3d867037783e58c9ce72d2587eeb2', 'reviewed', 68964, 16, 0, 0],
-  ['8731a61a-f532-432a-99f1-12727e48ab70', '2026-11-14T09:55:40.308Z', 'a8378412317640a056fd26e867f391cd0b774c05', '6c5022cca3aad89d2861734f64595436d7ce209e', 'reviewed', 62826, 8, 0, 0],
-  ['5399ac10-019e-40db-bdfb-a29c05ae98bd', '2026-11-14T10:01:14.800Z', '39af358863dbdcbc98a17faa55f9705450979efa', 'e9db94c0e177e734e5a5194be52c4436abebd97e', 'reviewed', 41915, 8, 0, 0],
-  ['218f3aed-865b-4ce2-9e1a-9f54a77a66cb', '2026-11-14T10:05:24.118Z', '6c5022cca3aad89d2861734f64595436d7ce209e', '9dfd7afc77749e618cbe9a15a1a42082f4efcfef', 'reviewed', 57583, 2, 0, 0],
-  ['0c39143a-035b-45bf-9679-42a8cca31229', '2026-11-14T10:12:46.656Z', '6ba747e38fcc3d7045fb3afc746081d83e5c2a82', '4977072eb1f993507963e804cb4cf386321ab589', 'reviewed', 240476, 260, 2, 4],
-  ['9da6679e-6c4d-4625-b3ee-921a491e3279', '2026-11-14T10:14:53.582Z', '6ba747e38fcc3d7045fb3afc746081d83e5c2a82', '4977072eb1f993507963e804cb4cf386321ab589', 'failed', 65993, 175, 0, 4],
-  ['563cfd0a-f7c4-4212-9702-185e1c78ee62', '2026-11-14T10:16:24.345Z', '6ba747e38fcc3d7045fb3afc746081d83e5c2a82', '4977072eb1f993507963e804cb4cf386321ab589', 'reviewed', 66505, 175, 0, 4],
-  ['5bb8aa3e-a416-42ce-9d42-cae9f609b91a', '2026-11-14T10:26:43.660Z', '4977072eb1f993507963e804cb4cf386321ab589', '62a71b564824337714d0f53dbf7e8659a8715f2f', 'reviewed', 94853, 9, 1, 0],
-  ['f3250c48-be28-4a4e-9598-d0d655d3d6ba', '2026-11-14T10:39:54.407Z', '62a71b564824337714d0f53dbf7e8659a8715f2f', '6e243065000d9a3d64231d8aa588c53249af1466', 'reviewed', 38886, 37, 1, 0],
-  ['d9f2818d-8910-468e-896e-a2476587c48c', '2026-11-14T10:52:22.685Z', '9dfd7afc77749e618cbe9a15a1a42082f4efcfef', '2e3b9f941cc6c8884472f0426762b4c55dded4fd', 'reviewed', 76048, 92, 0, 3],
-  ['6c784ce4-917c-49d0-ae36-1592db05ef79', '2026-11-14T11:14:10.812Z', '96ce3c90920cb5c0ee7de2e18607efd80081bc9b', '7c4f91fde6e84d889180848e924e2d01de22cc7b', 'reviewed', 164895, 302, 1, 0],
-  ['394218bc-2a76-43a1-a835-215890306d98', '2026-11-14T11:34:03.677Z', '7c4f91fde6e84d889180848e924e2d01de22cc7b', '36bde347499e57ee03efdafa2de6400078075532', 'reviewed', 50784, 165, 0, 0],
-  ['775a3241-c257-4d63-a792-0cbf65e722fd', '2026-11-14T11:42:04.454Z', '36bde347499e57ee03efdafa2de6400078075532', 'b46b65acbad766a22ea8cebe1061ade15d7828db', 'reviewed', 70303, 40, 0, 0],
-  ['b15ff0ef-b646-4195-89e2-f09aff0f9187', '2026-11-14T11:49:48.040Z', 'b46b65acbad766a22ea8cebe1061ade15d7828db', '86a1becba3db2f25a584e43eb9e09f53af625f87', 'reviewed', 72285, 21, 0, 0],
-  ['1a6834ba-8e8f-4e2a-8a0e-4b4dd9b06512', '2026-11-14T12:10:22.456Z', '5c6bca961b85552574117f49c2d4dc798a53e49c', 'a253097f748ac73f1657752086947069fd593a54', 'reviewed', 70110, 18, 1, 0],
-  ['ba57f254-b216-4807-ac21-a69f1b9f331e', '2026-11-14T12:16:11.982Z', 'a253097f748ac73f1657752086947069fd593a54', '18d6bda93d165a3b9372698824d3f40c4c551c1b', 'failed', null, 30, null, 0],
-  ['c5ac1739-4406-46a2-88fc-71bae4c798b7', '2026-11-14T12:55:46.773Z', 'a253097f748ac73f1657752086947069fd593a54', 'a15517a8c4bf1194d5834194d6716e941e69b683', 'reviewed', 36698, 32, 0, 0],
+  ['95e28a5c-f9f1-4a74-8c31-1a678103f0a3', '2026-11-13T22:54:40.704Z', 51867, '0375349227735ca9bb8b7d25c2519dc32bfa2d76', '8bbbdbf334e063310c6d457113fb1e97a6b049f8', 'reviewed', 120016, 158, 2, 0, 0, 0, 1],
+  ['4b7e7b16-efcd-489a-b65f-ebd78949b2b1', '2026-11-14T08:03:05.353Z', 25762, '8bbbdbf334e063310c6d457113fb1e97a6b049f8', '0444b5ded113aed21143b4bb571a977325ce57ec', 'reviewed', 40660, 37, 0, 1, 0, 0, 1],
+  ['ea26b053-6204-41f6-b1a9-b9385bc1e366', '2026-11-14T08:15:01.340Z', 98983, 'cc5467815fb50ae21f5536e1d96ac20dd9dff5a8', 'af986f036b14c2052c1bd21c3ab5d0c04342a524', 'failed', 220599, 221, 1, 0, 7, 8, 3],
+  ['8d8eb8e9-3236-46c8-aba2-ee105c4e3617', '2026-11-14T08:17:32.905Z', 46508, '0444b5ded113aed21143b4bb571a977325ce57ec', 'c4990e930b53cb18e8669e527bb1bdfafe72f431', 'reviewed', 69498, 59, 0, 0, 0, 0, 1],
+  ['def9752e-ebb0-45d3-97aa-5decf15ec37a', '2026-11-14T08:19:22.742Z', 55687, 'cc5467815fb50ae21f5536e1d96ac20dd9dff5a8', '13fba2604b08241ab0ee664f8bb60c05e6d1b0ba', 'reviewed', 202957, 221, 2, 0, 7, 8, 3],
+  ['57afa766-c385-41c1-9727-4e8a87450423', '2026-11-14T08:20:22.726Z', 41203, 'cc5467815fb50ae21f5536e1d96ac20dd9dff5a8', '13fba2604b08241ab0ee664f8bb60c05e6d1b0ba', 'reviewed', 136175, 285, 0, 0, 7, 8, 3],
+  ['334f58db-0c54-4bee-9d60-a16c5fef2f65', '2026-11-14T08:21:06.004Z', 36532, 'cc5467815fb50ae21f5536e1d96ac20dd9dff5a8', '13fba2604b08241ab0ee664f8bb60c05e6d1b0ba', 'reviewed', 189499, 266, 0, 0, 7, 8, 3],
+  ['0a71377b-8ffc-4f9c-81f3-d6fd70b8c741', '2026-11-14T08:40:20.502Z', 28633, '13fba2604b08241ab0ee664f8bb60c05e6d1b0ba', '12942c95e217b53cb62b943e7cfc90dc3d680153', 'reviewed', 42196, 29, 1, 1, 0, 0, 1],
+  ['9512a2e6-6083-454e-af40-da8218ba843f', '2026-11-14T08:40:31.211Z', 43115, 'c4990e930b53cb18e8669e527bb1bdfafe72f431', '16b63f65e09b83d10e617c5fa0a367262e7cfc2b', 'reviewed', 133896, 61, 1, 0, 0, 0, 1],
+  ['5891e75f-0005-446b-aa06-e7f981f0951e', '2026-11-14T08:47:02.735Z', 18748, '12942c95e217b53cb62b943e7cfc90dc3d680153', 'b91cde56784740e884d2c041e701628cf1b0dc27', 'reviewed', 34054, 13, 0, 1, 0, 0, 1],
+  ['39c32b27-6f37-4af9-91ef-a80676f19063', '2026-11-14T08:49:27.016Z', 19931, '16b63f65e09b83d10e617c5fa0a367262e7cfc2b', '9cba75011026a74076e273e81d2fb4a3762a1484', 'reviewed', 38529, 47, 0, 1, 0, 0, 1],
+  ['1f2a7ad6-e191-48c6-a550-acf4971da024', '2026-11-14T09:00:40.721Z', 42621, 'b91cde56784740e884d2c041e701628cf1b0dc27', 'df02895434114e42529eb0b69a41e794dfd6c6fd', 'reviewed', 83867, 3, 1, 0, 0, 0, 1],
+  ['02866c50-0cd3-4ed0-b7d3-17690b06cf1a', '2026-11-14T09:06:43.821Z', 16952, 'df02895434114e42529eb0b69a41e794dfd6c6fd', 'cec00bb7f8dcbc9247269be1f68f18655d46ce6e', 'reviewed', 39922, 5, 0, 1, 0, 0, 1],
+  ['9e40c7c2-06e1-4668-9889-65bc569b2b63', '2026-11-14T09:13:44.367Z', 66818, '9cba75011026a74076e273e81d2fb4a3762a1484', 'f71380ea46103fd3680ffb7f2f0ceebc50ec9ec1', 'reviewed', 170735, 230, 3, 0, 0, 0, 1],
+  ['596fcae6-c4d5-4bae-b1cf-65664a3efdbb', '2026-11-14T09:28:54.109Z', 69666, '75a0fbb636d1568efbb8a871d9e2d24fcf5a55f8', 'f281d01312e014ddbff4c19cc3b7fdca038ea6c2', 'reviewed', 170246, 128, 3, 0, 0, 0, 1],
+  ['4ef92ac5-9b04-49ea-878d-c641fbaeed07', '2026-11-14T09:32:01.307Z', 26886, 'f71380ea46103fd3680ffb7f2f0ceebc50ec9ec1', '1d982b38907a5274a261efc9012b78afefd042bc', 'reviewed', 79096, 215, 0, 1, 0, 0, 1],
+  ['581dc6fb-ae23-4b23-8074-e4af2258ca57', '2026-11-14T09:43:43.573Z', 20080, 'f281d01312e014ddbff4c19cc3b7fdca038ea6c2', '4c7f22be81b623937901b1c95357b378a254f313', 'reviewed', 50139, 293, 0, 1, 0, 0, 1],
+  ['a28af8f2-d95c-4f09-9303-303c0f07e0f2', '2026-11-14T09:46:09.851Z', 32064, 'b1e2fd5ebd087ad6534d01d5f3f79d96f9e785d9', '4ee5ec6193affe61d84241b0cbada8ac58270a75', 'reviewed', 72086, 55, 0, 0, 0, 0, 1],
+  ['df2d3ccd-ef12-49b3-8ca0-d4a13a5ee1f9', '2026-11-14T09:50:35.422Z', 29115, '4c7f22be81b623937901b1c95357b378a254f313', 'c88de83543d3d867037783e58c9ce72d2587eeb2', 'reviewed', 68964, 16, 0, 0, 0, 0, 1],
+  ['8731a61a-f532-432a-99f1-12727e48ab70', '2026-11-14T09:55:40.308Z', 25970, 'a8378412317640a056fd26e867f391cd0b774c05', '6c5022cca3aad89d2861734f64595436d7ce209e', 'reviewed', 62826, 8, 0, 0, 0, 0, null],
+  ['5399ac10-019e-40db-bdfb-a29c05ae98bd', '2026-11-14T10:01:14.800Z', 21070, '39af358863dbdcbc98a17faa55f9705450979efa', 'e9db94c0e177e734e5a5194be52c4436abebd97e', 'reviewed', 41915, 7, 0, 0, 0, 0, 1],
+  ['218f3aed-865b-4ce2-9e1a-9f54a77a66cb', '2026-11-14T10:05:24.118Z', 20879, '6c5022cca3aad89d2861734f64595436d7ce209e', '9dfd7afc77749e618cbe9a15a1a42082f4efcfef', 'reviewed', 57583, 2, 0, 0, 0, 0, null],
+  ['0c39143a-035b-45bf-9679-42a8cca31229', '2026-11-14T10:12:46.656Z', 124242, '6ba747e38fcc3d7045fb3afc746081d83e5c2a82', '4977072eb1f993507963e804cb4cf386321ab589', 'reviewed', 240476, 239, 2, 0, 4, 5, 2],
+  ['9da6679e-6c4d-4625-b3ee-921a491e3279', '2026-11-14T10:14:53.582Z', 20026, '6ba747e38fcc3d7045fb3afc746081d83e5c2a82', '4977072eb1f993507963e804cb4cf386321ab589', 'failed', 65993, 129, 0, 0, 4, 5, 2],
+  ['563cfd0a-f7c4-4212-9702-185e1c78ee62', '2026-11-14T10:16:24.345Z', 21659, '6ba747e38fcc3d7045fb3afc746081d83e5c2a82', '4977072eb1f993507963e804cb4cf386321ab589', 'reviewed', 66505, 129, 0, 0, 4, 5, 2],
+  ['5bb8aa3e-a416-42ce-9d42-cae9f609b91a', '2026-11-14T10:26:43.660Z', 38069, '4977072eb1f993507963e804cb4cf386321ab589', '62a71b564824337714d0f53dbf7e8659a8715f2f', 'reviewed', 94853, 9, 1, 1, 0, 0, 1],
+  ['f3250c48-be28-4a4e-9598-d0d655d3d6ba', '2026-11-14T10:39:54.407Z', 28677, '62a71b564824337714d0f53dbf7e8659a8715f2f', '6e243065000d9a3d64231d8aa588c53249af1466', 'reviewed', 38886, 34, 1, 1, 0, 0, 1],
+  ['d9f2818d-8910-468e-896e-a2476587c48c', '2026-11-14T10:52:22.685Z', 32361, '9dfd7afc77749e618cbe9a15a1a42082f4efcfef', '2e3b9f941cc6c8884472f0426762b4c55dded4fd', 'reviewed', 76048, 84, 0, 0, 3, 4, 1],
+  ['6c784ce4-917c-49d0-ae36-1592db05ef79', '2026-11-14T11:14:10.812Z', 70401, '96ce3c90920cb5c0ee7de2e18607efd80081bc9b', '7c4f91fde6e84d889180848e924e2d01de22cc7b', 'reviewed', 164895, 280, 1, 0, 0, 0, 1],
+  ['394218bc-2a76-43a1-a835-215890306d98', '2026-11-14T11:34:03.677Z', 19685, '7c4f91fde6e84d889180848e924e2d01de22cc7b', '36bde347499e57ee03efdafa2de6400078075532', 'reviewed', 50784, 158, 0, 1, 0, 0, 1],
+  ['775a3241-c257-4d63-a792-0cbf65e722fd', '2026-11-14T11:42:04.454Z', 38188, '36bde347499e57ee03efdafa2de6400078075532', 'b46b65acbad766a22ea8cebe1061ade15d7828db', 'reviewed', 70303, 40, 0, 0, 0, 0, 1],
+  ['b15ff0ef-b646-4195-89e2-f09aff0f9187', '2026-11-14T11:49:48.040Z', 32192, 'b46b65acbad766a22ea8cebe1061ade15d7828db', '86a1becba3db2f25a584e43eb9e09f53af625f87', 'reviewed', 72285, 21, 0, 0, 0, 0, null],
+  ['1a6834ba-8e8f-4e2a-8a0e-4b4dd9b06512', '2026-11-14T12:10:22.456Z', 33427, '5c6bca961b85552574117f49c2d4dc798a53e49c', 'a253097f748ac73f1657752086947069fd593a54', 'reviewed', 70110, 17, 1, 0, 0, 0, 1],
+  ['ba57f254-b216-4807-ac21-a69f1b9f331e', '2026-11-14T12:16:11.982Z', 6823, 'a253097f748ac73f1657752086947069fd593a54', '18d6bda93d165a3b9372698824d3f40c4c551c1b', 'failed', null, 30, null, 0, 0, 0, null],
+  ['c5ac1739-4406-46a2-88fc-71bae4c798b7', '2026-11-14T12:55:46.773Z', 19596, 'a253097f748ac73f1657752086947069fd593a54', 'a15517a8c4bf1194d5834194d6716e941e69b683', 'reviewed', 36698, 30, 0, 1, 0, 0, 1],
 ];
 // [base, head, reviewedAt, run ids]
 const BASELINE_RECORDS = [
