@@ -7688,6 +7688,42 @@ test('an injected effort is what the session is held to: a review that ran at it
   assert.equal(wrote(other.root), false);
 });
 
+// A model no rule names: what a configuration measured on an earlier model passes once the rule has moved on.
+const OTHER_MODEL = 'gpt-measured-earlier';
+const atModel = (argv, model) => argv.map((token, at) => (argv[at - 1] === '-m' ? model : token));
+
+test('codexArgs: the model is an option as the effort is, and without it the argv names the rule\'s', () => {
+  const base = 'a'.repeat(40);
+  assert.deepEqual(codexArgs(base, 'linux', 'codex', { model: REVIEW_MODEL }), leanArgv(base));
+  assert.deepEqual(codexArgs(base, 'linux', 'codex', { model: OTHER_MODEL }), atModel(leanArgv(base), OTHER_MODEL));
+  assert.equal(atModel(leanArgv(base), OTHER_MODEL).includes(OTHER_MODEL), true, 'the fixture does change the token');
+  assert.deepEqual(codexArgs(base, 'linux', 'own', { model: OTHER_MODEL, effort: OTHER_EFFORT }), atEffort(atModel(ownArgv(), OTHER_MODEL), OTHER_EFFORT));
+  // A model is one token of a command line: no space, no quote, nothing a shell or Codex would read as more.
+  for (const model of ['gpt 6', '', '-x', 'a"b', 7, null]) assert.throws(() => codexArgs(base, 'linux', 'codex', { model }), /model/, JSON.stringify(model));
+});
+
+test('an injected model is the model the command passes and the one the session is held to', async () => {
+  // A session that ran on the model it was asked for stands: the run line and the line that announces the review name it.
+  const mine = fakeHome();
+  const kept = makeRepo();
+  const range = `${kept.base.slice(0, 7)}..${kept.head.slice(0, 7)}`;
+  const stands = await leanReviewThatRan(kept.root, kept.base, turnContext(OTHER_MODEL, REVIEW_EFFORT), mine, { model: OTHER_MODEL });
+  assert.deepEqual([stands.code, stands.err], [0, '']);
+  assert.deepEqual([onlyRun(kept.root).outcome, onlyRun(kept.root).model, onlyRun(kept.root).effort, ...sessionRan(onlyRun(kept.root))], ['reviewed', OTHER_MODEL, REVIEW_EFFORT, OTHER_MODEL, REVIEW_EFFORT]);
+  assert.equal(afterPlan(stands.out)[0], `Codex is reviewing ${range} with the lean session (${OTHER_MODEL}, ${REVIEW_EFFORT}); this can take several minutes.`);
+  // And the argv it launched is the one `codexArgs` gives for that model.
+  const { root, base } = makeRepo();
+  const fake = fakeCodex(reviewed(root, base));
+  await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, model: OTHER_MODEL });
+  assert.deepEqual(fake.calls[0].args, atModel(leanArgv(base), OTHER_MODEL));
+  // Asked for the earlier model and ran on the rule's: not what was asked, so it falls.
+  const other = makeRepo();
+  const falls = await leanReviewThatRan(other.root, other.base, turnContext(REVIEW_MODEL, REVIEW_EFFORT), mine, { model: OTHER_MODEL });
+  assert.equal(falls.code, 1);
+  assert.equal(falls.err.replace(RERUN_LAST, ''), `Codex's turn completed, but its session ran on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, and the command passed ${OTHER_MODEL} at ${REVIEW_EFFORT} effort${RAN_ON_ANOTHER}`);
+  assert.equal(wrote(other.root), false);
+});
+
 test('injected extra configuration is added to the argv, before what is reviewed', async () => {
   const { root, base } = makeRepo();
   const lean = fakeCodex(reviewed(root, base));
