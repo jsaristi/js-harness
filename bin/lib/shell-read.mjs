@@ -31,10 +31,14 @@ export function readShell(source, { body = false } = {}) {
         const next = s.indexOf('\n', i + 1);
         const line = s.slice(i + 1, next === -1 ? s.length : next);
         i = next === -1 ? s.length : next;
-        if ((heredoc.tabs ? line.replace(/^\t+/, '') : line) === heredoc.end) {
+        const bare = heredoc.tabs ? line.replace(/^\t+/, '') : line;
+        if (bare === heredoc.end) {
           found = true;
           break;
         }
+        // Inside a substitution bash 5.3 also ends the body at a line that starts with the delimiter and has a `)`
+        // after it (`EOF)`, `EOF x)`): where that is cannot be told here, so the reading is broken.
+        if (bare.startsWith(heredoc.end) && bare.indexOf(')', heredoc.end.length) !== -1) broken = true;
         lines.push(heredoc.tabs ? line.replace(/^\t+/, '') : line);
       }
       if (!found) broken = true;
@@ -291,6 +295,8 @@ export function readShell(source, { body = false } = {}) {
         // bash's blanks are a space and a tab: a carriage return, a form feed or a no-break space is a character.
         break;
       } else {
+        // A glob or brace character outside quotes may make other words: `globs` says so.
+        if (/[*?[{~]/.test(c)) word.globs = true;
         word.text += c;
         word.raw += c;
         i += 1;

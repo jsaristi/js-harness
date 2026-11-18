@@ -65,5 +65,9 @@ test('what cannot be read whole is broken', () => {
   assert.equal(readShell('echo $((JS-HARNESS))').broken, true, 'the name, case aside');
   assert.equal(readShell("echo $'\\U00110000'").broken, true, 'an escape past the last code point is broken, never a throw');
   assert.deepEqual(words('$"a b" c'), [['a b', 'c']], 'locale quoting is double quoting');
+  // The verifier, round 2.
+  assert.equal(readShell('x=$(cat <<EOF\nhi\nEOF)\ny\nEOF\n)').broken, true, 'a delimiter line with a ) after it, inside a substitution');
+  const globs = readShell('x "--lan"? \\--la? \'a\'[n] ~ "~" b').commands[0].words.map((v) => Boolean(v.globs));
+  assert.deepEqual(globs, [false, true, true, true, true, false, false], 'a glob, brace or tilde character outside quotes');
   assert.equal(readShell('a "b" \'c\' $(d) `e`').broken, false);
 });
