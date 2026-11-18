@@ -390,3 +390,12 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   launch reader's own scan: the comment and heredoc apostrophe launches are refused, tests first. Codex correct 0.88, both
   lenses 0 findings; the third verifier's lists rerun at cc31281d by this session (not independent) flip only those. Left as
   limits: $'…' quoting and an escaped >. The PR stays a draft until an independent verifier runs.
+- L15 2026-11-17, his yes to question 333 (lead 699d7c29 line 11325): one independent verifier on PR 905, cap 15M.
+  It ran read-only (opus, 30 tool calls, 115k final context, 10.6 min): no blocking finding; nothing the PR changed
+  lets a launch through or refuses an ordinary command; the record-write check now also refuses tee, rm and cp of a
+  record behind &> (correct); the typed-wait reader decides the same. Holes shared with base, not caused here, for a
+  later unit: a backslash-newline between & and >, claude -p > --bg, 
+...' and nested quotes in $( ), process
+  substitution, and HEREDOC (guard.mjs:256) delimiters bash reads otherwise (<<EOF-1, <<'EOF'x, <<!, $((1<<n))).
+  Main fdae9423 merged in (46692dfa). Paused at 19:10 local for his Desktop update: next is gh pr ready 905 and a
+  ready notice; the lead lands it at once (his correction of 18:55).
