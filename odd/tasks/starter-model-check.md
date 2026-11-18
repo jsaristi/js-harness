@@ -5,8 +5,8 @@ level half of that check stays. Branch `fix/starter-model-check`; runner `node -
 `npm run check`. Delivery: one pull request, pushed by the session that launched this one after its reviews.
 
 ## State
-T1, this document, is written; next T2, tests first. Open: the reviews (Codex and the lenses) and the push, which the
-launching session runs.
+T1 to T3 are done (L5, L6). Next: Codex and the lenses on `c5e4fe3b` to the head, then the push and the pull request
+(L7). Open beyond this slice: the opening of the depth pass's item 4.
 Open beyond this slice: a start that names no model from a session off the home is no longer refused (depth pass,
 item 4; L4).
 
@@ -106,10 +106,11 @@ of what he asked to remove, and keeps the cap the app's tool puts on a start's l
    and each text that lists what the hook refuses names only the level (the brief, 2026-11-18).
 
 ## Tasks
-- [ ] T1 (kind: docs) this document, before any source write: `docs(tasks)` commit.
-- [ ] T2 (kind: build) specs 1 to 3: the tests changed and seen red, then the model branch removed, its register
-  entry, the call site's comment and the prose; route: tests first, `npm run check`: `fix(guard)` commit.
-- [ ] T3 (kind: docs) one Log line in `odd/tasks/one-model-home.md` and the ticks here: last `docs(tasks)` commit.
+- [x] T1 (kind: docs) this document, before any source write: `docs(tasks)` commit `ada43456`.
+- [x] T2 (kind: build) specs 1 to 3: the tests changed and seen red, then the model branch removed, its register
+  entry, the call site's comment and the prose; route: tests first, `npm run check`: `fix(guard)` commit `b96c668f`.
+- [x] T3 (kind: docs) one Log line in `odd/tasks/one-model-home.md` (L32) and the ticks here: the `docs(tasks)`
+  commit after `b96c668f`.
 
 ## Log
 - L1 His request, as written (transcript `f5c3ee4d-2c09-416a-addb-ea2b5e6c3e8d` line 1916,
@@ -131,3 +132,17 @@ of what he asked to remove, and keeps the cap the app's tool puts on a start's l
   `claude-opus-5-5` gives `null`; naming `claude-fable-5-2` is refused by `modelReason`; a starter record on
   `claude-fable-5-2` at `max` and at `low` gives the refusal of L2 word for word. So after the change a start from
   JH PLAN that names no model passes the guard and, by spec 5's reading of the tool, runs on `claude-fable-5-2`.
+- L5 T2, red before the code: `node --test bin/lib/guard.test.mjs` failed on "another model is not held" (the old
+  model refusal where `null` was expected), and `node --test bin/guard.test.mjs` failed 2 (a starter on another
+  model, by the injected reader and by the app folder's reader, denied); the level's cases passed on the old code,
+  as they should. After the code: 52 pass, 0 fail, and 47 pass, 0 fail; `bin/lib/rules-coverage.test.mjs` 18 pass,
+  `bin/lib/manifest.test.mjs` 220 pass. `js-harness rules coverage` then noted one owed span of the skill edited in
+  place (the manifest's line): its hash changed by hand, `ed473b21b313` to `7b5e679cf345`, since `--refresh` also
+  moved an unrelated context entry from one source's list to another's, which this slice leaves alone. Then `PASS
+  coverage`, and `npm run check` exit 0 (`PASS check 18 rows passed`).
+- L6 Against the pass: item 3 predicted 3 of 3 specs red before and green after; measured 2 of 3 red before (specs
+  1 and 2; spec 3's register test was not run before the change, so its red is not measured) and 3 of 3 green
+  after. Item 4's verdict held.
+- L7 The owner's order of about 18:02Z, through the coordinator: "Corre las revisiones y entra el cambio ya". This
+  session runs Codex and the lenses on `c5e4fe3b`, pushes and opens the pull request; the ready notice and the land
+  are the coordinator's and the lead's.
