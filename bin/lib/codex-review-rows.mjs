@@ -137,25 +137,21 @@ function correctionOwed(cwd, given, options) {
     const { kept, owing } = decidingRecord({ from: at, records: upTo === undefined ? line : line.filter((rec) => order.get(rec) < upTo), runs, atOrBefore });
     return JSON.stringify(owing.length > 0 ? owing : [kept]);
   };
-  // Re-read as that run read it: from where it started, the `from` of the run line admission took for the record (the
-  // one stating its range and its recheck), not from the merge it names, since above the merge the look-back of a long
-  // run of documents ends sooner and a walk from the merge can join a debt the run never held (T8, the verifier on
-  // 0331959e); and with the ancestry the run asked of its head, which reads a recheck on another branch as not held
-  // (Codex on 1941ed4). A start that is not a full commit id, which a ref could move, settles nothing.
+  // Re-read as that run read it: from where it started, not from the merge it names, since above the merge the look-back
+  // of a long run of documents ends sooner and a walk from the merge can join a debt the run never held (T8, the verifier
+  // on 0331959e); and with the ancestry the run asked of its head, unknown where git cannot say, which reads a recheck on
+  // another branch as not held (Codex on 1941ed4 and ecab5d1). The start is the `from` of the lines admission took for the
+  // record, the newest of each run that states its range, among them the one that marks its recheck; one that is not a
+  // full commit id of the length of its head, which a ref could move, settles nothing.
   const startOf = (rec) => {
     const ids = (Array.isArray(rec.runs) ? rec.runs : [rec.run]).filter((id) => typeof id === 'string');
-    const stating = runs.findLast((line) => ids.includes(line?.id) && line.head === rec.head && (line.base === rec.base || line.from === rec.base) &&
-      line.outcome === 'reviewed' && line.recheck?.of === rec.recheckOf);
-    return typeof stating?.from === 'string' && /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(stating.from) ? stating.from : undefined;
-  };
-  const spawn = options.spawn ?? spawnSync;
-  const heldAt = (tip) => (commit) => {
-    const status = spawn('git', ['merge-base', '--is-ancestor', commit, tip], { cwd, encoding: 'utf8' }).status;
-    return status === 0 ? true : status === 1 ? false : null;
+    const stating = ids.map((id) => runs.findLast((line) => line?.id === id && line.head === rec.head && (line.base === rec.base || line.from === rec.base) && line.outcome === 'reviewed'));
+    const from = stating.findLast((line) => line?.recheck?.of === rec.recheckOf)?.from;
+    return typeof from === 'string' && from.length === rec.head.length && /^[0-9a-f]+$/.test(from) ? from : undefined;
   };
   const settled = (at) => records.some((rec, index) => isValidCodexReview(rec) && rec.outcome === 'reviewed' && onLine.has(rec.head) &&
     typeof rec.recheckOf === 'string' && startOf(rec) !== undefined && owingAt(at, index) === owingAt(at) && (() => {
-      const then = recheckAt(cwd, { from: startOf(rec), tip: rec.head, records: records.slice(0, index), runs, holds: heldAt(rec.head), spawn, where: given.where });
+      const then = recheckAt(cwd, { from: startOf(rec), tip: rec.head, records: records.slice(0, index), runs, holds: (commit) => atOrBefore(commit, rec.head), spawn: options.spawn, where: given.where });
       return then?.kind === 'recheck' && then.of === rec.recheckOf && then.joinedAt?.includes(at) === true;
     })());
   const spanned = spannedDebt({ heads: [...given.rangeIds], records, runs, atOrBefore, settled });
