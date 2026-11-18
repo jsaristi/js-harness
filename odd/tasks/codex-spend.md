@@ -182,7 +182,7 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
 ## Tasks
 - [x] T1 (kind: build) spec 1 — PR 878 — `bin/codex-review.mjs`, `bin/lib/codex-review-turns.mjs` + tests — commit `fix(codex-review): read a snapshot of the head, not the live folder`
 - [x] T2 (kind: build) spec 2 — PR 883, main c7afe0be — `bin/lib/codex-review-turns.mjs`, `bin/codex-review.mjs` + tests — commit `fix(codex-review): review the gap below a merge of main alone`
-- [ ] T3 (kind: build) spec 3 — `bin/merge-queue.mjs`, `bin/lib/pull-request.mjs` (clearance asked) + tests — commit `fix(merge-queue): a conflict with main names its fix`
+- [x] T3 (kind: build) spec 3 — branch fix/codex-spend-t3 (L34-L37) — `bin/merge-queue.mjs`, `bin/lib/pull-request.mjs`, `bin/lib/merge-queue-reviews.mjs:97` (cleared L36) + tests — commit `fix(merge-queue): a conflict with main names its fix`
 - [ ] T4 (kind: build) specs 4, 5 — `rules change double-review` on `rule/double-review-sequence`, `bin/double-review.mjs`, `bin/js-harness.mjs` usage + tests — commits `chore(rules): a question's double review reads Claude first` and `feat(double-review): Codex reads what Claude passed`
 - [ ] T5 (kind: build) spec 6 — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
 - [ ] T6 (kind: verify) — the measure after the slices land, against the baseline, by Done-when's T6 line; result in the Log
@@ -483,3 +483,7 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   on 1dbba7f: risk 0; readability a follow-up, answered: at the merge a failed `git merge` with no unmerged file is not
   a conflict (the test "a merge that fails with no conflict says what git said"), while `merge-tree`'s exit 1 is.
   The lead holds T5's Codex review (planned 7.5M to 17.3M input tokens) for the owner's answer.
+- L37 2026-11-18, the second recheck, 1dbba7f..6bf60cc (195,381 input tokens): both findings fixed, verdict correct
+  (0.99). T3's reviews end at three: Codex 915,136 + 297,006 + 195,381 = 1,407,523 input tokens; lenses risk 0 each
+  round, readability's follow-up (say in a comment why the two loops count an empty conflict list apart) left for
+  the next change of those lines, since a code edit now would need a fourth review. Merge-queue tests 133 of 133.
