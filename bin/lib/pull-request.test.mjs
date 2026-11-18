@@ -36,7 +36,7 @@ test('a conflict with main names its fix: merge the branch it targets into the b
 
 test('a conflict with an earlier pull request of the batch says it waits for that land, naming it, and no fix of its branch', () => {
   assert.equal(conflictSaid({ base: 'main', branch: 'feat/c', files: ['a.txt'], earlier: [1] }), 'it waits for the land of PR 1, which it conflicts with in a.txt.');
-  assert.equal(conflictSaid({ base: 'main', branch: 'feat/c', files: ['a.txt'], earlier: [1, 2] }), 'it waits for the land of the one of PR 1, PR 2 it conflicts with in a.txt.');
+  assert.equal(conflictSaid({ base: 'main', branch: 'feat/c', files: ['a.txt'], earlier: [1, 2] }), 'it waits for the land of the earlier pull request it conflicts with, one of PR 1, PR 2 in a.txt.');
 });
 
 test('a body that names no review is no problem: the reviews are read from their records (F8 S11, L11)', () => {

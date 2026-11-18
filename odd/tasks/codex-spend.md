@@ -475,3 +475,11 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   batch. Verifier 2 (`readyProblems` asks gh for no `headRefName`, so notify's line names no branch) needs
   `bin/notify.mjs`; verifier 3 (an UNKNOWN conflict found by the reviews keeps `reviewEvidence`'s words in notify)
   is `merge-queue-reviews.mjs` too. Both go to the lead as follow-ups with README.md:1308.
+- L36 2026-11-18, Codex's recheck of c3385fc..1dbba7f (297,006 input tokens): 3 fixed, 2 not fixed. Finding 4 (a long
+  list still came before the wait's condition) and finding 2 (ask main again) both taken. For finding 2 the lead
+  cleared, 16:24 local: "You may edit bin/lib/merge-queue-reviews.mjs at line 97 and its test, adding only the
+  optional field conflictOnto." `reviewEvidence`'s conflict now says whose it is, `main` or `candidate`, and the
+  reviews' loop reads it; the merge loop still asks main alone, since a `git merge` there has no such result. Lenses
+  on 1dbba7f: risk 0; readability a follow-up, answered: at the merge a failed `git merge` with no unmerged file is not
+  a conflict (the test "a merge that fails with no conflict says what git said"), while `merge-tree`'s exit 1 is.
+  The lead holds T5's Codex review (planned 7.5M to 17.3M input tokens) for the owner's answer.

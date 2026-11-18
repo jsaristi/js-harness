@@ -31,7 +31,7 @@ export function conflictSaid({ base = 'main', branch = null, files = [], earlier
   const where = files.length ? ` in ${files.join(', ')}` : '';
   const names = earlier.map((number) => `PR ${number}`).join(', ');
   if (earlier.length === 1) return `it waits for the land of ${names}, which it conflicts with${where}.`;
-  if (earlier.length) return `it waits for the land of the one of ${names} it conflicts with${where}.`;
+  if (earlier.length) return `it waits for the land of the earlier pull request it conflicts with, one of ${names}${where}.`;
   return `merge ${base} into its branch${branch ? ` ${branch}` : ''} and push it, since it conflicts with ${base} itself${where}.`;
 }
 

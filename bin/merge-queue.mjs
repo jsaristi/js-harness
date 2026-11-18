@@ -901,7 +901,7 @@ async function queueRun(args, { run = spawnSync, covered = null, suite = null, e
     const files = Array.isArray(coverage?.conflicted) ? coverage.conflicted : null;
     // A conflict is with main itself where the candidate is still main, or where the pull request does not merge onto
     // main alone either: then its line names the fix; else it waits for the pull requests before it (spec 3).
-    const withMain = files && (onto === main || Array.isArray(isCovered(pr.headRefOid, main)?.conflicted));
+    const withMain = files && (onto === main || coverage.conflictOnto === 'main');
     if (files) leaveOut(log, stdout, pr, 'conflict', conflictSaid({ base: defaultBranch, branch: pr.headRefName, files, earlier: withMain ? [] : candidates.map((one) => one.number) }), { files });
     else if (!coverage?.pass) leaveOut(log, stdout, pr, 'review', `${String(coverage?.detail ?? 'its Codex review records could not be read').replace(/\.$/, '')}.`, { next: coverage?.next });
     if (files || !coverage?.pass) continue;
