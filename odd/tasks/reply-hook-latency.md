@@ -391,6 +391,16 @@ a longer timeout for the reply hook seldom lengthens a stop. That value is his: 
   lead: an empty text shifts the later indices (`commandBlocks` likely never sends one), `Remove-Item -re[ x` passes,
   `Get-AppPackage -Name x -zz` passes on PowerShell 7. `node --test bin/lib/reply-commands.test.mjs`: 13 pass, 1 skipped.
   Not checked by it: a module whose autoload throws, profiles, the deadline under load.
+- L21 (2026-11-18, JH 223): the lead made PR 916 a draft. JH PLAN found that it drops refusals main made, against the
+  brief's "keeps every refusal", and set three conditions, decided and not asked of him (the lead's message): a test
+  through `commandRefusals` that pins an `own` block ending in an unknown command; the dropped cases listed here; the
+  verifier's word that no other refusal is lost. The list is in `## Measure`, "Refusals main made that this change
+  drops". The test (`5df63e00`) was red on `b044dbf7`. Reviews over `f5b2c3b..5df63e0`: Codex (1,065,496 input tokens
+  against an estimate of 140,000): three P2s and a P3; the reliability lens one warning. Accepted and fixed: the
+  test's own 60 s deadline, a parse count that shows each passing case was parsed, and the sibling's exact refusal.
+  Answered, not changed: Codex's P2 and the lens's warning that the test requires a pass for a block main refused.
+  That pass is the decision JH PLAN set as condition 1, and the test pins it so a later change has to undo it on
+  purpose.
 
 ## Next step
 JH 223 (2026-11-18): T5 and T8 are done. The code is final at `9760618b`, and the docs at the commit after `8f2f1fc9`.
