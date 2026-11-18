@@ -5,8 +5,8 @@ level half of that check stays. Branch `fix/starter-model-check`; runner `node -
 `npm run check`. Delivery: one pull request, pushed by the session that launched this one after its reviews.
 
 ## State
-T1 to T3 are done (L5, L6). Next: Codex and the lenses on `c5e4fe3b` to the head, then the push and the pull request
-(L7). Open beyond this slice: the opening of the depth pass's item 4.
+T1 to T3 are done (L5, L6), and Codex and the lenses have passed (L8, L9). Next: the push and the pull request (L7);
+the ready notice and the land are not this session's. Open beyond this slice: the opening of the depth pass's item 4.
 Open beyond this slice: a start that names no model from a session off the home is no longer refused (depth pass,
 item 4; L4).
 
@@ -156,3 +156,6 @@ of what he asked to remove, and keeps the cap the app's tool puts on a start's l
   as the same model, so the tests would pass with the old cap back. Fixed: the first number changes, and each test
   asserts that `sameClaudeModel` reads the two as different; checked on a dated id (old fixture: same, new: not).
   After: `bin/lib/guard.test.mjs` 52 pass, `bin/guard.test.mjs` 47 pass, 0 fail.
+- L9 Codex's recheck of `29bc6da..7ea01df` (the fix `7ea01df0`; estimated about 230,000 to 600,000 input tokens, used
+  184,857): the patch is correct (0.99), both findings fixed. The risk, readability and reliability lenses on
+  `c5e4fe3..7ea01df`: 0 findings each, 68,628 input tokens in all.
