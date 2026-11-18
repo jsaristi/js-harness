@@ -65,12 +65,15 @@ Nothing here is his but the hook's timeout: if the fix needs it changed, a recor
 - [x] T2 (kind: build) spec 4: the measuring script and the budget test on a lead-sized fixture, run before the cuts
 - [x] T3 (kind: build) specs 2, 3: the cuts, each check answering as before
 - [x] T4 (kind: verify) spec 1: the measure after, on the fixture and the lead's real files
-- [ ] T5 (kind: docs) spec 5: the recorded question on the timeout, if the measure says the fix needs it
+- [x] T5 (kind: docs) spec 5: the recorded question on the timeout, if the measure says the fix needs it — question
+  138, answered "Sí, 15 s" and built by JH 119 (`odd/tasks/reply-hook-timeout.md`, `bin/lib/hook-entries.mjs:129`); L12
 - [ ] T6 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice
 - [x] T6a (kind: verify) spec 6: Codex reads again the fix of its partly fixed finding (`c76d97d1`) and whatever the
   verifier changes, from `8dd55c84` with `--again` (it runs no second recheck of the review that ended at `3543c9f`)
-- [ ] T8 (kind: build) out of scope, for the lead: the command-block check's PowerShell parser costs 1.4–2.3 s a stop
-  whose reply hands him a block (`## Measure`); started beside the other checks or kept warm, or the timeout raised
+- [x] T8 (kind: build) out of scope, for the lead: the command-block check's PowerShell parser costs 1.4–2.3 s a stop
+  whose reply hands him a block (`## Measure`); started beside the other checks or kept warm, or the timeout raised —
+  the timeout raised (T5); measured again, no cut in the parser's file keeps its answers, and its exit-1 defect fixed
+  (`## Measure`, The parser's cost; L12, L13)
 - [ ] T7 (kind: docs) spec 6: the summary under `docs/sessions/` and the closed notice
 
 ## Measure
@@ -191,6 +194,51 @@ After the verifier (2026-10-31, the project asked of git again, once a stop; the
   process's start, not the hook's own work) and says so. What lowers it is the timeout (question 138) or a follow-up
   that starts the parser differently (beside the other checks, or kept warm): out of this feature's scope.
 
+### The parser's cost (T8, 2026-11-18, main at `b044dbf7`)
+
+Bad news first: nothing in `bin/lib/reply-commands.mjs` makes the parser cheaper without changing what it answers. Its
+cost is PowerShell's start; what lowers a stop's time is outside this file. Measured while four other sessions ran
+(the machine loaded, as at a stop), PowerShell 7.7.0 from the Store (`pwsh.exe` is its WindowsApps alias), Node 24.15.
+
+- The check on the lead's files with a handed block: `node scripts/reply-hook-time.mjs profile --transcript <copy of
+  699d7c29, 23 MB, with a reply handing a powershell block appended> --cwd D:/js-harness`, 12 runs: the command check
+  1590–3097 ms, of which the parser 1346–2711 ms; the rest, `transcriptRuns` and the matching, about 300 ms. On the old
+  0f71b2c6 (128 MB, the size of October's lead), 12 runs: the check 2728–3056 ms, the parser 1386–2007 ms,
+  `transcriptRuns` alone 630–868 ms (five runs, in process). Today's lead-sized transcripts are 23–25 MB
+  (`find ~/.claude/projects -name "*.jsonl" -newermt 2026-11-17 -size +20M`).
+- The whole hook on that 23 MB payload: `node scripts/reply-hook-time.mjs runs --transcript <the same copy> --cwd
+  D:/js-harness --runs 6`: p50 4879, p90 5405 ms (4181–5405), under the 15 s timeout (`replyHookEntry`,
+  `bin/lib/hook-entries.mjs:129`) and the parser answered every time (the refusal was the run's, not the parser's).
+- Where the parser's time goes (a timed copy of `POWERSHELL_CHECK`, five runs a block, scratch script): PowerShell's
+  start until the script's first line 494–1423 ms; the script itself 228–537 ms for a native program or a cmdlet,
+  320–646 ms for the six blocks of the real test together. Inside the script (`-File`, three runs): decoding and
+  parsing about 50 ms, the first `Get-Command` 100–120 ms (command discovery's warm-up), each later one 1–5 ms,
+  `-ArgumentList` 5–11 ms. Nothing in it is worth cutting.
+- A name PowerShell cannot find costs pwsh 1.5–2.1 s on its first miss (module discovery over the 92 module folders
+  of `PSModulePath`), Windows PowerShell 67–132 ms. `Get-Command -CommandType Alias, Cmdlet, Function` did not help
+  (1490–2112 ms, three fresh processes): any cut there would have to skip module discovery, which is what finds a
+  cmdlet of a module not yet loaded, so it would weaken a refusal. Such a name is rare in a handed block (a typo, a
+  program not installed).
+- The start options, 12 interleaved runs each, a `Get-Command Remove-Item` script (scratch `start.mjs`): the alias
+  p50 4123, p90 6252 ms; with `POWERSHELL_TELEMETRY_OPTOUT=1` and `POWERSHELL_UPDATECHECK=Off`, p50 4137, p90 6370;
+  `powershell.exe` p50 4154, p90 5775. No difference beyond the noise of the load (that load ran those starts to
+  4 s; earlier, quieter, `pwsh.exe` started in 399–1187 ms and `powershell.exe` in 262–696). The package's own
+  `pwsh.exe` cannot be started by its path (ENOENT). Putting Windows PowerShell first is rejected: it is not faster
+  under load and it reads `&&` and `||` as errors, so verdicts would change.
+- Whether the deadline or the parser ever failed in situ: `grep -rho "could not check it (PowerShell[^)]*)"
+  ~/.claude/projects/` finds no hook refusal in any transcript, only this session's own search.
+- Found by the measure, fixed (tests first, red on `b044dbf7`): a block whose last command PowerShell cannot find was
+  refused as "its parser could not check it (PowerShell: it exited 1)", while the same text passed when the miss was not
+  last. The script's exit code was its last statement's `$?`, false after Get-Command misses. It now ends on `exit 0`;
+  a `throw` before its end still exits 1 (`pwsh -Command "throw 'x'; exit 0"`, both shells). A refusal becomes a pass
+  in a guard, so the verifier reads it.
+
+What would lower the stop's time, none of it in this item's files: starting the parser beside the other checks
+(`bin/reply.mjs`, an async spawn; the gain is capped by the other checks' 0.3–0.7 s), or a parser kept warm (a
+process outside the hook's life, which `uninstall` would have to know). Under a load that takes a PowerShell start to
+4–6 s the check's 4 s deadline (`COMMANDS_DEADLINE_MS`, kept at 4 s by `odd/tasks/reply-hook-timeout.md`) can pass, and
+the block is refused as one its parser could not check: a refusal, not a pass, and none recorded so far.
+
 ### What the timeout needs (T5)
 
 In the same transcript the host cancelled `guard --stop` at its 5 s in 52 of 503 stops and `backup --hook` in 55, as
@@ -258,6 +306,30 @@ a longer timeout for the reply hook seldom lengthens a stop. That value is his: 
   (Windows): the budget test lead p90 666 ms, work p90 919 ms; `bin/reply.test.mjs` 29 of 29; the merge's gate green.
   gentle-ai's Stop hook offered the merge commit (main's 60 files, reviewed in their own PRs): its status run, nothing
   started, as no work unit of this branch.
+- L12 (2026-11-18, JH 223, item `replyparser` of the stretch's plan version 4, approved by question 340, his answer
+  "Sí, las 8"; the brief: "Measured first, then the smallest change that keeps every refusal", and T5 "is not ticked as
+  stale: the session records why no question is needed, or leaves it open"): T5 is closed, not stale: question 138 was
+  asked and answered "Sí, 15 s" (JH 119, L1 of `odd/tasks/reply-hook-timeout.md`), and the entry `install` writes has
+  `timeout: 15` (`bin/lib/hook-entries.mjs:129`). Searched before writing: `grep` for `shellParser`'s callers
+  (`bin/reply.mjs:221`, `scripts/reply-hook-time.mjs:204`, the test), this document's measure and
+  `scripts/reply-hook-time.mjs` (its `profile` and `runs`, used as they are; no new script in the repo).
+- L13 (2026-11-18, JH 223, the measure, `## Measure`, The parser's cost): the parser's time is PowerShell's start, not
+  the script; no start option beats the load's noise; Windows PowerShell first is rejected (it reads `&&` as an error).
+  Decided: no cut to the parser, since none in its file keeps its answers. The fix of its exit-1 defect, tests first: the
+  test "a block whose last command PowerShell cannot find" red on `b044dbf7` (`failed: 'PowerShell: it exited 1'`),
+  green with `exit 0`. For the lead, not built here: the parser started beside the other checks (`bin/reply.mjs`), and
+  whether the 4 s deadline should follow the 15 s timeout under a load that runs a start to 4–6 s.
+- L14 (2026-11-18, JH 223, the independent verifier, read-only, over the fix against `b044dbf7`, both shells, old and
+  new module): no refusal became a wrongful pass. Only a failing last statement changes: an unknown name, an alias to
+  a missing target, and a real error hidden by a later miss (`["Get-Date -zz","nosuchprog-jh223"]` refused both with
+  "it exited 1"; now `-zz` is named). A `throw` still exits 1; a statement-terminating error (`[int]::Parse('x')`)
+  never stopped the script, before or after. Huge input (2.4 MB) still times out, a 50,000-deep nesting is a parse
+  error. The new test is red on `b044dbf7`, green after; `node --test bin/lib/reply-commands.test.mjs bin/reply.test.mjs`
+  46 pass, 1 skipped. It measured the deadline too: one of three back-to-back `shellParser('win32')(['Get-Date -zz'], {
+  timeout: 4000 })` timed out (4851 ms), so the deadline refusal of L13 is likely in a loaded stop. Older defects it
+  found, not in this change and left for the lead: `Get-Date -?` refused as ambiguous, `Get-Date -F*` passed (the
+  parameter name reaches `-like` as a pattern), `* -x` checked against an unrelated command. Not checked by it: the
+  whole hook path, a host crash, a profile or constrained language mode, off Windows, `npm run check`.
 
 ## Next step
 Code: `b42532d7`, `8c746b16`, `c76d97d1` and the verifier's fixes (L9), each committed with the gate green. Question
