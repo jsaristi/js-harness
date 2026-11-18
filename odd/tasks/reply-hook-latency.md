@@ -373,8 +373,13 @@ a longer timeout for the reply hook seldom lengthens a stop. That value is his: 
   Not checked by it: a module whose autoload throws, profiles, the deadline under load.
 
 ## Next step
-Code: `b42532d7`, `8c746b16`, `c76d97d1` and the verifier's fixes (L9), each committed with the gate green. Question
-138 (T5) is recorded and sent, no answer yet; on a yes, change `replyHookEntry`'s timeout to 15 with its test. Reviews
-done: the lenses over every code commit up to `c76d97d1`, Codex over `f91cbcc..8c746b1`, the verifier. Next: T6a,
-`js-harness codex-review --base 8dd55c84 --again` and the lenses over the verifier's fixes; push, PR, `notify --kind
-ready --pr <n>`; the summary under `docs/sessions/`; `notify --kind closed`. Nothing edited while a review runs.
+JH 223 (2026-11-18): T5 and T8 are done. The code is final at `9760618b`, and the docs at the commit after `8f2f1fc9`.
+PR 916 is open on branch `claude/reply-parser-cost-c8d92b`; every code commit has its Codex and lens records, and both
+verifiers ran (L14, L20). Next: push; `js-harness notify --to orchestrator --kind ready --pr 916`, naming the refusal
+dropped on purpose (L20); then `notify --kind closed --summary docs/sessions/2026-11-18-jh-223-reply-parser-cost-jh-116-t8.md`.
+Left for the lead:
+- starting the parser beside the other checks (`bin/reply.mjs`);
+- whether the 4 s deadline should follow the 15 s timeout;
+- whether an unknown command in an `own` block should be refused on purpose, which would be a new check;
+- the older parameter-check defects of L14 and L20.
+T6 and T7 belong to JH 116's own pull request, which this session did not read.

@@ -33,6 +33,10 @@ not read here with `js-harness sessions --quote`, since the brief gives no line.
 ## Decisions
 - No cut to the parser: its time is PowerShell's start (494–1423 ms of a check, the script itself 228–537 ms), no start
   option beats the load's noise, and Windows PowerShell first would change verdicts (`&&`) (this session, L13).
+- An `own` block whose last command PowerShell cannot find now passes. The base refused it only because its exit was
+  that miss's `$?`, and it passed whenever that command was not last. The brief asked to keep every refusal, and this
+  is the one class dropped on purpose; whether to refuse an unknown command deliberately is a new check, for the lead
+  (this session, L20).
 - T5 closed, not stale: question 138 answered "Sí, 15 s", built by JH 119 (`bin/lib/hook-entries.mjs:129`) (L12).
 - The Codex review over its allowance (estimate about 360,000 input tokens against 300,000) was put to the lead as
   question 344; the lead withdrew it and said to run it: review is not the owner's to decide (CLAUDE.md), and Codex
@@ -50,8 +54,8 @@ not read here with `js-harness sessions --quote`, since the brief gives no line.
 - I asked the owner, through the lead, about a review's cost although review is not his to decide.
 - The helpers added in a fix were functions the script's own `Get-Command` could find; the advisor found it before the
   ready notice, not a review. The test now holds a block that names one.
-- The second gate commit reached the parser's own `Find-Command` only through a module; Codex found the test would
-  fail where PowerShellGet is missing.
+- The first test of the shadowed name relied on PowerShellGet's `Find-Command`; Codex found it would fail on a machine
+  without that module. The test now defines its own.
 
 ## Left
 - For the lead, not built (L13, L14): the parser started beside the other checks (`bin/reply.mjs`); whether the 4 s
@@ -65,4 +69,8 @@ not read here with `js-harness sessions --quote`, since the brief gives no line.
 - Reviews: Codex six runs (627,015, 168,678, 510,998, 108,532, 387,563 and 74,979 input tokens); the Claude lenses
   six runs (about 7,000 to 10,700 input tokens a lens). Two independent verifiers: over the first fix (about 90,000
   tokens, 22 min) and over the final code against the base (about 120,000 tokens, 18 min).
-- Gate runs: seven commit gates green (one more stopped while it waited on another session's gate, and made again).
+- Gate runs: eleven commit gates green, from 9a47edbf to the last docs commit; one more was stopped while it waited on
+  another session's gate, and made again.
+- Time: the first commit at 15:14 and the last code commit at 16:35 local (2026-11-18, `git log --date`); the first
+  notice was question 344 and the last the closed notice. The context share at the end was over the window (the host's
+  pause notice said 157%).
