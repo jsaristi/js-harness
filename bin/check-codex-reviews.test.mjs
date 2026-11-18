@@ -2529,6 +2529,31 @@ test('a merge recheck that joined a debt does not settle a later review that owe
   assert.match(row.detail, new RegExp(`review that ended at ${short(root, owing)} owes a correction`));
 });
 
+test('a merge recheck that joined a debt still settles it after a clean review of part of it ends at the same head (T7, Codex on d1be083)', () => {
+  // As above, but the later review ending at H, M..H, is clean: the review that owes at H is the same one the merge's
+  // recheck joined, so that recheck still settles it, and the clean X..G spanning H passes.
+  const { root, base } = makeRepo();
+  feature(root);
+  const middle = commit(root, 'b.js', 'two', 'feat: two');
+  const owing = commit(root, 'c.js', 'three', 'feat: three');
+  run(root, { id: 'owes', base, from: base, head: owing, answer: { verdict: 'incorrect', findings: [finding] } });
+  record(root, base, owing, { run: 'owes' });
+  const merge = mergeMainWithEdit(root);
+  const fm = { ...finding, file: 'z.js', title: 'The merge drops a line' };
+  run(root, { id: 'merge-own', base: owing, from: owing, head: merge, answer: { verdict: 'incorrect', findings: [fm] } });
+  record(root, owing, merge, { run: 'merge-own', diff: 'remerge' });
+  const fixed = commit(root, 'c.js', 'three, fixed', 'fix: three and the merge');
+  run(root, { id: 'joined', base: merge, from: merge, head: fixed, answer: { verdict: 'correct', findings: [] }, recheck: { of: merge, findings: 2, fixed: 2, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } });
+  record(root, merge, fixed, { run: 'joined', recheckOf: merge });
+  run(root, { id: 'again', base: middle, from: middle, head: owing, answer: { verdict: 'correct', findings: [] } });
+  record(root, middle, owing, { run: 'again' });
+  const top = commit(root, 'e.js', 'five', 'feat: five');
+  run(root, { id: 'span', base: middle, from: middle, head: top, answer: { verdict: 'correct', findings: [] } });
+  record(root, middle, top, { run: 'span' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+});
+
 test('a merge recheck is read with the marks of its own head, not those of a later tip (T7, Codex on 6892cdc)', () => {
   // base..H owes f; M1, a merge of main that edits z.js, has no record, so the walk from M2, whose own record owes, stops
   // at M1 and its recheck holds M2's finding alone. Later z.js is left out of review: read with the tip's marks, M1
