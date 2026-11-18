@@ -18,20 +18,33 @@ not read here with `js-harness sessions --quote`, since the brief gives no line.
   PowerShell fallback, red on b044dbf7 (`failed: 'PowerShell: it exited 1'`), green after.
 - Commit 0168e1ef `docs(tasks): reply-hook-latency T8 measures the parser's cost, T5 closed by question 138`: `## Measure`,
   "The parser's cost (T8)"; T5 and T8 ticked; L12 to L14.
+- Commit cc56e0f2 `fix(reply): a PowerShell lookup that fails for another reason than a miss still refuses` (Codex's
+  P2 over b044dbf..0339273: `& 'Get-Ite[m' -x` passed unchecked).
+- Commit 5fd74a29 `fix(reply): a failed PowerShell lookup refuses its own block, not the whole batch` (the resilience
+  and reliability lenses over 0339273..cc56e0f).
+- Commit b45380f2 `fix(reply): each line the PowerShell check prints stays one line` (Codex's P2 over cc56e0f..5fd74a2:
+  a CR or U+2028 in a name dropped the refusal line).
+- Each fix test first, the real win32 test red before it, in PowerShell 7 and Windows PowerShell; L15 to L18.
 - The pull request: named in the ready notice.
 
 ## Decisions
 - No cut to the parser: its time is PowerShell's start (494–1423 ms of a check, the script itself 228–537 ms), no start
   option beats the load's noise, and Windows PowerShell first would change verdicts (`&&`) (this session, L13).
 - T5 closed, not stale: question 138 answered "Sí, 15 s", built by JH 119 (`bin/lib/hook-entries.mjs:129`) (L12).
-- The Codex review over its allowance (estimate about 360,000 input tokens against 300,000) asked of the owner through
-  the lead as question 344, not run before his answer (this session, as the plan's rule says).
+- The Codex review over its allowance (estimate about 360,000 input tokens against 300,000) was put to the lead as
+  question 344; the lead withdrew it and said to run it: review is not the owner's to decide (CLAUDE.md), and Codex
+  read 28% of its 5-hour window (the lead's note, 15:25).
 
 ## Failures and lessons
 - The first commit carried a `Co-Authored-By` line against his global instructions; its gate was stopped before the
   commit landed and the commit made again without it.
 - Two scratch scripts failed on `\x` escapes in JS strings; `String.raw` was used instead.
 - A scripted doc edit by string match threw on a line it did not find and wrote nothing; the Edit tool was used.
+- The first fix (`exit 0`) was too wide twice and its next fix once: Codex and the lenses found three ways a block
+  could pass unchecked or a sibling lose its answer. Each was found by a review, not by this session's own tests;
+  each now has a real test.
+- A Node heredoc turned `\r` in a PowerShell regex into a raw carriage return; a script file with `String.raw` fixed it.
+- I asked the owner, through the lead, about a review's cost although review is not his to decide.
 
 ## Left
 - For the lead, not built (L13, L14): the parser started beside the other checks (`bin/reply.mjs`); whether the 4 s
@@ -40,6 +53,7 @@ not read here with `js-harness sessions --quote`, since the brief gives no line.
   unrelated command).
 
 ## Cost
-- Reviews: the Claude lenses risk, resilience, reliability over b044dbf..0168e1e, 0 findings (about 7,900 input tokens
-  each); Codex: see question 344. One independent verifier (about 90,000 tokens, 22 min).
-- Gate runs: two commit gates green (one stopped while it waited on another session's gate and made again).
+- Reviews: Codex four runs (627,015, 168,678, 510,998 and 108,532 input tokens); the Claude lenses risk, resilience
+  and reliability four runs (about 8,000 to 9,500 input tokens a lens). One independent verifier over the first fix
+  (about 90,000 tokens, 22 min); not run again over the three later fixes, which the reviews read.
+- Gate runs: seven commit gates green (one more stopped while it waited on another session's gate, and made again).

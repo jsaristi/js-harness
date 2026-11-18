@@ -347,6 +347,9 @@ a longer timeout for the reply hook seldom lengthens a stop. That value is his: 
   error line, which `shellParser` then dropped, so the block passed unchecked. Fixed, tests first (red on `5fd74a2`):
   every line the script prints goes through `Say`, which turns CR, LF, U+0085, U+2028 and U+2029 into a space; the
   parse-error and parameter lines too, since a name reaches them as well.
+- L18 (2026-11-18, JH 223, reviews over `5fd74a2..b45380f`): the lenses 0 findings; Codex correct (confidence 0.99),
+  its P2 fixed. Every code commit of the branch is covered by both records. The independent verifier (L14) read the
+  first fix (`9a47edbf`); the three fixes after it were read by Codex and the lenses, not by a second verifier.
 
 ## Next step
 Code: `b42532d7`, `8c746b16`, `c76d97d1` and the verifier's fixes (L9), each committed with the gate green. Question
