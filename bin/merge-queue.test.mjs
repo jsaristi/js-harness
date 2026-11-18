@@ -115,7 +115,7 @@ test('--dry-run builds the candidate of main and the ready pull requests in orde
   assert.equal(code, 0, out.join('\n'));
   assert.deepEqual(out, [
     `PR 4 is left out: PR 4 is a draft.`,
-    'PR 3 is left out: it conflicts with the candidate so far (PR 1, PR 2) in a.txt: it waits for their land.',
+    'PR 3 is left out: it waits for the land of the one of PR 1, PR 2 it conflicts with in a.txt.',
     `Candidate: main ${main.slice(0, 7)} with 2 pull requests merged in order: PR 1 (feat/a), PR 2 (feat/b).`,
     'main\'s check.mjs has no merge door yet (odd/tasks/rule-hierarchy.md, T16e): no door ran',
     'Dry run: nothing was tested or pushed, and the candidate was removed.',
@@ -155,8 +155,8 @@ test('a pull request GitHub has not yet computed (mergeable UNKNOWN, about a min
   const { code, out } = await dryRun(root, prs);
   assert.equal(code, 0, out.join('\n'));
   assert.deepEqual(out, [
-    'PR 4 is left out: PR 4 is not mergeable (CONFLICTING): it conflicts with main itself, so merge main into its branch feat/d and push it.',
-    'PR 3 is left out: it conflicts with the candidate so far (PR 1, PR 2) in a.txt: it waits for their land.',
+    'PR 4 is left out: PR 4 is not mergeable (CONFLICTING): merge main into its branch feat/d and push it, since it conflicts with main itself.',
+    'PR 3 is left out: it waits for the land of the one of PR 1, PR 2 it conflicts with in a.txt.',
     `Candidate: main ${main.slice(0, 7)} with 2 pull requests merged in order: PR 1 (feat/a), PR 2 (feat/b).`,
     'main\'s check.mjs has no merge door yet (odd/tasks/rule-hierarchy.md, T16e): no door ran',
     'Dry run: nothing was tested or pushed, and the candidate was removed.',
@@ -183,8 +183,8 @@ test('a conflict with main names its fix, merge main into the branch: GitHub\'s 
   const { code, out } = await dryRun(root, prs);
   assert.equal(code, 0, out.join('\n'));
   assert.deepEqual(out.slice(0, 2), [
-    'PR 1 is left out: PR 1 is not mergeable (CONFLICTING): it conflicts with main itself, so merge main into its branch feat/a and push it.',
-    'PR 3 is left out: it conflicts with main itself in a.txt, so merge main into its branch feat/c and push it.',
+    'PR 1 is left out: PR 1 is not mergeable (CONFLICTING): merge main into its branch feat/a and push it, since it conflicts with main itself.',
+    'PR 3 is left out: merge main into its branch feat/c and push it, since it conflicts with main itself in a.txt.',
   ]);
 });
 
@@ -200,16 +200,39 @@ test('a conflict with main names its fix where the reviews are read onto main, o
     return { pass: true };
   };
   for (const [withMain, said] of [
-    [true, 'PR 3 is left out: it conflicts with main itself in a.txt, so merge main into its branch feat/c and push it.'],
-    [false, 'PR 3 is left out: it conflicts with the candidate so far (PR 2) in a.txt: it waits for that land.'],
+    [true, 'PR 3 is left out: merge main into its branch feat/c and push it, since it conflicts with main itself in a.txt.'],
+    [false, 'PR 3 is left out: it waits for the land of PR 2, which it conflicts with in a.txt.'],
   ]) {
     asked.length = 0;
     const { code, out } = await dryRun(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b']), pr(3, 'feat/c', heads['feat/c'])], covered(withMain));
     assert.equal(code, 0, out.join('\n'));
-    assert.deepEqual(out.slice(0, 2), ['PR 1 is left out: it conflicts with main itself in a.txt, so merge main into its branch feat/a and push it.', said], String(withMain));
+    assert.deepEqual(out.slice(0, 2), ['PR 1 is left out: merge main into its branch feat/a and push it, since it conflicts with main itself in a.txt.', said], String(withMain));
     assert.ok(!out.some((line) => /^ {2}next: /.test(line)), 'the line names the fix: no "merging or rebasing" step beside it');
     assert.deepEqual(asked.filter(([head]) => head === heads['feat/c']), [[heads['feat/c'], 'cand2'], [heads['feat/c'], 'main']], 'main alone is asked only for a conflict onto the candidate');
   }
+});
+
+test('a conflict with main names its fix by one rule in both loops: at the merge into a candidate that holds earlier pull requests, main alone decides (lens readability, c3385fc0)', async () => {
+  const { root } = makeQueueRepo();
+  const heads = Object.fromEntries(['feat/b', 'feat/c'].map((branch) => [branch, git(root, 'rev-parse', `origin/${branch}`)]));
+  mainMovesOnA(root);
+  // The reviews pass both (a merge-tree and a merge may disagree); asked again at the merge, feat/c conflicts onto main.
+  const asked = [];
+  const covered = (head, onto) => {
+    asked.push(head);
+    return head === heads['feat/c'] && asked.filter((one) => one === head).length > 1 ? { pass: false, detail: 'a conflict', conflicted: ['a.txt'] } : { pass: true };
+  };
+  const { code, out } = await dryRun(root, [pr(2, 'feat/b', heads['feat/b']), pr(3, 'feat/c', heads['feat/c'])], covered);
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(out[0], 'PR 3 is left out: merge main into its branch feat/c and push it, since it conflicts with main itself in a.txt.');
+});
+
+test('a conflict with main names its fix where git names no file of it (merge-tree, some rename conflicts; Codex, c3385fc0)', async () => {
+  const { root, heads } = makeQueueRepo();
+  const covered = (head) => (head === heads['feat/a'] ? { pass: false, detail: 'it does not merge onto main without a conflict', conflicted: [] } : { pass: true });
+  const { code, out } = await dryRun(root, [pr(1, 'feat/a', heads['feat/a'])], covered);
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(out[0], 'PR 1 is left out: merge main into its branch feat/a and push it, since it conflicts with main itself.');
 });
 
 test('a merge that fails with no conflict says what git said, not that it conflicts', async () => {
@@ -1510,7 +1533,7 @@ test('--land writes one land record: the pull requests it looked at, each left o
     considered: [1, 2, 3, 4],
     leftOut: [
       { pr: 4, reason: 'not-ready', said: 'PR 4 is a draft.', told: null },
-      { pr: 3, reason: 'conflict', said: 'it conflicts with the candidate so far (PR 1, PR 2) in a.txt: it waits for their land.', files: ['a.txt'], told: null },
+      { pr: 3, reason: 'conflict', said: 'it waits for the land of the one of PR 1, PR 2 it conflicts with in a.txt.', files: ['a.txt'], told: null },
     ],
     phases: [{ phase: 'suite', ok: true }, { phase: 'actions', ok: true }, { phase: 'push', ok: true }],
     actions: { state: 'green', name: 'gate', conclusion: 'success', url: 'https://github.com/o/r/actions/runs/1' },

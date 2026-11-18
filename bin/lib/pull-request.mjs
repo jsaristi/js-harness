@@ -11,8 +11,11 @@ export function pullRequestProblems(pr, base = 'main') {
   const said = [];
   if (pr.state !== 'OPEN') said.push(`${name} is ${pr.state}, not open.`);
   if (pr.isDraft) said.push(`${name} is a draft.`);
-  // GitHub computes CONFLICTING against the branch the pull request targets, so that is the branch its fix merges in.
-  if (pr.mergeable === 'CONFLICTING') said.push(`${name} is not mergeable (CONFLICTING): ${conflictSaid({ base: pr.baseRefName ?? base, branch: pr.headRefName })}`);
+  // GitHub computes CONFLICTING against the branch the pull request targets: merging that branch in is the fix only
+  // where it is `base`; another one is a wrong target, which the base line below names, and merging it would bring
+  // its commits into the pull request (Codex, c3385fc0).
+  const against = pr.baseRefName ?? base;
+  if (pr.mergeable === 'CONFLICTING') said.push(against === base ? `${name} is not mergeable (CONFLICTING): ${conflictSaid({ base, branch: pr.headRefName })}` : `${name} is not mergeable (CONFLICTING) with ${against}, the branch it targets.`);
   else if (pr.mergeable !== 'MERGEABLE') said.push(`${name} is not mergeable (${pr.mergeable}).`);
   if (pr.baseRefName !== base) said.push(`${name} targets ${pr.baseRefName}, not ${base}.`);
   return said;
@@ -21,11 +24,15 @@ export function pullRequestProblems(pr, base = 'main') {
 /** What a conflict leaves a pull request out with, one home for its words (odd/tasks/codex-spend.md, spec 3). With
  * the branch it targets itself (`base`), the line names the fix, which is the branch's: merge `base` into it
  * (`branch`, its name where known). With pull requests of this batch merged before it (`earlier`, their numbers), it
- * waits for their land: a merge of `base` cannot fix it until they are on it. `files` are where git found it. */
+ * waits for the land of the one it conflicts with: a merge of `base` cannot fix it until that one is on it. `files`
+ * are where git found it, none where git named none. The step comes first and the lists after it, since a notice
+ * to the session is cut at its length (`leftOutText`, ../merge-queue.mjs; Codex, c3385fc0). */
 export function conflictSaid({ base = 'main', branch = null, files = [], earlier = [] } = {}) {
   const where = files.length ? ` in ${files.join(', ')}` : '';
-  if (earlier.length) return `it conflicts with the candidate so far (${earlier.map((number) => `PR ${number}`).join(', ')})${where}: it waits for ${earlier.length === 1 ? 'that' : 'their'} land.`;
-  return `it conflicts with ${base} itself${where}, so merge ${base} into its branch${branch ? ` ${branch}` : ''} and push it.`;
+  const names = earlier.map((number) => `PR ${number}`).join(', ');
+  if (earlier.length === 1) return `it waits for the land of ${names}, which it conflicts with${where}.`;
+  if (earlier.length) return `it waits for the land of the one of ${names} it conflicts with${where}.`;
+  return `merge ${base} into its branch${branch ? ` ${branch}` : ''} and push it, since it conflicts with ${base} itself${where}.`;
 }
 
 /** The trailer of every merge commit the queue makes, and of no other: GitHub's merge button writes the same subject,

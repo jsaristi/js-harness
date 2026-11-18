@@ -462,3 +462,16 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   `bin/lib/stretch*.mjs`, `bin/stretch.mjs` and `workshop/`, non-test files, unbounded). Left: `README.md:1308` shows the old
   CONFLICTING line, and `bin/lib/merge-queue-reviews.mjs:75` still says "by merging or rebasing" for `check`'s own
   use; both outside T3's files.
+- L35 2026-11-18, T3's reviews on b044dbf..c3385fc. Codex (915,136 input tokens, 818,816 cached; its plan said about
+  1.9M, over the 300,000 allowance, sent to the lead before it ran): five P2, verdict incorrect. Lenses risk 0,
+  readability 1 warning. Verifier (opus, read-only): clean, probe on a real repository reproduced the old misnaming
+  and the fix; five low notes. Taken in one commit, tests first: a conflict git names no file of is still a
+  conflict (`Array.isArray`, Codex 1); the step comes before the lists, which a notice cuts at its length (Codex 4);
+  CONFLICTING against a branch the queue refuses as base names no merge of it (Codex 5); the wait names "the one of"
+  the earlier pull requests it conflicts with, not all of them (Codex 3, verifier 1); the merge loop decides "with
+  main" by the reviews' rule, asking main alone where earlier merges moved the candidate (lens). Answered, not
+  taken: Codex 2 (carry the conflict's base in `reviewEvidence`'s result instead of asking main alone again) needs
+  `bin/lib/merge-queue-reviews.mjs`, outside the cleared files; the second ask runs only on a conflict with the
+  batch. Verifier 2 (`readyProblems` asks gh for no `headRefName`, so notify's line names no branch) needs
+  `bin/notify.mjs`; verifier 3 (an UNKNOWN conflict found by the reviews keeps `reviewEvidence`'s words in notify)
+  is `merge-queue-reviews.mjs` too. Both go to the lead as follow-ups with README.md:1308.
