@@ -215,7 +215,8 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     const start = sessionStartRefusal(input, rules, { lead });
     if (start !== null) return start;
     // The tool caps a start at the session that makes it: the app's record of the caller is read, for a call with a
-    // brief only. No id, no record or a reader that fails is no record, which refuses nothing.
+    // brief only, and its level is held, not its model (odd/tasks/starter-model-check.md). No id, no record or a
+    // reader that fails is no record, which refuses nothing.
     let starter = null;
     if (typeof input.prompt === 'string' && input.prompt !== '' && typeof payload.session_id === 'string' && payload.session_id !== '') {
       try {

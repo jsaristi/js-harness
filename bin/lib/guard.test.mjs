@@ -204,8 +204,9 @@ test('the tools that do not open a session pass in this repository, whatever the
 });
 
 // odd/tasks/one-model-home.md, spec 5 (L13, Claude 2): the tool caps a start at the session that makes it, so a
-// starter off the home cannot start a session on it, whatever its call names.
-test('a start from a session whose own record holds another model, or a lower level than the start is held to, is refused with who corrects it', () => {
+// starter under the level a start is held to cannot start a session at it, whatever its call names. The starter's
+// own model is not held since his words of 2026-11-18 (odd/tasks/starter-model-check.md, spec 1).
+test('a start from a session whose own record holds a lower level than the start is held to is refused with who corrects it, and one on another model passes', () => {
   // The refusal names no way around the cap: a card from the same starter is capped as a row is (lens on 9fc30a0..1e19075).
   const model = MODEL_RULES[0].value;
   const next = model.replace(/\d+$/, (digits) => String(Number(digits) + 1));
@@ -220,8 +221,10 @@ test('a start from a session whose own record holds another model, or a lower le
   assert.equal(starterRefusal({ model: null, effort: null, title: null }, HERE), null, 'a record that names neither');
   assert.equal(starterRefusal({ ...on, effort: 'ultra' }, HERE), null, 'a word that is no level is not compared');
   assert.equal(starterRefusal({ ...on, model: next, effort: 'low' }, null), null, 'no rules here');
-  assert.equal(starterRefusal({ ...on, model: next, title: 'JH 7 · thing' }, HERE),
-    `js-harness guard: start_session is called from a session whose own record holds the model "${next}", not the one of the rule session-model: ${model}, and a start is capped at the session that makes it. The lead sets that session's with its session tools.`);
+  // His words of 2026-11-18: a starter on another model than the home's starts a session, a work session's or a lead's.
+  assert.equal(starterRefusal({ ...on, model: next, title: 'JH 7 · thing' }, HERE), null, 'another model is not held');
+  assert.equal(starterRefusal({ ...on, model: next, title: 'JH 7 · thing' }, HERE, { lead: true }), null, 'nor for a new lead');
+  assert.equal(starterRefusal({ ...on, model: next }, HERE, { starterLead: true }), null, 'nor from a lead');
   // The level is the one the start is held to: the sessions' for a work session, the lead's for a new lead.
   const under = EFFORTS[EFFORTS.indexOf(HELD) - 1];
   if (under !== undefined) {
@@ -232,9 +235,12 @@ test('a start from a session whose own record holds another model, or a lower le
     assert.equal(starterRefusal({ ...on, effort: HELD }, HERE), null, 'a work session is started from the sessions\' level');
     assert.match(starterRefusal({ ...on, effort: HELD, title: 'JH 7 · thing' }, HERE, { lead: true }), new RegExp(`holds the level "${HELD}", under the one this start is held to \\(rule lead-effort: ${LEAD}\\)`));
   }
-  // A lead cannot be set by another session: the refusal carries the line for the user, with the lead's level.
-  assert.equal(starterRefusal({ ...on, model: next }, HERE, { starterLead: true }),
-    `js-harness guard: start_session is called from a session whose own record holds the model "${next}", not the one of the rule session-model: ${model}, and a start is capped at the session that makes it. Only the user changes a lead's own: ${menuLine({ model, effort: LEAD })}`);
+  // A lead cannot be set by another session: the refusal carries the line for the user, with the home's model and
+  // the lead's level, whatever model the lead's own record holds.
+  if (under !== undefined) {
+    assert.equal(starterRefusal({ ...on, model: next, effort: under }, HERE, { starterLead: true }),
+      `js-harness guard: start_session is called from a session whose own record holds the level "${under}", under the one this start is held to (rule session-effort: ${HELD}), and a start is capped at the session that makes it. Only the user changes a lead's own: ${menuLine({ model, effort: LEAD })}`);
+  }
 });
 
 // odd/tasks/one-model-home.md, spec 5: what a start does not name is the home's, a lead's level for a lead.
