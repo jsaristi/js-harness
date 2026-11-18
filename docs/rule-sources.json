@@ -1069,46 +1069,34 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "solo permitiremos sol 6.1 en high",
-        "date": "2026-10-08",
-        "session": "77a27016-3431-4df1-bb6f-b33ee53930cc",
-        "line": 4208
-      },
-      {
-        "quote": "Bajar a medio",
-        "date": "2026-10-12",
-        "session": "65318fd5-80e7-4bb8-92b5-06737140185b",
-        "line": 8962
+        "quote": "Pero necesito que hagas una cosa ya y es pasar de revisor codex a Sol 6.2 listo?",
+        "date": "2026-11-17",
+        "session": "305c10e3-46ab-45a7-8670-412d5b7d0422",
+        "line": 2499
       }
     ],
-    "reading": "A Codex review runs at medium effort. His latest word is a tapped option, not a typed sentence: the orchestrator asked him through the question tool \"Pregunta 14: ¿en qué esfuerzo corre la revisión de Codex?\" with the options \"Seguir en alto (Recomendado)\", \"Bajar a medio\" and \"Medir de nuevo antes de decidir\", and the entry at that line is the tool's result holding his answer, read by this session. Earlier words, kept as history: high and no other on 2026-10-08 (the first quote), and medium on 2026-10-06 (session 71ccf3e5-a96a-45d7-b9dc-6c5314571b00, line 1116).",
-    "accepted": "Not put to him as a reading: the option he tapped names the effort.",
+    "reading": "Codex reviews run on GPT-6.2-Sol at max effort from now",
+    "accepted": "question 339, lead transcript 305c10e3-46ab-45a7-8670-412d5b7d0422 line 2676: Sol 6.2 Max",
     "checked": {
-      "date": "2026-10-12",
-      "by": "session"
+      "date": "2026-11-18",
+      "by": "command"
     }
   },
   "review-model": {
     "kind": "words",
     "quotes": [
       {
-        "quote": "Hagamos la Revision con el Modelo Sol 6.1 en Medium mejor",
-        "date": "2026-10-06",
-        "session": "71ccf3e5-a96a-45d7-b9dc-6c5314571b00",
-        "line": 1116
-      },
-      {
-        "quote": "solo permitiremos sol 6.1 en high",
-        "date": "2026-10-08",
-        "session": "77a27016-3431-4df1-bb6f-b33ee53930cc",
-        "line": 4208
+        "quote": "Pero necesito que hagas una cosa ya y es pasar de revisor codex a Sol 6.2 listo?",
+        "date": "2026-11-17",
+        "session": "305c10e3-46ab-45a7-8670-412d5b7d0422",
+        "line": 2499
       }
     ],
-    "reading": "A Codex review runs on the model he calls Sol 6.1, which the command names gpt-6.1-sol, and on no other.",
-    "accepted": "Not put to him as a reading: that his \"sol 6.1\" is the id gpt-6.1-sol is the command's, and his to correct.",
+    "reading": "Codex reviews run on GPT-6.2-Sol at max effort from now",
+    "accepted": "question 339, lead transcript 305c10e3-46ab-45a7-8670-412d5b7d0422 line 2676: Sol 6.2 Max",
     "checked": {
-      "date": "2026-10-11",
-      "by": "session"
+      "date": "2026-11-18",
+      "by": "command"
     }
   },
   "review-part-files": {

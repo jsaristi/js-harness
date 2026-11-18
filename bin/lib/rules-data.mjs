@@ -554,8 +554,11 @@ export const RULES = [
     "id": "review-effort",
     "subject": "the effort a Codex review runs at",
     "owner": "sebastian",
-    "since": "2026-10-12",
-    "value": "medium",
+    "since": "2026-11-18",
+    "value": "max",
+    "was": [
+      { "value": "medium", "until": "2026-11-18" }
+    ],
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bcodex\\b.{0,60}\\bat `?{amount}`? effort",
       "^(?!.*\\bruleValue\\().*\\b(?:runs?|is run|set to)\\b.{0,30}(?<![\\w.-])(?!claude-)(?=[a-z]+(?:-[a-z0-9.]+)*-\\d)[a-z][\\w.-]+`?\\s+at\\s+`?{amount}`?"
@@ -565,8 +568,11 @@ export const RULES = [
     "id": "review-model",
     "subject": "the one model a Codex review runs on",
     "owner": "sebastian",
-    "since": "2026-10-08",
-    "value": "gpt-6.1-sol",
+    "since": "2026-11-18",
+    "value": "gpt-6.2-sol",
+    "was": [
+      { "value": "gpt-6.1-sol", "until": "2026-11-18" }
+    ],
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\b(?:codex|review)\\b.{0,60}\\bon `?(?!claude-)(?=[a-z]+(?:-[a-z0-9.]+)*-\\d){amount}"
     ]

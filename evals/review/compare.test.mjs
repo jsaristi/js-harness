@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
-import { codexArgs, REVIEW_EFFORT } from '../../bin/codex-review.mjs';
+import { codexArgs, REVIEW_EFFORT, REVIEW_MODEL } from '../../bin/codex-review.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir } from '../../bin/lib/codex-review-home.mjs';
 import { REVIEW_PROMPT_VERSION } from '../../bin/lib/codex-review-prompt.mjs';
 import { windowsCommandLine } from '../../bin/lib/windows-args.mjs';
@@ -291,10 +291,10 @@ async function run(argv, m, fake = nothingStarts(), extra = {}) {
 const launchedWith = (argv) => (PLATFORM === 'win32' ? { command: windowsCommandLine('codex', argv), args: [] } : { command: 'codex', args: argv });
 const launched = ({ command, args }) => ({ command, args });
 
-/** The argv Codex is launched with for a lean cell over the range from `base`: the lean session at the
- * effort the cell was measured with, `medium` unless `over` says otherwise, which is not the effort
+/** The argv Codex is launched with for a lean cell over the range from `base`: the lean session on the model
+ * and at the effort the cell was measured with, gpt-6.1-sol and `medium` unless `over` says otherwise, whatever
  * `codex-review` passes when nobody names one. `over` is what the cell varies (`codexArgs`). */
-const leanCell = (base, prompt = 'codex', over = {}) => codexArgs(base, PLATFORM, prompt, { effort: 'medium', ...over });
+const leanCell = (base, prompt = 'codex', over = {}) => codexArgs(base, PLATFORM, prompt, { model: 'gpt-6.1-sol', effort: 'medium', ...over });
 
 const reading = (m, config, range) => JSON.parse(fs.readFileSync(readingFile(m.readings, config, range), 'utf8'));
 const entries = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).sort() : []);
@@ -325,21 +325,25 @@ test('the matrix is data: five configurations over two ranges, nine cells, CodeG
   assert.ok(fs.existsSync(new URL(`./seeded/head/${RANGES[1].doc}`, import.meta.url)));
 });
 
-test('each lean configuration is pinned at the effort its committed readings were measured with, whatever effort `codex-review` passes by default', () => {
-  // The effort a review runs at when nobody names one changed on 2026-10-08, from `medium` to `high`, and on
-  // 2026-10-12 back to `medium`. A
-  // configuration that took its effort from that default would be another configuration since, under the
-  // name of the one that was measured: so each names its own, and the readings in the repository say which.
-  assert.equal(REVIEW_EFFORT, 'medium', 'the default is what three of the four lean configurations were measured at again, and none of them reads it');
+test('each lean configuration is pinned on the model and at the effort its committed readings were measured with, whatever `codex-review` passes by default', () => {
+  // The effort a review runs at when nobody names one changed on 2026-10-08, from `medium` to `high`, on
+  // 2026-10-12 back to `medium`, and on 2026-11-18 to `max`, with the model from gpt-6.1-sol to gpt-6.2-sol
+  // (rules review-model and review-effort). A configuration that took either from those defaults would be
+  // another configuration since, under the name of the one that was measured: so each names its own, and the
+  // readings in the repository say which. Nothing here reads the rules' values: the cells hold whatever they say.
   const committed = new URL('../results/review/readings/', import.meta.url);
   const lean = CONFIGS.filter((config) => config.session === 'lean');
-  assert.deepEqual(lean.map((config) => [config.name, config.effort]), [['lean', 'medium'], ['lean-own', 'medium'], ['lean-high', 'high'], ['lean-codegraph', 'medium']]);
+  assert.deepEqual(lean.map((config) => [config.name, config.model, config.effort]), [
+    ['lean', 'gpt-6.1-sol', 'medium'], ['lean-own', 'gpt-6.1-sol', 'medium'], ['lean-high', 'gpt-6.1-sol', 'high'], ['lean-codegraph', 'gpt-6.1-sol', 'medium'],
+  ]);
   let read = 0;
   for (const { config, range } of CELLS.filter((cell) => lean.some((one) => one.name === cell.config))) {
     const stored = JSON.parse(fs.readFileSync(new URL(`${config}__${range}.json`, committed), 'utf8'));
-    // What the command passed: the reading's `effort`, or `configuredEffort` when `effort` is what the session ran with.
-    const passed = stored.modelSource === 'session' ? stored.configuredEffort : stored.effort;
-    assert.equal(passed, CONFIGS.find((one) => one.name === config).effort, `${config}:${range}`);
+    // What the command passed: the reading's `model` and `effort`, or `configuredModel` and `configuredEffort`
+    // when those are what the session ran with.
+    const passed = stored.modelSource === 'session' ? { model: stored.configuredModel, effort: stored.configuredEffort } : { model: stored.model, effort: stored.effort };
+    const pinned = CONFIGS.find((one) => one.name === config);
+    assert.deepEqual(passed, { model: pinned.model, effort: pinned.effort }, `${config}:${range}`);
     read += 1;
   }
   assert.equal(read, 7, 'every lean cell has a committed reading to be held to');
@@ -466,7 +470,7 @@ test('--dry-run: the argv of the four lean cells is the one their readings were 
 // --- the configuration that is retired ---
 
 const RETIRED = (cell) =>
-  `Cell ${cell} cannot be run: the \`current\` configuration was retired on 2026-10-08, because a Codex review runs only on gpt-6.1-sol at medium effort (odd/tasks/codex-review-cost.md) ` +
+  `Cell ${cell} cannot be run: the \`current\` configuration was retired on 2026-10-08, because a Codex review runs only on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort (odd/tasks/codex-review-cost.md) ` +
   'and this configuration measured one on the model the user\'s own Codex configuration names. Its readings stay as the record of the comparison; nothing was started.';
 
 test('the current configuration is retired: its cells are refused before anything is made or started, with --force and as a dry run too, and its readings stay', async () => {

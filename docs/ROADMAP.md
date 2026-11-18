@@ -969,9 +969,11 @@ of the first version.
   walk left to him. The rest waits for G3; its completion boundary and dependency map are in the
   proposal's section 4.7.
 - [ ] Modern Web Guidance, Google Chrome's skill of web-platform practice (1.0.1), as an optional `stack` row
-  beside context7: a candidate, his to decide, nothing installed. He asked on 2026-11-17 ("Modren web guidance de
-  google nos ayudaria para este proyecto mejor que context7"), then "quiero saber mas antes de añadirlo", then
-  "Sí, anótalo" to this entry. It replaces nothing: its guides name no framework and cover HTML, CSS and browser
+  beside context7: nothing installed, and his direction is that the harness can turn it on. He asked on 2026-11-17
+  ("Modren web guidance de google nos ayudaria para este proyecto mejor que context7"), then "quiero saber mas
+  antes de añadirlo", then "Sí, anótalo" to this entry and, the same day: "cuando se vaya a hacer un proyecto de
+  desarrollo y codigo que va a ser casi la mayoria de las veces, la idea es que el harness pueda activarlo". It
+  replaces nothing: its guides name no framework and cover HTML, CSS and browser
   APIs, while context7 holds library docs and stays required (S11). Read at the source, none measured here: its
   README gives Claude Code 57% to 88% of its own checks (its row of 2026-11-08) and a fixed cost near 205 tokens;
   note inc., on a Next.js codebase, went from 60.8% to 94.0% when the prompt named it and to 76.5% with it only
@@ -979,7 +981,8 @@ of the first version.
   `DISABLE_TELEMETRY=1`. Run once, on 2026-11-17: its `legacy-scan` on `D:\abogadaclaudiajimenez` changed no file
   and found 5 items, 2 in his code and minor, over about 20% of the guides, so it proves little. This session's
   reading, not his words: no gain in this repository (one HTML file), and what would decide is one real UI task in
-  one Astro or Next.js project, with and without it. Owed before any row: a design with its two reviews.
+  one Astro or Next.js project, with and without it; turning it on would be a switch in `harness.json` beside
+  `codeMap`, on only where a project has a web interface. Owed before any row: a design with its two reviews.
   Sources: https://github.com/GoogleChrome/modern-web-guidance and
   https://developer.chrome.com/blog/mwg-with-internal-component.
 

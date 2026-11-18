@@ -86,22 +86,23 @@ const SEEDED_KEY = JSON.parse(fs.readFileSync(path.join(SEEDED_DIR, 'key.json'),
 
 /** The configurations, in the order of the report. `session` is the session of `codex-review` the
  * configuration was measured in, of the two it had then (it has one since 2026-10-08, the lean one, and no
- * cell names it to the command); `prompt` is `codex-review`'s; `effort` is
- * the one the lean session is launched at and held to, written out and never taken from the command's own
- * (`null` under `current`, which was handed none: the user's configuration named its effort then); `doc` is
+ * cell names it to the command); `prompt` is `codex-review`'s; `model` and `effort` are
+ * the ones the lean session is launched on and held to, written out and never taken from the command's own
+ * (`null` under `current`, which was handed neither: the user's configuration named them then); `doc` is
  * whether the review is given the range's feature document; `codegraph`, whether the CodeGraph MCP server
  * of the user's configuration is added; `only`, the ranges it runs on when not all; `retired`, the day
  * since which it is no longer run, `null` for one that still is (`compareMain` refuses a retired cell).
  *
  * The efforts are the ones the committed readings were measured with: `medium` was the command's own until
  * 2026-10-08 and `high` is since, so a `lean` that followed it would have become `lean-high` under its own
- * name. A test holds each to its readings (`./compare.test.mjs`). */
+ * name. The model is pinned for the same reason: every lean reading was taken on gpt-6.1-sol, and the rule
+ * `review-model` has moved on since (2026-11-18). A test holds each to its readings (`./compare.test.mjs`). */
 export const CONFIGS = [
-  { name: 'current', session: 'current', prompt: 'codex', effort: null, doc: false, codegraph: false, only: null, retired: '2026-10-08', what: 'the current session, the default while the cells were read: the user\'s whole Codex configuration, measured in a copy of his Codex home' },
-  { name: 'lean', session: 'lean', prompt: 'codex', effort: 'medium', doc: false, codegraph: false, only: null, retired: null, what: 'the lean session, asked with the sentence Codex writes for `--base`' },
-  { name: 'lean-own', session: 'lean', prompt: 'own', effort: 'medium', doc: true, codegraph: false, only: null, retired: null, what: 'the lean session, asked with this harness\'s own prompt and the range\'s feature document' },
-  { name: 'lean-high', session: 'lean', prompt: 'codex', effort: 'high', doc: false, codegraph: false, only: null, retired: null, what: 'the lean session at high effort' },
-  { name: 'lean-codegraph', session: 'lean', prompt: 'codex', effort: 'medium', doc: false, codegraph: true, only: ['real'], retired: null, what: 'the lean session with the CodeGraph MCP server of the user\'s configuration' },
+  { name: 'current', session: 'current', prompt: 'codex', model: null, effort: null, doc: false, codegraph: false, only: null, retired: '2026-10-08', what: 'the current session, the default while the cells were read: the user\'s whole Codex configuration, measured in a copy of his Codex home' },
+  { name: 'lean', session: 'lean', prompt: 'codex', model: 'gpt-6.1-sol', effort: 'medium', doc: false, codegraph: false, only: null, retired: null, what: 'the lean session, asked with the sentence Codex writes for `--base`' },
+  { name: 'lean-own', session: 'lean', prompt: 'own', model: 'gpt-6.1-sol', effort: 'medium', doc: true, codegraph: false, only: null, retired: null, what: 'the lean session, asked with this harness\'s own prompt and the range\'s feature document' },
+  { name: 'lean-high', session: 'lean', prompt: 'codex', model: 'gpt-6.1-sol', effort: 'high', doc: false, codegraph: false, only: null, retired: null, what: 'the lean session at high effort' },
+  { name: 'lean-codegraph', session: 'lean', prompt: 'codex', model: 'gpt-6.1-sol', effort: 'medium', doc: false, codegraph: true, only: ['real'], retired: null, what: 'the lean session with the CodeGraph MCP server of the user\'s configuration' },
 ];
 
 /** The ranges. `base` and `head` are full commit ids, `doc` the feature document of the range, from the
@@ -578,13 +579,13 @@ export async function compareMain(argv = process.argv.slice(2), deps = {}) {
 
   /** What `codex-review` is called with for the tree at `checkout`, and what Codex is launched with: the
    * one place both a dry run and a real one take them from. Nothing is left to a default of the command
-   * that could change under a cell: the effort is the cell's own, handed over as it is, since left out it
-   * would be the command's, which changed once already, and the cell would measure another configuration
+   * that could change under a cell: the model and the effort are the cell's own, handed over as they are, since
+   * left out they would be the command's, which have changed since, and the cell would measure another configuration
    * under its name. No session is named: the command has one since 2026-10-08, and `--session` is a flag
    * it only still reads. */
   const reviewOf = (checkout) => ({
     command: ['--base', range.base, ...(config.prompt === 'own' ? ['--prompt', 'own', '--doc', range.doc] : []), '--cwd', checkout],
-    codexArgv: codexArgs(range.base, platform, config.prompt, { effort: config.effort, extraConfig }),
+    codexArgv: codexArgs(range.base, platform, config.prompt, { model: config.model, effort: config.effort, extraConfig }),
   });
 
   if (args.dryRun) {
@@ -632,7 +633,7 @@ export async function compareMain(argv = process.argv.slice(2), deps = {}) {
     // taken with every file of its range under review, the Markdown file both ranges change among them. A
     // review that left it out, as `codex-review` does for a person, would be asked by its files with another
     // prompt, and would not be the cell its reading is of.
-    const reviewDeps = { spawn, log, error, platform, homedir, now, ...deps.review, onResult: (result) => results.push(result), effort: config.effort, extraCodexConfig: extraConfig, everyFile: true };
+    const reviewDeps = { spawn, log, error, platform, homedir, now, ...deps.review, onResult: (result) => results.push(result), model: config.model, effort: config.effort, extraCodexConfig: extraConfig, everyFile: true };
     const { command } = reviewOf(checkout);
     log(`Cell ${cell}: js-harness codex-review ${command.join(' ')}`);
     exit = await codexReviewMain(command, env, reviewDeps);
