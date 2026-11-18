@@ -1,7 +1,8 @@
 # review-gate: one honest review gate
 
 ## State
-JH 207, branch feat/review-gate, pushed at a8ee54a8. V1 closed (L57-L61); V4+V3 4f9103fa reviewed and closed (L62-L65). V2 4c8069dd and its guard fix cfd546ba reviewed and closed (L66-L70); third verifier pass done (L71): B and C 3b41c3a7 reviewed and closed (L71-L75), T9 done, pushed; ready recorded, summary pushed (L77); the lead held the land for e1b and D (L78): built tests first, whole set green (L79), reviewed (L80), but a no-HEAD regression found (L81); fixed, reviewed (L82-L83); ready sent again at d3e05aa6 (L85); waiting for the land, then T10 from main (spec 8), then closed; then T10 from main after the land, then closed; then notify ready --pr 896 (A is T10, its own slice after the land, L73). Every codex-review after its --plan and codex-meter; commit the doc before a review (L59); local runs name codex-review.second.test.mjs (L41). Open item, no check now: whether a skip's reason is the owner's words (L56).
+Landed (2026-11-18, JH 222, read with `gh`): PR 896 (45a40e8c), then T10 as PR 898 (6bd49076). What follows is the state
+before those lands. JH 207, branch feat/review-gate, pushed at a8ee54a8. V1 closed (L57-L61); V4+V3 4f9103fa reviewed and closed (L62-L65). V2 4c8069dd and its guard fix cfd546ba reviewed and closed (L66-L70); third verifier pass done (L71): B and C 3b41c3a7 reviewed and closed (L71-L75), T9 done, pushed; ready recorded, summary pushed (L77); the lead held the land for e1b and D (L78): built tests first, whole set green (L79), reviewed (L80), but a no-HEAD regression found (L81); fixed, reviewed (L82-L83); ready sent again at d3e05aa6 (L85); waiting for the land, then T10 from main (spec 8), then closed; then T10 from main after the land, then closed; then notify ready --pr 896 (A is T10, its own slice after the land, L73). Every codex-review after its --plan and codex-meter; commit the doc before a review (L59); local runs name codex-review.second.test.mjs (L41). Open item, no check now: whether a skip's reason is the owner's words (L56).
 C:\Users\Oficina\.js-harness\background\briefs\2026-11-15T12-20-39-311Z-c126f3fd.md. Orientation done; plan draft and
 advisor answer taken (see Log L2). Next: read verify5 (Temp scratchpad path on line 4 of the lead's
 jh199-verify5-883.md), `git show worktree-full-audit:odd/tasks/full-audit.md`, his words (`js-harness sessions --quote`
@@ -91,7 +92,7 @@ Refusing existing records (S5's 78); anything that changes who decides a waiver.
 - [x] T7 (kind: build) S6, spec 6: lens BLOCKER/CRITICAL owed until a lens recheck, admitted records only
 - [x] T8 (kind: build) S7, spec 7: the quiet line shows both debts
 - [x] T9 (kind: verify) one opus verifier on the whole: first pass found F1-F3 (L30); second V1-V4 (L48); third A-G (L71), B and C fixed (L72)
-- [ ] T10 (kind: build) spec 8, route: its own slice from main after PR 896 lands, tests first, real records counted first (L73)
+- [x] T10 (kind: build) spec 8, route: its own slice from main after PR 896 lands, tests first, real records counted first (L73); PR 898 (6bd49076), after PR 896 (45a40e8c)
 
 ## Log
 - L1 2026-11-15, his request: question 287, answered 02:51 local, "Puerta de revisión (Recomendada)" (quote to be read
