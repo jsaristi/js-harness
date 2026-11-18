@@ -1,10 +1,10 @@
 # again-subrange: an --again over part of a range does not clear an owed correction
 
 ## State
-JH 207, worktree D:/js-harness-worktrees/spanning-review, branch feat/spanning-review, PR 902, a draft. His answer A to
-question 338: T7 fixed tests first (L45), main 15f74d8 merged in (40dd016c). Next: Codex and the lenses on the slice,
-then one independent verifier (cap 15M), then ready --pr 902 to the lead. js-harness wait --notice-to 207 runs in the
-background; the session stops it when it closes.
+JH 207, worktree D:/js-harness-worktrees/spanning-review, branch feat/spanning-review, PR 902, a draft. T7 done and
+reviewed clean (L45-L48, main 611f5013 merged in at b9034a9c); the independent verifier found a fail-open that predates T7
+(L49), left for his decision (T8): land as is, or fix T8 first. js-harness wait --notice-to 207 runs in the background;
+the session stops it when it closes.
 
 ## Goal
 A clean Codex review at a head that owes a correction settles that correction only where it reads the whole range the
@@ -82,6 +82,7 @@ Nothing beyond the lead's scope; questions go to the lead by notify.
 - [ ] T6 (kind: build) open, for the lead: where a plain review decides, a standing recheck's open finding joins a first recheck and can get a fourth review (L27)
 - [x] T3 (kind: build) spec 2, done in 6eba0f3f (L32): the lens rows' older-writer note counts only records of the range checked
 - [x] T7 (kind: build) spec 3, his answer A to question 338, done (L45): `settled` settled a spanned debt by findings matched by value, not by a recheck walk that reached the head
+- [ ] T8 (kind: build) spec 3, open, his decision (L49): the re-read of a merge recheck starts at the merge, not where its run started, so a long run of document commits lets it join a debt the run never held; the onLine guard of settled has no test
 
 ## Log
 - L1 2026-11-16, the lead (message to JH 207): "PR 896 landed. main 83252ac is now 45a40e8 ... Start T10 from main: the
