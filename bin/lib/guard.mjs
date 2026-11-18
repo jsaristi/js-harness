@@ -382,7 +382,7 @@ export function terminalNoteRefusal(command, projectData) {
  * `2>&1` stays in its word where `redirections` is off. `words.operators` holds the indexes of the words that are operators,
  * so a quoted `"&&"` is told from one. With `groups`, an unquoted `(` or `)` of a subshell is an operator too; one of
  * a `$(...)` stays in its word. With `redirections`, an unquoted `>`, `>>` or `>|` is a word of its own wherever it
- * stands, a descriptor before it (`2>`) taken in, and `words.redirections` holds their indexes. */
+ * stands, a descriptor before it (`2>`) or the `&` of `&>` taken in, and `words.redirections` holds their indexes. */
 export function shellWords(command, { groups = false, redirections = false } = {}) {
   const words = [];
   const operators = new Set();
@@ -452,6 +452,11 @@ export function shellWords(command, { groups = false, redirections = false } = {
     } else if (c === '&' && word !== null && !quoted && /[<>]$/.test(word)) {
       // The `&` of `2>&1` or `>&2` belongs to its redirection.
       word += c;
+    } else if (redirections && c === '&' && text[i + 1] === '>') {
+      // The `&` of `&>` and `&>>` is its redirection's, read with the `>` that follows: here, where quotes, comments and
+      // heredoc bodies are known (the verifier's third pass on background-launch, 2026-11-17).
+      if (word !== null) words.push(word);
+      word = null;
     } else if (c === ';' || c === '|' || c === '&') {
       if (word !== null) words.push(word);
       word = null;

@@ -43,6 +43,10 @@ test('a step that launches claude --bg or js-harness sessions start is found, ho
     // The lenses on 0b7d607..7a7eb7c: a separator before a real &>, or an &> in quotes, is still a separator.
     ['echo ok & >log claude --bg x; node y &>out', 'claude --bg'],
     ['echo "&>" & >log claude --bg x', 'claude --bg'],
+    // The verifier's third pass, 2026-11-17: an apostrophe in a comment or a heredoc body hides no later &>.
+    ["# it's a note\nclaude &>log --bg x", 'claude --bg'],
+    ["echo hi # it's\nclaude &>log --bg x", 'claude --bg'],
+    ["git commit -F - <<'EOF'\nfix: claude's reader\nEOF\nclaude &>log --bg x", 'claude --bg'],
   ]) {
     assert.equal(backgroundLaunch(command), launch, command);
   }
@@ -62,6 +66,10 @@ test('a command that only names a launch, in quotes or a heredoc body, launches 
     'exec -a --bg claude -p x',
     'node x.mjs > out.log 2>&1',
     'node x.mjs &> out.log && gh pr view 1',
+    "git commit -F - <<'EOF'\nfix: claude's reader, claude --bg\nEOF\nnode x.mjs &> out.log && gh pr view 1",
+    "# it's a note\nnode y &> out && gh pr view 1",
+    'js-harness wait --notice-to orchestrator &>/dev/null &',
+    'node --test a.mjs b.mjs &>> o.log && gh pr view 1',
   ]) {
     assert.equal(backgroundLaunch(command), null, command);
   }
