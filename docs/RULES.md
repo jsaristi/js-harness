@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `d39ff041bf30`. In force: 73 (45 of Sebastián, 28 of the project). Retired: 9.
+Hash `41acc56f64de`. In force: 73 (45 of Sebastián, 28 of the project). Retired: 9.
 
 ## Sebastián's
 
@@ -157,14 +157,16 @@ Before adding a command, an option, a function, a protocol, a rule or a document
 - Since 2026-10-24. Row: reports. Source: his words of 2026-10-23, checked by the command on 2026-10-24.
 
 ### review-effort
-The effort a Codex review runs at: medium.
+The effort a Codex review runs at: max.
+- Was: medium until 2026-11-18.
 - Read by: `bin/codex-review.mjs`, `bin/lib/model-home.mjs`.
-- Since 2026-10-12. Row: reports. Source: his words of 2026-10-08, 2026-10-12, checked by a session on 2026-10-12.
+- Since 2026-11-18. Row: reports. Source: his words of 2026-11-17, checked by the command on 2026-11-18.
 
 ### review-model
-The one model a Codex review runs on: gpt-6.1-sol.
+The one model a Codex review runs on: gpt-6.2-sol.
+- Was: gpt-6.1-sol until 2026-11-18.
 - Read by: `bin/codex-review.mjs`, `bin/lib/model-home.mjs`.
-- Since 2026-10-08. Row: reports. Source: his words of 2026-10-06, 2026-10-08, checked by a session on 2026-10-11.
+- Since 2026-11-18. Row: reports. Source: his words of 2026-11-17, checked by the command on 2026-11-18.
 
 ### reviewed-commit-lines
 About how many changed lines a commit that will be reviewed stays under, a file it renames counted by the lines it changes: 1,200 changed lines.
