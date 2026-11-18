@@ -230,6 +230,7 @@ run in an environment with no DOM and no Node, and reach the world through `$`:
   2.1.321 the question is not asked in bypass or auto mode: the first write turns the mods on
   (`docs/host-updates/claude-desktop-5.1231.0.md`, code 2.1.321 #7), so in a harness session,
   which runs in bypass, his yes has to be recorded before a mod is written.
+- **Since the 6.6395.0 review** (`docs/host-updates/claude-desktop-6.6395.0.md`): CLI 2.1.323 makes a `*`, namespace or negated `engine.create` hook only observe and adds `isPromptCovered` to a pane's props; 2.1.326 adds `overflowX` on `Box` and `maxLines` and `wrap="clip"` on `Text`, and asks more often for edits in a session's mods folder. None of it changes the board pane below.
 - **Maturity:** "Added Claude Mods" in 2.1.287; 65 "Fixed" lines name a mod since then (counted in
   the changelog copy). A lost hooks worker restarts the module with its timers gone [doc].
 
