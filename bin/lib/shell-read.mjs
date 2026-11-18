@@ -71,21 +71,9 @@ export function readShell(source, { body = false } = {}) {
     }
     if (s[i] !== '$') return false;
     const start = i;
-    if (s[i + 1] === '(' && s[i + 2] === '(') {
-      // Arithmetic: `<<` is a shift, not a heredoc; a `$(` inside still runs. bash may read a `$((` that is no
-      // arithmetic as a substitution of a subshell, so one that names js-harness is read loosely.
-      let depth = 0;
+    if ((s[i + 1] === '(' && s[i + 2] === '(') || s[i + 1] === '[') {
       i += 1;
-      for (; i < s.length; i++) {
-        if (s[i] === '$' && s[i + 1] === '(' && s[i + 2] !== '(') {
-          i += 1;
-          subshell();
-          i -= 1;
-        } else if (s[i] === '(') depth++;
-        else if (s[i] === ')' && --depth === 0) break;
-      }
-      if (i >= s.length || /js-harness/.test(s.slice(start, i))) broken = true;
-      i += 1;
+      arithmetic(start);
     } else if (s[i + 1] === '(') {
       i += 1;
       subshell();
@@ -114,15 +102,15 @@ export function readShell(source, { body = false } = {}) {
       }
       if (depth > 0) broken = true;
     } else if (s[i + 1] === "'" && !inDouble) {
-      // ANSI-C quoting: a backslash escapes the next character, the quote included.
+      // ANSI-C quoting, its escapes decoded as bash decodes them: the text is the word bash runs.
       i += 2;
       while (i < s.length && s[i] !== "'") {
-        if (s[i] === '\\') i++;
-        word.text += s[i] ?? '';
-        i++;
+        if (s[i] === '\\') word.text += ansiEscape();
+        else word.text += s[i++];
       }
       if (i >= s.length) broken = true;
       word.raw += s.slice(start, i + 1);
+      word.quoted = true;
       i += 1;
       return true;
     } else if (/[A-Za-z0-9_@*#?$!-]/.test(s[i + 1] ?? '')) {
@@ -140,6 +128,53 @@ export function readShell(source, { body = false } = {}) {
     word.raw += s.slice(start, i);
     word.expands = true;
     return true;
+  };
+
+  // Reads arithmetic, `$((…))`, `$[…]` or a `((…))` command, whose first bracket is at `i`, to its match; `i` ends
+  // after it. `<<` in it is a shift, not a heredoc; a `$(` inside still runs. bash may read a `((` that is no
+  // arithmetic as a subshell, so one that names js-harness is read loosely.
+  const arithmetic = (start) => {
+    const open = s[i];
+    const close = open === '[' ? ']' : ')';
+    let depth = 0;
+    for (; i < s.length; i++) {
+      if (s[i] === '$' && s[i + 1] === '(' && s[i + 2] !== '(') {
+        i += 1;
+        subshell();
+        i -= 1;
+      } else if (s[i] === open) depth++;
+      else if (s[i] === close && --depth === 0) break;
+    }
+    if (i >= s.length || /js-harness/.test(s.slice(start, i))) broken = true;
+    i += 1;
+  };
+
+  // Decodes one escape of `$'…'` whose backslash is at `i`; `i` ends after it.
+  const ansiEscape = () => {
+    const c = s[i + 1] ?? '';
+    const simple = { a: '\x07', b: '\b', e: '\x1b', E: '\x1b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v' };
+    const digits = (from, re, max, base) => {
+      let k = from;
+      while (k < from + max && re.test(s[k] ?? '')) k++;
+      const value = s.slice(from, k);
+      if (value === '') return null;
+      i = k;
+      return String.fromCodePoint(parseInt(value, base));
+    };
+    if (Object.hasOwn(simple, c)) {
+      i += 2;
+      return simple[c];
+    }
+    if (/[0-7]/.test(c)) return digits(i + 1, /[0-7]/, 3, 8);
+    if (c === 'x' || c === 'u' || c === 'U') {
+      const value = digits(i + 2, /[0-9A-Fa-f]/, c === 'x' ? 2 : c === 'u' ? 4 : 8, 16);
+      if (value !== null) return value;
+    } else if (c === 'c' && i + 2 < s.length) {
+      i += 3;
+      return String.fromCharCode(s[i - 1].toUpperCase().charCodeAt(0) ^ 64);
+    }
+    i += 2;
+    return /['"\\?]/.test(c) ? c : '\\' + c;
   };
 
   // Reads a `$(` whose `(` is at `i`, to its `)`; `i` ends after it.
@@ -212,6 +247,22 @@ export function readShell(source, { body = false } = {}) {
         word.text += '<()';
         word.raw += '<()';
         word.expands = true;
+      } else if (c === '(' && !word.quoted && /^[A-Za-z_][A-Za-z0-9_]*\+?=$/.test(word.raw)) {
+        // An array assignment, `name=(a b)`: its elements are words of this one, their substitutions still read.
+        const open = i;
+        i += 1;
+        while (i < s.length && s[i] !== ')') {
+          if (/\s/.test(s[i])) i++;
+          else if (readWord() === null) {
+            broken = true;
+            i++;
+          }
+        }
+        if (i >= s.length) broken = true;
+        i += 1;
+        word.text += s.slice(open, i);
+        word.raw += s.slice(open, i);
+        word.expands = true;
       } else if (/[\s;&|()<>]/.test(c)) {
         break;
       } else {
@@ -267,16 +318,8 @@ export function readShell(source, { body = false } = {}) {
         i++;
       } else if (c === '(') {
         finish();
-        if (s[i + 1] === '(' && command === null) {
-          // An arithmetic command: `<<` is a shift; one that names js-harness is read loosely, as `$((` is.
-          const from = i;
-          let d = 0;
-          for (; i < s.length; i++) {
-            if (s[i] === '(') d++;
-            else if (s[i] === ')' && --d === 0) break;
-          }
-          if (i >= s.length || /js-harness/.test(s.slice(from, i))) broken = true;
-          i++;
+        if (s[i + 1] === '(') {
+          arithmetic(i);
         } else {
           depth++;
           i++;

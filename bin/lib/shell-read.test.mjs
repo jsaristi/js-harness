@@ -22,6 +22,15 @@ test('a substitution\'s commands are read, inside double quotes and heredoc bodi
   assert.deepEqual(words('cat <<EOF\n$(x y)\nEOF'), [['cat'], ['x', 'y']]);
   assert.deepEqual(words("cat <<'EOF'\n$(x y)\nEOF"), [['cat']], 'a quoted delimiter expands nothing');
   assert.deepEqual(words('echo $((1<<X))\nz\nX'), [['echo', '$((1<<X))'], ['z'], ['X']], 'an arithmetic shift opens no heredoc');
+  // The lenses on ffe98caa.
+  assert.deepEqual(words('echo $[1<<X]\nz\nX]'), [['echo', '$[1<<X]'], ['z'], ['X]']], 'nor does the old arithmetic $[…]');
+  assert.deepEqual(words('(( y = $(a b) ))'), [['a', 'b']], 'an arithmetic command runs its substitutions');
+  assert.deepEqual(words('cmds=(a "b c" $(d)) e'), [['d'], ['cmds=(a "b c" $(d))', 'e']], 'an array assignment is one word');
+});
+
+test('ANSI-C quoting is decoded as bash decodes it', () => {
+  assert.deepEqual(words("x $'\\x6aa\\n\\t\\101\\u0042\\'\\\\'"), [['x', "ja\n\tAB'\\"]]);
+  assert.equal(readShell("cat <<$'E'\n$(x)\nE").commands.length, 1, "a $'…' delimiter is quoted");
 });
 
 test('a heredoc body is kept with the command it feeds, not read as commands', () => {
