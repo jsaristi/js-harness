@@ -134,6 +134,13 @@ test('real: a block whose last command PowerShell cannot find is checked, not fa
     ? { error: Object.assign(new Error('spawn pwsh.exe ENOENT'), { code: 'ENOENT' }) }
     : spawnSync(program, args, options));
   assert.deepEqual(shellParser('win32', windowsPowerShell)(texts, { timeout: 20000 }), { errors: [['rm has no parameter -rf'], []] });
+  // A lookup that fails for another reason than a miss (an unmatched `[` is no wildcard pattern) checked nothing: the
+  // parser could not check the block, wherever the command stands (Codex, over b044dbf..0339273).
+  for (const spawn of [undefined, windowsPowerShell]) {
+    for (const broken of [["& 'Get-Ite[m' -x"], ["& 'Get-Ite[m' -x", 'rm -rf x']]) {
+      assert.match(String(shellParser('win32', spawn)(broken, { timeout: 20000 }).failed), /^PowerShell: it exited 1$/, JSON.stringify(broken));
+    }
+  }
 });
 
 test('real: bash -n reads each block off Windows', { skip: process.platform === 'win32' && 'bash is checked off Windows' }, () => {

@@ -315,12 +315,19 @@ export const COMMANDS_DEADLINE_MS = 4000;
 // to none of its parameters, or to more than one by a prefix that is no full name or alias (`-f` of Remove-Item), as
 // PowerShell binds them; an alias resolved by its `Definition` (a profile-less shell leaves `ResolvedCommand` empty)
 // and a provider's dynamic parameters counted through `-ArgumentList`. A native program, and a simple function that
-// takes any name into `$args`, are skipped. Each line it prints is `<index>`, a tab, and why. It ends on `exit 0`:
-// without it the exit code is the last statement's `$?`, false after Get-Command misses a name, so a block whose last
-// command PowerShell cannot find read as a parser that could not run (odd/tasks/reply-hook-latency.md, T8); an error
-// that stops the script before its end still exits 1.
+// takes any name into `$args`, are skipped. Each line it prints is `<index>`, a tab, and why. Its exit code is its
+// own: 0, or 1 when a lookup failed for another reason than a name PowerShell cannot find (an unmatched `[` is no
+// wildcard pattern), since that block's parameters went unchecked. Left to the last statement's `$?`, false after any
+// miss, a block whose last command was a typo read as a parser that could not run, and a failed lookup earlier in the
+// text passed (odd/tasks/reply-hook-latency.md, T8). An error that stops the script before its end still exits 1.
 const POWERSHELL_CHECK = String.raw`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $tab = [char]9
+$broken = $false
+function Find-Command($name) {
+  try { Get-Command $name -ErrorAction Stop | Select-Object -First 1 }
+  catch [System.Management.Automation.CommandNotFoundException] { $null }
+  catch { $script:broken = $true; [Console]::Error.WriteLine("$($name): $_"); $null }
+}
 $texts = @([Console]::In.ReadToEnd() -split [char]10 | Where-Object { $_.Trim() } | ForEach-Object { [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_.Trim())) })
 for ($i = 0; $i -lt $texts.Count; $i++) {
   $tokens = $null; $errors = $null
@@ -329,8 +336,8 @@ for ($i = 0; $i -lt $texts.Count; $i++) {
   if ($errors.Count -gt 0) { continue }
   foreach ($c in $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true)) {
     $name = $c.GetCommandName(); if (-not $name) { continue }
-    $cmd = Get-Command $name -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($cmd -and $cmd.CommandType -eq 'Alias') { $cmd = Get-Command $cmd.Definition -ErrorAction SilentlyContinue | Select-Object -First 1 }
+    $cmd = Find-Command $name
+    if ($cmd -and $cmd.CommandType -eq 'Alias') { $cmd = Find-Command $cmd.Definition }
     if (-not $cmd -or $cmd.CommandType -notin 'Cmdlet', 'Function') { continue }
     if ($cmd.CommandType -eq 'Function' -and -not $cmd.CmdletBinding) { continue }
     $first = $c.CommandElements | Select-Object -Skip 1 | Where-Object { $_ -is [System.Management.Automation.Language.StringConstantExpressionAst] } | Select-Object -First 1
@@ -345,7 +352,7 @@ for ($i = 0; $i -lt $texts.Count; $i++) {
     }
   }
 }
-exit 0
+exit ([int]$broken)
 `;
 
 /** Why one spawn of a checker gave no answer, or `null` when it answered. */

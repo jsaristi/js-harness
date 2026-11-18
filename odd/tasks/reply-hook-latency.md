@@ -330,6 +330,13 @@ a longer timeout for the reply hook seldom lengthens a stop. That value is his: 
   found, not in this change and left for the lead: `Get-Date -?` refused as ambiguous, `Get-Date -F*` passed (the
   parameter name reaches `-like` as a pattern), `* -x` checked against an unrelated command. Not checked by it: the
   whole hook path, a host crash, a profile or constrained language mode, off Windows, `npm run check`.
+- L15 (2026-11-18, JH 223, reviews over `b044dbf..0339273`): the Claude lenses (risk, resilience, reliability) 0
+  findings. Codex (627,015 input tokens, 456 s, run on the lead's word after question 344 was withdrawn): one P2,
+  accepted: an unconditional `exit 0` also let a lookup that failed for another reason than a miss pass, as
+  `& 'Get-Ite[m' -x` (an unmatched `[`, `WildcardPatternException`), so that block's parameters went unchecked. Fixed,
+  tests first (red on `0339273`: the block passed): the lookups go through `Find-Command`, where only
+  `CommandNotFoundException` is a miss and any other failure makes the script exit 1, in both shells; the same failure
+  earlier in the text, which the old script also passed, now refuses too.
 
 ## Next step
 Code: `b42532d7`, `8c746b16`, `c76d97d1` and the verifier's fixes (L9), each committed with the gate green. Question
