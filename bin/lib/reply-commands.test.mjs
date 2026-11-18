@@ -160,6 +160,17 @@ test('real: each block gets its own answer from PowerShell 7 and Windows PowerSh
   }
 });
 
+test('real: through commandRefusals, a block whose last command PowerShell cannot find is no refusal, as when it is not last (dropped on purpose, odd/tasks/reply-hook-latency.md, L20)', { skip: process.platform !== 'win32' && 'PowerShell is checked on Windows' }, () => {
+  const check = (reply, transcript) => commandRefusals(fencedBlocks(reply), { platform: 'win32', transcript, parse: shellParser('win32') });
+  // His own block, parsed only: the miss last, and the same miss before a command that is found.
+  assert.deepEqual(check('```powershell own\nnosuchprog-jh223 --a\n```', DOCTOR_RUN), []);
+  assert.deepEqual(check('```powershell own\nnosuchprog-jh223 --a; git status\n```', DOCTOR_RUN), []);
+  // A handed block with no transcript to read goes to the parser too.
+  assert.deepEqual(check('```powershell\nnosuchprog-jh223 --a\n```', null), []);
+  // A sibling's refusal is kept beside it.
+  assert.match(check('```powershell own\nrm -rf x\n```\n\n```powershell own\nnosuchprog-jh223\n```', DOCTOR_RUN).join('\n'), /"rm -rf x" \(line 1\): rm has no parameter -rf$/);
+});
+
 test('real: bash -n reads each block off Windows', { skip: process.platform === 'win32' && 'bash is checked off Windows' }, () => {
   const checked = shellParser('linux')(['rm -rf /tmp/none-such && echo ok', 'if then fi )'], { timeout: 10000 });
   assert.deepEqual(checked.errors[0], []);

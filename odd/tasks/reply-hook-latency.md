@@ -239,6 +239,26 @@ process outside the hook's life, which `uninstall` would have to know). Under a 
 4–6 s the check's 4 s deadline (`COMMANDS_DEADLINE_MS`, kept at 4 s by `odd/tasks/reply-hook-timeout.md`) can pass, and
 the block is refused as one its parser could not check: a refusal, not a pass, and none recorded so far.
 
+### Refusals main made that this change drops (L21)
+
+The brief said "keeps every refusal". Each case below was refused on main (`b044dbf7`) only because the parser's exit
+was the `$?` of the spawn's last statement. A refusal of the form "its parser could not check it (PowerShell: it exited
+1)" covers every block of that spawn. The same text passed on main whenever the miss was not last. Each is dropped on
+purpose; no other refusal is dropped (L22).
+
+1. An `own` block whose last command PowerShell cannot find (`nosuchprog-jh223 --a`). Pinned through `commandRefusals`
+   by the test "through commandRefusals, a block whose last command PowerShell cannot find is no refusal" (red on
+   main).
+2. A handed block when the transcript cannot be read (Codex, a missing file): such a block goes to the parser, so it
+   is case 1 again (the same test).
+3. Valid sibling blocks of the same reply: the spawn's exit 1 refused every block in it, though a sibling had nothing
+   wrong. Now each keeps its own answer, and a sibling's real error is still named (the same test, and "each block
+   gets its own answer").
+4. A miss of another kind as the spawn's last statement: an alias to a missing target, a `.ps1` or `.exe` path that
+   does not exist, a module-qualified name whose module or command does not exist (the second verifier, L20).
+
+Whether an unknown command should be refused on purpose is a new check, for the lead.
+
 ### What the timeout needs (T5)
 
 In the same transcript the host cancelled `guard --stop` at its 5 s in 52 of 503 stops and `backup --hook` in 55, as
