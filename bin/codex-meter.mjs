@@ -14,10 +14,20 @@
 // arguments, its output and its exit code. It exits 0 with a reading, 1 when the read fails (codex is missing, the
 // server does not answer in time, answers with an error, or exits first), and 2 for a usage error, which starts
 // no process.
+//
+// `--per-pr` answers the other half of the question, what Codex was spent on (odd/tasks/codex-spend.md, spec 6): Codex
+// input per landed PR, from the records under `<git common dir>/js-harness/` alone (`perLandedPr`,
+// ./lib/land-records.mjs), so it starts no app-server. It exits 0 with its report, 1 when the records cannot be read.
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
 import { unknownArgument } from './lib/args.mjs';
 import { failureLine, humanLines, parseRateLimits, readRateLimits } from './lib/codex-meter.mjs';
 import { floorDebtLines } from './lib/codex-meter.mjs';
-import { isValidCodexReview, readCodexReviews } from './lib/codex-reviews.mjs';
+import { admittedCodexReviews, defaultBranch, gitOut, reviewCoverage } from './lib/codex-review-coverage.mjs';
+import { codexReviewRunsPath } from './lib/codex-review-runs.mjs';
+import { isValidCodexReview, jsonLinesPath, readCodexReviews } from './lib/codex-reviews.mjs';
+import { DOUBLE_REVIEWS_FILE } from './lib/double-review-records.mjs';
+import { perLandedPr, perPrLines, readLandRecord, readRecordLines } from './lib/land-records.mjs';
 import { branchCodexSkips, codexSkipsOwed, skipLine } from './lib/lens-review-rows.mjs';
 
 /** What `fn` gives, or `fallback` when it throws: a debt that cannot be read must not cost the reading. */
@@ -48,29 +58,61 @@ function debtLines(debts) {
   return debts.length === 0 ? ['Codex debts: none'] : debts.map((debt) => `Codex debt: ${debt}`);
 }
 
-export const USAGE = 'Usage: js-harness codex-meter [--json]';
+/** Codex input per landed PR in the repository of `cwd`, read from its records: the run log and the land records read
+ * so that a file there that cannot be read throws, the Codex review records with the run log's admission, and git
+ * for the commits each land brought in. Each re-read is counted by `reviewCoverage` as the push counts it. */
+function workingPerPr(cwd = process.cwd()) {
+  const git = (args, input) => gitOut(spawnSync, cwd, args, input);
+  const { records, admitted } = admittedCodexReviews(cwd);
+  return perLandedPr({
+    runs: readRecordLines(codexReviewRunsPath(cwd), fs),
+    records,
+    admitted,
+    lands: readLandRecord(cwd, spawnSync, fs),
+    doubleReviews: readRecordLines(jsonLinesPath(cwd, DOUBLE_REVIEWS_FILE), fs),
+    git,
+    defaultRef: defaultBranch(spawnSync, cwd, 'origin')?.ref ?? null,
+    coverage: ({ from, tip, records: before }) => reviewCoverage(cwd, { from, tip, read: () => before, isValid: () => true, beyondTip: false }),
+  });
+}
+
+export const USAGE = 'Usage: js-harness codex-meter [--json] [--per-pr]';
 
 class CodexMeterArgError extends Error {}
 
-/** The one flag the command takes, `--json`; anything else is a usage error, refused before a process starts. */
+/** The flags the command takes, `--json` and `--per-pr`; anything else is a usage error, refused before a process
+ * starts. */
 function parseArgs(argv) {
-  const unknown = unknownArgument(argv, { bare: ['--json'] });
+  const unknown = unknownArgument(argv, { bare: ['--json', '--per-pr'] });
   if (unknown !== null) throw new CodexMeterArgError(`unknown argument: ${unknown}`);
-  return { json: argv.includes('--json') };
+  return { json: argv.includes('--json'), perPrOnly: argv.includes('--per-pr') };
 }
 
 /** Runs the command; returns its exit code. `deps` (all optional) pass to `readRateLimits` (`spawn`, `kill`,
- * `platform`, `timeoutMs`, `now`), `codexDebts` gives the Codex debts of the branch, and `log` and `error` take the
- * lines printed, so the tests run no server and read no repository. */
+ * `platform`, `timeoutMs`, `now`), `codexDebts` gives the Codex debts of the branch, `perPr` the report of Codex input
+ * per landed PR, and `log` and `error` take the lines printed, so the tests run no server and read no repository. */
 export async function codexMeterMain(argv = process.argv.slice(2), deps = {}) {
-  const { log = console.log, error = console.error, codexDebts = workingDebts } = deps;
+  const { log = console.log, error = console.error, codexDebts = workingDebts, perPr = workingPerPr } = deps;
   let json;
+  let perPrOnly;
   try {
-    ({ json } = parseArgs(argv));
+    ({ json, perPrOnly } = parseArgs(argv));
   } catch (err) {
     if (!(err instanceof CodexMeterArgError)) throw err;
     error(`${err.message}\n\n${USAGE}`);
     return 2;
+  }
+  if (perPrOnly) {
+    let report;
+    try {
+      report = perPr();
+    } catch (err) {
+      error(`could not read the records for Codex input per landed PR: ${err.message}`);
+      return 1;
+    }
+    if (json) log(JSON.stringify(report, null, 2));
+    else for (const line of perPrLines(report)) log(line);
+    return 0;
   }
   const outcome = await readRateLimits(deps);
   if (outcome.killError) error(`could not stop codex app-server: ${outcome.killError}`);

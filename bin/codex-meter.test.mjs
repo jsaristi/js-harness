@@ -151,8 +151,42 @@ test('an unknown argument: exit 2 with the usage, and codex is not started', asy
   assert.equal(fake.spawned.length, 0, 'no process is started for a usage error');
 });
 
-test('the usage line names the command and its one option', () => {
-  assert.match(USAGE, /^Usage: js-harness codex-meter \[--json\]$/m);
+test('the usage line names the command and its two options', () => {
+  assert.match(USAGE, /^Usage: js-harness codex-meter \[--json\] \[--per-pr\]$/m);
+});
+
+// Spec 6 of odd/tasks/codex-spend.md: --per-pr reads the records alone, so it needs no app-server.
+const PER_PR = {
+  prs: [{ pr: 864, runs: 3, inputTokens: 230_174, days: ['2026-11-13', '2026-11-14'], failed: { runs: 0, inputTokens: 0 }, unnamed: { runs: 0, inputTokens: 0 }, rereads: { runs: 0, inputTokens: 0 }, rounds: { runs: 1, inputTokens: 69_498 }, reviewedLines: 272, tokensPerLine: 846, coverageUnknown: 0 }],
+  unattributed: Object.fromEntries(['pending', 'byNoLand', 'orphaned'].map((kind) => [kind, { runs: 0, inputTokens: 0, ids: [], list: [] }])),
+  baseline: { prs: [864, 865, 866, 867, 868], runs: 3, inputTokens: 230_174, day: '2026-11-14', dayInputTokens: 110_158 },
+  doubleReviews: { reads: 0, codexReads: 0, codexInputTokens: 0 },
+};
+
+test('--per-pr prints Codex input per landed PR from the records and starts no codex app-server; exit 0', async () => {
+  const fake = fakeCodex(answering());
+  const { code, out, err } = await run(['--per-pr'], fake, { perPr: () => PER_PR });
+  assert.equal(code, 0, err);
+  assert.equal(fake.spawned.length, 0, 'no app-server is started');
+  assert.match(out, /^PR 864: 3 runs, 230,174 input tokens \(2026-11-13, 2026-11-14\); /m);
+  assert.match(out, /^Baseline, PRs 864-868: 3 runs, 230,174 input tokens over all their days; of them on 2026-11-14 alone: 110,158$/m);
+  assert.doesNotMatch(out, /five-hour|Codex debt/);
+});
+
+test('--per-pr --json prints the report as JSON; exit 0', async () => {
+  const fake = fakeCodex(answering());
+  const { code, out } = await run(['--json', '--per-pr'], fake, { perPr: () => PER_PR });
+  assert.equal(code, 0);
+  assert.deepEqual(JSON.parse(out), PER_PR);
+  assert.equal(fake.spawned.length, 0);
+});
+
+test('--per-pr exits 1 with one line when the records cannot be read', async () => {
+  const fake = fakeCodex(answering());
+  const { code, out, err } = await run(['--per-pr'], fake, { perPr: () => { throw new Error('EACCES'); } });
+  assert.equal(code, 1);
+  assert.equal(out, '');
+  assert.match(err, /^could not read the records for Codex input per landed PR: EACCES$/m);
 });
 
 test('the Codex debts of the branch, the skips no Codex review has paid yet, are listed after the reading', async () => {
