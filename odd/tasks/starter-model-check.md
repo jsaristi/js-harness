@@ -146,3 +146,13 @@ of what he asked to remove, and keeps the cap the app's tool puts on a start's l
 - L7 The owner's order of about 18:02Z, through the coordinator: "Corre las revisiones y entra el cambio ya". This
   session runs Codex and the lenses on `c5e4fe3b`, pushes and opens the pull request; the ready notice and the land
   are the coordinator's and the lead's.
+- L8 Codex on `ada4345..29bc6da` (gpt-6.2-sol at max; the plan estimated about 180,000 to 260,000 input tokens; it
+  used 1,483,263, 1,360,000 of them cached, in 313 s): the patch is incorrect (0.97), two findings, both taken.
+  (1) P2: with `rule:session-effort` at the lowest level, both hook tests computed no level under it and read the
+  hook's empty answer as a denial, so `rules switch` to that level would turn the gate red. Fixed: the denials run
+  only where a level under the home exists, as the unit test already did; checked by setting the rules data to the
+  lowest level in place for one run of the two tests (2 pass, 0 fail), then restoring it. (2) P3: the other model of
+  the three tests changed the last number of the id, a date when the home names one, which `sameClaudeModel` reads
+  as the same model, so the tests would pass with the old cap back. Fixed: the first number changes, and each test
+  asserts that `sameClaudeModel` reads the two as different; checked on a dated id (old fixture: same, new: not).
+  After: `bin/lib/guard.test.mjs` 52 pass, `bin/guard.test.mjs` 47 pass, 0 fail.

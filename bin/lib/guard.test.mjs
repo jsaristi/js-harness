@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { RULES } from './rules-data.mjs';
 import { ruleHere, writeRules } from './rules.mjs';
-import { EFFORTS, menuLine } from './model-home.mjs';
+import { EFFORTS, menuLine, sameClaudeModel } from './model-home.mjs';
 import { agentEffortRefusal, allowedModels, denial, hourRefusal, openingRefusal, sessionStartHome, sessionStartRefusal, stampedHour, starterRefusal } from './guard.mjs';
 import { backtickRefusal, backticksInDoubleQuotes, driveRootRemovalRefusal, modelRefusal, onFirstParentLine, reviewBaseRefusal, terminalNoteRefusal } from './guard.mjs';
 import { RECORD_HANDLES, REVIEW_RECORD_FILES, reviewRecordOf, reviewRecordWriteRefusal, shellWords } from './guard.mjs';
@@ -209,7 +209,9 @@ test('the tools that do not open a session pass in this repository, whatever the
 test('a start from a session whose own record holds a lower level than the start is held to is refused with who corrects it, and one on another model passes', () => {
   // The refusal names no way around the cap: a card from the same starter is capped as a row is (lens on 9fc30a0..1e19075).
   const model = MODEL_RULES[0].value;
-  const next = model.replace(/\d+$/, (digits) => String(Number(digits) + 1));
+  const next = model.replace(/\d+/, (digits) => String(Number(digits) + 1));
+  // A date at the end is no other model (sameClaudeModel), so the first number of the id is the one changed.
+  assert.equal(sameClaudeModel(next, model), false, `${next} is another model than ${model}`);
   // The starter's own level is the higher of the two the home gives, so it is under neither whichever is above: a
   // switch may put the lead's level below the sessions', and a starter at the lead's would then be capped.
   const on = { model, effort: EFFORTS[Math.max(EFFORTS.indexOf(HELD), EFFORTS.indexOf(LEAD))], title: 'JH ORQ · orquestador' };
