@@ -34,7 +34,10 @@ test('bash\'s blanks are a space and a tab alone, and a named descriptor is no w
   assert.deepEqual(words('true #; x'), [['true #'], ['x']]);
   assert.deepEqual(words('cat <<EOF\r\r\nEOF\r\r\nx\nEOF\n').slice(1), [['x'], ['EOF']], 'the end line is compared whole, its carriage returns too');
   assert.deepEqual(words('cat <<E\fOF\nE\fOF\nx\n'), [['cat'], ['x']]);
+  assert.deepEqual(words('cat <<EOF\r\nx\r\nEOF\r\ny\r\n'), [['cat'], ['y']], 'a line ends at \\r\\n, as Git for Windows\' bash reads it');
   assert.deepEqual(words('cmd {x}>&2 a 2>/dev/null b'), [['cmd', 'a', 'b']]);
+  const splits = readShell('x "$(a "b")" a$b "c"$d').commands.at(-1).words.map((v) => Boolean(v.splits));
+  assert.deepEqual(splits, [false, false, true, true], 'an expansion outside double quotes splits');
   assert.deepEqual(words('echo "`a \\"b\\"`"'), [['a', 'b'], ['echo', '`a \\"b\\"`']], 'a double-quoted backtick takes the backslash off a quote');
 });
 

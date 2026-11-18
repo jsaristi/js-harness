@@ -17,7 +17,9 @@ export function readShell(source, { body = false } = {}) {
   const pending = [];
   let broken = false;
   let i = 0;
-  const s = source;
+  // Git for Windows' bash ends a line at `\r\n` and keeps a lone `\r` as a character (the verifier's round 1, run
+  // there); on another bash a `\r` left at a line's end only makes a word no command takes.
+  const s = source.replace(/\r\n/g, '\n');
 
   // Reads the heredoc bodies pending at the newline at `i`; `i` ends on the newline after the last.
   const readBodies = () => {
@@ -240,7 +242,12 @@ export function readShell(source, { body = false } = {}) {
       } else if (c === '"') {
         readDouble(word);
       } else if (c === '$' || c === '`') {
+        // An expansion outside double quotes is split into words and globbed: `splits` says so.
+        const was = word.expands;
+        word.expands = false;
         readDollar(word);
+        if (word.expands) word.splits = true;
+        word.expands ||= was;
       } else if ((c === '<' || c === '>') && s[i + 1] === '(') {
         // A process substitution runs its commands.
         i += 1;
