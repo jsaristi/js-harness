@@ -25,8 +25,16 @@ function advisorOf(replied, advisor) {
 /** True when `home` (`{ model, effort, lead, advisor }`, each a value or null) holds something a session can be off. */
 export const homeInForce = (home) => home !== null && typeof home === 'object' && [home.model, home.effort, home.lead, home.lenses, home.advisor].some((value) => typeof value === 'string');
 
-/** The act that puts the background job `job` on the home: a resume, which waits for a job at work to end. */
+/** The act that puts the background job `job` on the home where a resume runs, the rule sessions-open-in-sidebar not
+ * declared: a resume, which waits for a job at work to end. */
 const resumeOf = (job) => `a resume${job.working === true ? ' once its job is no longer at work, which a resume refuses until then:' : ','} js-harness sessions start --resume ${job.id}`;
+
+/** The act that puts the background job `job` on the home: closing it once its work has landed and nothing in its
+ * worktree is needed, with --remove-worktree since `sessions stop` refuses a worktree that holds files (Codex P2 of
+ * 2026-11-17), and opening it again with start_session, since a background resume is refused where rule
+ * sessions-open-in-sidebar is declared (odd/tasks/senior-orchestrator.md, T7) and a message resumes it on the model it
+ * ran. */
+const correctionOf = (job) => `closing it${job.working === true ? ' once its job is no longer at work' : ''}, once its work has landed and nothing in its worktree is needed (js-harness sessions stop ${job.id} --remove-worktree), and start_session`;
 
 /** The sessions off `home`, as `{ rows, archived, removedOff, on }`.
  *
@@ -40,14 +48,14 @@ const resumeOf = (job) => `a resume${job.working === true ? ' once its job is no
  * background row its `asked`, `replied` and `state`. A background session is judged by its last reply, and
  * by what its start asked only where no reply was read. `corrects` is the act that puts it on the home: `his menu`
  * for a lead in the app, since only the user changes a lead's own; `the lead's session tools` for another desktop
- * session; a resume for a background one, which takes the home's, once its job is no longer at work where it is, since
- * `sessions start --resume` refuses a conversation a job works; none for a job the harness removed, which is in no
+ * session; for a background one, `correctionOf`'s closing and start_session, since a background resume is refused
+ * where rule sessions-open-in-sidebar is declared, and `resumeOf`'s resume where it is not (`resumes`); none for a job the harness removed, which is in no
  * row: `removedOff` counts those off the home.
  *
  * An archived desktop session is in no row: nothing corrects one while it is archived, and this machine held 124 of
  * them on 2026-11-11. `archived` counts them by what they hold, `[{ holds, count }]`, the most first. `on` counts the
  * sessions on the home, `{ desktop, background }`, archived ones left out. */
-export function sessionsOffHome(home, { desktop = [], background = [], isLead = () => false, isSenior = () => false } = {}) {
+export function sessionsOffHome(home, { desktop = [], background = [], isLead = () => false, isSenior = () => false, resumes = false } = {}) {
   // A senior's title holds it to the senior's model and level, its start naming no advisor; his settings' advisorModel
   // still gives it one (odd/tasks/senior-orchestrator.md; odd/tasks/audit-cement.md, spec 7).
   const heldOf = (title) => {
@@ -82,7 +90,7 @@ export function sessionsOffHome(home, { desktop = [], background = [], isLead = 
       if (off !== null) removedOff += 1;
     } else if (off === null && advisor.unknown !== null) unknownAdvisor.push({ id: job.id, title: job.title ?? null, why: advisor.unknown });
     else if (off === null) on.background += 1;
-    else rows.push({ kind: 'background', id: job.id, title: job.title ?? null, asked: job.asked, replied: job.replied ?? null, state: job.state ?? null, held, off, ...(ofAdvisor && { advisorUnknown: advisor.unknown }), corrects: resumeOf(job) });
+    else rows.push({ kind: 'background', id: job.id, title: job.title ?? null, asked: job.asked, replied: job.replied ?? null, state: job.state ?? null, held, off, ...(ofAdvisor && { advisorUnknown: advisor.unknown }), corrects: resumes ? resumeOf(job) : correctionOf(job) });
   }
   return { rows, archived: [...archived].map(([holds, count]) => ({ holds, count })).sort((one, other) => other.count - one.count), removedOff, on, unknownAdvisor };
 }
