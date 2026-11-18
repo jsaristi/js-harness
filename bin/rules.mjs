@@ -29,6 +29,7 @@ import { beforeHistory, checkRules } from './lib/rules-check.mjs';
 import { countFindings, registerFindings } from './lib/rules-scan.mjs';
 import { parseRegister } from './lib/failures.mjs';
 import { renderList, rulesHash, ruleHere, ruleOf, unscoped } from './lib/rules.mjs';
+import { sidebarRule } from './lib/guard.mjs';
 import { appliedLines, appliedOf } from './lib/rules-applied.mjs';
 import { readRecords } from './lib/rules-applied-read.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
@@ -456,7 +457,7 @@ function appliedForm({ cwd, env, homedir, now, run, readApp, agents }, stdout) {
   if (homeInForce(home)) {
     const claudeDir = env.CLAUDE_CONFIG_DIR || path.join(homedir(), '.claude');
     const read = readHomeSessions({ main, home: harnessHome({ env, homedir }), claudeDir, now: at, days: APPLIED_DAYS, env, homedir, ...(readApp && { readApp }), ...(agents && { agents }) });
-    for (const line of offHomeLines(sessionsOffHome(home, { ...read, isLead: heldAsLead, isSenior: seniorTitle }), home, { unread: read.unread })) stdout(line);
+    for (const line of offHomeLines(sessionsOffHome(home, { ...read, isLead: heldAsLead, isSenior: seniorTitle, resumes: sidebarRule(projectData) === null }), home, { unread: read.unread })) stdout(line);
   }
   return records.exists ? result.exit : 0;
 }

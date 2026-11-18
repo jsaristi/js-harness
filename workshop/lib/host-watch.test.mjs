@@ -324,7 +324,7 @@ test('the brief freezes the spans and names every step of the review, in order',
   const brief = renderBrief({ versions: { desktop: '4.5000.0', code: '2.1.320' }, reviewed: { desktop: '4.4212.0', code: '2.1.309' }, title: 'JH 120 · host watch 4.5000.0' });
   assert.match(brief, /^# JH 120 · host watch 4\.5000\.0$/m);
   assert.match(brief, /--from-desktop 4\.4212\.0 --to-desktop 4\.5000\.0 --from-code 2\.1\.309 --to-code 2\.1\.320/);
-  const steps = ['host-watch draft', 'every entry', 'Map row', 'host-watch tools', 'plugin-authoring', 'docs/proposals/claude-app-native-sessions.md', 'host-watch check', 'rule:reports-spanish-visual', 'notify --to orchestrator --kind question', 'codex-review', 'lens-review', 'gh pr create', 'doctor --host-reviewed'];
+  const steps = ['host-watch draft', 'every entry', 'Map row', 'host-watch tools', 'plugin-authoring', 'docs/proposals/claude-app-native-sessions.md', 'host-watch check', 'rule:reports-spanish-visual', 'notify --to orchestrator --kind question', 'codex-review', 'lens-review', 'gh pr create', 'git pull', 'doctor --host-reviewed'];
   let at = -1;
   for (const step of steps) {
     const i = brief.indexOf(step);
@@ -335,6 +335,9 @@ test('the brief freezes the spans and names every step of the review, in order',
   assert.match(brief, /without his yes/);
   // JH 113: #24 was decided adapt with no check that the app reads a 3P key on a claude.ai install; it does not.
   assert.match(brief, /3P section .*third-party inference.*claude\.ai install/s);
+  // Desktop 6.6395.0 stopped updating the local main branch for worktree sessions, so step 11 asks for git pull in
+  // the main checkout before doctor reads the review file there (question 337, his yes).
+  assert.match(brief, /^11\. [^\n]*\n[^\n]*git pull[^\n]*main checkout[\s\S]*?js-harness doctor --host-reviewed/m);
 });
 
 test('the gate of doctor --host-reviewed accepts the first real review, of 4.29.0 / 2.1.308 to 4.4212.0 / 2.1.309', () => {
