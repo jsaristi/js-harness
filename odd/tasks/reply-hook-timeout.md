@@ -40,7 +40,7 @@ Any timeout other than the reply hook's.
 ## Tasks
 - [x] T1 (kind: build) spec 1: the entry's test at 15 and the upgrade test, red; then `replyHookEntry` at 15, green.
 - [x] T2 (kind: build) spec 1: the budget held at 2500 ms apart from the timeout; the 0.97.0 Codex entry frozen at 5.
-- [ ] T3 (kind: verify) Codex, the Claude lenses and an independent verifier over the code slice; PR; ready notice.
+- [x] T3 (kind: verify) Codex, the Claude lenses and an independent verifier over the code slice; PR; ready notice. PR 733, 5548ba2c; L6-L8.
 
 ## Log
 - L1 (2026-10-31, his request: the lead's brief `C:\Users\Oficina\.js-harness\background\briefs\2026-10-31T06-23-14-249Z-33f1ddcd.md`,
@@ -88,5 +88,6 @@ Any timeout other than the reply hook's.
 - gentle-ai: `1ffe7d02` (lineage `review-15705bd6ae8edb04`), approved, acknowledged.
 
 ## Next step
+Done (2026-11-18, JH 222, read with `gh`): PR 733 merged as 5548ba2c, its summary under `docs/sessions/`. Before it:
 Push, PR, `notify --kind ready --pr <n>`; the summary under `docs/sessions/`; `notify --kind closed`. After the land,
 the lead's refresh (`js-harness install` through `merge-queue --land --refresh-copy`) writes 15 s into his settings.

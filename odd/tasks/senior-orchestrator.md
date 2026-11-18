@@ -5,7 +5,9 @@ JH 192, slice 3 of the lead's brief. Delivery: this design, then one pull reques
 (`rules change` runs only on a `rule/` branch, `bin/lib/rules-change-run.mjs:170`). Runner: `node --test`.
 
 ## State
-Now (2026-11-17 ~05:10Z): `rule/away-autonomy` landed (PR 897, main 9fc30a07) and is merged into T7's branch
+Now (2026-11-18, JH 222, read with `gh`): T7 landed as PR 901 (9f54eb4d) and its apostrophe fix as PR 905 (6ab33641); T8
+landed as PR 895 (83252acb). Open: T2's probe, T3 and T4. The paragraphs below are the state before those lands.
+Before (2026-11-17 ~05:10Z): `rule/away-autonomy` landed (PR 897, main 9fc30a07) and is merged into T7's branch
 (15c9bd39). Both rule changes are committed: `sessions-open-in-sidebar` drops its exception (715f2ab2) and
 `senior-model`'s subject names start_session (ca8fba11). Next: Codex and lenses from ee0fb395 (the merge resolution and
 both rules), then the review fixes 1e190752, eb4d8e6b and 043ce46a, all reviewed (L11), and the provenance fixes 0976dcb1, 76fd3e63, c3066640 (L12). T7 is at PR 901; the lead held it for a verifier pass on the guard, done with its fixes (L13), and it is ready again. The paragraphs below are each task's record, T8's first.
@@ -218,9 +220,11 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   advisor; an independent verifier after. Route: inline, then one verifier.
 - [ ] T4 (kind: build) (1, 2) The reporters' hold by role, and the texts of session-model, session-effort and
   advisor-model. Route: inline.
-- [ ] T5 (kind: docs) (2) `bin/lib/lead-protocols.mjs`: when and how the lead sends a senior a task. Route: inline.
-- [ ] T6 (kind: build) (3, 4) The lead starts the senior visibly with `start_session`; the guard holds the start and
-  the messages to it. Route: inline, then one verifier. Commits: cb830c3e, the D11 fix.
+- [x] T5 (kind: docs) (2) `bin/lib/lead-protocols.mjs`: when and how the lead sends a senior a task. Route: inline.
+  Commit 6e66d710, PR 876 (01f75889); rewritten for `start_session` in PR 893.
+- [x] T6 (kind: build) (3, 4) The lead starts the senior visibly with `start_session`; the guard holds the start and
+  the messages to it. Route: inline, then one verifier. Commits: cb830c3e, the D11 fix. PR 893 (b3a73245); the verifier
+  is D13.
 - [x] T7 (kind: build) (5) The guard refuses `js-harness sessions start` for every title; `rule:sessions-open-in-sidebar`
   drops its exception by `rules change`, his to approve. Route: inline.
 - [x] T8 (kind: build) (6) The lead held to `rule:lead-effort`: a lead whose title drifts off `<code> ORQ · …` keeps

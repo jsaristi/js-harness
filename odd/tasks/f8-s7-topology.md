@@ -114,7 +114,7 @@ what it covered leaves the lead to guess what was done (the reverse-engineering 
    `S#`" (`:689-690`).
 
 ## Tasks
-- [ ] T1 (docs) this document with its depth pass; the writer-model question recorded and sent to the lead.
+- [x] T1 (docs) this document with its depth pass; the writer-model question recorded and sent to the lead. Question 227, answered; PR 794, cb539ba8.
 - [x] T2 (build) S2: `.claude/agents/js-harness-writer.md` and `bin/lib/writer-agent.test.mjs` holding it to the rules.
 - [x] T3 (build) S3: the hand-off line in the protocols skill, with its test.
 - [x] T4 (build) S1: the heartbeat's `CUT:` line and the orchestrator skill's relief rule, with their tests.
@@ -198,5 +198,6 @@ what it covered leaves the lead to guess what was done (the reverse-engineering 
   out of the range, so they did not see it.
 
 ## Next step
-- State (2026-11-09 ~02:55Z): PR 794 ready, reviews recorded and answered (L11), `npm run check` PASS. Next: the
+- State (2026-11-18, JH 222, read with `gh`): PR 794 merged as cb539ba8 on 2026-11-09; L8 is still owed.
+- Before (2026-11-09 ~02:55Z): PR 794 ready, reviews recorded and answered (L11), `npm run check` PASS. Next: the
   lead merges after his yes; L8 (the type's first turn in an app session) is owed after a restart on that main.
