@@ -26,7 +26,7 @@ export function readShell(source, { body = false } = {}) {
       let found = false;
       while (i < s.length) {
         const next = s.indexOf('\n', i + 1);
-        const line = s.slice(i + 1, next === -1 ? s.length : next).replace(/\r$/, '');
+        const line = s.slice(i + 1, next === -1 ? s.length : next);
         i = next === -1 ? s.length : next;
         if ((heredoc.tabs ? line.replace(/^\t+/, '') : line) === heredoc.end) {
           found = true;
@@ -54,7 +54,8 @@ export function readShell(source, { body = false } = {}) {
       let end = i + 1;
       let inner = '';
       while (end < s.length && s[end] !== '`') {
-        if (s[end] === '\\' && /[`$\\]/.test(s[end + 1] ?? '')) end++;
+        // Inside double quotes a backslash also escapes a double quote.
+        if (s[end] === '\\' && (inDouble ? /[`$\\"]/ : /[`$\\]/).test(s[end + 1] ?? '')) end++;
         inner += s[end];
         end++;
       }
@@ -252,7 +253,7 @@ export function readShell(source, { body = false } = {}) {
         const open = i;
         i += 1;
         while (i < s.length && s[i] !== ')') {
-          if (/\s/.test(s[i])) i++;
+          if (/[ \t\n]/.test(s[i])) i++;
           else if (readWord() === null) {
             broken = true;
             i++;
@@ -263,7 +264,8 @@ export function readShell(source, { body = false } = {}) {
         word.text += s.slice(open, i);
         word.raw += s.slice(open, i);
         word.expands = true;
-      } else if (/[\s;&|()<>]/.test(c)) {
+      } else if (/[ \t\n;&|()<>]/.test(c)) {
+        // bash's blanks are a space and a tab: a carriage return, a form feed or a no-break space is a character.
         break;
       } else {
         word.text += c;
@@ -298,7 +300,7 @@ export function readShell(source, { body = false } = {}) {
     };
     while (i < s.length) {
       const c = s[i];
-      if (c === ' ' || c === '\t' || c === '\r') {
+      if (c === ' ' || c === '\t') {
         i++;
       } else if (c === '\\' && s[i + 1] === '\n') {
         i += 2;
@@ -339,9 +341,9 @@ export function readShell(source, { body = false } = {}) {
         if (pipe) pipedIn = true;
       } else if ((c === '<' || c === '>') && s[i + 1] !== '(') {
         const cmd = current();
-        // A descriptor written before the operator (`2>`) is no word.
+        // A descriptor written before the operator (`2>`, `{name}>`) is no word.
         const last = cmd.words.at(-1);
-        if (last !== undefined && /^\d+$/.test(last.raw) && cmd.words.lastEnd === i) cmd.words.pop();
+        if (last !== undefined && /^(?:\d+|\{[A-Za-z_][A-Za-z0-9_]*\})$/.test(last.raw) && cmd.words.lastEnd === i) cmd.words.pop();
         if (s.startsWith('<<<', i)) {
           i += 3;
           skipBlanks();

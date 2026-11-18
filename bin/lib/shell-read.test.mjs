@@ -28,6 +28,16 @@ test('a substitution\'s commands are read, inside double quotes and heredoc bodi
   assert.deepEqual(words('cmds=(a "b c" $(d)) e'), [['d'], ['cmds=(a "b c" $(d))', 'e']], 'an array assignment is one word');
 });
 
+test('bash\'s blanks are a space and a tab alone, and a named descriptor is no word (the verifier, round 1)', () => {
+  assert.deepEqual(words('true\r#; x'), [['true\r#'], ['x']], 'a carriage return is a character of its word');
+  assert.deepEqual(words('true\f#; x'), [['true\f#'], ['x']]);
+  assert.deepEqual(words('true #; x'), [['true #'], ['x']]);
+  assert.deepEqual(words('cat <<EOF\r\r\nEOF\r\r\nx\nEOF\n').slice(1), [['x'], ['EOF']], 'the end line is compared whole, its carriage returns too');
+  assert.deepEqual(words('cat <<E\fOF\nE\fOF\nx\n'), [['cat'], ['x']]);
+  assert.deepEqual(words('cmd {x}>&2 a 2>/dev/null b'), [['cmd', 'a', 'b']]);
+  assert.deepEqual(words('echo "`a \\"b\\"`"'), [['a', 'b'], ['echo', '`a \\"b\\"`']], 'a double-quoted backtick takes the backslash off a quote');
+});
+
 test('ANSI-C quoting is decoded as bash decodes it', () => {
   assert.deepEqual(words("x $'\\x6aa\\n\\t\\101\\u0042\\'\\\\'"), [['x', "ja\n\tAB'\\"]]);
   assert.equal(readShell("cat <<$'E'\n$(x)\nE").commands.length, 1, "a $'…' delimiter is quoted");
