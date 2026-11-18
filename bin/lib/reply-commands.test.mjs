@@ -135,14 +135,20 @@ test('real: each block gets its own answer from PowerShell 7 and Windows PowerSh
     // A line break in a name stays out of the line the parser reads (Codex, cc56e0f..5fd74a2).
     '& "Get-Ite[m`rx" -x',
     "& 'Get-Ite[m\u2028x' -x",
-    // The check adds no command of its own that a block could name (the advisor, over b45380f).
+    // The check adds no command of its own that a block could name (the advisor, over b45380f): the test's own advanced
+    // function of that name, defined in the child shell, so no module is needed (Codex, 4a3fc21..66e91c9).
     'Find-Command -zz',
     'nosuchprog-jh223 --a',
   ];
+  const ownFindCommand = (program, args, options) => {
+    const script = Buffer.from(args.at(-1), 'base64').toString('utf16le');
+    const defined = `function global:Find-Command { [CmdletBinding()] param($Name) }\n${script}`;
+    return spawnSync(program, [...args.slice(0, -1), Buffer.from(defined, 'utf16le').toString('base64')], options);
+  };
   const windowsPowerShell = (program, args, options) => (program === 'pwsh.exe'
     ? { error: Object.assign(new Error('spawn pwsh.exe ENOENT'), { code: 'ENOENT' }) }
-    : spawnSync(program, args, options));
-  for (const [shell, spawn] of [['PowerShell 7', undefined], ['Windows PowerShell', windowsPowerShell]]) {
+    : ownFindCommand(program, args, options));
+  for (const [shell, spawn] of [['PowerShell 7', ownFindCommand], ['Windows PowerShell', windowsPowerShell]]) {
     const checked = shellParser('win32', spawn)(texts, { timeout: 30000 });
     assert.equal(checked.failed, undefined, `${shell}: ${checked.failed}`);
     assert.deepEqual(checked.errors[0], ['rm has no parameter -rf'], shell);
