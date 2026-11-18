@@ -214,7 +214,7 @@ cost is PowerShell's start; what lowers a stop's time is outside this file. Meas
   320–646 ms for the six blocks of the real test together. Inside the script (`-File`, three runs): decoding and
   parsing about 50 ms, the first `Get-Command` 100–120 ms (command discovery's warm-up), each later one 1–5 ms,
   `-ArgumentList` 5–11 ms. Nothing in it is worth cutting.
-- A name PowerShell cannot find costs pwsh 1.5–2.1 s on its first miss (module discovery over the 92 module folders
+- A name PowerShell cannot find costs pwsh 1.5–2.1 s on its first miss (module discovery over the 97 module folders
   of `PSModulePath`), Windows PowerShell 67–132 ms. `Get-Command -CommandType Alias, Cmdlet, Function` did not help
   (1490–2112 ms, three fresh processes): any cut there would have to skip module discovery, which is what finds a
   cmdlet of a module not yet loaded, so it would weaken a refusal. Such a name is rare in a handed block (a typo, a
@@ -350,6 +350,27 @@ a longer timeout for the reply hook seldom lengthens a stop. That value is his: 
 - L18 (2026-11-18, JH 223, reviews over `5fd74a2..b45380f`): the lenses 0 findings; Codex correct (confidence 0.99),
   its P2 fixed. Every code commit of the branch is covered by both records. The independent verifier (L14) read the
   first fix (`9a47edbf`); the three fixes after it were read by Codex and the lenses, not by a second verifier.
+- L19 (2026-11-18, JH 223, PR 916 open): the advisor, before the ready notice, found the script's helper functions
+  (`Find-Command`, `Say`) visible to its own `Get-Command`: `Find-Command -zz` (PowerShellGet's) was refused on
+  `b044dbf7` and passed at `b45380f`, both shells (a scratch comparison of the old and new modules). Fixed, tests first
+  (`66e91c91`): the helpers are script blocks in variables; the real test runs one spawn a shell, each case a text, the
+  plain miss last, with no assertion that always holds. Old and new compared over 16 names (paths, module-qualified
+  names, wildcards, aliases, the helpers' names): no difference, both shells. Reviews over `4a3fc21..66e91c9`: the
+  lenses 0; Codex one P2, accepted: the case leaned on PowerShellGet; the test's spawn now defines its own advanced
+  `Find-Command` (`9760618b`, red on `b45380f`'s script); its recheck over `66e91c9..9760618` correct (0.99), the
+  reliability lens 0. The PR's body keeps the generated-with line, as PR 911's does.
+- L20 (2026-11-18, JH 223, the second independent verifier, read-only, `b044dbf7` against `66e91c91`, 63 texts alone,
+  in batches forward and reversed, and in pairs, both shells): no error line lost without a replacement, no sibling's
+  answer lost. What the base refused and HEAD passes is one class, accepted as the change's intent: a miss as the
+  spawn's last statement (`gti status`, `.\x.ps1 -zz`, `NoSuchModule\Get-Thing -zz`, an alias to a missing target),
+  which the base passed anywhere else. Its one real loss: an `own` block whose last command is a typo was refused by
+  that accident and passes now; neither version says "command not found". Lines replaced, more exact: a failed lookup
+  at the base kept the previous command's `$cmd` and judged `a[b -zz` against Remove-Item's parameters; HEAD says it
+  could not look it up. New refusals: an unmatched `[` in a name, and `Remove-* -zz` (a wildcard's first match, an
+  alias with an empty `Definition`, so the message names an empty name: cosmetic). Older, both versions, left for the
+  lead: an empty text shifts the later indices (`commandBlocks` likely never sends one), `Remove-Item -re[ x` passes,
+  `Get-AppPackage -Name x -zz` passes on PowerShell 7. `node --test bin/lib/reply-commands.test.mjs`: 13 pass, 1 skipped.
+  Not checked by it: a module whose autoload throws, profiles, the deadline under load.
 
 ## Next step
 Code: `b42532d7`, `8c746b16`, `c76d97d1` and the verifier's fixes (L9), each committed with the gate green. Question

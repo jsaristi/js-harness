@@ -24,8 +24,11 @@ not read here with `js-harness sessions --quote`, since the brief gives no line.
   and reliability lenses over 0339273..cc56e0f).
 - Commit b45380f2 `fix(reply): each line the PowerShell check prints stays one line` (Codex's P2 over cc56e0f..5fd74a2:
   a CR or U+2028 in a name dropped the refusal line).
-- Each fix test first, the real win32 test red before it, in PowerShell 7 and Windows PowerShell; L15 to L18.
-- The pull request: named in the ready notice.
+- Commit 66e91c91 `fix(reply): the PowerShell check defines no command a block could name` (the advisor:
+  `Find-Command -zz` passed, shadowed by the script's own function).
+- Commit 9760618b `test(reply): the shadowing case defines its own Find-Command, needing no module` (Codex's P2).
+- Each fix test first, the real win32 test red before it, in PowerShell 7 and Windows PowerShell; L15 to L20.
+- Pull request 916, open, ready: https://github.com/jsaristi/js-harness/pull/916.
 
 ## Decisions
 - No cut to the parser: its time is PowerShell's start (494–1423 ms of a check, the script itself 228–537 ms), no start
@@ -45,15 +48,21 @@ not read here with `js-harness sessions --quote`, since the brief gives no line.
   each now has a real test.
 - A Node heredoc turned `\r` in a PowerShell regex into a raw carriage return; a script file with `String.raw` fixed it.
 - I asked the owner, through the lead, about a review's cost although review is not his to decide.
+- The helpers added in a fix were functions the script's own `Get-Command` could find; the advisor found it before the
+  ready notice, not a review. The test now holds a block that names one.
+- The second gate commit reached the parser's own `Find-Command` only through a module; Codex found the test would
+  fail where PowerShellGet is missing.
 
 ## Left
 - For the lead, not built (L13, L14): the parser started beside the other checks (`bin/reply.mjs`); whether the 4 s
   `COMMANDS_DEADLINE_MS` should follow the 15 s timeout (the verifier saw one of three back-to-back parses time out at
   4851 ms); older parameter-check defects (`Get-Date -?` refused, `Get-Date -F*` passed, `* -x` checked against an
-  unrelated command).
+  unrelated command); from the second verifier (L20): an empty text shifts later indices, `Remove-Item -re[ x` and
+  `Get-AppPackage -Name x -zz` (PowerShell 7) pass, and an `own` block whose last command is a typo now passes, as
+  it always did when that command was not last.
 
 ## Cost
-- Reviews: Codex four runs (627,015, 168,678, 510,998 and 108,532 input tokens); the Claude lenses risk, resilience
-  and reliability four runs (about 8,000 to 9,500 input tokens a lens). One independent verifier over the first fix
-  (about 90,000 tokens, 22 min); not run again over the three later fixes, which the reviews read.
+- Reviews: Codex six runs (627,015, 168,678, 510,998, 108,532, 387,563 and 74,979 input tokens); the Claude lenses
+  six runs (about 7,000 to 10,700 input tokens a lens). Two independent verifiers: over the first fix (about 90,000
+  tokens, 22 min) and over the final code against the base (about 120,000 tokens, 18 min).
 - Gate runs: seven commit gates green (one more stopped while it waited on another session's gate, and made again).
