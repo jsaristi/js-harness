@@ -223,7 +223,7 @@ const counted = (notFixed) => ({ findings: 1, fixed: 1 - notFixed, notFixed, fol
 
 test('a correction owed below a merge: where the merge\'s own review owes a correction too, the recheck after it carries the findings of both, and names the merge', () => {
   const records = [record(A, G, { run: 'r1' }), record(G, M, { run: 'r3', diff: 'remerge' })];
-  assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records, runs: bothRuns, changedBetween: never('a diff'), writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: [...lost, ...owing], at: M, merge: M });
+  assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records, runs: bothRuns, changedBetween: never('a diff'), writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: [...lost, ...owing], at: M, merge: M, joinedAt: [G] });
   // The gap's review owes nothing: the merge's findings alone, as before.
   const cleanBelow = [record(A, G, { run: 'r2' }), record(G, M, { run: 'r3', diff: 'remerge' })];
   assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records: cleanBelow, runs: bothRuns, changedBetween: never('a diff'), writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: lost, merge: M });
@@ -231,7 +231,7 @@ test('a correction owed below a merge: where the merge\'s own review owes a corr
   const [M2, S2] = ['5', '6'].map((digit) => digit.repeat(40));
   const rows = [[M2, M, S2], [S2, A], ...ROWS];
   const three = [...records, record(M, M2, { run: 'r2', diff: 'remerge' })];
-  assert.deepEqual(recheckThrough({ from: M2, rows, records: three, runs: bothRuns, changedBetween: () => ['s.js'], writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: [...lost, ...owing], at: M, merge: M2 });
+  assert.deepEqual(recheckThrough({ from: M2, rows, records: three, runs: bothRuns, changedBetween: () => ['s.js'], writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: [...lost, ...owing], at: M, merge: M2, joinedAt: [G] });
   // From the head of that recheck, once it left nothing open, a review as any other: the walk stops at its record.
   const C2 = '7'.repeat(40);
   const rechecked = [...records, record(M, C2, { run: 'r4', recheckOf: M })];
@@ -254,7 +254,7 @@ test('a correction owed below a merge: where the merge\'s own review owes over t
 });
 
 test('a correction owed below a merge: where the merge\'s own review owes over a second recheck due at G, the recheck after the merge carries both, as the third review of G\'s findings (codex-spend L26, W1)', () => {
-  assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records: secondDue, runs: secondDueRuns, changedBetween: never('a diff'), writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: [...lost, ...open], at: M, merge: M, thirdBelow: true });
+  assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records: secondDue, runs: secondDueRuns, changedBetween: never('a diff'), writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: [...lost, ...open], at: M, merge: M, joinedAt: [G], thirdBelow: true });
 });
 
 test('a correction owed below a merge: after that joined recheck left a finding open, the records alone tell it was the third review of G\'s findings, and the next range is refused as three reviews (codex-spend L26, W1)', () => {
@@ -301,7 +301,7 @@ test('a correction owed below a merge: a second merge of main above that joined 
   const atM3 = [...atC3, record(C3, M3, { run: 'r9', diff: 'remerge' })];
   const runsM3 = [...runsC3, runLine('r9', { answer: { findings: lost3, verdict: 'incorrect' } })];
   const third = recheckThrough({ from: M3, rows: [[M3, C3, S3], [S3, A], ...rows3], records: atM3, runs: runsM3, changedBetween: never('a diff'), writesNothing: never('what the merge writes') });
-  assert.deepEqual(third, { kind: 'recheck', of: M3, findings: [...lost3, ...open2], at: M3, merge: M3, thirdBelow: true });
+  assert.deepEqual(third, { kind: 'recheck', of: M3, findings: [...lost3, ...open2], at: M3, merge: M3, joinedAt: [C3], thirdBelow: true });
   assert.ok(!third.findings.some((one) => one.title.includes('Still drops a record')), 'G\'s finding is not reviewed a fifth time');
 });
 
@@ -531,7 +531,7 @@ test('a clean review at a merge from its second parent, after the record of what
   // S, the merge's second parent, is not at or before G, its first: the clean record read less than the one that owes.
   const atOrBefore = (older, newer) => older === newer || older === A;
   const records = [record(A, G, { run: 'r1' }), record(G, M, { run: 'r3', diff: 'remerge' }), record(S, M, { run: 'r2' })];
-  assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records, runs: bothRuns, atOrBefore, changedBetween: never('a diff'), writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: [...lost, ...owing], at: M, merge: M });
+  assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records, runs: bothRuns, atOrBefore, changedBetween: never('a diff'), writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: [...lost, ...owing], at: M, merge: M, joinedAt: [G] });
   // Above the joined recheck that left a finding open over a second recheck due at G, the cap still reads it as the third review.
   const C2 = '7'.repeat(40);
   const left = [finding('[not fixed] 2 Still drops a record')];

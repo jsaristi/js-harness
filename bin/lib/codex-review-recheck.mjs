@@ -294,7 +294,8 @@ export function decidingRecord({ from, records, runs, holds = () => null, atOrBe
  * and git is asked (`changedBetween`, `writesNothing`) only once a review that owes something is found below a merge,
  * so a range with none pays nothing for this. The state found below a merge, or joined there, carries `at`, the head
  * of the newest record that owes it; a state read past a merge or at one carries `merge`, the newest merge on the way,
- * which a refusal names. Neither is ever in a record. */
+ * which a refusal names; a state that joined a debt below a merge carries `joinedAt`, the heads of the records whose
+ * debt joined, which the push row reads to settle a debt a later review spans (T7). None is ever in a record. */
 export function recheckThrough({ from, rows, records, runs, holds = () => null, atOrBefore = () => null, changedBetween, writesNothing }) {
   const today = recheckState({ from: recheckAnchor({ from, records, back: rows.map(([id]) => id), changedBetween }), records, runs, holds, atOrBefore });
   const parentsOf = new Map(rows.map(([id, ...parents]) => [id, parents]));
@@ -315,7 +316,8 @@ export function recheckThrough({ from, rows, records, runs, holds = () => null, 
     let passed = owed !== null;
     let newest = owed?.merge ?? null;
     let [merges, stretches, at, newer] = [[], [], start, start];
-    const join = (state) => ({ ...owed, findings: [...owed.findings, ...state.findings], at: owed.at ?? owed.of, ...(state.second === true ? { thirdBelow: true } : {}) });
+    // `joinedAt`, the heads whose debt joined, newest first: what the recheck of the merge rechecks below it (T7).
+    const join = (state) => ({ ...owed, findings: [...owed.findings, ...state.findings], at: owed.at ?? owed.of, joinedAt: [...(owed.joinedAt ?? []), at], ...(state.second === true ? { thirdBelow: true } : {}) });
     const reached = () => stretches.every(([older, upTo]) => older === upTo || (changedBetween(older, upTo)?.every(isDocument) ?? false)) && merges.every((merge) => merge.own || writesNothing(merge.id));
     for (let steps = 0; parentsOf.has(at) && steps < rows.length; steps += 1) {
       const parents = parentsOf.get(at);

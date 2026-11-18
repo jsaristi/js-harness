@@ -124,18 +124,14 @@ function correctionOwed(cwd, given, options) {
   if (runs.length === 0) return owed;
   const atOrBefore = atOrBeforeIn(cwd, options.spawn);
   const onLine = new Set(given.rangeIds);
-  // A debt at `at` rechecked with a merge of main above it: a recheck on the line that names a merge at or above it, read
-  // as its run read it (the records before it), was the recheck of those findings, joined below the merge.
-  // Only a merge's own record joins a debt below it, and the walk down from it stops at the first record it meets: the
-  // recheck names a merge's own record and no reviewed record ends between the head and that merge (Codex on 3c3d6da:
-  // matching findings alone let a recheck of another head that found the same one settle it).
-  const reviewedOnLine = records.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed' && onLine.has(rec.head));
-  const mergeOwn = (merge) => reviewedOnLine.some((rec) => rec.head === merge && rec.diff === 'remerge' && typeof rec.recheckOf !== 'string');
-  const between = (at, merge) => reviewedOnLine.some((rec) => rec.head !== at && rec.head !== merge && atOrBefore(at, rec.head) === true && atOrBefore(rec.head, merge) === true);
-  const settled = (at, state) => records.some((rec, index) => isValidCodexReview(rec) && rec.outcome === 'reviewed' && onLine.has(rec.head) &&
-    typeof rec.recheckOf === 'string' && rec.recheckOf !== at && atOrBefore(at, rec.recheckOf) === true && mergeOwn(rec.recheckOf) && !between(at, rec.recheckOf) && (() => {
+  // A debt at `at` rechecked with a merge of main above it: a recheck on the line, read as its run read it (the records
+  // before it), was the recheck of that debt where the walk down from the merge it names joined `at`'s own record
+  // (`joinedAt`, which only that walk gives). Findings matched by value are no proof (the verifier on 030cbd2b, T7): a
+  // merge that found an equal finding, whose walk stopped above `at` or which lies below it, rechecked nothing of `at`'s.
+  const settled = (at) => records.some((rec, index) => isValidCodexReview(rec) && rec.outcome === 'reviewed' && onLine.has(rec.head) &&
+    typeof rec.recheckOf === 'string' && (() => {
       const then = recheckAt(cwd, { from: rec.recheckOf, tip: given.tip, records: records.slice(0, index), runs, spawn: options.spawn, where: given.where });
-      return then?.kind === 'recheck' && state.findings.every((one) => then.findings.some((other) => JSON.stringify(other) === JSON.stringify(one)));
+      return then?.kind === 'recheck' && then.joinedAt?.includes(at) === true;
     })());
   const spanned = spannedDebt({ heads: [...given.rangeIds], records, runs, atOrBefore, settled });
   if (spanned === null) return owed;
