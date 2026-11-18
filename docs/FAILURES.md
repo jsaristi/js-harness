@@ -1044,6 +1044,9 @@ Hours written in the relief file were not read from a clock.
 - Seen: 2026-11-13 — relief file, lines 2707, 2708 and 2728, and the correction at line 2729 (the lead's own) — three
   relief lines begin with a literal `%Y-%m-%d %H:%M:%S` instead of the time: written with `printf` and a `%%`
   mistake instead of `js-harness notify --relief`, which stamps the clock itself
+- Seen: 2026-11-17 — relief file, lines 3178 to 3180, and the note at line 3181 (the lead's own) — three relief
+  lines written after 21:14 local open with "2026-11-17 16:24 local", "16:45 local" and "16:50 local": five hours
+  were taken off a clock that already read local time, so each reads five hours early
 - Control: check — bin/notify.test.mjs — "a notice whose text stamps an hour more than a minute off
   the clock is refused, with the right hour, and not recorded" — since 2026-10-16
 - Proof: messages to another session: bin/guard.test.mjs:54, "a message to another session, by
@@ -1212,6 +1215,15 @@ came later.
   not take the lock when it is free: the older one takes it, and the newer one after it" — since
   2026-10-12
 
+### main-push-timed-out
+The merge queue's push of main ran the pre-push hook under the one-minute bound of every other command;
+the hook took longer, the push was killed before it reached origin, and the land failed with green candidates.
+- Class: tool
+- Seen: 2026-11-17 — relief file, lines 3124 and 3125 — the land of PR 901 failed twice at the push with
+  `spawnSync git ETIMEDOUT`; the hook (`check --push`) took 83.8 s and 117.4 s against `TIMEOUT_MS` 60000
+- Control: check — bin/merge-queue.test.mjs — "the push of main waits for a pre-push hook that takes minutes" —
+  since 2026-11-17
+
 ### memory-note-overwritten
 A session saved a memory note under a name another session had just used, without looking for
 one, and the first text was lost.
@@ -1285,6 +1297,9 @@ as in force, beside the new one.
   states it; his words on it are quoted there
 - Seen: 2026-10-11 — docs/sweep-2026-10-11.md, Counts — the sweep he ordered found 247 places that
   a reader would take as in force and that said something no longer true
+- Seen: 2026-11-18 — JH PLAN's transcript f5c3ee4d, line 370 — it told him "el tope es de 3 sesiones" from the
+  retired `rule:work-sessions`; the live cap is 12, `rule:work-sessions-public`; found by the plan's double review
+  and corrected in its version 2
 - Control: owed — odd/tasks/rule-hierarchy.md — "T16 One home for every rule"
 
 ### open-findings-escape-merge
@@ -1528,11 +1543,33 @@ skipped no duty.
   `stretch-not-opened`, the last one a held absence adds there: the reply hook's return warning and the heartbeat's
   `AWAY:` line now name this entry for it (JH 176). What stops a question holding the lead is owed: a unit of its own,
   for the lead to open
+- Seen: 2026-11-18 — relief file, line 3213 (the lead's own) — the lead ran `start_session` for JH 218 on a turn he
+  had not typed; the app held a card and the lead's turn from 07:51Z to about 15:50Z, so the stretch opened that
+  morning finished 0 of its 15 items. What stops it is owed: the guard refuses or proposes such a start (the reserve
+  item `start-guard` of the plan of 2026-11-18), and its proof is a count of start calls whose result came more than
+  ten minutes later in the lead's transcripts after that build, which is 0
 - Control: protocol — bin/lib/manifest.mjs — "So it is called at once only when the user wrote in
   that session a short while ago" — since 2026-10-14
 - Was: owed — odd/tasks/session-channel.md — "T17 Questions to him go through the question tool and
   through the orchestrator" — replaced on 2026-10-16: T17 was found delivered and checked off
   (odd/tasks/session-channel.md, Progress of 2026-10-15)
+
+### quiet-misses-background-work
+`js-harness quiet` said nothing had run and the machine could be turned off while a session whose turn had
+ended still ran its own background processes, such as `node --test`: it does not count those as work.
+- Class: tool
+- Seen: 2026-11-16 — relief file, line 3049 — JH 207's targeted tests ran (pid 13444) while quiet said nothing
+  had run since 16:04Z; the lead read the processes and sent no push
+- Seen: 2026-11-16 — relief file, line 3050 — again, with JH 207's `node --test` pid 11140 alive
+- Seen: 2026-11-16 — relief file, line 3051 — again, with pids 12668 and 17216 alive
+- Seen: 2026-11-16 — relief file, line 3052 — again, the fourth time, JH 207's processes alive
+- Seen: 2026-11-16 — relief file, line 3053 — again, the fifth time, JH 207's processes alive
+- Seen: 2026-11-16 — relief file, line 3054 — again, the sixth time, while JH 207 committed
+- Seen: 2026-11-16 — relief file, line 3055 — again, the seventh time, JH 207's processes alive
+- Seen: 2026-11-16 — relief file, line 3078 — again, with JH 207's `node --test` pid 16492 and a count script alive
+- Seen: 2026-11-16 — relief file, line 3079 — again, with the count script pid 15524 alive
+- Seen: 2026-11-16 — relief file, line 3080 — again, the tenth time; quiet was not started again while JH 207 had
+  known work
 
 ### ready-head-not-pushed
 A session said a pull request ready while the work it had verified sat on a local branch never
@@ -1916,6 +1953,18 @@ written.
   names (claimed; odd/tasks/gate-wait.md of `feat/gate-wait` at 6a9f605); on the safe side:
   nothing is written outside
 
+### spend-past-approved
+Tokens were spent past the figure he approved, or with no figure approved, and the spend was seen only
+after it was made: nothing measured the spend against the figure while the work ran.
+- Class: rule-not-acting
+- Seen: 2026-11-16 — relief file, line 3062 (the lead's own) — JH SR ran three reads of session-roles v3,
+  6.99M Claude and 1.72M Codex tokens, without his yes to that spend; the lead's brief named none
+- Seen: 2026-11-17 — relief file, lines 3113 and 3115 (the lead's own) — the work of question 323 measured
+  6,795,693 tokens of the senior's model in 28 calls against the 2M to 3.5M he approved; the correction ran in
+  a senior session already 68 % full, with no forecast before it started
+- Seen: 2026-11-17 — relief file, line 3154 — JH 214 passed its cap: its own spend 2.28M against a cap of
+  1.2M, 4.30M in all against 3.4M
+
 ### stack-update-moved-hooks
 A tool of the stack was updated on purpose without the hook count read after it, so a hook entry the update added was
 first seen when the `hook entries` row refused every commit on the machine.
@@ -2060,6 +2109,14 @@ an untracked path makes the review assessment answer "unassessable".
   PowerShell with a stripped environment is not known, and nobody owns finding it (claimed)
 - Control: check — bin/check.test.mjs — "checkSensor on Windows points the module analysis cache of
   PowerShell into the throwaway home" — since 2026-10-12
+
+### stretch-goal-met-at-open
+A stretch's goal command was not run before the stretch opened, and it already matched old work: the
+goal read met from the opening, and the return reported a goal met that was not.
+- Class: wrong-information
+- Seen: 2026-11-16 — relief file, line 3077, and the return at line 3082 (the lead's own) — the goal
+  `t5-listo` searched pull requests for "T5 in:body", which 30 old ones matched; the return of that
+  stretch said the goal was met while T5 was not ready
 
 ### stretch-not-opened
 He left with no stretch opened, though `rule:away-autonomy` asks for the departure, with its goals, in
@@ -2308,6 +2365,15 @@ was not so.
 - Seen: 2026-11-17 — odd/tasks/web-guidance.md, L4 and L5 — a session told him the evals "already had the
   pieces" for an A/B of a plugin, where no task with a web interface exists and the arm needs the plugin in his
   real home; and it ran the publisher's package on his client project without checking that its telemetry was off
+- Seen: 2026-11-17 — relief file, line 3143 (the lead's own) — the report of the stretch that closed that morning,
+  marked at 09:07 local, told him he had been away "more than 8 h"; measured, 6.7 h
+- Seen: 2026-11-17 — relief file, line 3154 (the lead's own) — the text of question 334 told him JH 214 had stopped
+  at its cap; it had passed it, 4.30M against 3.4M; the spend itself is under spend-past-approved
+- Seen: 2026-11-17 — relief file, line 3159 (the lead's own) — he was told Claude Desktop was updated, read from the
+  "since last review" line, while 5.11492.5 still ran and 6.6395.0 was only downloaded (doctor's host-update line)
+- Seen: 2026-11-17 — relief file, the block at line 3162 and its correction at line 3172 (the lead's own) — the
+  block written for a start from zero said PR 903 had landed, without a read of its state; `gh` gave it OPEN, its
+  head 9a9d448d not in main
 - Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### turn-ended-waiting
