@@ -973,7 +973,7 @@ of the first version.
   google nos ayudaria para este proyecto mejor que context7"), then "quiero saber mas antes de añadirlo", then
   "Sí, anótalo" to this entry. It replaces nothing: its guides name no framework and cover HTML, CSS and browser
   APIs, while context7 holds library docs and stays required (S11). Read at the source, none measured here: its
-  README gives Claude Code on Opus 5.5 57% to 88% of its own checks (2026-11-08) and a fixed cost near 205 tokens;
+  README gives Claude Code 57% to 88% of its own checks (its row of 2026-11-08) and a fixed cost near 205 tokens;
   note inc., on a Next.js codebase, went from 60.8% to 94.0% when the prompt named it and to 76.5% with it only
   installed, so a project's `AGENTS.md` would name it; it sends the agent's search queries to Google unless
   `DISABLE_TELEMETRY=1`. Run once, on 2026-11-17: its `legacy-scan` on `D:\abogadaclaudiajimenez` changed no file
