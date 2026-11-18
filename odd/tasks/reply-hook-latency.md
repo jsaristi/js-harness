@@ -337,6 +337,11 @@ a longer timeout for the reply hook seldom lengthens a stop. That value is his: 
   tests first (red on `0339273`: the block passed): the lookups go through `Find-Command`, where only
   `CommandNotFoundException` is a miss and any other failure makes the script exit 1, in both shells; the same failure
   earlier in the text, which the old script also passed, now refuses too.
+- L16 (2026-11-18, JH 223, reviews over `0339273..cc56e0f`): Codex: correct (confidence 0.99), its P2 fixed. The
+  lenses: risk 0; resilience and reliability one finding each, the same, accepted: the script-wide exit 1 made one
+  failed lookup take every block of the spawn down to "could not check it", dropping a sibling's `rm has no parameter
+  -rf`. Fixed, tests first (red on `cc56e0f`): the failed lookup is that block's own error line, "PowerShell could not
+  look up <name>: <why>", the other blocks keep their answers, and the script ends on `exit 0` again.
 
 ## Next step
 Code: `b42532d7`, `8c746b16`, `c76d97d1` and the verifier's fixes (L9), each committed with the gate green. Question

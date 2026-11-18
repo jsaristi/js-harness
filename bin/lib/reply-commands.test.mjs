@@ -134,12 +134,17 @@ test('real: a block whose last command PowerShell cannot find is checked, not fa
     ? { error: Object.assign(new Error('spawn pwsh.exe ENOENT'), { code: 'ENOENT' }) }
     : spawnSync(program, args, options));
   assert.deepEqual(shellParser('win32', windowsPowerShell)(texts, { timeout: 20000 }), { errors: [['rm has no parameter -rf'], []] });
-  // A lookup that fails for another reason than a miss (an unmatched `[` is no wildcard pattern) checked nothing: the
-  // parser could not check the block, wherever the command stands (Codex, over b044dbf..0339273).
+  // A lookup that fails for another reason than a miss (an unmatched `[` is no wildcard pattern) checked nothing: that
+  // block is refused, wherever the command stands (Codex, over b044dbf..0339273), and the other blocks keep their own
+  // answers (the lenses, over 0339273..cc56e0f).
   for (const spawn of [undefined, windowsPowerShell]) {
-    for (const broken of [["& 'Get-Ite[m' -x"], ["& 'Get-Ite[m' -x", 'rm -rf x']]) {
-      assert.match(String(shellParser('win32', spawn)(broken, { timeout: 20000 }).failed), /^PowerShell: it exited 1$/, JSON.stringify(broken));
-    }
+    const lone = shellParser('win32', spawn)(["& 'Get-Ite[m' -x"], { timeout: 20000 });
+    assert.equal(lone.failed, undefined, lone.failed);
+    assert.match(lone.errors[0].join('\n'), /^PowerShell could not look up Get-Ite\[m: /);
+    const both = shellParser('win32', spawn)(["& 'Get-Ite[m' -x; Get-Date -zz", 'rm -rf x'], { timeout: 20000 });
+    assert.equal(both.failed, undefined, both.failed);
+    assert.match(both.errors[0].join('\n'), /^PowerShell could not look up Get-Ite\[m: [^\n]*\nGet-Date has no parameter -zz$/);
+    assert.deepEqual(both.errors[1], ['rm has no parameter -rf']);
   }
 });
 
