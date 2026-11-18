@@ -397,5 +397,5 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   later unit: a backslash-newline between & and >, claude -p > --bg, 
 ...' and nested quotes in $( ), process
   substitution, and HEREDOC (guard.mjs:256) delimiters bash reads otherwise (<<EOF-1, <<'EOF'x, <<!, $((1<<n))).
-  Main fdae9423 merged in (46692dfa). Paused at 19:10 local for his Desktop update: next is gh pr ready 905 and a
+  Main fdae9423 merged in (46692dfa). Paused at 19:02 local for his Desktop update: next is gh pr ready 905 and a
   ready notice; the lead lands it at once (his correction of 18:55).
