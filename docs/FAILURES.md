@@ -2305,6 +2305,9 @@ was not so.
   it deletes those skills (`:1044-1087`) and the skill-registry hook in `~/.codex/hooks.json` (`:477-496`). Read
   after his yes and before the run; nothing ran, and question 184 asks him the scope. What stops it recurring: the
   scope of a command named in a question is read in its source or help before the question is sent
+- Seen: 2026-11-17 — odd/tasks/web-guidance.md, L4 and L5 — a session told him the evals "already had the
+  pieces" for an A/B of a plugin, where no task with a web interface exists and the arm needs the plugin in his
+  real home; and it ran the publisher's package on his client project without checking that its telemetry was off
 - Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### turn-ended-waiting
