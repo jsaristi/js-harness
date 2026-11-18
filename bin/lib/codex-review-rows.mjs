@@ -137,10 +137,14 @@ function correctionOwed(cwd, given, options) {
     const { kept, owing } = decidingRecord({ from: at, records: upTo === undefined ? line : line.filter((rec) => order.get(rec) < upTo), runs, atOrBefore });
     return JSON.stringify(owing.length > 0 ? owing : [kept]);
   };
+  // Re-read from where that run started, the `from` of its run line, not from the merge it names: above the merge the
+  // look-back of a long run of documents ends sooner, so a walk from the merge can join a debt the run never held (T8,
+  // the verifier on 0331959e). A record whose run line names no start settles nothing.
+  const startOf = (rec) => runs.findLast((line) => line?.id === rec.run && typeof line.from === 'string')?.from;
   const settled = (at) => records.some((rec, index) => isValidCodexReview(rec) && rec.outcome === 'reviewed' && onLine.has(rec.head) &&
-    typeof rec.recheckOf === 'string' && owingAt(at, index) === owingAt(at) && (() => {
-      const then = recheckAt(cwd, { from: rec.recheckOf, tip: rec.head, records: records.slice(0, index), runs, spawn: options.spawn, where: given.where });
-      return then?.kind === 'recheck' && then.joinedAt?.includes(at) === true;
+    typeof rec.recheckOf === 'string' && typeof startOf(rec) === 'string' && owingAt(at, index) === owingAt(at) && (() => {
+      const then = recheckAt(cwd, { from: startOf(rec), tip: rec.head, records: records.slice(0, index), runs, spawn: options.spawn, where: given.where });
+      return then?.kind === 'recheck' && then.of === rec.recheckOf && then.joinedAt?.includes(at) === true;
     })());
   const spanned = spannedDebt({ heads: [...given.rangeIds], records, runs, atOrBefore, settled });
   if (spanned === null) return owed;
