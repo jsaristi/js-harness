@@ -536,6 +536,11 @@ commit can break a test, pass its own gate, and fail the next gate with code in 
   claimed): the skip is `bin/check.mjs:279-287`, and `bin/rules.test.mjs:480` runs `rules check`
   on the real `docs/RULES.md` and `docs/rule-sources.json` (`bin/rules.mjs:24-25`); until the gate
   runs the readers of a staged document, `rules check` is run by hand after such a commit
+- Seen: 2026-11-17 — pull request 903, `~/.js-harness/gate-log/failed.jsonl` (the four ends of
+  2026-11-17T14:39Z to 2026-11-18T01:52Z) — a roadmap entry that named a model with its version passed
+  its own pre-commit check (9a9d448d) and turned the merge queue's candidate red twice, on
+  `bin/conventions-model-home.test.mjs`, which reads `docs/ROADMAP.md`; the sensors of documents do not
+  run the convention tests that read the documents a commit changes, and the writer had not run them
 - Control: check — bin/check.test.mjs — "a commit of documents alone runs the sensors of documents,
   in their order and with a bound of two minutes" — since 2026-10-12
 
