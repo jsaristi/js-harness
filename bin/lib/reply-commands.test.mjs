@@ -124,33 +124,33 @@ test('real: PowerShell reads each block as he would, its parse errors and parame
   assert.match(checked.errors[3].join('\n'), /^PowerShell cannot parse it: /);
 });
 
-test('real: a block whose last command PowerShell cannot find is checked, not failed, in PowerShell 7 and in Windows PowerShell', { skip: process.platform !== 'win32' && 'PowerShell is checked on Windows' }, () => {
-  // Get-Command's miss leaves `$?` false, and a script's last `$?` was its exit code: the same text passed when the
-  // miss was not last (odd/tasks/reply-hook-latency.md, T8).
-  const texts = ['rm -rf x', 'nosuchprog-jh223 --a'];
-  assert.deepEqual(shellParser('win32')(texts, { timeout: 20000 }), { errors: [['rm has no parameter -rf'], []] });
-  assert.deepEqual(shellParser('win32')(['nosuchprog-jh223'], { timeout: 20000 }), { errors: [[]] });
+test('real: each block gets its own answer from PowerShell 7 and Windows PowerShell: a miss is no failure, a lookup that fails is its block\'s refusal', { skip: process.platform !== 'win32' && 'PowerShell is checked on Windows' }, () => {
+  // One spawn a shell, each case a text (odd/tasks/reply-hook-latency.md, T8, L13 to L19). The plain miss stays last: a
+  // script whose exit was its last statement's `$?` read it as a parser that could not run.
+  const texts = [
+    'rm -rf x',
+    // An unmatched `[` is no wildcard pattern: the lookup fails for another reason than a miss (Codex, b044dbf..0339273),
+    // and the rest of its block is still checked (the lenses, 0339273..cc56e0f).
+    "& 'Get-Ite[m' -x; Get-Date -zz",
+    // A line break in a name stays out of the line the parser reads (Codex, cc56e0f..5fd74a2).
+    '& "Get-Ite[m`rx" -x',
+    "& 'Get-Ite[m\u2028x' -x",
+    // The check adds no command of its own that a block could name (the advisor, over b45380f).
+    'Find-Command -zz',
+    'nosuchprog-jh223 --a',
+  ];
   const windowsPowerShell = (program, args, options) => (program === 'pwsh.exe'
     ? { error: Object.assign(new Error('spawn pwsh.exe ENOENT'), { code: 'ENOENT' }) }
     : spawnSync(program, args, options));
-  assert.deepEqual(shellParser('win32', windowsPowerShell)(texts, { timeout: 20000 }), { errors: [['rm has no parameter -rf'], []] });
-  // A lookup that fails for another reason than a miss (an unmatched `[` is no wildcard pattern) checked nothing: that
-  // block is refused, wherever the command stands (Codex, over b044dbf..0339273), and the other blocks keep their own
-  // answers (the lenses, over 0339273..cc56e0f).
-  for (const spawn of [undefined, windowsPowerShell]) {
-    const lone = shellParser('win32', spawn)(["& 'Get-Ite[m' -x"], { timeout: 20000 });
-    assert.equal(lone.failed, undefined, lone.failed);
-    assert.match(lone.errors[0].join('\n'), /^PowerShell could not look up Get-Ite\[m: /);
-    const both = shellParser('win32', spawn)(["& 'Get-Ite[m' -x; Get-Date -zz", 'rm -rf x'], { timeout: 20000 });
-    assert.equal(both.failed, undefined, both.failed);
-    assert.match(both.errors[0].join('\n'), /^PowerShell could not look up Get-Ite\[m: [^\n]*\nGet-Date has no parameter -zz$/);
-    assert.deepEqual(both.errors[1], ['rm has no parameter -rf']);
-    // A line break in the name stays out of the line the parser reads, or the refusal is lost (Codex, cc56e0f..5fd74a2).
-    const breaks = shellParser('win32', spawn)(['& "Get-Ite[m`rx" -x', "& 'Get-Ite[m x' -x", '& "Get-It`re" -zz'], { timeout: 20000 });
-    assert.equal(breaks.failed, undefined, breaks.failed);
-    assert.match(breaks.errors[0].join('\n'), /^PowerShell could not look up Get-Ite\[m x: /);
-    assert.match(breaks.errors[1].join('\n'), /^PowerShell could not look up Get-Ite\[m x: /);
-    assert.equal(breaks.errors.length, 3);
+  for (const [shell, spawn] of [['PowerShell 7', undefined], ['Windows PowerShell', windowsPowerShell]]) {
+    const checked = shellParser('win32', spawn)(texts, { timeout: 30000 });
+    assert.equal(checked.failed, undefined, `${shell}: ${checked.failed}`);
+    assert.deepEqual(checked.errors[0], ['rm has no parameter -rf'], shell);
+    assert.match(checked.errors[1].join('\n'), /^PowerShell could not look up Get-Ite\[m: [^\n]*\nGet-Date has no parameter -zz$/, shell);
+    assert.match(checked.errors[2].join('\n'), /^PowerShell could not look up Get-Ite\[m x: [^\n]*$/, shell);
+    assert.match(checked.errors[3].join('\n'), /^PowerShell could not look up Get-Ite\[m x: [^\n]*$/, shell);
+    assert.deepEqual(checked.errors[4], ['Find-Command has no parameter -zz'], shell);
+    assert.deepEqual(checked.errors[5], [], shell);
   }
 });
 

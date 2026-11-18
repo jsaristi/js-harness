@@ -318,27 +318,28 @@ export const COMMANDS_DEADLINE_MS = 4000;
 // takes any name into `$args`, are skipped. Each line it prints is `<index>`, a tab, and why; a lookup that fails for
 // another reason than a name PowerShell cannot find (an unmatched `[` is no wildcard pattern) is one, since that
 // command's parameters go unchecked. A line break in a name or a message becomes a space, so each why stays on its
-// line (`Say`). It ends on `exit 0`: left to the last statement's `$?`, false after any miss, a
-// block whose last command was a typo read as a parser that could not run, and a failed lookup earlier in the text
-// passed (odd/tasks/reply-hook-latency.md, T8). An error that stops the script before its end still exits 1.
+// line (`$say`). Its helpers are script blocks in variables, not functions, so no name a block holds resolves to
+// one of them (`Find-Command` is PowerShellGet's). It ends on `exit 0`: left to the last statement's `$?`, false after
+// any miss, a block whose last command was a typo read as a parser that could not run, and a failed lookup earlier in
+// the text passed (odd/tasks/reply-hook-latency.md, T8). An error that stops the script before its end still exits 1.
 const POWERSHELL_CHECK = String.raw`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $tab = [char]9
-function Say($index, $why) { "$index$($tab)$($why -replace '[\r\n\u0085\u2028\u2029]+', ' ')" }
-function Find-Command($index, $name) {
+$say = { param($index, $why) "$index$($tab)$($why -replace '[\r\n\u0085\u2028\u2029]+', ' ')" }
+$find = { param($index, $name)
   try { Get-Command $name -ErrorAction Stop | Select-Object -First 1 }
   catch [System.Management.Automation.CommandNotFoundException] { $null }
-  catch { Say $index "PowerShell could not look up $($name): $($_.Exception.Message)"; $null }
+  catch { & $say $index "PowerShell could not look up $($name): $($_.Exception.Message)"; $null }
 }
 $texts = @([Console]::In.ReadToEnd() -split [char]10 | Where-Object { $_.Trim() } | ForEach-Object { [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_.Trim())) })
 for ($i = 0; $i -lt $texts.Count; $i++) {
   $tokens = $null; $errors = $null
   $ast = [System.Management.Automation.Language.Parser]::ParseInput([string]$texts[$i], [ref]$tokens, [ref]$errors)
-  foreach ($e in $errors) { Say $i "PowerShell cannot parse it: $($e.Message)" }
+  foreach ($e in $errors) { & $say $i "PowerShell cannot parse it: $($e.Message)" }
   if ($errors.Count -gt 0) { continue }
   foreach ($c in $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true)) {
     $name = $c.GetCommandName(); if (-not $name) { continue }
-    $found = @(Find-Command $i $name); $found | Where-Object { $_ -is [string] }; $cmd = $found | Where-Object { $_ -isnot [string] } | Select-Object -First 1
-    if ($cmd -and $cmd.CommandType -eq 'Alias') { $found = @(Find-Command $i $cmd.Definition); $found | Where-Object { $_ -is [string] }; $cmd = $found | Where-Object { $_ -isnot [string] } | Select-Object -First 1 }
+    $found = @(& $find $i $name); $found | Where-Object { $_ -is [string] }; $cmd = $found | Where-Object { $_ -isnot [string] } | Select-Object -First 1
+    if ($cmd -and $cmd.CommandType -eq 'Alias') { $found = @(& $find $i $cmd.Definition); $found | Where-Object { $_ -is [string] }; $cmd = $found | Where-Object { $_ -isnot [string] } | Select-Object -First 1 }
     if (-not $cmd -or $cmd.CommandType -notin 'Cmdlet', 'Function') { continue }
     if ($cmd.CommandType -eq 'Function' -and -not $cmd.CmdletBinding) { continue }
     $first = $c.CommandElements | Select-Object -Skip 1 | Where-Object { $_ -is [System.Management.Automation.Language.StringConstantExpressionAst] } | Select-Object -First 1
@@ -348,8 +349,8 @@ for ($i = 0; $i -lt $texts.Count; $i++) {
       $given = $p.ParameterName
       if (@($params | Where-Object { $_.Name -eq $given -or $_.Aliases -contains $given }).Count) { continue }
       $hits = @($params | Where-Object { $_.Name -like "$given*" -or @($_.Aliases | Where-Object { $_ -like "$given*" }).Count })
-      if ($hits.Count -eq 0) { Say $i "$name has no parameter -$given" }
-      elseif ($hits.Count -gt 1) { Say $i "$($name): -$given is ambiguous, it could be $((@($hits | ForEach-Object { '-' + $_.Name }) | Sort-Object) -join ', ')" }
+      if ($hits.Count -eq 0) { & $say $i "$name has no parameter -$given" }
+      elseif ($hits.Count -gt 1) { & $say $i "$($name): -$given is ambiguous, it could be $((@($hits | ForEach-Object { '-' + $_.Name }) | Sort-Object) -join ', ')" }
     }
   }
 }
