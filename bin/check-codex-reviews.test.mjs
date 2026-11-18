@@ -1,3 +1,5 @@
+import { recheckAt } from './lib/codex-review-turns.mjs';
+import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -2315,4 +2317,303 @@ test('a clean --again over part of a recheck that left a finding open keeps the 
   record(root, middle, fix, { run: 'run-3' });
   const row = checkCodexReviews(root, 'HEAD');
   assert.ok((row.lines ?? []).join('\n').includes(`warning: the Codex recheck that ended at ${short(root, fix)} left 1 finding open`), JSON.stringify(row));
+});
+
+test('a clean --again that spans the head owing a correction from inside its range does not settle it; one that read all of it does (T5)', () => {
+  // odd/tasks/again-subrange.md T5 (L12, L33): base..H owes; a clean M..H2, M between base and H, read only part of what
+  // base..H read, and cleared its correction at the push. A record above H settles it only where it read all of it.
+  const { root, base } = makeRepo();
+  feature(root);
+  const middle = commit(root, 'b.js', 'two', 'feat: two');
+  const owing = commit(root, 'c.js', 'three', 'feat: three');
+  run(root, { id: 'owes', base, from: base, head: owing, answer: { verdict: 'incorrect', findings: [finding] } });
+  record(root, base, owing, { run: 'owes' });
+  const above = commit(root, 'd.js', 'four', 'feat: four');
+  run(root, { id: 'span', base: middle, from: middle, head: above, answer: { verdict: 'correct', findings: [] } });
+  record(root, middle, above, { run: 'span' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, owing)} owes a correction: 1 finding open`));
+  assert.match(JSON.stringify(row.next), new RegExp(`codex-review --base ${short(root, owing)} --at [0-9a-f]+ --again`));
+  // A chain of such records still reads less: K..H3, K between H and H2.
+  const top = commit(root, 'e.js', 'five', 'feat: five');
+  run(root, { id: 'chain', base: above, from: above, head: top, answer: { verdict: 'correct', findings: [] } });
+  record(root, above, top, { run: 'chain' });
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, false);
+  // A clean review of base..top read all base..H read, and the fix above it: it settles the correction.
+  run(root, { id: 'whole', base, from: base, head: top, answer: { verdict: 'correct', findings: [] } });
+  record(root, base, top, { run: 'whole' });
+  const settled = checkCodexReviews(root, 'HEAD');
+  assert.equal(settled.pass, true, settled.detail);
+});
+
+test('a debt rechecked with a merge of main, joined there, is settled though a later review spans it (T5, the verifier on c821306e)', () => {
+  // verify902 v3: base..H owes; main is merged in at Mg, whose own record owes too; the joined recheck Mg..F, clean,
+  // named the merge and rechecked both. A clean X..G after it, X below H, spans H: main passes, and so must this.
+  const { root, base } = makeRepo();
+  feature(root);
+  const middle = commit(root, 'b.js', 'two', 'feat: two');
+  const owing = commit(root, 'c.js', 'three', 'feat: three');
+  run(root, { id: 'owes', base, from: base, head: owing, answer: { verdict: 'incorrect', findings: [finding] } });
+  record(root, base, owing, { run: 'owes' });
+  git(root, 'checkout', 'main');
+  commit(root, 'z.js', 'main side', 'feat: elsewhere on main');
+  git(root, 'update-ref', 'refs/remotes/origin/main', 'main');
+  git(root, 'checkout', 'feature');
+  git(root, 'merge', '--no-commit', '--no-ff', 'main');
+  fs.writeFileSync(path.join(root, 'z.js'), 'resolved in the merge');
+  git(root, 'add', '.');
+  git(root, 'commit', '-m', 'merge main with an edit');
+  const merge = git(root, 'rev-parse', 'HEAD');
+  const fm = { ...finding, file: 'z.js', title: 'The merge drops a line' };
+  run(root, { id: 'merge-own', base: owing, from: owing, head: merge, answer: { verdict: 'incorrect', findings: [fm] } });
+  record(root, owing, merge, { run: 'merge-own', diff: 'remerge' });
+  const fixed = commit(root, 'c.js', 'three, fixed', 'fix: three and the merge');
+  const joined = recheckAt(root, { from: merge, tip: fixed, runs: readCodexReviewRuns(root) });
+  assert.equal(joined.kind, 'recheck', JSON.stringify(joined));
+  assert.equal(joined.findings.length, 2, JSON.stringify(joined));
+  run(root, { id: 'joined', base: merge, from: merge, head: fixed, answer: { verdict: 'correct', findings: [] }, recheck: { of: merge, findings: 2, fixed: 2, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } });
+  record(root, merge, fixed, { run: 'joined', recheckOf: merge });
+  assert.equal(checkCodexReviews(root, 'HEAD').pass, true, checkCodexReviews(root, 'HEAD').detail);
+  const top = commit(root, 'e.js', 'five', 'feat: five');
+  run(root, { id: 'span', base: middle, from: middle, head: top, answer: { verdict: 'correct', findings: [] } });
+  record(root, middle, top, { run: 'span' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+});
+
+test('a recheck of a merge of main that did not hold the spanned debt below it does not settle it (T5, the reliability lens on 3c3d6da)', () => {
+  // base..H owes; a clean narrow X..H1 spans H before the merge, so the walk from the merge stops at H1 and the joined
+  // recheck Mg..F holds the merge's own finding alone. H's debt is still owed, and the row names its recheck.
+  const { root, base } = makeRepo();
+  feature(root);
+  const middle = commit(root, 'b.js', 'two', 'feat: two');
+  const owing = commit(root, 'c.js', 'three', 'feat: three');
+  run(root, { id: 'owes', base, from: base, head: owing, answer: { verdict: 'incorrect', findings: [finding] } });
+  record(root, base, owing, { run: 'owes' });
+  const above = commit(root, 'd.js', 'four', 'feat: four');
+  run(root, { id: 'narrow', base: middle, from: middle, head: above, answer: { verdict: 'correct', findings: [] } });
+  record(root, middle, above, { run: 'narrow' });
+  git(root, 'checkout', 'main');
+  commit(root, 'z.js', 'main side', 'feat: elsewhere on main');
+  git(root, 'update-ref', 'refs/remotes/origin/main', 'main');
+  git(root, 'checkout', 'feature');
+  git(root, 'merge', '--no-commit', '--no-ff', 'main');
+  fs.writeFileSync(path.join(root, 'z.js'), 'resolved in the merge');
+  git(root, 'add', '.');
+  git(root, 'commit', '-m', 'merge main with an edit');
+  const merge = git(root, 'rev-parse', 'HEAD');
+  const fm = { ...finding, file: 'z.js', title: 'The merge drops a line' };
+  run(root, { id: 'merge-own', base: above, from: above, head: merge, answer: { verdict: 'incorrect', findings: [fm] } });
+  record(root, above, merge, { run: 'merge-own', diff: 'remerge' });
+  const fixed = commit(root, 'z.js', 'resolved, fixed', 'fix: the merge');
+  const joined = recheckAt(root, { from: merge, tip: fixed, runs: readCodexReviewRuns(root) });
+  assert.equal(joined.kind, 'recheck', JSON.stringify(joined));
+  assert.deepEqual(joined.findings.map((one) => one.title), [fm.title], JSON.stringify(joined));
+  run(root, { id: 'joined', base: merge, from: merge, head: fixed, answer: { verdict: 'correct', findings: [] }, recheck: { of: merge, findings: 1, fixed: 1, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } });
+  record(root, merge, fixed, { run: 'joined', recheckOf: merge });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, owing)} owes a correction: 1 finding open`));
+});
+
+test('a recheck of another head whose review found the same finding does not settle the spanned debt (T5, Codex on 3c3d6da)', () => {
+  // base..H owes f; a narrow M..J, J above H, found the same f; its clean recheck J..K names J. No review read all of
+  // base..H, and nothing rechecked H: the row still refuses, naming H.
+  const { root, base } = makeRepo();
+  feature(root);
+  const middle = commit(root, 'b.js', 'two', 'feat: two');
+  const owing = commit(root, 'c.js', 'three', 'feat: three');
+  run(root, { id: 'owes', base, from: base, head: owing, answer: { verdict: 'incorrect', findings: [finding] } });
+  record(root, base, owing, { run: 'owes' });
+  const other = commit(root, 'd.js', 'four', 'feat: four');
+  run(root, { id: 'same', base: middle, from: middle, head: other, answer: { verdict: 'incorrect', findings: [finding] } });
+  record(root, middle, other, { run: 'same' });
+  const fixed = commit(root, 'b.js', 'two, fixed', 'fix: two');
+  run(root, { id: 'recheck', base: other, from: other, head: fixed, answer: { verdict: 'correct', findings: [] }, recheck: { of: other, findings: 1, fixed: 1, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } });
+  record(root, other, fixed, { run: 'recheck', recheckOf: other });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, owing)} owes a correction: 1 finding open`));
+});
+
+/** Merges main, with one commit of its own, into `feature` with an edit, as the T5 tests above do; the merge's id. */
+function mergeMainWithEdit(root) {
+  git(root, 'checkout', 'main');
+  commit(root, 'z.js', 'main side', 'feat: elsewhere on main');
+  git(root, 'update-ref', 'refs/remotes/origin/main', 'main');
+  git(root, 'checkout', 'feature');
+  git(root, 'merge', '--no-commit', '--no-ff', 'main');
+  fs.writeFileSync(path.join(root, 'z.js'), 'resolved in the merge');
+  git(root, 'add', '.');
+  git(root, 'commit', '-m', 'merge main with an edit');
+  return git(root, 'rev-parse', 'HEAD');
+}
+
+for (const [shape, sameFinding] of [['an equal finding', true], ['another finding', false]]) {
+  test(`a recheck of a merge whose walk stopped above the spanned debt does not settle it, with ${shape} at the merge (T7, the verifier on 030cbd2b, p5 and p3)`, () => {
+    // base..H owes f; C, code above H, has no record, so the walk down from the merge stops at C and never reaches H;
+    // the merge's own record found `sameFinding ? f : fm`, and its clean recheck names the merge. A clean X..G spans H
+    // and covers C: H was never rechecked, and the row refuses, naming it, whatever the merge found.
+    const { root, base } = makeRepo();
+    feature(root);
+    const middle = commit(root, 'b.js', 'two', 'feat: two');
+    const owing = commit(root, 'c.js', 'three', 'feat: three');
+    run(root, { id: 'owes', base, from: base, head: owing, answer: { verdict: 'incorrect', findings: [finding] } });
+    record(root, base, owing, { run: 'owes' });
+    const unreviewed = commit(root, 'd.js', 'four', 'feat: four');
+    const merge = mergeMainWithEdit(root);
+    const fm = sameFinding ? finding : { ...finding, file: 'z.js', title: 'The merge drops a line' };
+    run(root, { id: 'merge-own', base: unreviewed, from: unreviewed, head: merge, answer: { verdict: 'incorrect', findings: [fm] } });
+    record(root, unreviewed, merge, { run: 'merge-own', diff: 'remerge' });
+    const fixed = commit(root, 'z.js', 'resolved, fixed', 'fix: the merge');
+    run(root, { id: 'joined', base: merge, from: merge, head: fixed, answer: { verdict: 'correct', findings: [] }, recheck: { of: merge, findings: 1, fixed: 1, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } });
+    record(root, merge, fixed, { run: 'joined', recheckOf: merge });
+    const top = commit(root, 'e.js', 'five', 'feat: five');
+    run(root, { id: 'span', base: middle, from: middle, head: top, answer: { verdict: 'correct', findings: [] } });
+    record(root, middle, top, { run: 'span' });
+    const row = checkCodexReviews(root, 'HEAD');
+    assert.equal(row.pass, false, row.detail);
+    assert.match(row.detail, new RegExp(`review that ended at ${short(root, owing)} owes a correction: 1 finding open`));
+  });
+}
+
+test('a recheck of a merge below the spanned debt does not settle it, though it held an equal finding (T7, the verifier on 030cbd2b, p4)', () => {
+  // The merge comes first: its own record found f and its clean recheck names it. base..H, H above both, then owes f
+  // too; a clean X..G spans H. The merge's recheck ran before H existed, so it rechecked nothing of H's.
+  const { root, base } = makeRepo();
+  feature(root);
+  const before = commit(root, 'b.js', 'two', 'feat: two');
+  const merge = mergeMainWithEdit(root);
+  run(root, { id: 'merge-own', base: before, from: before, head: merge, answer: { verdict: 'incorrect', findings: [finding] } });
+  record(root, before, merge, { run: 'merge-own', diff: 'remerge' });
+  const fixed = commit(root, 'z.js', 'resolved, fixed', 'fix: the merge');
+  run(root, { id: 'joined', base: merge, from: merge, head: fixed, answer: { verdict: 'correct', findings: [] }, recheck: { of: merge, findings: 1, fixed: 1, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } });
+  record(root, merge, fixed, { run: 'joined', recheckOf: merge });
+  const middle = commit(root, 'c.js', 'three', 'feat: three');
+  const owing = commit(root, 'd.js', 'four', 'feat: four');
+  run(root, { id: 'owes', base, from: base, head: owing, answer: { verdict: 'incorrect', findings: [finding] } });
+  record(root, base, owing, { run: 'owes' });
+  const top = commit(root, 'e.js', 'five', 'feat: five');
+  run(root, { id: 'span', base: middle, from: middle, head: top, answer: { verdict: 'correct', findings: [] } });
+  record(root, middle, top, { run: 'span' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, owing)} owes a correction: 1 finding open`));
+});
+
+test('a merge recheck that joined a debt does not settle a later review that owes at the same head (T7, Codex on 6892cdc)', () => {
+  // As the T5 verifier test above: the joined recheck Mg..F settled H's f. Then a review ending at H again found g; a
+  // clean X..G spans H. The merge's recheck never saw g: the row refuses, naming H.
+  const { root, base } = makeRepo();
+  feature(root);
+  const middle = commit(root, 'b.js', 'two', 'feat: two');
+  const owing = commit(root, 'c.js', 'three', 'feat: three');
+  run(root, { id: 'owes', base, from: base, head: owing, answer: { verdict: 'incorrect', findings: [finding] } });
+  record(root, base, owing, { run: 'owes' });
+  const merge = mergeMainWithEdit(root);
+  const fm = { ...finding, file: 'z.js', title: 'The merge drops a line' };
+  run(root, { id: 'merge-own', base: owing, from: owing, head: merge, answer: { verdict: 'incorrect', findings: [fm] } });
+  record(root, owing, merge, { run: 'merge-own', diff: 'remerge' });
+  const fixed = commit(root, 'c.js', 'three, fixed', 'fix: three and the merge');
+  run(root, { id: 'joined', base: merge, from: merge, head: fixed, answer: { verdict: 'correct', findings: [] }, recheck: { of: merge, findings: 2, fixed: 2, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } });
+  record(root, merge, fixed, { run: 'joined', recheckOf: merge });
+  const g = { ...finding, file: 'b.js', title: 'Two forgets a case' };
+  run(root, { id: 'again', base: middle, from: middle, head: owing, answer: { verdict: 'incorrect', findings: [g] } });
+  record(root, middle, owing, { run: 'again' });
+  const top = commit(root, 'e.js', 'five', 'feat: five');
+  run(root, { id: 'span', base: middle, from: middle, head: top, answer: { verdict: 'correct', findings: [] } });
+  record(root, middle, top, { run: 'span' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, owing)} owes a correction`));
+});
+
+test('a merge recheck that joined a debt still settles it after a clean review of part of it ends at the same head (T7, Codex on d1be083)', () => {
+  // As above, but the later review ending at H, M..H, is clean: the review that owes at H is the same one the merge's
+  // recheck joined, so that recheck still settles it, and the clean X..G spanning H passes.
+  const { root, base } = makeRepo();
+  feature(root);
+  const middle = commit(root, 'b.js', 'two', 'feat: two');
+  const owing = commit(root, 'c.js', 'three', 'feat: three');
+  run(root, { id: 'owes', base, from: base, head: owing, answer: { verdict: 'incorrect', findings: [finding] } });
+  record(root, base, owing, { run: 'owes' });
+  const merge = mergeMainWithEdit(root);
+  const fm = { ...finding, file: 'z.js', title: 'The merge drops a line' };
+  run(root, { id: 'merge-own', base: owing, from: owing, head: merge, answer: { verdict: 'incorrect', findings: [fm] } });
+  record(root, owing, merge, { run: 'merge-own', diff: 'remerge' });
+  const fixed = commit(root, 'c.js', 'three, fixed', 'fix: three and the merge');
+  run(root, { id: 'joined', base: merge, from: merge, head: fixed, answer: { verdict: 'correct', findings: [] }, recheck: { of: merge, findings: 2, fixed: 2, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } });
+  record(root, merge, fixed, { run: 'joined', recheckOf: merge });
+  run(root, { id: 'again', base: middle, from: middle, head: owing, answer: { verdict: 'correct', findings: [] } });
+  record(root, middle, owing, { run: 'again' });
+  const top = commit(root, 'e.js', 'five', 'feat: five');
+  run(root, { id: 'span', base: middle, from: middle, head: top, answer: { verdict: 'correct', findings: [] } });
+  record(root, middle, top, { run: 'span' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
+});
+
+test('a merge recheck is read with the marks of its own head, not those of a later tip (T7, Codex on 6892cdc)', () => {
+  // base..H owes f; M1, a merge of main that edits z.js, has no record, so the walk from M2, whose own record owes, stops
+  // at M1 and its recheck holds M2's finding alone. Later z.js is left out of review: read with the tip's marks, M1
+  // writes nothing and the walk would reach H, a recheck its run never made. A clean X..G spans H: the row refuses.
+  const { root, base } = makeRepo();
+  feature(root);
+  const middle = commit(root, 'b.js', 'two', 'feat: two');
+  const owing = commit(root, 'c.js', 'three', 'feat: three');
+  run(root, { id: 'owes', base, from: base, head: owing, answer: { verdict: 'incorrect', findings: [finding] } });
+  record(root, base, owing, { run: 'owes' });
+  const first = mergeMainWithEdit(root);
+  git(root, 'checkout', 'main');
+  commit(root, 'y.js', 'main again', 'feat: more on main');
+  git(root, 'update-ref', 'refs/remotes/origin/main', 'main');
+  git(root, 'checkout', 'feature');
+  git(root, 'merge', '--no-commit', '--no-ff', 'main');
+  fs.writeFileSync(path.join(root, 'y.js'), 'resolved in the second merge');
+  git(root, 'add', '.');
+  git(root, 'commit', '-m', 'merge main again with an edit');
+  const second = git(root, 'rev-parse', 'HEAD');
+  const fm = { ...finding, file: 'y.js', title: 'The second merge drops a line' };
+  run(root, { id: 'merge-own', base: first, from: first, head: second, answer: { verdict: 'incorrect', findings: [fm] } });
+  record(root, first, second, { run: 'merge-own', diff: 'remerge' });
+  const fixed = commit(root, 'y.js', 'resolved, fixed', 'fix: the second merge');
+  const then = recheckAt(root, { from: second, tip: fixed, runs: readCodexReviewRuns(root) });
+  assert.deepEqual(then.findings.map((one) => one.title), [fm.title], JSON.stringify(then));
+  run(root, { id: 'joined', base: second, from: second, head: fixed, answer: { verdict: 'correct', findings: [] }, recheck: { of: second, findings: 1, fixed: 1, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } });
+  record(root, second, fixed, { run: 'joined', recheckOf: second });
+  commit(root, '.gitattributes', 'z.js -codex-review\n.gitattributes -codex-review\n', 'chore: leave z.js out of review');
+  const top = commit(root, 'e.js', 'five', 'feat: five');
+  run(root, { id: 'span', base: middle, from: middle, head: top, answer: { verdict: 'correct', findings: [] } });
+  record(root, middle, top, { run: 'span' });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, false, row.detail);
+  assert.match(row.detail, new RegExp(`review that ended at ${short(root, owing)} owes a correction`));
+});
+
+test('the recheck a spanned debt names is what a run from that head makes, and its record lets the push pass (T5, the reliability lens on 2d0a5ee)', () => {
+  const { root, base } = makeRepo();
+  feature(root);
+  const middle = commit(root, 'b.js', 'two', 'feat: two');
+  const owing = commit(root, 'c.js', 'three', 'feat: three');
+  run(root, { id: 'owes', base, from: base, head: owing, answer: { verdict: 'incorrect', findings: [finding] } });
+  record(root, base, owing, { run: 'owes' });
+  const fixed = commit(root, 'c.js', 'three, fixed', 'fix: three');
+  run(root, { id: 'span', base: middle, from: middle, head: fixed, answer: { verdict: 'correct', findings: [] } });
+  record(root, middle, fixed, { run: 'span' });
+  const refused = checkCodexReviews(root, 'HEAD');
+  assert.equal(refused.pass, false);
+  // The head the refusal names, read from its command; codex-review run from a head writes `recheckOf` of what
+  // recheckAt reads there (codex-review.test.mjs, the record at RECHECK_ID).
+  const named = JSON.stringify(refused.next).match(/codex-review --base ([0-9a-f]+) --at [0-9a-f]+ --again/)?.[1];
+  assert.equal(named, short(root, owing), JSON.stringify(refused.next));
+  const from = git(root, 'rev-parse', named);
+  // What codex-review reads from the head the refusal names: the recheck of that head's findings.
+  const state = recheckAt(root, { from, tip: fixed, runs: readCodexReviewRuns(root) });
+  assert.equal(state.kind, 'recheck', JSON.stringify(state));
+  assert.equal(state.of, owing);
+  run(root, { id: 'recheck', base: owing, from: owing, head: fixed, answer: { verdict: 'correct', findings: [] }, recheck: { of: owing, findings: 1, fixed: 1, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } });
+  record(root, owing, fixed, { run: 'recheck', recheckOf: owing });
+  const row = checkCodexReviews(root, 'HEAD');
+  assert.equal(row.pass, true, row.detail);
 });

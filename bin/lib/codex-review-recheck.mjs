@@ -294,7 +294,8 @@ export function decidingRecord({ from, records, runs, holds = () => null, atOrBe
  * and git is asked (`changedBetween`, `writesNothing`) only once a review that owes something is found below a merge,
  * so a range with none pays nothing for this. The state found below a merge, or joined there, carries `at`, the head
  * of the newest record that owes it; a state read past a merge or at one carries `merge`, the newest merge on the way,
- * which a refusal names. Neither is ever in a record. */
+ * which a refusal names; a state that joined a debt below a merge carries `joinedAt`, the heads of the records whose
+ * debt joined, which the push row reads to settle a debt a later review spans (T7). None is ever in a record. */
 export function recheckThrough({ from, rows, records, runs, holds = () => null, atOrBefore = () => null, changedBetween, writesNothing }) {
   const today = recheckState({ from: recheckAnchor({ from, records, back: rows.map(([id]) => id), changedBetween }), records, runs, holds, atOrBefore });
   const parentsOf = new Map(rows.map(([id, ...parents]) => [id, parents]));
@@ -315,7 +316,8 @@ export function recheckThrough({ from, rows, records, runs, holds = () => null, 
     let passed = owed !== null;
     let newest = owed?.merge ?? null;
     let [merges, stretches, at, newer] = [[], [], start, start];
-    const join = (state) => ({ ...owed, findings: [...owed.findings, ...state.findings], at: owed.at ?? owed.of, ...(state.second === true ? { thirdBelow: true } : {}) });
+    // `joinedAt`, the heads whose debt joined, newest first: what the recheck of the merge rechecks below it (T7).
+    const join = (state) => ({ ...owed, findings: [...owed.findings, ...state.findings], at: owed.at ?? owed.of, joinedAt: [...(owed.joinedAt ?? []), at], ...(state.second === true ? { thirdBelow: true } : {}) });
     const reached = () => stretches.every(([older, upTo]) => older === upTo || (changedBetween(older, upTo)?.every(isDocument) ?? false)) && merges.every((merge) => merge.own || writesNothing(merge.id));
     for (let steps = 0; parentsOf.has(at) && steps < rows.length; steps += 1) {
       const parents = parentsOf.get(at);
@@ -386,6 +388,37 @@ export function againPastThreeReviews({ heads, stateOf, uncovered, reviewFromOf,
     const reviewFrom = newCode && state.merge === undefined ? reviewFromOf(head) : null;
     if (reviewFrom !== null && startsAtOrAfter(reviewFrom) === true) continue;
     return { head, state };
+  }
+  return null;
+}
+
+/** The head among `heads` (newest first) whose review owes a first recheck that a record spanning it read only part of:
+ * a review whose base lies before that head and whose head lies above it, with its base after the base of the record
+ * that owes, of each that owes there (`atOrBefore(older, newer)` as `recheckState` takes it), cleared that correction at the push, since the
+ * push reads the record that covers its newest commit (odd/tasks/again-subrange.md T5, L12). A record spanning it, or
+ * at it, that read all the owing record read settles it; a recheck that names it is read by `recheckState`. Only that
+ * shape is asked: a recheck after a merge names the merge and spans nothing below it (codex-spend L24). Git is asked
+ * only of a head that owes. `heads` are the commits of the history checked: a record ending elsewhere is not read.
+ * `settled(at, state)` says whether a recheck that names a later merge rechecked that debt, joined there (the walk of
+ * `recheckThrough`, which needs git): `decidingRecord` at the head cannot see it (the verifier on c821306e).
+ * `{ at, state }`, or `null`. */
+export function spannedDebt({ heads, records, runs, atOrBefore, settled = () => false }) {
+  // Only records that end on the history checked: the log is shared, and a record of another branch, or past the tip,
+  // neither settles its debt nor asks for one (Codex on 2d0a5ee).
+  const onLine = new Set(heads);
+  // The state at a head is read from them too: a recheck that names it and ends elsewhere does not settle it (Codex on 6e4f892).
+  const line = records.filter((rec) => onLine.has(rec?.head));
+  const reviewed = line.filter((rec) => isValidCodexReview(rec) && rec.outcome === 'reviewed');
+  for (const at of heads) {
+    if (!reviewed.some((rec) => rec.head === at)) continue;
+    const { kept, owing, state } = decidingRecord({ from: at, records: line, runs, atOrBefore });
+    if (state.kind !== 'recheck' || state.second === true || typeof kept?.recheckOf === 'string') continue;
+    const spans = (rec) => rec.head !== at && rec.base !== at && atOrBefore(rec.base, at) === true && atOrBefore(at, rec.head) === true;
+    // What every standing record that owes there read, not the deciding one's alone (Codex on 2d0a5ee).
+    const owed = owing.length > 0 ? owing : [kept];
+    const readAll = (rec) => typeof rec.recheckOf !== 'string' && owed.every((one) => rec.base === one.base || atOrBefore(rec.base, one.base) === true);
+    const spanning = reviewed.filter(spans);
+    if (spanning.length > 0 && !spanning.some(readAll) && settled(at, state) !== true) return { at, state };
   }
   return null;
 }

@@ -11,7 +11,7 @@ import { beyondLines, defaultBranch, gitOut, MARKS_UNREAD, mergeStart, NOT_A_REV
 import { atOrBeforeIn, mergeTurn, recheckAt, turnsCheaper } from './codex-review-turns.mjs';
 import { codexReviewsPath, isValidCodexReview, readCodexReviews } from './codex-reviews.mjs';
 import { readCodexReviewRuns } from './codex-review-runs.mjs';
-import { classifyRecheck, decidingRecord, ESCALATION_SAID, priorLine, recheckState, runAnswerFindings } from './codex-review-recheck.mjs';
+import { classifyRecheck, decidingRecord, ESCALATION_SAID, priorLine, recheckState, runAnswerFindings, spannedDebt } from './codex-review-recheck.mjs';
 import { counted, leftOutOf, rangeFiles, reviewScope } from './codex-review-scope.mjs';
 import { commitTree, functionsOf, gitIn, harnessOfCommit, harnessOfTree, workingTree } from './project-functions.mjs';
 import { commandStep, firstStep, noStep, reviewCommand } from './next-step.mjs';
@@ -71,7 +71,7 @@ function codexReviewCoverage(cwd, head, { spawn, remote }) {
     ignored ? `${ignored} record${ignored === 1 ? '' : 's'} ignored (base or head not found)` : '',
   ].filter(Boolean);
   const note = noteParts.length ? `; ${noteParts.join('; ')}` : '';
-  return { tip, baseRef, base, codeCommits, covers, uncovered, beyond, note, where };
+  return { tip, baseRef, base, codeCommits, covers, uncovered, beyond, note, where, rangeIds: coverage.rangeIds };
 }
 
 /** The lines that both rows print for the code commits no Codex review record covers: one per commit, with its
@@ -108,7 +108,55 @@ function coveredDetail({ codeCommits, base }) {
  * the commit the review of the commits no record covers starts at. Read past a merge, a merge's own record that owes
  * joins the debt below it (`recheckThrough`, codex-spend L24): the review after it is the recheck of both. `through`
  * says the debt was read past a merge, or joined there. */
-function correctionOwed(cwd, { codeCommits, covers, tip, where }, { spawn, below = null }) {
+function correctionOwed(cwd, given, options) {
+  const owed = correctionOwedAt(cwd, given, options);
+  if (owed?.refuse || options.below !== null && options.below !== undefined || given.rangeIds === undefined) return owed;
+  // A head of the range whose correction a record spanning it read only part of (T5): read from the records first, so the
+  // plain row asks git nothing more where no head owes.
+  let records;
+  let runs;
+  try {
+    records = admittedRecords(cwd, { spawn: options.spawn, where: given.where });
+    runs = readCodexReviewRuns(cwd, { spawn: options.spawn, where: given.where });
+  } catch {
+    return owed;
+  }
+  if (runs.length === 0) return owed;
+  const atOrBefore = atOrBeforeIn(cwd, options.spawn);
+  const onLine = new Set(given.rangeIds);
+  // A debt at `at` rechecked with a merge of main above it: a recheck on the line, read as its run read it (the records
+  // before it), was the recheck of that debt where the walk down from the merge it names joined `at`'s own record
+  // (`joinedAt`, which only that walk gives). Findings matched by value are no proof (the verifier on 030cbd2b, T7): a
+  // merge that found an equal finding, whose walk stopped above `at` or which lies below it, rechecked nothing of `at`'s.
+  // The debt it joined is the one that stands only while the records that owe at `at` are those its run read (Codex on
+  // 6892cdc: a later review ending there with another finding; on d1be083: a later clean one leaves them as they were);
+  // and the run read it with the marks at its own head, which a later tip may change.
+  const order = new Map(records.map((rec, index) => [rec, index]));
+  const line = records.filter((rec) => onLine.has(rec?.head));
+  const owingAt = (at, upTo) => {
+    const { kept, owing } = decidingRecord({ from: at, records: upTo === undefined ? line : line.filter((rec) => order.get(rec) < upTo), runs, atOrBefore });
+    return JSON.stringify(owing.length > 0 ? owing : [kept]);
+  };
+  const settled = (at) => records.some((rec, index) => isValidCodexReview(rec) && rec.outcome === 'reviewed' && onLine.has(rec.head) &&
+    typeof rec.recheckOf === 'string' && owingAt(at, index) === owingAt(at) && (() => {
+      const then = recheckAt(cwd, { from: rec.recheckOf, tip: rec.head, records: records.slice(0, index), runs, spawn: options.spawn, where: given.where });
+      return then?.kind === 'recheck' && then.joinedAt?.includes(at) === true;
+    })());
+  const spanned = spannedDebt({ heads: [...given.rangeIds], records, runs, atOrBefore, settled });
+  if (spanned === null) return owed;
+  const at = gitOut(options.spawn, cwd, ['rev-parse', '--short', spanned.at]) ?? spanned.at.slice(0, 7);
+  const n = spanned.state.findings.length;
+  return {
+    refuse: true,
+    through: false,
+    of: spanned.at,
+    detail: `the Codex review that ended at ${at} owes a correction: ${n} finding${n === 1 ? '' : 's'} open, not rechecked; a review that spans it read only part of its range`,
+    lines: spanned.state.findings.map(priorLine),
+    next: commandStep(reviewCommand('codex-review', { base: at, at: given.tip.slice(0, 12), flags: ['--again'] })),
+  };
+}
+
+function correctionOwedAt(cwd, { codeCommits, covers, tip, where }, { spawn, below = null }) {
   let from = below;
   let last;
   if (below === null) {

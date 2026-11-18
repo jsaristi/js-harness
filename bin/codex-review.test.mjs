@@ -8179,6 +8179,34 @@ function recheckAnswer(root, { blocks = false } = {}) {
   };
 }
 
+test('the command a spanned debt names, run, writes the recheck of that head and the push passes (T5, the reliability lens on 6e4f892)', async () => {
+  // odd/tasks/again-subrange.md T5: base..owing owes; a clean middle..fixed spans owing and read less, so the push
+  // refuses and names `codex-review --base <owing> --again`; that run is a recheck of owing and settles it.
+  const { root, base, head: middle } = makeRepo();
+  // The push compares against the default branch of origin, here the base.
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', base);
+  fs.writeFileSync(path.join(root, 'f.txt'), 'two and a half', 'utf8');
+  git(root, 'commit', '-am', 'owing');
+  const owing = git(root, 'rev-parse', 'HEAD');
+  assert.equal((await run(['--base', base, '--cwd', root], { ...fakeCodex(reviewed(root, base), {}, PROBE_OK, answerWith(root)), randomUUID: () => idOf(41) })).code, 0);
+  fs.writeFileSync(path.join(root, 'f.txt'), 'three', 'utf8');
+  git(root, 'commit', '-am', 'fixed');
+  const fixed = git(root, 'rev-parse', 'HEAD');
+  assert.equal((await run(['--base', middle, '--again', '--cwd', root], { ...fakeCodex(reviewed(root, middle), {}, PROBE_OK, NO_FINDINGS), randomUUID: () => idOf(42) })).code, 0);
+  const refused = checkCodexReviews(root);
+  assert.equal(refused.pass, false, refused.detail);
+  const named = JSON.stringify(refused.next).match(/codex-review --base ([0-9a-f]+) --at [0-9a-f]+ --again/)?.[1];
+  assert.ok(named, `${refused.detail} ${JSON.stringify(refused.next)}`);
+  assert.equal(git(root, 'rev-parse', named), owing, JSON.stringify(refused.next));
+  const allFixed = { findings: [], overall_correctness: 'patch is correct', overall_explanation: 'Each finding is fixed.' };
+  const result = await run(['--base', named, '--again', '--cwd', root], { ...fakeCodex(reviewed(root, owing), {}, PROBE_OK, allFixed), randomUUID: () => RECHECK_ID });
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(readCodexReviews(root).at(-1), { ...reviewedRecord(owing, fixed), run: RECHECK_ID, recheckOf: owing });
+  const row = checkCodexReviews(root);
+  assert.equal(row.pass, true, row.detail);
+});
+
 test('every reviewed run line keeps what its review found, so a later range can be checked against it', async () => {
   const { root } = await reviewedThenCorrected();
   const [line] = readCodexReviewRuns(root);
