@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { fencedBlocks } from './reply.mjs';
 import { commandRefusals, runParts, shellParser } from './reply-commands.mjs';
 
@@ -121,6 +122,18 @@ test('real: PowerShell reads each block as he would, its parse errors and parame
   assert.match(checked.errors[5].join('\n'), /^Remove-Item: -f is ambiguous, it could be -(Filter|Force), -(Filter|Force)/);
   assert.deepEqual([checked.errors[1], checked.errors[2], checked.errors[4]], [[], [], []], 'a prefix of a parameter binds, as PowerShell binds it');
   assert.match(checked.errors[3].join('\n'), /^PowerShell cannot parse it: /);
+});
+
+test('real: a block whose last command PowerShell cannot find is checked, not failed, in PowerShell 7 and in Windows PowerShell', { skip: process.platform !== 'win32' && 'PowerShell is checked on Windows' }, () => {
+  // Get-Command's miss leaves `$?` false, and a script's last `$?` was its exit code: the same text passed when the
+  // miss was not last (odd/tasks/reply-hook-latency.md, T8).
+  const texts = ['rm -rf x', 'nosuchprog-jh223 --a'];
+  assert.deepEqual(shellParser('win32')(texts, { timeout: 20000 }), { errors: [['rm has no parameter -rf'], []] });
+  assert.deepEqual(shellParser('win32')(['nosuchprog-jh223'], { timeout: 20000 }), { errors: [[]] });
+  const windowsPowerShell = (program, args, options) => (program === 'pwsh.exe'
+    ? { error: Object.assign(new Error('spawn pwsh.exe ENOENT'), { code: 'ENOENT' }) }
+    : spawnSync(program, args, options));
+  assert.deepEqual(shellParser('win32', windowsPowerShell)(texts, { timeout: 20000 }), { errors: [['rm has no parameter -rf'], []] });
 });
 
 test('real: bash -n reads each block off Windows', { skip: process.platform === 'win32' && 'bash is checked off Windows' }, () => {
