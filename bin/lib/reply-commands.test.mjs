@@ -145,6 +145,12 @@ test('real: a block whose last command PowerShell cannot find is checked, not fa
     assert.equal(both.failed, undefined, both.failed);
     assert.match(both.errors[0].join('\n'), /^PowerShell could not look up Get-Ite\[m: [^\n]*\nGet-Date has no parameter -zz$/);
     assert.deepEqual(both.errors[1], ['rm has no parameter -rf']);
+    // A line break in the name stays out of the line the parser reads, or the refusal is lost (Codex, cc56e0f..5fd74a2).
+    const breaks = shellParser('win32', spawn)(['& "Get-Ite[m`rx" -x', "& 'Get-Ite[m x' -x", '& "Get-It`re" -zz'], { timeout: 20000 });
+    assert.equal(breaks.failed, undefined, breaks.failed);
+    assert.match(breaks.errors[0].join('\n'), /^PowerShell could not look up Get-Ite\[m x: /);
+    assert.match(breaks.errors[1].join('\n'), /^PowerShell could not look up Get-Ite\[m x: /);
+    assert.equal(breaks.errors.length, 3);
   }
 });
 

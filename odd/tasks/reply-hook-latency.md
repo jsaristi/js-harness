@@ -342,6 +342,11 @@ a longer timeout for the reply hook seldom lengthens a stop. That value is his: 
   failed lookup take every block of the spawn down to "could not check it", dropping a sibling's `rm has no parameter
   -rf`. Fixed, tests first (red on `cc56e0f`): the failed lookup is that block's own error line, "PowerShell could not
   look up <name>: <why>", the other blocks keep their answers, and the script ends on `exit 0` again.
+- L17 (2026-11-18, JH 223, reviews over `cc56e0f..5fd74a2`): the lenses 0 findings, both earlier ones rechecked
+  fixed. Codex (510,998 input tokens): one P2, accepted: a carriage return or U+2028 in a quoted name split the lookup's
+  error line, which `shellParser` then dropped, so the block passed unchecked. Fixed, tests first (red on `5fd74a2`):
+  every line the script prints goes through `Say`, which turns CR, LF, U+0085, U+2028 and U+2029 into a space; the
+  parse-error and parameter lines too, since a name reaches them as well.
 
 ## Next step
 Code: `b42532d7`, `8c746b16`, `c76d97d1` and the verifier's fixes (L9), each committed with the gate green. Question
