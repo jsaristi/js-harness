@@ -401,6 +401,15 @@ a longer timeout for the reply hook seldom lengthens a stop. That value is his: 
   Answered, not changed: Codex's P2 and the lens's warning that the test requires a pass for a block main refused.
   That pass is the decision JH PLAN set as condition 1, and the test pins it so a later change has to undo it on
   purpose.
+- L22 (2026-11-18, JH 223, condition 3, the second verifier again, read-only): it compared main (`b044dbf7`) and
+  HEAD through `commandRefusals`, 65 texts and 8 pairs, 341 replies a shell plus the alias case, both shells, with a
+  60 s deadline for both. The forms: an `own` block, a handed block with a transcript, a handed block with none, and
+  two-block replies. Its word: "No other refusal is lost." Each reply refused on main and passed at HEAD (68 a shell,
+  17 texts) falls into one of the four cases above, and main's only reason for each was "it exited 1". A handed block
+  with a readable transcript keeps its "no run of this session" refusal. No sibling loses its real error. A block with
+  an unmatched `[` is still refused, and now with the right reason: on main it was judged against an earlier
+  command's parameters. Not checked by it: replies of more than two blocks, other fence tags, the hook's real 4 s
+  deadline. The reliability lens over `5df63e0..4f98993` repeated its warning on the pinned pass, answered in L21.
 
 ## Next step
 JH 223 (2026-11-18): T5 and T8 are done. The code is final at `9760618b`, and the docs at the commit after `8f2f1fc9`.
