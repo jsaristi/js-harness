@@ -8,9 +8,12 @@ Locator: `odd/tasks/web-guidance.md` · Engram mirror: `odd/web-guidance/tasks` 
 ## State
 2026-11-18, this session: the design and its plan are written and no code is. Nothing is installed. Done: the
 source read (L2), the harness's own mechanism read (L3), the refutation run (Depth pass, item 4), the row's class
-settled (L7), two double reviews, 17 findings and then 15, each taken (L8, L9). Not done: the third and last
-review of this text; the pull request and the ready notice to the lead. Next: that review, then the hand to the
-lead. Open: his decisions under "Ask me before", none asked yet, each through the lead.
+settled (L7), three double reviews, 17, 15 and 16 findings (L8, L9, L10). The plan did not converge: the third
+review still found real failures, 3 of them high, so by `rule:double-review` it goes to him as a problem and to the
+senior session the lead opens (`rule:senior-model`). What holds: the order (T2's install trial first, then the
+design of T3 to T7) and what is out of scope. What is provisional: the text of T3 to T7, corrected for L10's
+findings only where L10 says so and not reviewed since. Next: the lead places T2 and the senior pass. Open: his
+decisions under "Ask me before", none asked yet, each through the lead.
 
 ## Goal
 A project turns Modern Web Guidance on with one switch in `harness.json`, read by every command that reports or
@@ -41,8 +44,9 @@ before he decides where, if anywhere, it is on by default.
   through `probeStack` and changes only if T5's cells ask it; two eval tasks with a web interface and their arms;
   the texts (`docs/SPEC.md`, the user guide, and the roadmap entry once pull request 909 has landed).
 - Out: context7, which stays required in every preset (S4); the plugin's own guides, skill text and CLI, which the
-  harness configures and never copies or rewrites; any write to a project's `AGENTS.md`, which `init` and `sync`
-  never write where it exists (`bin/lib/project.mjs:797-801`); Codex's side, until
+  harness configures and never copies or rewrites; any text of this feature in a project's `AGENTS.md`: `sync`
+  goes on refreshing the harness's own block there (`syncTemplateBlock`, `bin/lib/project.mjs:1839`) and what the
+  project wrote stays as it is; Codex's side, until
   T2 shows Codex can keep a plugin out of one project: until then the harness names no Codex install of it, since
   one would be on in every project.
 
@@ -123,20 +127,20 @@ before he decides where, if anywhere, it is on by default.
 - S2. "quiero saber mas antes de añadirlo, por ejemplo si hacemos una pagina en Astro o una aplicacion en NextJS que
   tanto serviria?" (2026-11-17): its gain is measured here, on an Astro task and a Next.js task, before a default.
 - S3. "listo quiero que crees como deberia funcionar todo y pasarle el plan al orquestardor JH ORQ para que el decida
-  como ponerlo en toda la cola de implementaciones que estamos haciendo" (2026-11-17): this document, reviewed twice,
-  handed to the lead, who places it.
+  como ponerlo en toda la cola de implementaciones que estamos haciendo" (2026-11-17): this document, reviewed and
+  with its reviews' state said, handed to the lead, who places it.
 - S4. "Modren web guidance de google nos ayudaria para este proyecto mejor que context7 osea recuerda que este es un
   harness para varias cosas pero sobretodo para programar" (2026-11-17): answered no, it does another job; context7
   stays required and nothing is replaced.
 
 ## Tasks
-- [ ] T1 (kind: design) S1, S3: the design and its double review (L7, L8). Route: this session. Commit: documents alone.
+- [ ] T1 (kind: design) S1, S3: the design and its double reviews (L7 to L10); not converged, so its close is the senior pass after T2. Route: this session, then the senior session. Commit: documents alone.
 - [ ] T2 (kind: verify) S1: after his yes, on a scratch home, for Claude Code: what each of `-s user`, `project` and `local` writes; which of them, or which settings key, keeps the skill out of a project that has not turned it on and loads it in one that has, read from the session's loaded skills; every skill the install loads and the fixed cost by `claude plugin details`; a second project never touched and a clone never synced, after the install; a plugin already installed for the whole machine, and off after on with that state inherited; each scope's install run before `js-harness sync`, then the switch turned off, with what each step reports and undoes, since a `local` install may write the file the harness manages (`bin/lib/project-apply.mjs:10-12`); a conflicting value he wrote himself. For Codex: whether a plugin can be held out of one project. From the host's settings documentation, no install needed: whether it reads `DISABLE_TELEMETRY`. Route: inline. Commit: the Log.
 - [ ] T3 (kind: build) S2: two eval tasks with a web interface, one Astro and one Next.js (fixture, reference, hidden checks of function, of the browser and of accessibility), and three arms: without the plugin, with it, and with it named in the project's `AGENTS.md`. Written in the Log before pricing: the trials per arm, the least gain that justifies a default, the cost limit, that an inconclusive result or a regression keeps the default off, and that a gain speaks only for Astro pages and Next.js applications. The skill's text stays as shipped, so one version of the `npx` package is held by what T3's first step proves works without touching it: that version fetched into the trial's package cache and run offline, or a resolver in the trial's PATH that serves it; the version each call ran is checked and a drift fails the trial. Each trial sets `DISABLE_TELEMETRY=1` and records the versions of the plugin, the CLI and the host. The plugin arm's home comes from a template of its own, or from an install in his real home with its undo recorded, as he decides. Route: a writer. Commit: the tasks, then their report.
 - [ ] T4 (kind: build) S1: the switch `webGuidance` in `SWITCHES` (`auto`, `on`, `off`; strict `off`); `auto` is off over a tree that cannot be read, off until he answers, and then as he answers, the rule proposed being a web framework's configuration at the project's root; the custom preset's choice (`bin/init.mjs`), the fixed presets declaring nothing; the switch's own command and its test, which lists every switch (`bin/functions.mjs`, `bin/functions.test.mjs:254`). Route: inline. Commit: with its tests.
-- [ ] T5 (kind: build) S1, S4: the row in `tools`, shown while the switch is on and also wherever the plugin is on for this clone with the switch not on, where it is a gap whose fix turns it off. Its `installed` cell reads the installation that serves this project, not the first on the machine; its `claude` cell reads the clone's effective state, not the user file alone; its `project` cell is a gap where the project's `AGENTS.md` does not name the skill, and its fix prints the lines to add: that the skill is used for interface work and that the project's own components win over it. Fixes: `claude plugin marketplace add GoogleChrome/modern-web-guidance` then `claude plugin install modern-web-guidance@googlechrome` with the scope T2 proves leaves it off outside the project, and no fix is named before T2; the undo is the uninstall of that scope and `claude plugin marketplace remove googlechrome`. `planStack` puts its machine gaps in `manual`, his steps with their undo, as the engram plugin's are (`bin/lib/stack-install.mjs:152-164`), since `optional` carries no undo; the `project` cell shows in `doctor` alone, `gapsOf` keeping the machine's dimensions. Tested: two projects with different states, and that the plan carries the undo. Route: inline. Commit: with its tests.
-- [ ] T6 (kind: build) S1: `SETTINGS_KEYS` and `SWITCH_OF_KEY` hold the plugin on in a clone whose switch is on, by the key T2 shows, and nowhere else; a value of his that conflicts, or a key an install wrote before `sync`, is kept and reported as not applied here, never as done; the telemetry key as he decides. Route: inline. Commit: with its tests.
-- [ ] T7 (kind: build) S1: the help and the usage lines (`bin/js-harness.mjs`, `bin/init.mjs`), and a test that `sync` on a clone with its own `AGENTS.md` changes no byte of it. Route: inline. Commit: with its tests.
+- [ ] T5 (kind: build) S1, S4: the row in `tools`, shown while the switch is on and also wherever the plugin is on for this clone with the switch not on, where it is a gap whose fix turns it off. Its `installed` cell reads the installation that serves this project, not the first on the machine; its `claude` cell reads the clone's effective state, not the user file alone; its `project` cell is a gap where the project's `AGENTS.md` does not name the skill, and its fix prints the lines to add: that the skill is used for interface work and that the project's own components win over it. Fixes: `claude plugin marketplace add GoogleChrome/modern-web-guidance` then `claude plugin install modern-web-guidance@googlechrome` with the scope T2 proves leaves it off outside the project, and no fix is named before T2; the undo is the uninstall of that scope and `claude plugin marketplace remove googlechrome`. `planStack` keeps its machine gaps in `optional`, as L7 classes the row, and `optional` gains an `undo` field, since `manual` would make `js-harness stack` exit 1 over an optional plugin (`bin/stack.mjs:117-120`, `:173`); the undo removes only what this step added, the marketplace only where no other installation uses it. Its `upToDate` cell and update fix are named as the other plugin rows' are (`bin/lib/latest.mjs`). Tested: two projects with different states, that the plan carries the undo, and that `stack` exits 0 with this row's gap alone. Route: inline. Commit: with its tests.
+- [ ] T6 (kind: build) S1: `SETTINGS_KEYS` and `SWITCH_OF_KEY` hold the plugin on in a clone whose switch is on and, by an explicit false, off in every other synced clone, by the keys T2 shows; where T2 shows a clone's key does not override the machine's, the Constraint's "holds" becomes "shows"; a switch on with no plugin installed writes no key and is reported; a value of his that conflicts, or a key an install wrote before `sync`, is kept and reported as not applied here, never as done; the telemetry key as he decides. Route: inline. Commit: with its tests.
+- [ ] T7 (kind: build) S1: the help and the usage lines (`bin/js-harness.mjs`, `bin/init.mjs`), and a test that this feature adds no text to a project's `AGENTS.md`: one with no block of the harness's keeps every byte, and one with the block keeps what the project wrote. Route: inline. Commit: with its tests.
 - [ ] T8 (kind: docs) S3: the capability in `docs/SPEC.md`, the user guide, and the roadmap entry closed, after pull request 909 has landed. Route: inline. Commit: documents alone.
 
 Order: T1, T2, T3 before T4 to T7, since T2 can change the design and T3 decides the default; T8 last. T4 to T7
@@ -220,3 +224,22 @@ touch nine modules of `bin` that other features also change, so the lead places 
   `sync` (claude 7); a gain speaks for the kinds of project tested (claude 8); L4 says what is not known of the scan
   (claude 9); spec 3 is dated on this text (claude 10); the citation and the on side of T2 (claude 11); the plugin
   ships `chrome-extensions` too, which the first text called out of scope (codex 2).
+- L10 (2026-11-18, evidence, the third and last double review, `823f0dfa-886a-4bbe-b19f-abcb2bd3072c` on commit
+  `8831fab9`: 11 findings of the Claude reader and 5 of Codex's, all 16 real and taken as true). Corrected in this
+  text, not reviewed since: T6 holds the plugin off by an explicit false and says when "holds" becomes "shows"
+  (claude 1, codex 1); the row stays `optional` with an `undo`, since `manual` makes `stack` exit 1 (claude 2); the
+  undo removes only what the step added (codex 2); the `upToDate` cell (claude 8); a switch on with nothing installed
+  (claude 6); `sync` does write the harness's own block of an existing `AGENTS.md`, which the second text denied
+  (codex 4); T1's citation and S3's wording (claude 10). Owed to the senior pass, after T2: T3 as written can
+  support a default only for Astro and Next.js, so "on in every project with code" would rest on his decision and
+  not on a measurement, and the test that this repository resolves off depends on his answer (claude 3); T3 cannot
+  be built from what the evals have: the arm grammar takes neither a third arm nor a plugin installed below user
+  scope, nothing runs a browser or an accessibility check with zero dependencies, and the fixtures need their
+  packages offline (claude 4); `evals/plan.mjs` prints no estimate for cells never run, so pricing needs a capped
+  calibration batch or his yes to a stated ceiling (codex 5); the shipped skill prefers `pnpx` where pnpm exists, so
+  holding one version must cover that route and the Windows shims (codex 3), and a default would rest on the
+  version measured (claude 11); the row's Codex cell reads nothing, so a Codex install is on unseen (claude 5); the
+  root-configuration rule was fitted to three trees and misses a monorepo, Angular, Gatsby and others (claude 9);
+  no `doctor` test nor eval test is in "Done when", nor a line for the hand to the lead (claude 7, claude 10).
+  Why three reviews did not close it, this session's reading: each round judged a design of host behaviour that only
+  T2's install can show, so the design of T3 to T7 is written after T2, not before.
