@@ -115,7 +115,7 @@ test('--dry-run builds the candidate of main and the ready pull requests in orde
   assert.equal(code, 0, out.join('\n'));
   assert.deepEqual(out, [
     `PR 4 is left out: PR 4 is a draft.`,
-    `PR 3 is left out: it conflicts with the candidate so far in a.txt.`,
+    'PR 3 is left out: it conflicts with the candidate so far (PR 1, PR 2) in a.txt: it waits for their land.',
     `Candidate: main ${main.slice(0, 7)} with 2 pull requests merged in order: PR 1 (feat/a), PR 2 (feat/b).`,
     'main\'s check.mjs has no merge door yet (odd/tasks/rule-hierarchy.md, T16e): no door ran',
     'Dry run: nothing was tested or pushed, and the candidate was removed.',
@@ -155,12 +155,61 @@ test('a pull request GitHub has not yet computed (mergeable UNKNOWN, about a min
   const { code, out } = await dryRun(root, prs);
   assert.equal(code, 0, out.join('\n'));
   assert.deepEqual(out, [
-    'PR 4 is left out: PR 4 is not mergeable (CONFLICTING).',
-    'PR 3 is left out: it conflicts with the candidate so far in a.txt.',
+    'PR 4 is left out: PR 4 is not mergeable (CONFLICTING): it conflicts with main itself, so merge main into its branch feat/d and push it.',
+    'PR 3 is left out: it conflicts with the candidate so far (PR 1, PR 2) in a.txt: it waits for their land.',
     `Candidate: main ${main.slice(0, 7)} with 2 pull requests merged in order: PR 1 (feat/a), PR 2 (feat/b).`,
     'main\'s check.mjs has no merge door yet (odd/tasks/rule-hierarchy.md, T16e): no door ran',
     'Dry run: nothing was tested or pushed, and the candidate was removed.',
   ]);
+});
+
+/** Moves origin's main of the queue repository `root` by one commit that changes a.txt, so feat/a and feat/c conflict
+ * with main itself: the new main's id. */
+function mainMovesOnA(root) {
+  git(root, 'checkout', '--quiet', '--detach', 'origin/main');
+  fs.writeFileSync(path.join(root, 'a.txt'), 'A from main\n', 'utf8');
+  git(root, 'commit', '--quiet', '-am', 'main changes a');
+  git(root, 'push', '--quiet', 'origin', 'HEAD:main');
+  git(root, 'fetch', '--quiet', 'origin');
+  return git(root, 'rev-parse', 'HEAD');
+}
+
+test('a conflict with main names its fix, merge main into the branch: GitHub\'s CONFLICTING, and a merge into the candidate while it is still main, a head that brings nothing included (codex-spend, spec 3)', async () => {
+  const { root } = makeQueueRepo();
+  const heads = Object.fromEntries(['feat/a', 'feat/c'].map((branch) => [branch, git(root, 'rev-parse', `origin/${branch}`)]));
+  const main = mainMovesOnA(root);
+  // PR 2's head is main itself: it merges without a commit, so the candidate is still main when PR 3 is merged into it.
+  const prs = [pr(1, 'feat/a', heads['feat/a'], { mergeable: 'CONFLICTING' }), pr(2, 'feat/main', main), pr(3, 'feat/c', heads['feat/c'], { mergeable: 'UNKNOWN' })];
+  const { code, out } = await dryRun(root, prs);
+  assert.equal(code, 0, out.join('\n'));
+  assert.deepEqual(out.slice(0, 2), [
+    'PR 1 is left out: PR 1 is not mergeable (CONFLICTING): it conflicts with main itself, so merge main into its branch feat/a and push it.',
+    'PR 3 is left out: it conflicts with main itself in a.txt, so merge main into its branch feat/c and push it.',
+  ]);
+});
+
+test('a conflict with main names its fix where the reviews are read onto main, or onto a candidate the pull request does not merge onto main alone either; one with an earlier pull request waits for that land', async () => {
+  const { root, heads } = makeQueueRepo();
+  const asked = [];
+  // PR 2 is read onto main and hands back its tip; PR 3 conflicts there, and onto main alone too when `withMain`.
+  const covered = (withMain) => (head, onto) => {
+    asked.push([head, onto === 'cand2' ? 'cand2' : 'main']);
+    if (head === heads['feat/b']) return { pass: true, tip: 'cand2' };
+    if (head === heads['feat/a']) return { pass: false, detail: 'it does not merge onto main without a conflict (in a.txt)', conflicted: ['a.txt'], next: { kind: 'step', text: 'settle the conflict with main in a.txt, by merging or rebasing the branch' } };
+    if (onto === 'cand2' || withMain) return { pass: false, detail: 'a conflict', conflicted: ['a.txt'], next: { kind: 'step', text: 'settle it' } };
+    return { pass: true };
+  };
+  for (const [withMain, said] of [
+    [true, 'PR 3 is left out: it conflicts with main itself in a.txt, so merge main into its branch feat/c and push it.'],
+    [false, 'PR 3 is left out: it conflicts with the candidate so far (PR 2) in a.txt: it waits for that land.'],
+  ]) {
+    asked.length = 0;
+    const { code, out } = await dryRun(root, [pr(1, 'feat/a', heads['feat/a']), pr(2, 'feat/b', heads['feat/b']), pr(3, 'feat/c', heads['feat/c'])], covered(withMain));
+    assert.equal(code, 0, out.join('\n'));
+    assert.deepEqual(out.slice(0, 2), ['PR 1 is left out: it conflicts with main itself in a.txt, so merge main into its branch feat/a and push it.', said], String(withMain));
+    assert.ok(!out.some((line) => /^ {2}next: /.test(line)), 'the line names the fix: no "merging or rebasing" step beside it');
+    assert.deepEqual(asked.filter(([head]) => head === heads['feat/c']), [[heads['feat/c'], 'cand2'], [heads['feat/c'], 'main']], 'main alone is asked only for a conflict onto the candidate');
+  }
 });
 
 test('a merge that fails with no conflict says what git said, not that it conflicts', async () => {
@@ -1461,7 +1510,7 @@ test('--land writes one land record: the pull requests it looked at, each left o
     considered: [1, 2, 3, 4],
     leftOut: [
       { pr: 4, reason: 'not-ready', said: 'PR 4 is a draft.', told: null },
-      { pr: 3, reason: 'conflict', said: 'it conflicts with the candidate so far in a.txt.', files: ['a.txt'], told: null },
+      { pr: 3, reason: 'conflict', said: 'it conflicts with the candidate so far (PR 1, PR 2) in a.txt: it waits for their land.', files: ['a.txt'], told: null },
     ],
     phases: [{ phase: 'suite', ok: true }, { phase: 'actions', ok: true }, { phase: 'push', ok: true }],
     actions: { state: 'green', name: 'gate', conclusion: 'success', url: 'https://github.com/o/r/actions/runs/1' },

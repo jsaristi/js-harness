@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { QUEUE_TRAILER, mergeMessage, pullRequestProblems } from './pull-request.mjs';
+import { QUEUE_TRAILER, conflictSaid, mergeMessage, pullRequestProblems } from './pull-request.mjs';
 
 const pr = (over = {}) => ({ number: 7, state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', baseRefName: 'main', body: 'Risk: none.', ...over });
 
@@ -18,12 +18,25 @@ test('each check of the pull request itself says which, in order', () => {
     [{ state: 'CLOSED' }, 'PR 7 is CLOSED, not open.'],
     [{ isDraft: true }, 'PR 7 is a draft.'],
     [{ mergeable: 'UNKNOWN' }, 'PR 7 is not mergeable (UNKNOWN).'],
-    [{ mergeable: 'CONFLICTING' }, 'PR 7 is not mergeable (CONFLICTING).'],
+    [{ mergeable: 'CONFLICTING' }, 'PR 7 is not mergeable (CONFLICTING): it conflicts with main itself, so merge main into its branch and push it.'],
     [{ baseRefName: 'dev' }, 'PR 7 targets dev, not main.'],
   ]) {
     assert.deepEqual(pullRequestProblems(pr(over), 'main'), [said], JSON.stringify(over));
   }
   assert.deepEqual(pullRequestProblems(pr({ state: 'MERGED', isDraft: true, baseRefName: 'dev' }), 'main'), ['PR 7 is MERGED, not open.', 'PR 7 is a draft.', 'PR 7 targets dev, not main.']);
+});
+
+test('a conflict with main names its fix: merge the branch it targets into the branch of the pull request, never for a mergeable GitHub has not computed (codex-spend, spec 3)', () => {
+  assert.deepEqual(pullRequestProblems(pr({ mergeable: 'CONFLICTING', headRefName: 'feat/x' }), 'main'), ['PR 7 is not mergeable (CONFLICTING): it conflicts with main itself, so merge main into its branch feat/x and push it.']);
+  assert.deepEqual(pullRequestProblems(pr({ mergeable: 'CONFLICTING', headRefName: 'feat/x' }), 'trunk'), ['PR 7 is not mergeable (CONFLICTING): it conflicts with main itself, so merge main into its branch feat/x and push it.', 'PR 7 targets main, not trunk.'], 'GitHub computes the conflict against the branch the pull request targets');
+  assert.deepEqual(pullRequestProblems(pr({ mergeable: 'UNKNOWN', headRefName: 'feat/x' }), 'main'), ['PR 7 is not mergeable (UNKNOWN).']);
+  assert.equal(conflictSaid({ base: 'trunk', branch: 'feat/x', files: ['a.txt', 'b.txt'] }), 'it conflicts with trunk itself in a.txt, b.txt, so merge trunk into its branch feat/x and push it.');
+  assert.equal(conflictSaid({ base: 'main' }), 'it conflicts with main itself, so merge main into its branch and push it.');
+});
+
+test('a conflict with an earlier pull request of the batch says it waits for that land, naming it, and no fix of its branch', () => {
+  assert.equal(conflictSaid({ base: 'main', branch: 'feat/c', files: ['a.txt'], earlier: [1] }), 'it conflicts with the candidate so far (PR 1) in a.txt: it waits for that land.');
+  assert.equal(conflictSaid({ base: 'main', branch: 'feat/c', files: ['a.txt'], earlier: [1, 2] }), 'it conflicts with the candidate so far (PR 1, PR 2) in a.txt: it waits for their land.');
 });
 
 test('a body that names no review is no problem: the reviews are read from their records (F8 S11, L11)', () => {

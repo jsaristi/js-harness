@@ -445,3 +445,20 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   it; Y1 goes to JH 207. The lead also asked whether Y1 is on main: yes, C1f (no merge) on main 7de0b95's own bin
   passes the push row after a nothing-to-review record over an owed review (JH 199 scratchpad verify5,
   out-C1f-main.txt). JH 199 closes with its summary, docs/sessions/2026-11-15-jh-199-sin-desperdicio-de-codex.md.
+- L34 2026-11-18, JH 220 (item `codexspend` of the plan of 2026-11-18, v4): T3 and T5, worktree
+  `.claude/worktrees/codex-spend-t3-t5-9335da` from main b044dbf7. L12's cleared lines were counted at main 4187cb1;
+  at b044dbf7 they are `:896` (GitHub's answer), `:900-902` (the reviews read onto the candidate) and `:936` (the merge
+  into it), plus the import line `:24` for the one new name. `bin/notify.test.mjs`: the one assertion of
+  `readyProblems`' CONFLICTING words changes (`:429`), no test added. T3's decisions: the words have one home,
+  `conflictSaid` in `bin/lib/pull-request.mjs`. GitHub's CONFLICTING is computed against the branch the pull request
+  targets, so its fix names that branch. In the reviews' loop a conflict onto main is now a `conflict` (it was left out
+  as `review`, with a "merging or rebasing" next step); onto a candidate with earlier pull requests, main alone is asked
+  again (`isCovered(head, main)`, only on that path), since `reviewEvidence` returns main's own conflict first and the
+  line called it the candidate's. At the merge, the candidate is still main while every merge before it brought
+  nothing (`merge === main`), not only while none was made. A conflict with the batch names the pull requests merged
+  so far, not the one it meets: git does not say which, and they land together. The one reader of a land record's
+  `leftOut` reason is `leftOutText` (`bin/merge-queue.mjs:264`), which prints it in brackets before `said` and branches
+  on nothing (`grep -rn "leftOut\|\.reason\b"` over `bin/merge-queue.mjs`, `bin/lib/merge-queue-*.mjs`,
+  `bin/lib/stretch*.mjs`, `bin/stretch.mjs` and `workshop/`, non-test files, unbounded). Left: `README.md:1308` shows the old
+  CONFLICTING line, and `bin/lib/merge-queue-reviews.mjs:75` still says "by merging or rebasing" for `check`'s own
+  use; both outside T3's files.
