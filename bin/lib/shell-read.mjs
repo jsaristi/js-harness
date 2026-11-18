@@ -1,0 +1,362 @@
+// `readShell`: one pass over a Bash command in the grammar bash reads (quotes, `$'…'`, backslashes, comments, `$(…)`,
+// backticks, `$((…))`, `${…}`, heredocs with their bodies, here-strings, operators and groups), for the advisor gate's
+// reading of the acts a command runs (bin/advisor-gate.mjs; odd/tasks/advisor-use.md, T8, L35). It is apart from
+// `shellWords` (./guard.mjs), which drops every heredoc body whatever reads it, keeps a `$(…)` unread in its word and
+// reads `$((1<<X))` as a heredoc that swallows the next line: here a body is kept with the command it feeds, a
+// substitution's commands are read, and what cannot be read whole is said `broken`, so the caller never takes a
+// half-read command for a whole one. Pure: it reads a string and runs nothing.
+
+/** One pass over `source` as bash reads it: `{ commands, bodies, broken }`. Each command is `{ words, heredocs,
+ * hereStrings, stdin, raw }`, those inside a substitution among them: its words `{ text, raw, expands, quoted }`
+ * (`text` with the quotes taken off, `expands` when a `$` or a backtick may change it); `stdin` says what feeds it
+ * (`pipe`, `file`, or null). `bodies` holds every heredoc `{ text, quoted }`. `broken` says the reading could
+ * not finish: an unterminated quote, substitution or heredoc. */
+export function readShell(source, { body = false } = {}) {
+  const commands = [];
+  const bodies = [];
+  const pending = [];
+  let broken = false;
+  let i = 0;
+  const s = source;
+
+  // Reads the heredoc bodies pending at the newline at `i`; `i` ends on the newline after the last.
+  const readBodies = () => {
+    for (const heredoc of pending.splice(0)) {
+      const lines = [];
+      let found = false;
+      while (i < s.length) {
+        const next = s.indexOf('\n', i + 1);
+        const line = s.slice(i + 1, next === -1 ? s.length : next).replace(/\r$/, '');
+        i = next === -1 ? s.length : next;
+        if ((heredoc.tabs ? line.replace(/^\t+/, '') : line) === heredoc.end) {
+          found = true;
+          break;
+        }
+        lines.push(heredoc.tabs ? line.replace(/^\t+/, '') : line);
+      }
+      if (!found) broken = true;
+      heredoc.text = lines.join('\n');
+      bodies.push(heredoc);
+      // An unquoted delimiter's body is expanded: its substitutions run.
+      if (!heredoc.quoted) {
+        const sub = readShell(heredoc.text, { body: true });
+        if (sub.broken) broken = true;
+        commands.push(...sub.commands);
+        bodies.push(...sub.bodies);
+      }
+    }
+  };
+
+  // Reads the expansion that starts at `i` (`$` or a backtick) into `word`; `inDouble` inside double quotes, where
+  // `$'` is two characters and a single quote in `${…}` is one.
+  const readDollar = (word, inDouble = false) => {
+    if (s[i] === '`') {
+      let end = i + 1;
+      let inner = '';
+      while (end < s.length && s[end] !== '`') {
+        if (s[end] === '\\' && /[`$\\]/.test(s[end + 1] ?? '')) end++;
+        inner += s[end];
+        end++;
+      }
+      if (end >= s.length) broken = true;
+      const sub = readShell(inner);
+      if (sub.broken) broken = true;
+      commands.push(...sub.commands);
+      bodies.push(...sub.bodies);
+      word.text += s.slice(i, end + 1);
+      word.raw += s.slice(i, end + 1);
+      word.expands = true;
+      i = end + 1;
+      return true;
+    }
+    if (s[i] !== '$') return false;
+    const start = i;
+    if (s[i + 1] === '(' && s[i + 2] === '(') {
+      // Arithmetic: `<<` is a shift, not a heredoc; a `$(` inside still runs. bash may read a `$((` that is no
+      // arithmetic as a substitution of a subshell, so one that names js-harness is read loosely.
+      let depth = 0;
+      i += 1;
+      for (; i < s.length; i++) {
+        if (s[i] === '$' && s[i + 1] === '(' && s[i + 2] !== '(') {
+          i += 1;
+          subshell();
+          i -= 1;
+        } else if (s[i] === '(') depth++;
+        else if (s[i] === ')' && --depth === 0) break;
+      }
+      if (i >= s.length || /js-harness/.test(s.slice(start, i))) broken = true;
+      i += 1;
+    } else if (s[i + 1] === '(') {
+      i += 1;
+      subshell();
+    } else if (s[i + 1] === '{') {
+      // A parameter expansion: to its matching `}`, its quotes and substitutions read.
+      i += 2;
+      let depth = 1;
+      const inner = { text: '', raw: '', expands: false };
+      while (i < s.length && depth > 0) {
+        const c = s[i];
+        if (c === '\\') {
+          i += 2;
+        } else if (c === "'" && !inDouble) {
+          const end = s.indexOf("'", i + 1);
+          if (end === -1) broken = true;
+          i = end === -1 ? s.length : end + 1;
+        } else if (c === '"') {
+          readDouble(inner);
+        } else if (c === '$' || c === '`') {
+          readDollar(inner, inDouble);
+        } else {
+          if (c === '{') depth++;
+          else if (c === '}') depth--;
+          i++;
+        }
+      }
+      if (depth > 0) broken = true;
+    } else if (s[i + 1] === "'" && !inDouble) {
+      // ANSI-C quoting: a backslash escapes the next character, the quote included.
+      i += 2;
+      while (i < s.length && s[i] !== "'") {
+        if (s[i] === '\\') i++;
+        word.text += s[i] ?? '';
+        i++;
+      }
+      if (i >= s.length) broken = true;
+      word.raw += s.slice(start, i + 1);
+      i += 1;
+      return true;
+    } else if (/[A-Za-z0-9_@*#?$!-]/.test(s[i + 1] ?? '')) {
+      i += 1;
+      while (/[A-Za-z0-9_]/.test(s[i] ?? '')) i++;
+      if (i === start + 1) i++;
+    } else {
+      // A lone `$` is a character.
+      word.text += '$';
+      word.raw += '$';
+      i += 1;
+      return true;
+    }
+    word.text += s.slice(start, i);
+    word.raw += s.slice(start, i);
+    word.expands = true;
+    return true;
+  };
+
+  // Reads a `$(` whose `(` is at `i`, to its `)`; `i` ends after it.
+  const subshell = () => {
+    i += 1;
+    list(')');
+    if (s[i] !== ')') broken = true;
+    i += 1;
+  };
+
+  // Reads a double-quoted span whose `"` is at `i` into `word`.
+  const readDouble = (word) => {
+    const start = i;
+    i += 1;
+    while (i < s.length && s[i] !== '"') {
+      if (s[i] === '\\' && /[$`"\\\n]/.test(s[i + 1] ?? '')) {
+        if (s[i + 1] !== '\n') word.text += s[i + 1];
+        i += 2;
+      } else if (s[i] === '$' || s[i] === '`') {
+        const before = word.raw;
+        readDollar(word, true);
+        word.raw = before;
+      } else {
+        word.text += s[i];
+        i += 1;
+      }
+    }
+    if (i >= s.length) broken = true;
+    i += 1;
+    word.raw += s.slice(start, i);
+    word.quoted = true;
+  };
+
+  // Reads one word from `i`, or returns null at an operator, a blank, a newline or the end.
+  const readWord = () => {
+    const word = { text: '', raw: '', expands: false, quoted: false };
+    let any = false;
+    while (i < s.length) {
+      const c = s[i];
+      if (c === '\\') {
+        if (s[i + 1] === '\n') {
+          i += 2;
+          continue;
+        }
+        word.text += s[i + 1] ?? '';
+        word.raw += s.slice(i, i + 2);
+        word.quoted = true;
+        i += 2;
+      } else if (c === "'") {
+        const end = s.indexOf("'", i + 1);
+        if (end === -1) {
+          broken = true;
+          word.text += s.slice(i + 1);
+          word.raw += s.slice(i);
+          i = s.length;
+        } else {
+          word.text += s.slice(i + 1, end);
+          word.raw += s.slice(i, end + 1);
+          i = end + 1;
+        }
+        word.quoted = true;
+      } else if (c === '"') {
+        readDouble(word);
+      } else if (c === '$' || c === '`') {
+        readDollar(word);
+      } else if ((c === '<' || c === '>') && s[i + 1] === '(') {
+        // A process substitution runs its commands.
+        i += 1;
+        subshell();
+        word.text += '<()';
+        word.raw += '<()';
+        word.expands = true;
+      } else if (/[\s;&|()<>]/.test(c)) {
+        break;
+      } else {
+        word.text += c;
+        word.raw += c;
+        i += 1;
+      }
+      any = true;
+    }
+    return any ? word : null;
+  };
+
+  // Reads commands until `end` (`)` for a substitution) or the end of the text.
+  const list = (end) => {
+    let depth = 0;
+    let command = null;
+    let pipedIn = false;
+    let commandStart = i;
+    const finish = () => {
+      if (command !== null) {
+        command.raw = s.slice(commandStart, i);
+        commands.push(command);
+      }
+      command = null;
+    };
+    const current = () => {
+      if (command === null) {
+        command = { words: [], heredocs: [], hereStrings: [], stdin: pipedIn ? 'pipe' : null, raw: '' };
+        commandStart = i;
+        pipedIn = false;
+      }
+      return command;
+    };
+    while (i < s.length) {
+      const c = s[i];
+      if (c === ' ' || c === '\t' || c === '\r') {
+        i++;
+      } else if (c === '\\' && s[i + 1] === '\n') {
+        i += 2;
+      } else if (c === '#') {
+        while (i < s.length && s[i] !== '\n') i++;
+      } else if (c === '\n') {
+        finish();
+        readBodies();
+        i++;
+      } else if (c === ')') {
+        if (depth === 0 && end === ')') {
+          finish();
+          return;
+        }
+        finish();
+        if (depth > 0) depth--;
+        i++;
+      } else if (c === '(') {
+        finish();
+        if (s[i + 1] === '(' && command === null) {
+          // An arithmetic command: `<<` is a shift; one that names js-harness is read loosely, as `$((` is.
+          const from = i;
+          let d = 0;
+          for (; i < s.length; i++) {
+            if (s[i] === '(') d++;
+            else if (s[i] === ')' && --d === 0) break;
+          }
+          if (i >= s.length || /js-harness/.test(s.slice(from, i))) broken = true;
+          i++;
+        } else {
+          depth++;
+          i++;
+        }
+      } else if (c === ';' || c === '&' || c === '|') {
+        if (c === '&' && s[i + 1] === '>') {
+          // `&>` and `&>>` redirect both outputs.
+          i += s[i + 2] === '>' ? 3 : 2;
+          current();
+          skipBlanks();
+          readWord();
+          continue;
+        }
+        finish();
+        const pipe = c === '|' && s[i + 1] !== '|';
+        i += s[i + 1] === c || (c === '|' && s[i + 1] === '&') || (c === ';' && s[i + 1] === '&') ? 2 : 1;
+        if (pipe) pipedIn = true;
+      } else if ((c === '<' || c === '>') && s[i + 1] !== '(') {
+        const cmd = current();
+        // A descriptor written before the operator (`2>`) is no word.
+        const last = cmd.words.at(-1);
+        if (last !== undefined && /^\d+$/.test(last.raw) && cmd.words.lastEnd === i) cmd.words.pop();
+        if (s.startsWith('<<<', i)) {
+          i += 3;
+          skipBlanks();
+          const word = readWord();
+          if (word === null) broken = true;
+          else cmd.hereStrings.push(word);
+        } else if (s.startsWith('<<', i)) {
+          const tabs = s[i + 2] === '-';
+          i += tabs ? 3 : 2;
+          skipBlanks();
+          const word = readWord();
+          if (word === null) broken = true;
+          else {
+            const heredoc = { end: word.text, quoted: word.quoted, tabs, text: '' };
+            cmd.heredocs.push(heredoc);
+            pending.push(heredoc);
+          }
+        } else {
+          const input = c === '<';
+          i += 1;
+          if (/[>&|]/.test(s[i] ?? '')) i += 1;
+          skipBlanks();
+          readWord();
+          if (input && cmd.stdin === null) cmd.stdin = 'file';
+        }
+      } else {
+        const cmd = current();
+        const word = readWord();
+        if (word === null) {
+          i++;
+          continue;
+        }
+        // A `case` pattern's `)` would close the substitution it is in, and its commands be read as the outer word.
+        if (end === ')' && !word.quoted && word.text === 'case') broken = true;
+        cmd.words.push(word);
+        cmd.words.lastEnd = i;
+      }
+    }
+    finish();
+    if (end === ')') broken = true;
+    if (depth > 0) broken = true;
+  };
+  const skipBlanks = () => {
+    while (s[i] === ' ' || s[i] === '\t') i++;
+  };
+
+  if (body) {
+    // An unquoted heredoc's body: text in which a backslash escapes `$`, a backtick or itself, and the rest is read.
+    const word = { text: '', raw: '', expands: false, quoted: false };
+    while (i < s.length) {
+      if (s[i] === '\\' && /[$`\\]/.test(s[i + 1] ?? '')) i += 2;
+      else if (s[i] === '$' || s[i] === '`') readDollar(word, true);
+      else i += 1;
+    }
+  } else list(null);
+  if (pending.length > 0) {
+    broken = true;
+    for (const heredoc of pending.splice(0)) bodies.push(heredoc);
+  }
+  return { commands, bodies, broken };
+}
