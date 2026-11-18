@@ -59,5 +59,11 @@ test('what cannot be read whole is broken', () => {
   assert.equal(readShell('echo $((cd x && js-harness y))').broken, true, 'a $(( that names js-harness is not trusted as arithmetic');
   assert.equal(readShell('echo "$(case x in x) y;; esac)"').broken, true, 'a case pattern\'s ) inside a substitution');
   assert.equal(readShell('case x in x) y;; esac').broken, false, 'a case outside one is read');
+  // The lenses on 9bc45aae.
+  assert.deepEqual(words('echo $((`a b` + 1))'), [['a', 'b'], ['echo', '$((`a b` + 1))']], 'a backtick inside arithmetic runs');
+  assert.equal(readShell("echo $((x+'y'))").broken, true, 'a quote inside arithmetic is not read as arithmetic');
+  assert.equal(readShell('echo $((JS-HARNESS))').broken, true, 'the name, case aside');
+  assert.equal(readShell("echo $'\\U00110000'").broken, true, 'an escape past the last code point is broken, never a throw');
+  assert.deepEqual(words('$"a b" c'), [['a b', 'c']], 'locale quoting is double quoting');
   assert.equal(readShell('a "b" \'c\' $(d) `e`').broken, false);
 });

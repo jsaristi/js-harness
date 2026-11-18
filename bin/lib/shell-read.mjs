@@ -9,8 +9,9 @@
 /** One pass over `source` as bash reads it: `{ commands, bodies, broken }`. Each command is `{ words, heredocs,
  * hereStrings, stdin, raw }`, those inside a substitution among them: its words `{ text, raw, expands, quoted }`
  * (`text` with the quotes taken off, `expands` when a `$` or a backtick may change it); `stdin` says what feeds it
- * (`pipe`, `file`, or null). `bodies` holds every heredoc `{ text, quoted }`. `broken` says the reading could
- * not finish: an unterminated quote, substitution or heredoc. */
+ * (`pipe`, `file`, or null). `bodies` holds every heredoc `{ text, quoted }`. `broken` says the reading may not be
+ * bash's: an unterminated quote, substitution or heredoc, an escape past the last code point, a `case` inside a
+ * substitution, or arithmetic bash may take for a subshell (it holds a quote or the advisor gate's program name). */
 export function readShell(source, { body = false } = {}) {
   const commands = [];
   const bodies = [];
@@ -104,6 +105,11 @@ export function readShell(source, { body = false } = {}) {
         }
       }
       if (depth > 0) broken = true;
+    } else if (s[i + 1] === '"' && !inDouble) {
+      // Locale quoting, `$"…"`: double quotes once translated, here read as they are.
+      i += 1;
+      readDouble(word);
+      return true;
     } else if (s[i + 1] === "'" && !inDouble) {
       // ANSI-C quoting, its escapes decoded as bash decodes them: the text is the word bash runs.
       i += 2;
@@ -134,8 +140,8 @@ export function readShell(source, { body = false } = {}) {
   };
 
   // Reads arithmetic, `$((…))`, `$[…]` or a `((…))` command, whose first bracket is at `i`, to its match; `i` ends
-  // after it. `<<` in it is a shift, not a heredoc; a `$(` inside still runs. bash may read a `((` that is no
-  // arithmetic as a subshell, so one that names js-harness is read loosely.
+  // after it. `<<` in it is a shift, not a heredoc; a `$(` or a backtick inside still runs. bash may read a `((`
+  // that is no arithmetic as a subshell: such a text is said broken, below.
   const arithmetic = (start) => {
     const open = s[i];
     const close = open === '[' ? ']' : ')';
@@ -145,10 +151,15 @@ export function readShell(source, { body = false } = {}) {
         i += 1;
         subshell();
         i -= 1;
+      } else if (s[i] === '`') {
+        readDollar({ text: '', raw: '', expands: false });
+        i -= 1;
       } else if (s[i] === open) depth++;
       else if (s[i] === close && --depth === 0) break;
     }
-    if (i >= s.length || /js-harness/.test(s.slice(start, i))) broken = true;
+    // Which of the two bash takes cannot be told here: a quote, or the program's name (the advisor gate's), says
+    // the text may be commands, so it is not read as arithmetic.
+    if (i >= s.length || /['"\\]|js-harness/i.test(s.slice(start, i))) broken = true;
     i += 1;
   };
 
@@ -162,7 +173,12 @@ export function readShell(source, { body = false } = {}) {
       const value = s.slice(from, k);
       if (value === '') return null;
       i = k;
-      return String.fromCodePoint(parseInt(value, base));
+      const point = parseInt(value, base);
+      if (point > 0x10ffff) {
+        broken = true;
+        return '';
+      }
+      return String.fromCodePoint(point);
     };
     if (Object.hasOwn(simple, c)) {
       i += 2;
