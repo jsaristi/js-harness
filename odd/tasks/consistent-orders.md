@@ -342,8 +342,9 @@ answering a block, while a session waits) were missed with nothing to say so; on
     (the work-session protocol asks for one, bin/lib/manifest.mjs:255) counts as a block too: his words name the
     kind, no program can tell the two apart by their text, and the cost is one consult per notice.
   - What clears it, read from the channel alone: that session's own later `ready`, `closed` or `relieved`; its
-    `question` (departure b); or a `relieved` or `opened` for the same work number from another id, so a relieved
-    session's old block does not outlive its relief. Nothing else another sends clears it: not the lead's `note` or
+    `question` (departure b); its own later `opened` (a session sends one when it starts new work,
+    bin/sessions-background.mjs:356); or a `relieved` or `opened` for the same work number from another id, so a
+    relieved or replaced session's old block does not outlive its successor. Nothing else another sends clears it: not the lead's `note` or
     `answer`, not a `withdrawn`. A cleared block does not come back when the owner answers or withdraws that question:
     only a new `waiting` opens one. A `ready` for another pull request also clears it: a session that sends `ready` is
     acting, not waiting (a stated limit).
@@ -377,12 +378,14 @@ answering a block, while a session waits) were missed with nothing to say so; on
     result and contract stay as they are.
   - The advisor's own failures, as the gate treats them (bin/advisor-gate.mjs:326-330): a lead with no sign of the
     advisor tool, or with two errored calls since the block's newest notice, is let through, said on standard error.
-  - Once per block notice within one turn. The check runs only where the wake check runs, in the branch of
+  - Once per block notice, for the immediate retry only. The check runs only where the wake check runs, in the branch of
     bin/reply.mjs that a stop the host marks `stop_hook_active` does not take (:264, :290); and, since L15 found that
     flag not always seen, by its own record as the wake check keeps one (`transcriptMarks`, bin/lib/stop-wake.mjs:87):
-    its refusal carries a marker of its own, and a turn-back counts only when it is after the block's newest notice
-    and after his newest message, so a new turn with the same unresolved block is turned back again. A new notice of a
-    blocked session between the turn-back and the retry asks its own consult.
+    its refusal carries a marker of its own, and a turn-back counts only for the immediate retry: it is after the
+    block's newest notice and no entry that opens a turn lies after it (his message, a session event, a wait's
+    task-notification), so a later turn with the same unresolved block, which while he is away opens with a
+    notification, is turned back again. A new notice of a blocked session between the turn-back and the retry asks its
+    own consult.
   - Cost, cheapest first: the role from the title (a work session's stop reads nothing more), then the state, then
     the channel through the stop's shared parse (`io.readNotices`, bin/reply.mjs:107), then the bound, then the
     transcript text already read. No process is started. Its time within the reply hook's budget is measured at the
@@ -397,7 +400,7 @@ answering a block, while a session waits) were missed with nothing to say so; on
     not; `ready`, `closed`, `relieved`, `question` and a relief of the same number clear it, the lead's `note` and
     `answer` do not; a free session's `waiting` is a block; a block past the bound is out; a full and an abbreviated
     id are one sender; a lead with no transcript title is found by its opening; the retry after a turn-back passes by
-    the marker, a new turn does not, a new notice between them does not; a close in `decision` passes; a work
+    the marker, a later turn opened by his message or by a task-notification does not, a new notice between them does not; a close in `decision` passes; a work
     session's close is not checked; no advisor tool and two advisor errors pass; an unreadable channel and an
     unreadable transcript pass with their reason on standard error.
   - Measured at the build, not expected here: L19's 6 of 70 was counted with L13's rule (the commit and job rules,
@@ -405,16 +408,24 @@ answering a block, while a session waits) were missed with nothing to say so; on
     whose `waiting`s are at 16:11Z and 14:53Z). The build replays the lead's ends of 2026-11-15 anew with this rule,
     from inputs cut at each stop, and records each stop's verdict and reason; 13:08:52Z turned back is the case it
     must show.
-  - Limits: it acts at a close, never while the lead sits idle; once per block notice within a turn; one consult
+  - Limits: it acts at a close, never while the lead sits idle; once per block notice and retry; one consult
     covers every open block; a session blocked longer than the bound is never counted, however live. S1 refuses an
     unconsulted `waiting` before it reaches the channel (bin/advisor-gate.mjs:68-89), so a session refused there that
     sends a `note` or ends its turn instead leaves no block for S2 to see: S2 does not carry that case, against what
     L8 said; it is F12.
+  - Files of the build: those In scope names. The text-reading function in `bin/advisor-gate.mjs` is not in the
+    plan's `orders-build` file list, and `tokenizer` (advisor-use T8, the gate's shell quoting) very likely holds
+    that file: the build waits for it or the lead orders them.
   - The lead decides: whether this design is approved for a build, and whether the senior's `waiting` counts as a
     block (proposed yes, since the lead's consult is the same act whoever waits). His, through the lead: departures
     (a) with its bound, (b) and (c), and whether a free session's `waiting` counts.
 - L23 (2026-11-18, JH 221) the double review of L22, read 59d0ee8d (Claude on claude-opus-5-5, 9 findings, 730,659
-  tokens; Codex on gpt-6.2-sol, 12 findings, 4,232,143 tokens). Taken: claude 1-9, codex 1-9 and 12. The git
+  tokens; Codex on gpt-6.2-sol, 12 findings, 4,232,143 tokens). Bad news first: Codex spent 4.2M tokens against the
+  0.9M the plan said before it ran; `js-harness codex-meter` after it: weekly 18% used, five-hour 28%. Taken: claude
+  1-9, codex 2, 3, 6-9 and 12; in part codex 1, 4 and 5: codex 1 is named as a limit and F12, not solved; codex 4
+  asked for a machine-readable line between a free session and a blocked one, and the design counts both, his to
+  rule; codex 5 asked for a resolution tied to the block, and a `ready` or a `question` still clears it, as a
+  stated limit and departure (b). The git
   commit rule dropped (claude 1, 2, 5; codex 2, 5, 6); coverage by time with only compaction voiding it (claude 3,
   codex 7); the narrowings put as his (claude 4); once scoped to a turn (claude 8, codex 3); identity by
   `sameSession` and the title fallback (codex 8), relief by number (claude 8); the transcript read through the text
@@ -423,3 +434,6 @@ answering a block, while a session waits) were missed with nothing to say so; on
   F12 (codex 1); In scope, Ask me before and stale citations brought up to date (claude 6, 7; codex 12). Not taken:
   codex 10 (S6's check) and codex 11 (S5's zero forks): neither is T2; both go to the lead, codex 10 for T7's own
   double review, codex 11 because "a plan with none opens as today" is spec 5's bar as reviewed in L8 and landed.
+  Unguaranteed: what was written after the read and no reader saw: the git rule's removal, coverage by time with
+  compaction only, the marker scoped to the immediate retry, relief and `opened` by number, and the build's file
+  collision with `tokenizer`. The lead's review of the pull request is the only read of them.
