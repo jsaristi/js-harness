@@ -410,12 +410,18 @@ a longer timeout for the reply hook seldom lengthens a stop. That value is his: 
   an unmatched `[` is still refused, and now with the right reason: on main it was judged against an earlier
   command's parameters. Not checked by it: replies of more than two blocks, other fence tags, the hook's real 4 s
   deadline. The reliability lens over `5df63e0..4f98993` repeated its warning on the pinned pass, answered in L21.
+- L23 (2026-11-18, JH 223): Codex's recheck over `5df63e0..dc88947` (`--again`, 172,287 input tokens): 3 fixed, 1 not
+  fixed, verdict incorrect (confidence 0.97). The one open is its P2 "Do not require a pass for a previously refused
+  block", the pass JH PLAN set as condition 1; answered in L21, not changed. The third review it offers, a range from
+  `dc88947`, was not run: it would recheck only that decided pass. `node --test bin/lib/reply-commands.test.mjs`: 14
+  pass, 1 skipped. PR 916 mergeable with main.
 
 ## Next step
-JH 223 (2026-11-18): T5 and T8 are done. The code is final at `9760618b`, and the docs at the commit after `8f2f1fc9`.
-PR 916 is open on branch `claude/reply-parser-cost-c8d92b`; every code commit has its Codex and lens records, and both
-verifiers ran (L14, L20). Next: push; `js-harness notify --to orchestrator --kind ready --pr 916`, naming the refusal
-dropped on purpose (L20); then `notify --kind closed --summary docs/sessions/2026-11-18-jh-223-reply-parser-cost-jh-116-t8.md`.
+JH 223 (2026-11-18): T5 and T8 are done, and JH PLAN's three conditions are met (L21, L22). The module is final at
+`9760618b` and its test at `4f989932`. PR 916 is on branch `claude/reply-parser-cost-c8d92b`; every code commit has
+its Codex and lens records; the verifier ran three times (L14, L20, L22); Codex's one open P2 is answered (L23).
+Next: `gh pr ready 916`; `js-harness notify --to orchestrator --kind ready --pr 916`, naming the four dropped cases
+and the open P2; then `notify --kind closed --summary docs/sessions/2026-11-18-jh-223-reply-parser-cost-jh-116-t8.md`.
 Left for the lead:
 - starting the parser beside the other checks (`bin/reply.mjs`);
 - whether the 4 s deadline should follow the 15 s timeout;

@@ -28,15 +28,21 @@ not read here with `js-harness sessions --quote`, since the brief gives no line.
   `Find-Command -zz` passed, shadowed by the script's own function).
 - Commit 9760618b `test(reply): the shadowing case defines its own Find-Command, needing no module` (Codex's P2).
 - Each fix test first, the real win32 test red before it, in PowerShell 7 and Windows PowerShell; L15 to L20.
-- Pull request 916, open, ready: https://github.com/jsaristi/js-harness/pull/916.
+- After the lead made PR 916 a draft over JH PLAN's three conditions (L21): commit 5df63e00 `test(reply): an own block
+  whose last command is unknown is pinned through commandRefusals`, red on b044dbf7; commit 4f989932, its own 60 s
+  deadline, a parse count and the sibling's exact refusal (Codex's P2s and P3); the four dropped cases listed under
+  `## Measure`; the verifier's word "No other refusal is lost" (L22).
+- Pull request 916, marked ready after the conditions: https://github.com/jsaristi/js-harness/pull/916.
 
 ## Decisions
 - No cut to the parser: its time is PowerShell's start (494–1423 ms of a check, the script itself 228–537 ms), no start
   option beats the load's noise, and Windows PowerShell first would change verdicts (`&&`) (this session, L13).
-- An `own` block whose last command PowerShell cannot find now passes. The base refused it only because its exit was
-  that miss's `$?`, and it passed whenever that command was not last. The brief asked to keep every refusal, and this
-  is the one class dropped on purpose; whether to refuse an unknown command deliberately is a new check, for the lead
-  (this session, L20).
+- Four cases main refused only by "it exited 1" now pass: an `own` block whose last command misses; a handed block
+  with an unreadable transcript; valid sibling blocks; alias, `.ps1` and module misses. The brief asked to keep every
+  refusal; JH PLAN set the conditions that accept them (the lead's message, L21), and a test pins the first so a later
+  change undoes it on purpose. Whether to refuse an unknown command deliberately is a new check, for the lead.
+- Codex's last recheck left its P2 on that pinned pass open (incorrect at 0.97); answered, not changed, and its third
+  review not run (L23).
 - T5 closed, not stale: question 138 answered "Sí, 15 s", built by JH 119 (`bin/lib/hook-entries.mjs:129`) (L12).
 - The Codex review over its allowance (estimate about 360,000 input tokens against 300,000) was put to the lead as
   question 344; the lead withdrew it and said to run it: review is not the owner's to decide (CLAUDE.md), and Codex
@@ -52,6 +58,9 @@ not read here with `js-harness sessions --quote`, since the brief gives no line.
   each now has a real test.
 - A Node heredoc turned `\r` in a PowerShell regex into a raw carriage return; a script file with `String.raw` fixed it.
 - I asked the owner, through the lead, about a review's cost although review is not his to decide.
+- The first ready notice called one dropped class "accepted as the change's intent" against the brief's "keeps every
+  refusal"; JH PLAN found three more, and the lead made the PR a draft until they were listed, pinned and verified.
+- The host compacted this session at 18:53 local; it resumed from this document and the feature document.
 - The helpers added in a fix were functions the script's own `Get-Command` could find; the advisor found it before the
   ready notice, not a review. The test now holds a block that names one.
 - The first test of the shadowed name relied on PowerShellGet's `Find-Command`; Codex found it would fail on a machine
@@ -66,9 +75,10 @@ not read here with `js-harness sessions --quote`, since the brief gives no line.
   it always did when that command was not last.
 
 ## Cost
-- Reviews: Codex six runs (627,015, 168,678, 510,998, 108,532, 387,563 and 74,979 input tokens); the Claude lenses
-  six runs (about 7,000 to 10,700 input tokens a lens). Two independent verifiers: over the first fix (about 90,000
-  tokens, 22 min) and over the final code against the base (about 120,000 tokens, 18 min).
+- Reviews: Codex eight runs (627,015, 168,678, 510,998, 108,532, 387,563, 74,979, 1,065,496 against an estimate of
+  140,000, and 172,287 input tokens); the Claude lenses eight runs (about 7,000 to 10,700 input tokens a lens).
+  Independent verifiers: over the first fix (about 90,000 tokens, 22 min), over the final code against the base (about
+  120,000 tokens, 18 min), and again through `commandRefusals` for condition 3 (L22).
 - Gate runs: eleven commit gates green, from 9a47edbf to the last docs commit; one more was stopped while it waited on
   another session's gate, and made again.
 - Time: the first commit at 15:14 and the last code commit at 16:35 local (2026-11-18, `git log --date`); the first
