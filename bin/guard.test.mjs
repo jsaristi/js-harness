@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { guardMain } from './guard.mjs';
 import { appRoot } from './lib/app-record.mjs';
 import { SENIOR_WAIT_BACKGROUND, SENIOR_WAIT_BRIEF } from './lib/lead-protocols.mjs';
-import { EFFORTS } from './lib/model-home.mjs';
+import { EFFORTS, sameClaudeModel } from './lib/model-home.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { ruleValue, writeRules } from './lib/rules.mjs';
 import { testRunWarning } from './lib/test-run-warning.mjs';
@@ -137,34 +137,43 @@ test('a session started with no effort, or at another level than the rule sessio
 });
 
 // odd/tasks/one-model-home.md, spec 5: the tool caps a start at the session that makes it, so the hook reads the
-// app's record of the calling session (the payload's session_id) and refuses a start from one off the home.
-test('a start_session from a session whose own app record is off the home is denied, and one with no record passes', async () => {
+// app's record of the calling session (the payload's session_id) and refuses a start from one under the level it is
+// held to. The record's model is not held since his words of 2026-11-18 (odd/tasks/starter-model-check.md, spec 1).
+test('a start_session from a session whose own app record is under the level is denied, one on another model passes, and one with no record passes', async () => {
   const model = RULES.find((rule) => rule.id === 'session-model').value;
   const lead = RULES.find((rule) => rule.id === 'lead-effort').value;
-  const next = model.replace(/\d+$/, (digits) => String(Number(digits) + 1));
-  const call = { tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', session_id: 'c-starter', tool_input: { initiation: 'own_initiative', title: 'JH 32 · T9', prompt: 'Do T9.', background: 'x'.repeat(80), effort: SESSION_EFFORT, context: 'fresh' } };
+  const next = model.replace(/\d+/, (digits) => String(Number(digits) + 1));
+  // A date at the end is no other model (sameClaudeModel), so the first number of the id is the one changed.
+  assert.equal(sameClaudeModel(next, model), false, `${next} is another model than ${model}`);
+  const call ={ tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', session_id: 'c-starter', tool_input: { initiation: 'own_initiative', title: 'JH 32 · T9', prompt: 'Do T9.', background: 'x'.repeat(80), effort: SESSION_EFFORT, context: 'fresh' } };
   // The starter's own level is the higher of the two the home gives, so it is under neither whichever is above: a
   // switch may put the lead's level below the sessions', and a starter at the lead's would then be capped.
   const top = EFFORTS[Math.max(EFFORTS.indexOf(SESSION_EFFORT), EFFORTS.indexOf(lead))];
+  const under = EFFORTS[EFFORTS.indexOf(SESSION_EFFORT) - 1];
   const record = (fields) => new Map([['c-starter', { where: 'sessions', title: 'JH ORQ · orquestador', model, effort: top, ...fields }]]);
   const passes = { code: 0, out: '', err: '' };
   assert.deepEqual(await hook(call, { app: record({}) }), passes, 'a starter on the home');
+  assert.deepEqual(await hook(call, { app: record({ model: next }) }), passes, 'a starter on another model');
   assert.deepEqual(await hook(call, { app: new Map() }), passes, 'no record of the starter');
-  assert.deepEqual(await hook({ ...call, session_id: undefined }, { app: record({ model: next }) }), passes, 'no session id in the payload');
-  assert.deepEqual(await hook(call, { app: record({ model: next }), rulesText: null }), passes, 'no rules here');
-  const off = await hook(call, { app: record({ model: next }) });
-  assert.equal(off.code, 0);
-  assert.match(denied(off).permissionDecisionReason, new RegExp(`^js-harness guard: start_session is called from a session whose own record holds the model "${next}", not the one of the rule session-model: ${model}, and a start is capped at the session that makes it\\. Only the user changes a lead's own: En esta sesión, abre el selector`));
+  assert.deepEqual(await hook({ ...call, session_id: undefined }, { app: record({ effort: under }) }), passes, 'no session id in the payload');
+  assert.deepEqual(await hook(call, { app: record({ effort: under }), rulesText: null }), passes, 'no rules here');
+  // A home at the lowest level has none under it: no starter is capped, and the denials below have no case.
+  if (under !== undefined) {
+    const off = await hook(call, { app: record({ model: next, effort: under }) });
+    assert.equal(off.code, 0);
+    assert.match(denied(off).permissionDecisionReason, new RegExp(`^js-harness guard: start_session is called from a session whose own record holds the level "${under}", under the one this start is held to \\(rule session-effort: ${SESSION_EFFORT}\\), and a start is capped at the session that makes it\\. Only the user changes a lead's own: En esta sesión, abre el selector`));
+  }
   // A reader that fails is a record that cannot be read: the start passes, and the board shows the session.
   assert.deepEqual(await hook(call, { app: { get: () => { throw new Error('locked'); } } }), passes);
   // A call the start's own rules refuse says that first, and reads no record.
   // The hook swallows what a reader throws, so the read is counted, not failed from inside it.
   let reads = 0;
-  const counted = { get: (id) => { reads += 1; return record({ model: next }).get(id); } };
+  const counted = { get: (id) => { reads += 1; return record({ effort: under }).get(id); } };
   const first = await hook({ ...call, tool_input: { ...call.tool_input, effort: undefined } }, { app: counted });
   assert.match(denied(first).permissionDecisionReason, /names no effort/);
   assert.equal(reads, 0, 'no record is read');
-  assert.match(denied(await hook(call, { app: counted })).permissionDecisionReason, /whose own record holds the model/);
+  const second = await hook(call, { app: counted });
+  if (under !== undefined) assert.match(denied(second).permissionDecisionReason, /whose own record holds the level/);
   assert.equal(reads, 1, 'the counting reader is the one the hook reads');
 });
 
@@ -177,13 +186,19 @@ test('with no reader given, the hook finds the calling session\'s record in the 
     const folder = path.join(appRoot(env, process.platform, dir), 'claude-code-sessions', 'account', 'org');
     fs.mkdirSync(folder, { recursive: true });
     const model = RULES.find((rule) => rule.id === 'session-model').value;
-    const next = model.replace(/\d+$/, (digits) => String(Number(digits) + 1));
-    const write = (held) => fs.writeFileSync(path.join(folder, 'local_1.json'), JSON.stringify({ cliSessionId: 'c-starter', title: 'JH 7 · thing', model: held, effort: 'max', cwd: 'D:/project' }));
+    const next = model.replace(/\d+/, (digits) => String(Number(digits) + 1));
+    assert.equal(sameClaudeModel(next, model), false, `${next} is another model than ${model}`);
+    const under = EFFORTS[EFFORTS.indexOf(SESSION_EFFORT) - 1];
+    const write = (held, effort) => fs.writeFileSync(path.join(folder, 'local_1.json'), JSON.stringify({ cliSessionId: 'c-starter', title: 'JH 7 · thing', model: held, effort, cwd: 'D:/project' }));
     const call = { tool_name: 'mcp__ccd_session__start_session', cwd: 'D:/project', session_id: 'c-starter', tool_input: { initiation: 'own_initiative', title: 'JH 32 · T9', prompt: 'Do T9.', background: 'x'.repeat(80), effort: SESSION_EFFORT, context: 'fresh' } };
-    write(next);
-    const off = await hook(call, { env, home: dir });
-    assert.match(denied(off).permissionDecisionReason, new RegExp(`whose own record holds the model "${next}", not the one of the rule session-model: ${model}, and a start is capped at the session that makes it\\. The lead sets that session's with its session tools\\.`));
-    write(model);
+    // A home at the lowest level has none under it, and caps no starter.
+    if (under !== undefined) {
+      write(model, under);
+      const off = await hook(call, { env, home: dir });
+      assert.match(denied(off).permissionDecisionReason, new RegExp(`whose own record holds the level "${under}", under the one this start is held to \\(rule session-effort: ${SESSION_EFFORT}\\), and a start is capped at the session that makes it\\. The lead sets that session's with its session tools\\.`));
+    }
+    // His words of 2026-11-18 (odd/tasks/starter-model-check.md): another model in the record is not held.
+    write(next, 'max');
     assert.deepEqual(await hook(call, { env, home: dir }), { code: 0, out: '', err: '' });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

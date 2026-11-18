@@ -133,19 +133,18 @@ export function sessionStartRefusal(toolInput, projectData, { cli = false, lead 
 
 /** Why a `start_session` from the session whose app record is `starter` (`{ model, effort }` as `appSessions` gives
  * it, or null when it has none or it could not be read) is refused, or null. The tool caps a start at the session
- * that makes it, so a starter on another model than the home's, or at a lower level than the one the start is held
- * to (the lead's for a new lead, `lead`), starts no session on the home whatever its call names
- * (odd/tasks/one-model-home.md, spec 5). The reason says who corrects the starter: the user for a lead
- * (`starterLead`), with the line to give him, and the lead for any other. A starter with no record passes. */
+ * that makes it, so a starter at a lower level than the one the start is held to (the lead's for a new lead, `lead`)
+ * starts no session at it whatever its call names (odd/tasks/one-model-home.md, spec 5). The starter's own model is
+ * not held: his words of 2026-11-18 removed that half (odd/tasks/starter-model-check.md, spec 1). The reason says who
+ * corrects the starter: the user for a lead (`starterLead`), with the line to give him, and the lead for any other.
+ * A starter with no record passes. */
 export function starterRefusal(starter, projectData, { lead = false, starterLead = false } = {}) {
   if (starter === null || typeof starter !== 'object') return null;
   const home = claudeHeld(projectData);
   const newLead = home.lead !== null && lead;
   const level = newLead ? home.lead : home.effort;
   let off = null;
-  if (home.model !== null && typeof starter.model === 'string' && !sameClaudeModel(starter.model, home.model.value)) {
-    off = `the model "${starter.model}", not the one of the rule ${CLAUDE_HOME.model}: ${home.model.value}`;
-  } else if (level !== null && EFFORTS.includes(starter.effort) && EFFORTS.indexOf(starter.effort) < EFFORTS.indexOf(level.value)) {
+  if (level !== null && EFFORTS.includes(starter.effort) && EFFORTS.indexOf(starter.effort) < EFFORTS.indexOf(level.value)) {
     off = `the level "${starter.effort}", under the one this start is held to (rule ${newLead ? CLAUDE_HOME.lead : CLAUDE_HOME.effort}: ${level.value})`;
   }
   if (off === null) return null;
