@@ -2,8 +2,10 @@
 
 ## State
 PR 886 landed (19:08Z). S4 is PR 887 on main at baf82737: reviewed clean by Codex and the lenses at each fix, the
-verifier PASS on its recheck (L21); ready goes to the lead. The S2 and S6 designs are written (L13, L14, S2's replay
-L17, L19) and wait for their double review and the lead; nothing of them is built. S5's rule is unblocked.
+verifier PASS on its recheck (L21); ready goes to the lead. S2's design is restated whole in L22 (2026-11-18, JH 221),
+checked against main at b044dbf7, and goes through its double review there; it waits for the lead's approval and his
+three rulings (L22, "The lead decides"); nothing of it is built. S6's design (L14) waits for its double review and the
+lead. S5's rule is unblocked.
 
 ## Goal
 An order the harness gives a session, a work session or a sub-agent (first: consult the advisor when blocked) is held
@@ -114,7 +116,7 @@ answering a block, while a session waits) were missed with nothing to say so; on
 
 - 3. The bar:
   spec 1: `node --test bin/advisor-gate.test.mjs`: none, new behaviour (`notify --kind waiting` with no consult in its stretch is refused)
-  spec 2: `node --test bin/lib/stop-consult.test.mjs`: none, new behaviour (the lead's idle close is turned back while a live session's newest notice to it is `waiting` and no consult came after it; replayed today: 3 of 62 ends)
+  spec 2: `node --test bin/lib/stop-consult.test.mjs`: none, new behaviour (the lead's idle close is turned back while a live session's newest notice to it is `waiting` and no consult came after it; replayed today: 3 of 62 ends; replanned on a block that survives a later `note` by the lead's ruling, L7, and restated in L22, which supersedes this predicate)
   spec 3: left out because with S1 in place a work session's `waiting` cannot be sent unconsulted, and on today's record S3 catches nothing S1 does not (JH 207's closes at 12:49Z and 14:53Z follow the two notices S1 refuses); folded into S1, with two limits the double review found (L8): policy R lets an earlier unrelated consult cover a new block, and a refused session can send a `note` or end its turn instead, which S1 does not hold; S2's replan carries that case
   spec 4: left out because a sub-agent end refused changes what his yes to question 282 left apart (bin/advisor-gate.mjs:8-9) and the exemption of the senior's sub-agents is his; the records show 2 flagged of 27 readable ends today and 66 of 93 with no transcript, so the lead takes it to him with that figure
   spec 5: `node --test bin/stretch.test.mjs`: none, new behaviour (a stretch plan carries 2-4 forks with a proposed answer, shown at open; a plan with 1 or 5 forks is refused; a plan with none opens as today; what open prints says the forks grant no spend and no publishing)
@@ -152,7 +154,7 @@ answering a block, while a session waits) were missed with nothing to say so; on
   Stop hook as gentle-ai held its own (code decides, the next step is handed as data), and copy none of its per-turn
   block. S1: the advisor gate holds `notify --kind waiting` to a consult in its stretch (work sessions; it also
   covers S3). S2: the reply Stop hook turns back the lead's idle close while a live session's newest notice to it is
-  `waiting` and no lead consult came after that notice. S4, a sub-agent's unconsulted end refused, goes to him through
+  `waiting` and no lead consult came after that notice (the request as first written; L22 holds the replanned design). S4, a sub-agent's unconsulted end refused, goes to him through
   the lead: without it this plan builds nothing for sub-agents. S5: the departure plan of `stretch open` carries 2-4
   forks with the lead's proposed answer; his one approval is recorded as his answer to the question that shows them
   (the channel, as every answer is); "nothing outside them" is held by the lead's protocol and the rule, not by a
@@ -170,7 +172,7 @@ answering a block, while a session waits) were missed with nothing to say so; on
 
 ## Tasks
 - [x] T1 (kind: build) S1, spec 1 (two cases failed on main, 26 of 26 pass after): `waiting` a gated act in `gatedAct`; tests first in bin/advisor-gate.test.mjs; route inline; commit `feat(advisor-gate): hold a waiting notice to a consult`
-- [ ] T2 (kind: design) S2, spec 2: replan on a blocked-state signal that survives a later `note` (the waiting, note, idle case first), with liveness and resolution rules, without changing readStalled's contract; define the idle close; the lead approves before a build
+- [ ] T2 (kind: design) S2, spec 2: replan on a blocked-state signal that survives a later `note` (the waiting, note, idle case first), with liveness and resolution rules, without changing readStalled's contract; define the idle close; the lead approves before a build (designed: L13, restated whole in L22 with its double review; the lead's approval and rulings pending)
 - [ ] T3 (kind: build) S3, spec 3: left out, folded into S1 (Depth pass item 3)
 - [x] T4 (kind: build) S4, spec 4: his yes (L12); turn back an unconsulted sub-agent end once; tests first; commit `feat(advisor-gate): turn back an unconsulted sub-agent end once`
 - [x] T5 (kind: build) S5, spec 5 (code built, two tests failed on main, 67 of 67 pass; the rule's `rule/` branch after this pull request lands): `forks` in the stretch plan, shown at open; rule via `rules change` on a `rule/` branch; route inline; commit `feat(stretch): pre-decided forks in the departure plan`
@@ -317,3 +319,59 @@ answering a block, while a session waits) were missed with nothing to say so; on
   69 covered; 229 unchecked and 43 with no transcript, which S4 lets through as before. Per-end cost on this session's
   two verifiers: 0, each of their 5 stops was covered. Not checked: the host's live behaviour after a turn-back; the
   proof after the land is the first `turnedBack` record followed by `covered` for the same agent.
+- L22 (2026-11-18, JH 221, item `orders-t2` of the stretch opened 2026-11-18T17:03:58Z) S2's design restated whole,
+  checked against main at b044dbf7. Where it differs from L13 it supersedes it; L13, L17 and L19 stay as the record of
+  how it was reached. It departs from question 289's words ("mientras el último aviso de una sesión sea 'waiting'") by
+  the lead's ruling in L7: a block survives the blocked session's later `note`, so the 13:08Z close is caught.
+  - Who is blocked. A session known by its notices' `from.id`, not by title (the record holds two sessions titled
+    `JH SR` and two with no title), whose title reads as a work session or the senior (`roleOfTitle`,
+    bin/lib/sessions.mjs:1254-1261). Its block starts at its newest `waiting` addressed to the orchestrator
+    (`to.role` is `orchestrator`). The lead's own notices and those of a session of no role (the Plan) are no block.
+  - What clears it: that session's own later `ready`, `closed` or `relieved`; its `question`, which moves the block to
+    the owner (proposed); or a commit of its worktree after the `waiting`, the worktree named by its newest notice
+    that carries one (as `stalledSessions` reads it, bin/lib/stall.mjs:131), asked of `branchCommitAt` (:164). The
+    senior works in the main checkout, so no commit clears its block. Nothing another sends clears it: not the lead's
+    `note` or `answer`, not a `withdrawn`. A cleared block does not come back when the owner answers or withdraws that
+    question: only a new `waiting` opens one. `opened` is the orchestrator's and clears nothing.
+  - Live: a block counts while its session's newest own notice is younger than a bound, a constant (proposed 6 h,
+    the lead's). L13's second rule, a job `removed` in `background/sessions.jsonl`, is dropped: that record's newest
+    line is 2026-11-15T23:06:21Z, and the sessions started since through the app leave no job there, so it would never
+    fire for them. Probe at about 2026-11-18T19:22Z over the whole channel (`jh221-blocked-now.mjs` in the stretch's shared
+    notes folder, `side-session-notes/local_f536332a-81c1-489b-9669-68384563ffe9`; L13's and L17's scripts went with
+    job b8e90a0a's folder): 16 blocks the clearing notices leave open, none of them within 6 h (the youngest, JH 213 at
+    27.3 h and the Plan's design senior at 35.7 h); the commit rule was not applied in that probe.
+  - Readers unchanged: `readStalled` keeps its contract and its `GIVEN_BACK`, which reads a `waiting` as work given
+    back (bin/lib/stall.mjs:21); the block is a new pure function, `blockedSessions`, in `bin/lib/stop-consult.mjs`.
+  - The idle close: a stop of the lead (its transcript's title reads `orchestrator`) whose reply closes in the
+    `working` state (`closingState`, bin/lib/reply.mjs:149, in the project's labels: "Sigo solo"), with or without
+    work in its background (13:08Z had a wait running). A close in `decision`, `question`, `cut` or `finished` passes.
+  - Covered: the lead made an advisor call with a result after the block's newest own notice, so each later note of
+    a blocked session asks a new consult, and no break of the lead's stretch lies between that call and the close
+    (`breakOf`, bin/advisor-gate.mjs:116, by the lead's ruling in L7: a compaction or his message after the consult
+    voids it). `readStretch` (:136) returns counts, not times (:195); the build adds the time of the stretch's newest
+    answered call as a new field of its result, the existing fields unchanged. A consult older than the 4 MB tail it
+    reads is not seen and reads as none: the close is turned back once, never more.
+  - Once. The check runs only where the wake check runs, in the branch of bin/reply.mjs that a stop the host marks
+    `stop_hook_active` does not take (:264, :290); and, since L15 found that flag not always seen, by its own record
+    as the wake check keeps one (`transcriptMarks`, bin/lib/stop-wake.mjs:87): its refusal carries a marker of its
+    own, and a turn-back already in the transcript after the block's newest notice lets the next close through.
+  - Cost, cheapest first: the role from the transcript's title (a work session's stop reads nothing more), then the
+    state, then the channel through the stop's shared parse (`io.readNotices`, bin/reply.mjs:107), then the bound, then
+    git for each block still open (one `branchCommitAt`, bounded by its 10 s timeout, bin/lib/stall.mjs:159), and the
+    transcript's tail last. Its time within the reply hook's budget is measured at the build with
+    `scripts/reply-hook-time.mjs`; not measured here.
+  - Fail open: a channel, a transcript or a git that cannot be read lets the close through, said on standard error, as
+    `wakeOf` does (bin/reply.mjs:155).
+  - The refusal names each blocked session, its newest notice's local time, and the next act: consult the advisor on
+    that block, then answer the session or close again.
+  - Tests first, at the build (`bin/lib/stop-consult.test.mjs`): `waiting`, its `note`, an idle close, turned back
+    (the 13:08Z case); a consult after the newest note covers it and one before it does not; a compaction between the
+    consult and the close voids it; `ready`, `closed`, `relieved` and `question` clear it, the lead's `note` and
+    `answer` do not; a block past the bound is out; a commit after the `waiting` clears it; the close after a turn-back
+    passes by the marker; a close in `decision` passes; a work session's close is not checked; an unreadable channel
+    passes with its reason on standard error. Measured at the build: the replay of the lead's 70 idle closes of
+    2026-11-15 written anew, 6 turned back expected with 13:08:52Z among them (L19).
+  - Limits: it acts at a close, never while the lead sits idle; once a close; a blocked session that commits something
+    unrelated clears its block; a session blocked longer than the bound is never counted, however live.
+  - The lead decides: the bound (6 h proposed); whether a `question` clears the block; whether the senior's `waiting`
+    counts as a block (proposed yes, since the lead's consult is the same act whoever waits).
