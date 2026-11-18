@@ -128,9 +128,11 @@ function correctionOwed(cwd, given, options) {
   // before it), was the recheck of that debt where the walk down from the merge it names joined `at`'s own record
   // (`joinedAt`, which only that walk gives). Findings matched by value are no proof (the verifier on 030cbd2b, T7): a
   // merge that found an equal finding, whose walk stopped above `at` or which lies below it, rechecked nothing of `at`'s.
+  // The debt it joined is the one that stands only while no record has ended at `at` since; and the run read it with the
+  // marks at its own head, which a later tip may change (Codex on 6892cdc).
   const settled = (at) => records.some((rec, index) => isValidCodexReview(rec) && rec.outcome === 'reviewed' && onLine.has(rec.head) &&
-    typeof rec.recheckOf === 'string' && (() => {
-      const then = recheckAt(cwd, { from: rec.recheckOf, tip: given.tip, records: records.slice(0, index), runs, spawn: options.spawn, where: given.where });
+    typeof rec.recheckOf === 'string' && !records.slice(index + 1).some((later) => later?.head === at) && (() => {
+      const then = recheckAt(cwd, { from: rec.recheckOf, tip: rec.head, records: records.slice(0, index), runs, spawn: options.spawn, where: given.where });
       return then?.kind === 'recheck' && then.joinedAt?.includes(at) === true;
     })());
   const spanned = spannedDebt({ heads: [...given.rangeIds], records, runs, atOrBefore, settled });
