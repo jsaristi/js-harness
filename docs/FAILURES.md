@@ -1547,7 +1547,7 @@ skipped no duty.
   had not typed; the app held a card and the lead's turn from 07:51Z to about 15:50Z, so the stretch opened that
   morning finished 0 of its 15 items. What stops it is owed: the guard refuses or proposes such a start (the reserve
   item `start-guard` of the plan of 2026-11-18), and its proof is a count of start calls whose result came more than
-  ten minutes later in the lead's transcripts after that build, which is 0
+  ten minutes later in the lead's transcripts after that build, whose target is 0
 - Control: protocol — bin/lib/manifest.mjs — "So it is called at once only when the user wrote in
   that session a short while ago" — since 2026-10-14
 - Was: owed — odd/tasks/session-channel.md — "T17 Questions to him go through the question tool and
@@ -1962,7 +1962,7 @@ after it was made: nothing measured the spend against the figure while the work 
 - Seen: 2026-11-17 — relief file, lines 3113 and 3115 (the lead's own) — the work of question 323 measured
   6,795,693 tokens of the senior's model in 28 calls against the 2M to 3.5M he approved; the correction ran in
   a senior session already 68 % full, with no forecast before it started
-- Seen: 2026-11-17 — relief file, line 3154 — JH 214 passed its cap: its own spend 2.28M against a cap of
+- Seen: 2026-11-17 — relief file, line 3154 — JH 214 passed its cap: its own spend 2.28M, 1.28M of it after it stopped, against a cap of
   1.2M, 4.30M in all against 3.4M
 
 ### stack-update-moved-hooks
@@ -2116,7 +2116,7 @@ goal read met from the opening, and the return reported a goal met that was not.
 - Class: wrong-information
 - Seen: 2026-11-16 — relief file, line 3077, and the return at line 3082 (the lead's own) — the goal
   `t5-listo` searched pull requests for "T5 in:body", which 30 old ones matched; the return of that
-  stretch said the goal was met while T5 was not ready
+  stretch read the goal met, which the lead marked false: T5 was not ready
 
 ### stretch-not-opened
 He left with no stretch opened, though `rule:away-autonomy` asks for the departure, with its goals, in

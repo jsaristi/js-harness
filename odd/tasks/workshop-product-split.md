@@ -596,7 +596,7 @@ The slices:
   slices 1+2, 3 and 4, each with Codex, the lenses and an independent verifier
 - [x] T8 (kind: verify) spec 7, slice D0: the hook-count row of `check` (from F8's S4a), written test first, and
   `scripts/diet-measure.mjs`, which takes each cut's before figure on the release just before it (L12, finding 14);
-  PR 772 (92da9c99), Codex and lens records over its commits, the verifier at L14
+  PR 772 (92da9c99), Codex and lens records over both its commits, the reviews at L14
 - [ ] T9 (kind: build) spec 7: the diet's cuts, one commit each, measured after each against T8's baseline: the
   skill bodies at most 3k with the skill lint (from F8's S5), D8, and the candidates of section "The diet" whose
   saving passes their cost

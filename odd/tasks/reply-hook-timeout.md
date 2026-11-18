@@ -40,7 +40,8 @@ Any timeout other than the reply hook's.
 ## Tasks
 - [x] T1 (kind: build) spec 1: the entry's test at 15 and the upgrade test, red; then `replyHookEntry` at 15, green.
 - [x] T2 (kind: build) spec 1: the budget held at 2500 ms apart from the timeout; the 0.97.0 Codex entry frozen at 5.
-- [x] T3 (kind: verify) Codex, the Claude lenses and an independent verifier over the code slice; PR; ready notice. PR 733, 5548ba2c; L6-L8.
+- [ ] T3 (kind: verify) Codex, the Claude lenses and an independent verifier over the code slice; PR; ready notice. PR 733 merged
+  (5548ba2c) and both code commits have Codex and lens records, but the verifier (L7) read only af847c22, not 1ffe7d02.
 
 ## Log
 - L1 (2026-10-31, his request: the lead's brief `C:\Users\Oficina\.js-harness\background\briefs\2026-10-31T06-23-14-249Z-33f1ddcd.md`,

@@ -653,7 +653,7 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **Probe and pass:** a new document without `## Goal` is refused; 10 of 10 pairs closed or his
   decision; a printed command refuses once the head moved; the incident set no worse.
 - **Cost:** about $13, the incident rerun [i].
-- **State:** done 2026-11-08 (`odd/tasks/f8-s4b-contradictions.md`). A new feature document without its
+- **State:** done; built 2026-11-08 (`odd/tasks/f8-s4b-contradictions.md`). A new feature document without its
   contract is refused by `check` (PR 792, merged). The ten pairs are held by `bin/lib/contradictions.test.mjs`,
   each by its own evidence: a check, a sentence, or his decision. Pair 9 holds his typed words of 2026-11-17,
   landed in PR 906 (fdae9423) and superseding answer A to question 229. Every refusal of the five
@@ -771,7 +771,7 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   adapt or ignore; it is a feature of its own after S2. `bin/lib/gentle-ai-update.mjs` is not
   there to keep: `8b724f3d` removed it with the `gentle-ai-sync` row; built again as `idea-watch`, PR 764 (f72efec4).
 - **Cost:** one session per desktop release (five from 2026-10-15 to 2026-10-29).
-- **State:** done: the feature closed in PR 720 (0910e0ca); each release since has its own review file.
+- **State:** done: the feature closed in PR 720 (0910e0ca); reviews continue under `docs/host-updates/`.
 
 ### Alignment to the depth pass (after rule 1, step 6)
 His words of 2026-10-31 (the lead's transcript `0f71b2c6`, line 43297): "entiendo que tenemos que alinear todo el

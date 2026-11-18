@@ -16,7 +16,7 @@ read that line itself.
   `told-him-unverified` (4), `hours-guessed` (1, so it reads seen again), `old-rule-beside-new` (JH PLAN's, 1) and
   `question-tool-holds-asker` (the hung `start_session`, from the lead's note of 2026-11-18T19:29Z).
 - `2e3e44bb` docs(tasks): ticked with PR and merge commit: drop-circleci T3 (PR 611), review-gate T10 (PR 898),
-  reply-hook-timeout T3 (PR 733), senior-orchestrator T5 (PR 876) and T6 (PR 893), workshop-product-split T8 (PR 772),
+  senior-orchestrator T5 (PR 876) and T6 (PR 893), workshop-product-split T8 (PR 772),
   f8-s0-baseline T8 (PR 599), f8-s7-topology T1 (PR 794); State or Next step updated in senior-orchestrator,
   review-gate, reply-hook-timeout, f8-s7-topology and f8-s1-reviews.
 - `83f532e8` docs(roadmap): ten lines replaced, none added (Install and update S1 ticked, PR 780; S3, S12, S4b and
@@ -24,7 +24,9 @@ read that line itself.
 - Each PR read MERGED in one `gh api graphql` call; review records read in `.git/js-harness/` by a read-only reader.
 - Checks on the head: `js-harness failures check` exit 0; `js-harness rules check` exit 0;
   `node --test bin/conventions-*.test.mjs bin/failures.test.mjs bin/lib/failures.test.mjs` 152 of 152;
-  `js-harness progress` prints `[x] drop-circleci 4/4 100%`.
+  `js-harness progress` prints `[x] drop-circleci 4/4 100%`. After the advisor's check, a correction commit: reply-hook-timeout
+  T3 back open, figures of JH 214 and two wordings fixed; 393 of 393 tests that read these documents pass under
+  `js-harness gate`. The roadmap's S1 box is ticked on PR 780 while `stack-upgrade.md` T8 (verify) stays open.
 
 ## Decisions
 - This session: a sighting is dated by the local day of the relief line, as the register's older lines are; one Seen
@@ -38,7 +40,7 @@ read that line itself.
   run beside other work; it reads no document this change touches. Not rerun.
 
 ## Left
-- Open boxes, each named with why: claude-md-block T3 (fix commit `cabbacbc` had no verifier pass), senior-orchestrator
+- Open boxes, each named with why: reply-hook-timeout T3 (its verifier, L7, read only af847c22, not 1ffe7d02), claude-md-block T3 (fix commit `cabbacbc` had no verifier pass), senior-orchestrator
   T2 (no record of the probe), T3 (no verifier over `a258b450`), T4; the roadmap's S3 fixed load over five sessions (no
   record measures it).
 - Fork labels: the relief file names only "fork labels correction" (lines 3111, 3143); what the labels said wrong is
