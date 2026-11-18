@@ -133,7 +133,7 @@ run. Costs are API-equivalent and draw on his plan's limits (D2); an [i] is an e
 | R2 | failure classes | S8 | no `tool`, `machine` or `unseen-state` entry unsettled | `js-harness failures check --settled` | 7 unsettled in those classes | free |
 | R3 | release check on the tagged commit | S8 | the tag's record names a `release-proof` run on it, exit 0 | no record format exists (T5) | latest tag v0.97.0 | free |
 | A1 | Claude audit, 3 runs | S8 | spread reported beside the baseline | no command or prompt found (searched `docs/audits/`, `odd/tasks/audit-pack.md`) (T3) | no Claude baseline: section 8 left its own grade out as anchored | not priced |
-| A2 | Codex audit, 3 runs | S8 | spread reported beside the baseline | as A1 (T3) | one run, 5.0 overall, on `gpt-6.1-sol`; the reviewer is `gpt-6.2-sol` since PR 911, so the baseline is not comparable | not priced |
+| A2 | Codex audit, 3 runs | S8 | spread reported beside the baseline | as A1 (T3) | one run, 5.0 overall (`docs/proposals/harness-diet.md:662`), on the model `rule:review-model` named before PR 911 changed it, so the baseline is not comparable | not priced |
 
 Of the 17 S0 and S8 measures, 5 miss their line on their latest result (C1.1, C1.2, C1.3, C3.2, C5.3), C2.4 is near
 its line on the reader's tally, and C3.4 has no command. The paid total, by the rows: about $5 + $36 + $1.5 + $6 +
