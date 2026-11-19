@@ -629,15 +629,22 @@ function ownTests(call, feature) {
   return tests.filter((target) => baseName(target).includes(stem) || text.includes(source));
 }
 
-/** A test file's name as a pattern: `*`, `?` and `[...]` are a glob's, and a name without them matches only itself. */
-const namePattern = (name) => new RegExp(`^${name.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*+/g, '.*').replace(/\?/g, '.').replace(/\[!/g, '[^')}$`);
+/** Whether a test file's name, as a run named it, covers `file`: `*`, `?` and `[...]` are a glob's, and a name without
+ * them, or one whose `[` is never closed, matches only itself. */
+const namesFile = (name, file) => {
+  try {
+    return new RegExp(`^${name.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*+/g, '.*').replace(/\?/g, '.').replace(/\[!/g, '[^')}$`).test(file);
+  } catch {
+    return name === file;
+  }
+};
 
 /** Whether a red call ran one of `tests`: a test run that names no test file runs the whole suite, which holds them; one
  * that names test files must name one of them, by its name or by a glob over it (`tests/*.spec.mjs`). Only the name is
  * matched, not the folder. */
 const runsOwn = (call, tests) => isRed(call) && commandsOf(call.input.command).filter(runsTests).some(({ args }) => {
   const named = args.filter((word) => TEST_FILE.test(word)).map(baseName);
-  return named.length === 0 || named.some((name) => tests.some((test) => namePattern(name).test(baseName(test))));
+  return named.length === 0 || named.some((name) => tests.some((test) => namesFile(name, baseName(test))));
 });
 
 /** Moment 4, per feature: the feature's own test written, then a red run of it, before the feature's source first

@@ -242,6 +242,7 @@ test('moment 4 takes a red run that names test files by a glob only when the glo
   }
   assert.deepEqual(await passes('node --test tests/store*.spec.mjs'), [false, false, false], 'a glob that matches no feature\'s test');
   assert.deepEqual(await passes('node --test tests/list*.spec.mjs tests/store.spec.mjs'), [true, false, false], 'a glob that matches f1\'s test only');
+  assert.deepEqual(await passes('node --test tests/list[.spec.mjs'), [false, false, false], 'an unclosed `[` is a literal name, not a crash');
 });
 
 test('a run that stopped early keeps the verdicts of the features it built, and moment 4 stays not reached', async (t) => {
