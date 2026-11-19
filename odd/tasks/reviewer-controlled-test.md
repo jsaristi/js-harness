@@ -222,3 +222,10 @@ three days.
   for the review effort on 6.2 until this test reports. The rules change has not run, on the lead's word: two
   typed lines are owed, his yes to high and "no quiero la revisión" for the double review the question skipped.
   The lead relays both when he types them. No Codex ran.
+- L16 2026-11-19, he typed at 16:12 local (f5c3ee4d line 7721): "Sí, que Codex revise en esfuerzo alto hasta que
+  termine la prueba, no quiero la revisión de esa tarjeta." His words lift this brief's "no rule change" for
+  review-effort alone, on its own rule/ branch; the arms still run through the eval's override. The dry run
+  (`js-harness rules change review-effort --dry-run`) was refused: "rule/plan-pre-prompt holds a rule change not
+  on origin/main (plan-pre-prompt): one change is open at a time". An empty branch rule/review-effort-high, cut
+  from origin/main 3d89c373, waits. Question 379, on the lead's word, asks him whether JH 227's branch is parked
+  as parked/plan-pre-prompt; the block scans only rule/ refs (bin/lib/rules-change-run.mjs:208). No Codex ran.
