@@ -187,8 +187,10 @@ Paid: $45.38 of $74 (list cost), no run above $12, no cap reached. The long-sess
 answer to question 363, "Sí, calificarla (Recomendada)" (transcript `f5c3ee4d`, line 6439), ran once on
 2026-11-19 from about 16:06Z to 16:20Z on the grader of `0c28d083` (`evals/` unchanged to `5ae4021a`), codex.exe 0.169.1:
 `evals/results/long-session/f8-s8-long.grade.json`. Its Codex spend is read only on the meter: weekly 49% to 50%,
-five-hour 0% to 7% (`js-harness codex-meter` before and after); tokens not known. The Sonnet regrade's cost is
-not recorded by `grade.mjs`; not known.
+five-hour 0% to 7% (`js-harness codex-meter` before and after). **Token counts are not recorded, for Codex or
+Sonnet**: `f8-s8-long.grade.json` holds no token, usage or cost field, `grade.mjs` reads only each judge's answer
+(`grade.mjs:713-731`), and Codex ran `--ephemeral`, so no rollout was written (`~/.codex/sessions/2026/11/19` has none
+after 01:04 local). Whether the grading spent past 0.9M of Codex cannot be shown from the record.
 
 **Unguaranteed: the stack moved since the baseline.** Every paid row ran on claude 2.1.327 and engram 3.7.1 (each
 results file's `stack`; the long batch's in `evals/results/long-session/f8-s8-long.commit.json`), against S5 on
