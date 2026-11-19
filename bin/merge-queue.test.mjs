@@ -1788,6 +1788,31 @@ test('--land stops before it builds anything when the merge-queue it runs from i
   assert.ok(!calls.some((line) => line.startsWith('git push')), calls.join('\n'));
 });
 
+// odd/tasks/merge-queue-dry-run.md, spec 1: a dry run passed on a stale installed copy while --land refused it (the 882
+// land, 2026-11-15), so the preview said yes to a land that could not run. It now stops where that land would.
+test('--dry-run stops before it lists or builds anything when the merge-queue it runs from is not origin/main\'s, as --land does (odd/tasks/merge-queue-dry-run.md, spec 1)', async () => {
+  const { root, origin, self } = guardedRepo('export const queue = 2;\n');
+  fs.writeFileSync(self, 'export const queue = 1;\n', 'utf8');
+  const { run, calls } = runner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))]);
+  const out = [];
+  const code = await mergeQueueMain(['--dry-run', '--cwd', root], { run, self, covered: () => ({ pass: true }), stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  assert.equal(code, 1, out.join('\n'));
+  assert.deepEqual(out, [`merge-queue: ${self} is not origin/main's bin/ (differs: bin/merge-queue.mjs): a land run from it would run code main no longer has, and this dry run stops where that land would. Run it from a checkout at origin/main.`]);
+  assert.ok(!calls.some((line) => line.startsWith('gh pr list') || line.startsWith('git worktree add')), calls.join('\n'));
+  assert.equal(git(root, 'worktree', 'list').split('\n').length, 1, 'no worktree was made');
+  assert.equal(fs.existsSync(path.join(root, '.git', 'js-harness', 'lands.jsonl')), false, 'a dry run writes no land record');
+});
+
+test('--dry-run from a merge-queue that is origin/main\'s, Windows line ends aside, builds the candidate as before (odd/tasks/merge-queue-dry-run.md, spec 1)', async () => {
+  const { root, origin, self } = guardedRepo('export const queue = 2;\n');
+  fs.writeFileSync(self, 'export const queue = 2;\r\n', 'utf8');
+  const { run } = runner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))]);
+  const out = [];
+  const code = await mergeQueueMain(['--dry-run', '--cwd', root], { run, self, covered: () => ({ pass: true }), stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(out.at(-1), 'Dry run: nothing was tested or pushed, and the candidate was removed.', out.join('\n'));
+});
+
 test('the land guard reads a merge-queue with Windows line ends as origin/main\'s, and lands', async () => {
   const { root, origin, self } = guardedRepo('export const queue = 2;\n');
   fs.writeFileSync(self, 'export const queue = 2;\r\n', 'utf8');
