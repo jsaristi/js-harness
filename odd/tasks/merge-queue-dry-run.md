@@ -6,7 +6,8 @@ temporary folder. Item `mq-dryrun` of the plan of 2026-11-18 (version 4), sessio
 request; the lead (JH ORQ) reviews and lands it.
 
 ## State
-T1 to T3 are done (L3, L4). Next: T4, the reviews and the verifier, then the pull request. Open: the tick of
+T1 to T3 are done (L3, L4); the first reviews and the verifier answered (L5). Next: the reviews of the fix, then the
+pull request. Open: the tick of
 `docs/ROADMAP.md`'s "Later" line, which JH 222 holds this stretch; it is owed in the ready notice.
 
 ## Goal
@@ -22,13 +23,15 @@ sites in the queue's test make temporary folders and never remove them: 9,601 we
 - `node --test bin/merge-queue.test.mjs` exits 0
 - `node --test bin/conventions-arguments.test.mjs bin/conventions-errors.test.mjs` exits 0
 - `npm run check` exits 0
-- A dry run whose running copy differs from origin/main's `bin/` exits 1 with the differing paths named, builds no
+- A dry run whose running copy differs from origin/main's `bin/` exits 1 with the differing paths named as the land
+  names them (three, then a count), builds no
   worktree and writes no `lands.jsonl`; one whose copy matches (Windows line ends aside) exits 0.
 - A run of `bin/merge-queue.test.mjs` with TEMP, TMP and TMPDIR set to an empty folder leaves that folder empty.
 
 ## In scope / Out of scope
 - In: `bin/merge-queue.mjs` (the guard's condition, its message tail for a dry run, `USAGE`, the header comment),
-  `README.md`'s one sentence on `--dry-run` in the merge-queue section,
+  `README.md`'s one sentence on `--dry-run` in the merge-queue section, the merge-queue line of `bin/js-harness.mjs`'s
+  help,
   `bin/merge-queue.test.mjs` (the new tests, one scratch root for every folder it makes), this document.
 - Out: `docs/ROADMAP.md` and `docs/FAILURES.md`, held by JH 222 this stretch; other test files that may leak too
   (reported, not fixed); the folders already in his temporary folder (his, in the plan's `waits`);
@@ -109,3 +112,18 @@ sites in the queue's test make temporary folders and never remove them: 9,601 we
   The whole file with TEMP, TMP and TMPDIR at an empty `%TEMP%jh226`: 136 tests, 136 pass, the folder empty after.
   Not changed: `bin/lib/manifest.mjs:158`, the text written into projects, which says what a dry run shows and stays
   true.
+- L5 2026-11-18, the reviews of `5b273c00..a2ef43c5`. The lenses (risk, resilience, readability, reliability): 0
+  findings. Codex, three P3: (1) name every differing path in the dry run: answered, not changed: the dry run says the
+  land's words so that it predicts the land, and the land names three and a count; "Done when" now says so. (2) The
+  root made fixture paths 3 bytes longer, enough for a slug used as a file name to pass 255 bytes under a 211-byte
+  TEMP: fixed, the root's prefix is `jhmq-`, so every fixture path is shorter than before the change. (3) The source
+  scan passes if the root is never removed: fixed, a test runs one fixture test in a child process with TEMP at an
+  empty folder and wants it empty; with the removal turned off it was red, restored green (2 pass). The verifier: pass
+  with notes. Its help line note (`bin/js-harness.mjs:38` said only a land stops) is fixed. Its note that a removal
+  failing after its retries turns a green run red is answered: it is meant, so a leak shows; the retries cover a short
+  hold. Its note that plain `git clone`s in the file keep automatic maintenance on is out of scope: no failure seen.
+  The mutation run left one `jhmq-*` folder in TEMP, removed by hand. `D:js-harness-mq-relief.log`, a log this
+  session wrote by mistake outside the repository, is left for him to delete: the safety check refused its removal.
+- L6 2026-11-18: the first commit of the fix was refused by its check: `bin/js-harness.test.mjs:705` pins the help
+  line word for word, and the search of L2 had read the help but not its test. The test now pins the new line
+  (6 pass), and the fix landed as `a7d8803f`.
