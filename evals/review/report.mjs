@@ -162,43 +162,88 @@ export function reportMarkdown({ readingsDir, ranges = RANGES }) {
   return { text, recorded, missing };
 }
 
-/** The input a reading spent on each changed line of its range (`coverage.total`, not the lines its review saw),
- * rounded: the base the price of the controlled test and the run log's figures are on, so a review that stopped
- * before it saw every line is not made to look dearer a line than one that finished. `unknown` when the range
- * has no changed line or the reading does not say how many. */
-const perChangedLine = ({ usage, coverage }) => (Number.isFinite(usage?.inputTokens) && Number.isFinite(coverage?.total) && coverage.total > 0 ? counted(Math.round(usage.inputTokens / coverage.total)) : 'unknown');
+/** The input a reading spent on each line its range changes (`changedLines` of the range, as git counts them),
+ * rounded: the base the price of the controlled test and the run log's figures are on. Not the lines the review's
+ * evidence holds, which are fewer, and not only the lines it saw, so a review that stopped before it saw every
+ * line is not made to look dearer a line than one that finished. `unknown` when either is not known. */
+const perChangedLine = (range) => ({ usage }) => (Number.isFinite(usage?.inputTokens) && Number.isInteger(range.changedLines) && range.changedLines > 0 ? counted(Math.round(usage.inputTokens / range.changedLines)) : 'unknown');
+
+/** Whether a run of the arm `config` counts (odd/tasks/reviewer-controlled-test.md, Constraints): `yes` when its
+ * session's own file says it ran the arm's model at the arm's effort, else `no` and why. A run that does not count
+ * is kept and shown: it was made and paid for, and it measured another pair, or one nobody can name. */
+function counts(config, { model, effort, modelSource }) {
+  if (modelSource !== 'session') return 'no: what it ran was not measured';
+  if (!named(effort)) return 'no: its session named no effort';
+  if (!named(model)) return 'no: its session named no model';
+  if (model !== config.model || effort !== config.effort) return `no: it ran ${model} ${effort}, not ${model !== config.model ? `${config.model} ${config.effort}` : config.effort}`;
+  return 'yes';
+}
+
+/** The value most of `readings` hold for `pick`, the first of them when two are as frequent. */
+function usual(readings, pick) {
+  const seen = new Map();
+  for (const reading of readings) seen.set(pick(reading), (seen.get(pick(reading)) ?? 0) + 1);
+  return [...seen].reduce((most, entry) => (entry[1] > most[1] ? entry : most), [null, 0])[0];
+}
 
 /** The section of the arms of the controlled test of the reviewer (`ARMS` in `./compare.mjs`,
  * odd/tasks/reviewer-controlled-test.md): one table a range, one row a run, with the columns of the comparison,
- * the input a changed line (the runs are compared on ranges of other sizes than the reviews of real work) and the
- * version of the prompt each was asked with, which every arm must share for the rows to compare. A run with no
- * reading is a row of dashes, as a cell is above. */
+ * whether the run counts (`counts`), the input a changed line (the runs are compared on ranges of other sizes than
+ * the reviews of real work) and the version of the prompt each was asked with. A run with no reading is a row of
+ * dashes, as a cell is above. Under a table, what keeps its rows from being compared, as under the comparison's: a
+ * reading of other commits than the range's, another codex-cli or another prompt version than most of the table's,
+ * and a file that is there and is no reading of its run, with why, so that it is looked at before a run is paid
+ * for again. */
 function armsSection({ readingsDir, ranges }) {
   const runs = CONFIGS.filter((one) => one.arm !== null);
   const cells = CELLS.filter((cell) => runs.some((one) => one.name === cell.config));
   let recorded = 0;
+  let counting = 0;
   const tables = ranges.map((range) => {
-    const shown = [...columns(range.seeded === true), ['input a changed line', perChangedLine], ['prompt version', (reading) => reading.promptVersion ?? 'unknown']];
+    const shown = columns(range.seeded === true);
+    const more = [['input a changed line', perChangedLine(range)], ['prompt version', (reading) => reading.promptVersion ?? 'unknown']];
+    const notes = [];
+    const read = [];
     const rows = runs.filter((config) => cells.some((cell) => cell.config === config.name && cell.range === range.name)).map((config) => {
       const found = readReading(readingsDir, config.name, range.name);
-      if (!found.ok) return [config.name, config.arm, 'missing', ...shown.slice(1).map(() => '-')];
+      if (!found.ok) {
+        if (!found.missing) notes.push(`- \`${config.name}\`: ${found.why}.`);
+        return [config.name, config.arm, 'missing', ...shown.slice(1).map(() => '-'), '-', ...more.map(() => '-')];
+      }
+      const { reading } = found;
       recorded += 1;
-      return [config.name, config.arm, ...shown.map(([, cell]) => String(cell(found.reading)))];
+      read.push(reading);
+      const verdict = counts(config, reading);
+      if (verdict === 'yes') counting += 1;
+      if (reading.range.base !== range.base || reading.range.head !== range.head) {
+        notes.push(`- \`${config.name}\` was read over ${String(reading.range.base).slice(0, 7)}..${String(reading.range.head).slice(0, 7)}, not over this range.`);
+      }
+      return [config.name, config.arm, ...shown.map(([, cell]) => String(cell(reading))), verdict, ...more.map(([, cell]) => String(cell(reading)))];
     });
-    const headings = ['run', 'arm', ...shown.map(([heading]) => heading)];
+    const cli = usual(read, (reading) => reading.cli);
+    const prompt = usual(read, (reading) => reading.promptVersion ?? null);
+    for (const reading of read) {
+      if (reading.cli !== cli) notes.push(`- \`${reading.config}\` ran on codex-cli ${reading.cli}, the others on ${cli}: the comparison is only fair on one version.`);
+      if ((reading.promptVersion ?? null) !== prompt) {
+        notes.push(`- \`${reading.config}\` was asked with ${reading.promptVersion ?? 'no named prompt version'}, the others with ${prompt ?? 'no named prompt version'}: the comparison is only fair on one prompt.`);
+      }
+    }
+    const headings = ['run', 'arm', ...shown.map(([heading]) => heading), 'counts', ...more.map(([heading]) => heading)];
     return [
-      `### ${range.name}: ${range.base.slice(0, 7)}..${range.head.slice(0, 7)}`,
+      `### ${range.name}: ${range.base.slice(0, 7)}..${range.head.slice(0, 7)}, ${range.changedLines} changed lines`,
       '',
       `| ${headings.join(' | ')} |`,
       `| ${headings.map((heading, at) => (at < 3 ? '---' : '---:')).join(' | ')} |`,
       ...rows.map((row) => `| ${row.join(' | ')} |`),
+      ...(notes.length > 0 ? ['', ...notes] : []),
       '',
     ].join('\n');
   });
   return [
     '## The arms of the controlled test',
     '',
-    `The runs of odd/tasks/reviewer-controlled-test.md, ${ARM_RUNS} a range an arm, each on the model and at the effort of its arm: ${recorded} of ${cells.length} runs are recorded. ` +
+    `The runs of odd/tasks/reviewer-controlled-test.md, ${ARM_RUNS} a range an arm, each on the model and at the effort of its arm: ${recorded} of ${cells.length} runs are recorded, ${counting} of them ${counting === 1 ? 'counts' : 'count'}. ` +
+      'A run counts when its session\'s own file says it ran its arm\'s model at its arm\'s effort; one that does not is shown and is no measure of its arm. ' +
       'They are not cells of the comparison above, and a run that has not been made leaves it complete.',
     '',
     ...ARMS.map(({ arm, model, effort, why }) => `- ${arm}: ${model} at ${effort}, ${why}.`),

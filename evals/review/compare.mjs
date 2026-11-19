@@ -139,7 +139,9 @@ CONFIGS.push(...ARMS.flatMap(({ arm, model, effort, why }) => Array.from({ lengt
 
 /** The ranges. `base` and `head` are full commit ids, `doc` the feature document of the range, from the
  * root of its tree. `seeded` says how the tree is made: built by `./seeded.mjs`, else cloned from this
- * repository. */
+ * repository. `changedLines` is how many lines the range adds and deletes as `git diff --numstat` counts them,
+ * the base the report divides a run's input by: not a reading's `coverage`, which counts the deduplicated
+ * lines that are not blank, the evidence a review is held to, and is smaller (216 and 226). */
 export const RANGES = [
   {
     name: 'real',
@@ -147,9 +149,10 @@ export const RANGES = [
     head: 'e3aad4802d4604fbc4976e2ad5c4a40e2f5de42e',
     doc: 'odd/tasks/codex-review-lean.md',
     seeded: false,
+    changedLines: 255,
     what: 'this repository, 255 changed lines with no known defect',
   },
-  { name: 'seeded', base: SEEDED_KEY.base, head: SEEDED_KEY.head, doc: 'odd/tasks/stocktake.md', seeded: true, what: 'the repository of evals/review/seeded.mjs, wrong in seven known places' },
+  { name: 'seeded', base: SEEDED_KEY.base, head: SEEDED_KEY.head, doc: 'odd/tasks/stocktake.md', seeded: true, changedLines: 292, what: 'the repository of evals/review/seeded.mjs, wrong in seven known places' },
 ];
 
 /** Every cell, `{ config, range }` by name: each configuration over each range it runs on. */

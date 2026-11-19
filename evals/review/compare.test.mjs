@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
+import { fileURLToPath } from 'node:url';
 import { codexArgs, REVIEW_EFFORT, REVIEW_MODEL } from '../../bin/codex-review.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir } from '../../bin/lib/codex-review-home.mjs';
 import { REVIEW_PROMPT_VERSION } from '../../bin/lib/codex-review-prompt.mjs';
@@ -15,6 +16,7 @@ import {
   buildReading, CELLS, CHECKOUT_NAME, codegraphSettings, compareMain, CONFIGS, EXCLUDED, FINDING_BODY_MAX, RANGES, READING_SCHEMA,
   readingFile, readReading,
 } from './compare.mjs';
+import { buildSeededRepo } from './seeded.mjs';
 
 // Real git and a fake `codex`, through injected spawns: no test calls a real Codex, the model, or CodeGraph.
 // The machine is a temporary folder too: an OS home with a fixture for a Codex home and its login, the
@@ -383,6 +385,19 @@ test('--dry-run of an arm: its own model and effort, the own prompt and the rang
     assert.ok(result.out.includes(`Reading: ${readingFile(m.readings, config, range)} (missing)`), result.out);
   }
   assert.deepEqual([entries(m.readings), entries(m.parent), entries(m.tmp)], [[], [], []], 'nothing was made');
+});
+
+test('each range says how many lines it changes as git counts them, the base of the input a changed line', () => {
+  // Not the lines a review's evidence holds (`coverage`): those are deduplicated and drop blank lines, 216 and 226
+  // where git counts 255 and 292, and dividing by them made every arm look dearer a line.
+  assert.deepEqual(RANGES.map(({ name, changedLines }) => [name, changedLines]), [['real', 255], ['seeded', 292]]);
+  const numstat = (cwd, base, head) => git(cwd, 'diff', '--numstat', base, head).split('\n').filter(Boolean).reduce((sum, line) => sum + line.split('\t').slice(0, 2).reduce((both, count) => both + Number(count), 0), 0);
+  const seeded = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-seeded-lines-'));
+  made.push(seeded);
+  buildSeededRepo(path.join(seeded, 'repo'));
+  assert.equal(numstat(path.join(seeded, 'repo'), KEY.base, KEY.head), 292);
+  const root = fileURLToPath(new URL('../../', import.meta.url));
+  if (spawnSync('git', ['cat-file', '-e', `${RANGES[0].head}^{commit}`], { cwd: root }).status === 0) assert.equal(numstat(root, RANGES[0].base, RANGES[0].head), 255);
 });
 
 test('a reading is one file a cell, named after its configuration and its range', () => {

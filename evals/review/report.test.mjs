@@ -107,7 +107,7 @@ test('a recorded cell is a row of what its reading holds: the outcome, the findi
 /** The section of the arms of the controlled test, and in it the table of the range `name`. */
 const arms = (text) => text.split(/^## /m).find((part) => part.startsWith('The arms of the controlled test')) ?? '';
 const armTable = (text, name) => arms(text).split(/^### /m).find((part) => part.startsWith(`${name}:`)) ?? '';
-const ARM_COLUMNS = (scored) => ['run', 'arm', ...(scored ? SEEDED_COLUMNS : REAL_COLUMNS).slice(1), 'input a changed line', 'prompt version'];
+const ARM_COLUMNS = (scored) => ['run', 'arm', ...(scored ? SEEDED_COLUMNS : REAL_COLUMNS).slice(1), 'counts', 'input a changed line', 'prompt version'];
 const ARM_RUNS = ['sol61-medium-1', 'sol61-medium-2', 'sol62-medium-1', 'sol62-medium-2', 'sol62-max-1', 'sol62-max-2', 'sol62-high-1', 'sol62-high-2'];
 
 test('the arms of the controlled test are a section of their own: one table a range, one row a run, with the input a changed line and the prompt version', () => {
@@ -124,20 +124,43 @@ test('the arms of the controlled test are a section of their own: one table a ra
     assert.deepEqual(row(table, 'run'), ARM_COLUMNS(name === 'seeded'), name);
     for (const config of ARM_RUNS) assert.deepEqual(row(table, config).slice(0, 3), [config, config === ARM_RUNS[0] || config === ARM_RUNS[1] ? 'A' : config.startsWith('sol62-medium') ? 'B' : config.startsWith('sol62-max') ? 'C' : 'D', 'missing'], `${name} ${config}`);
   }
-  // A run that is recorded: the input over the changed lines its review saw, rounded, and the version of its prompt.
-  record(repo, 'sol62-max-1', 'seeded', { model: 'gpt-6.2-sol', effort: 'max', modelSource: 'session', configuredModel: 'gpt-6.2-sol', configuredEffort: 'max', prompt: 'own', promptVersion: 'js-harness.codex-review-prompt/v4', coverage: { seen: 226, total: 226 }, usage: { inputTokens: 1000000, cachedInputTokens: 900000, outputTokens: 5000, reasoningOutputTokens: 3000 } });
+  // A run that is recorded and counts: its session ran its arm's model at its arm's effort. The input is over the
+  // range's changed lines as git counts them (`changedLines`, 292 for seeded), not over the lines the review's
+  // evidence holds (`coverage`, 226 here), and the version of its prompt is shown.
+  const measuredAs = (model, effort) => ({ model, effort, modelSource: 'session', configuredModel: model, configuredEffort: effort, prompt: 'own', promptVersion: 'js-harness.codex-review-prompt/v4' });
+  record(repo, 'sol62-max-1', 'seeded', { ...measuredAs('gpt-6.2-sol', 'max'), coverage: { seen: 226, total: 226 }, usage: { inputTokens: 1000000, cachedInputTokens: 900000, outputTokens: 5000, reasoningOutputTokens: 3000 } });
   assert.equal(run([], repo).code, 0);
   text = fs.readFileSync(repo.out, 'utf8');
-  assert.match(arms(text), /1 of 16 runs are recorded/);
-  assert.deepEqual(row(armTable(text, 'seeded'), 'sol62-max-1'), ['sol62-max-1', 'C', 'reviewed', '3', '2/7', '1', '1,000,000', '100,000', '5,000', '2', '18,200', '60', '0.160.1', 'gpt-6.2-sol max', '4,425', 'js-harness.codex-review-prompt/v4']);
-  // The lines are the range's, not those the review saw: a review that stopped at half the range is divided by all of it.
-  record(repo, 'sol62-max-1', 'real', { coverage: { seen: 100, total: 200 }, usage: { inputTokens: 100000, cachedInputTokens: 0, outputTokens: 1, reasoningOutputTokens: 0 } });
+  assert.match(arms(text), /1 of 16 runs are recorded, 1 of them counts/);
+  assert.deepEqual(row(armTable(text, 'seeded'), 'sol62-max-1'), ['sol62-max-1', 'C', 'reviewed', '3', '2/7', '1', '1,000,000', '100,000', '5,000', '2', '18,200', '60', '0.160.1', 'gpt-6.2-sol max', 'yes', '3,425', 'js-harness.codex-review-prompt/v4']);
+  // A review that stopped at half the range is divided by all of it.
+  record(repo, 'sol62-max-1', 'real', { ...measuredAs('gpt-6.2-sol', 'max'), coverage: { seen: 100, total: 200 }, usage: { inputTokens: 100000, cachedInputTokens: 0, outputTokens: 1, reasoningOutputTokens: 0 } });
   run([], repo);
-  assert.equal(row(armTable(fs.readFileSync(repo.out, 'utf8'), 'real'), 'sol62-max-1').at(-2), '500');
-  // A run whose range has no changed line, or that does not say how many, has no input a changed line to give.
-  record(repo, 'sol62-max-2', 'seeded', { coverage: { seen: 0, total: 0 } });
+  assert.equal(row(armTable(fs.readFileSync(repo.out, 'utf8'), 'real'), 'sol62-max-1').at(-2), '392');
+  // A run counts only when its session's own file says it ran the arm's model at the arm's effort: one that says
+  // no effort, one that ran another pair, and one whose model is what the command passed are shown, and do not count.
+  record(repo, 'sol62-max-2', 'seeded', { ...measuredAs('gpt-6.2-sol', 'max'), effort: null });
+  record(repo, 'sol62-high-1', 'seeded', { ...measuredAs('gpt-6.2-sol', 'medium'), configuredEffort: 'high' });
+  record(repo, 'sol62-high-2', 'seeded', { model: 'gpt-6.2-sol', effort: 'high', modelSource: 'command' });
   run([], repo);
-  assert.equal(row(armTable(fs.readFileSync(repo.out, 'utf8'), 'seeded'), 'sol62-max-2').at(-2), 'unknown');
+  text = fs.readFileSync(repo.out, 'utf8');
+  const counts = (config) => row(armTable(text, 'seeded'), config).at(-3);
+  assert.equal(counts('sol62-max-2'), 'no: its session named no effort');
+  assert.equal(counts('sol62-high-1'), 'no: it ran gpt-6.2-sol medium, not high');
+  assert.equal(counts('sol62-high-2'), 'no: what it ran was not measured');
+  assert.match(arms(text), /5 of 16 runs are recorded, 2 of them count/);
+  // Under a table, what keeps its rows from being compared: a reading of other commits, another CLI or another
+  // prompt version than most, and a file that is there and is no reading of its run, with why.
+  record(repo, 'sol62-medium-1', 'seeded', { ...measuredAs('gpt-6.2-sol', 'medium'), range: { name: 'seeded', base: 'a'.repeat(40), head: 'b'.repeat(40) } });
+  record(repo, 'sol62-medium-2', 'seeded', { ...measuredAs('gpt-6.2-sol', 'medium'), cli: '0.170.0', promptVersion: 'js-harness.codex-review-prompt/v5' });
+  fs.writeFileSync(readingFile(repo.readings, 'sol61-medium-2', 'seeded'), 'not json', 'utf8');
+  run([], repo);
+  const seeded = armTable(fs.readFileSync(repo.out, 'utf8'), 'seeded');
+  assert.match(seeded, /^- `sol62-medium-1` was read over aaaaaaa\.\.bbbbbbb, not over this range\.$/m);
+  assert.match(seeded, /^- `sol62-medium-2` ran on codex-cli 0\.170\.0, the others on 0\.160\.1: the comparison is only fair on one version\.$/m);
+  assert.match(seeded, /^- `sol62-medium-2` was asked with js-harness\.codex-review-prompt\/v5, the others with js-harness\.codex-review-prompt\/v4: the comparison is only fair on one prompt\.$/m);
+  assert.match(seeded, /^- `sol61-medium-2`: sol61-medium-2__seeded\.json is not JSON/m);
+  assert.equal(row(seeded, 'sol61-medium-2')[2], 'missing');
   // The arms that have not run do not make the comparison incomplete.
   recordAll(repo, (config) => (config.startsWith('sol') ? { outcome: 'reviewed' } : {}));
   for (const config of ARM_RUNS) for (const range of ['real', 'seeded']) fs.rmSync(readingFile(repo.readings, config, range), { force: true });

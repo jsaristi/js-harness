@@ -3,8 +3,8 @@
 ## State
 He approved the run with a cap of 20 points of the weekly window (question 359, L9). T2 to T4 are built (L10), with
 no Codex token spent. Next: T5, the runs, right after the weekly reset of 2026-11-23 23:45 local, A first, a
-`js-harness notify` to the lead at the start and at the end. The code slice (c6c1ee2..350e960) passed the lenses
-(L11) and waits for its Codex review, which spends from the window: the lead decides when it runs. Next, on a yes: T2 to T4 (code for
+`js-harness notify` to the lead at the start and at the end. Codex's review of the slice found four (L12), all fixed in the
+commit after f5994b6; a second round waits for the lead's word. Then push and a draft pull request. Next, on a yes: T2 to T4 (code for
 the arms and the repeats, no Codex), then T5, the runs, right after the weekly reset of 2026-11-23 23:45 local.
 Open: Q1; and whether the double review of this design (protocol section 1) runs, since it spends Codex tokens the
 brief does not allow before his answer (L6). The arms' models are named by their short versions above the Log and
@@ -57,7 +57,7 @@ approved designing the test (L1, L2). The rule stays his: only his answer to the
   `CONFIGS` (`compare.mjs:94-100`), handed to `codexReviewMain` as injected deps (`compare.mjs:477`), and never
   through the rules. The smallest change: three or four new `CONFIGS` entries and a run index on a reading.
 - 2. Raw material:
-  - `evals/review/seeded/key.json`: one seeded range, 226 changed lines, 7 planted defects of 7 kinds.
+  - `evals/review/seeded/key.json`: one seeded range, 292 changed lines as `git diff --numstat` counts them (226 in a reading's `coverage`, the lines a review's evidence holds), 7 planted defects of 7 kinds.
   - `evals/review/compare.mjs:113-123`: the `real` range, 255 changed lines of this repository "with no known defect".
   - `evals/results/review/readings/*.json` (2026-10-08, CLI 0.161.0, all on 6.1): `lean-own` seeded 7 of 7 found,
     0 extra, 55,203 input; `lean-own` real 0 findings, 145,842 input; `lean-high` seeded 7 of 7 and 1 extra,
@@ -113,16 +113,16 @@ approved designing the test (L1, L2). The rule stays his: only his answer to the
 ## Price
 How it is priced. Two bases, from the measured runs (L3) and the committed readings, and the larger is the high: per
 run (a review has a fixed cost of exploration that dominates on ranges this small) and per changed line. The two
-cases are 481 changed lines between them (226 + 255). Every figure here is an estimate from those measures.
+cases are 547 changed lines between them as git counts them (292 + 255; the run log's `part.changedLines` counts the same way). Corrected in L12: the version he answered used 226 for seeded. Every figure here is an estimate from those measures.
 
 | arm | runs | low (input tokens) | how | high (input tokens) | how |
 | --- | ---: | ---: | --- | ---: | --- |
-| A 6.1 medium | 4 | 0.40M | the `lean-own` readings, 2 x (55,203 + 145,842) | 1.07M | 1,113 a line (median of 251 first reviews) x 481 x 2 |
-| B 6.2 medium | 4 | 0.40M | as A: the model alone adds nothing | 12.0M | as C: the effort alone adds nothing |
-| C 6.2 max | 4 | 4.0M | A's low x 10 (the p90 ratio of 6.2 max to 6.1 medium) | 12.0M | 12,489 a line (median of 17 first reviews) x 481 x 2 |
-| D 6.2 high | 4 | 0.40M | as B | 12.0M | as C |
-| A to C | 12 | 4.8M | | 25.1M | |
-| A to D | 16 | 5.2M | | 37.1M | |
+| A 6.1 medium | 4 | 0.40M | the `lean-own` readings, 2 x (55,203 + 145,842) | 1.22M | 1,113 a line (median of 251 first reviews) x 547 x 2 |
+| B 6.2 medium | 4 | 0.40M | as A: the model alone adds nothing | 13.7M | as C: the effort alone adds nothing |
+| C 6.2 max | 4 | 4.0M | A's low x 10 (the p90 ratio of 6.2 max to 6.1 medium) | 13.7M | 12,489 a line (median of 17 first reviews) x 547 x 2 |
+| D 6.2 high | 4 | 0.40M | as B | 13.7M | as C |
+| A to C | 12 | 4.8M | | 28.6M | |
+| A to D | 16 | 5.2M | | 42.3M | |
 
 B has no measurement at all: its range is the whole span between A and C, and its first run prices it; the per-run
 check of the cap is what keeps that span from becoming spend.
@@ -130,8 +130,8 @@ check of the cap is what keeps that span from becoming spend.
 As a share of Codex's weekly window. Two readings, both confounded by other sessions' use: since the reset of
 2026-11-17 the logged Codex input is 67.4M tokens (38.6M in reviews, 28.8M in double-review reads) against 48% used,
 about 1.4M a point; and 3.28M tokens of two 6.2 max runs over the meter's move from 18% to 23% on 2026-11-18
-(`odd/tasks/again-subrange.md` L52-L54), at most 0.66M a point. So A to C is about 3% to 38% of the week, and A to D
-4% to 56%. The low end is likelier for A and the high end is reached only if B and D cost what C does; the first
+(`odd/tasks/again-subrange.md` L52-L54), at most 0.66M a point. So A to C is about 3% to 43% of the week, and A to D
+4% to 64%. His cap of 20 points (L9) is what binds: the run stops at it whatever the estimate. The low end is likelier for A and the high end is reached only if B and D cost what C does; the first
 runs replace both readings by measured ones (the meter is read before and after each run).
 
 When. The window is at 48% today and his line is 50%, so nothing fits this week. The run starts right after the
@@ -192,3 +192,14 @@ three days.
   range by all of it); risk 0. The lenses on ac1b927..350e960: 0 findings, the earlier one rechecked fixed. Codex's
   review of c6c1ee2..350e960 has not run: it spends from the weekly window (48% on 2026-11-19), and when it runs is
   the lead's.
+- L12 2026-11-19, Codex's review of c6c1ee2..f5994b6 on the lead's word (meter before it: weekly 52%, five-hour
+  17%): incorrect (0.99), 1,250,877 input tokens (1,136,128 cached), 502 s, four findings, all taken. P2: the input a
+  changed line divided by `coverage.total`, the deduplicated lines that are not blank a review's evidence holds
+  (216 and 226), not the lines git counts (255 and 292); `RANGES` now carries `changedLines`, held to
+  `git diff --numstat` by a test, and the report divides by it. P2: a run whose session named no effort, or ran
+  another pair, was counted with the verified ones; a `counts` column says yes or no and why, and the section
+  counts the runs that count. P2: a reading of other commits, CLI or prompt version was pooled with no word; notes
+  under each arm table say so, as under the comparison's. P3: an arm's unreadable file showed as `missing` with no
+  reason; the note gives it. Bad news it brought: the price he answered (question 359) used 226 lines for seeded;
+  at 292 the high of A to C is 28.6M, not 25.1M, and of A to D 42.3M, not 37.1M; the lows are the same, and his cap
+  of 20 points binds whatever the estimate. Recorded in docs/FAILURES.md, `estimate-passed-as-fact`.

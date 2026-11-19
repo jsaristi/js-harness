@@ -696,6 +696,10 @@ on it.
   the worst of the eleven values of p a test read, written as the largest into the header of
   evals/rule-proof.mjs and the roadmap's row "Rule proof", and sent to the lead in a notice; the
   largest is 9.4 %, near one pass in four, found by the lens review of 9bea5422..61dfd09d
+- Seen: 2026-11-19 — odd/tasks/reviewer-controlled-test.md, L12 — the price of question 359 used 226
+  changed lines for the seeded range, a reading's `coverage` (the lines a review's evidence holds), not
+  the 292 git counts; the high of arms A to C was 25.1M and is 28.6M. Found by Codex's review of
+  c6c1ee2..f5994b6; the ranges now carry `changedLines`, held to `git diff --numstat` by a test
 - Control: check — bin/guard.test.mjs — "a reply whose stated own share is more than 2 points off
   the recorded one is blocked from stopping, with the reason" — since 2026-10-15
 

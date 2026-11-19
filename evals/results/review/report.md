@@ -29,35 +29,35 @@ The repository of evals/review/seeded.mjs, wrong in seven known places.
 
 ## The arms of the controlled test
 
-The runs of odd/tasks/reviewer-controlled-test.md, 2 a range an arm, each on the model and at the effort of its arm: 0 of 16 runs are recorded. They are not cells of the comparison above, and a run that has not been made leaves it complete.
+The runs of odd/tasks/reviewer-controlled-test.md, 2 a range an arm, each on the model and at the effort of its arm: 0 of 16 runs are recorded, 0 of them count. A run counts when its session's own file says it ran its arm's model at its arm's effort; one that does not is shown and is no measure of its arm. They are not cells of the comparison above, and a run that has not been made leaves it complete.
 
 - A: gpt-6.1-sol at medium, the baseline, the pair the reviewer ran on before PR 911.
 - B: gpt-6.2-sol at medium, the model of PR 911 at the baseline's effort.
 - C: gpt-6.2-sol at max, the pair PR 911 set.
 - D: gpt-6.2-sol at high, the model of PR 911 between the two efforts, run only if the spend of A to C leaves room.
 
-### real: 338386a..e3aad48
+### real: 338386a..e3aad48, 255 changed lines
 
-| run | arm | outcome | findings | input tokens | not-cached input | output tokens | requests | first request | seconds | CLI | model | input a changed line | prompt version |
-| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| sol61-medium-1 | A | missing | - | - | - | - | - | - | - | - | - | - | - |
-| sol61-medium-2 | A | missing | - | - | - | - | - | - | - | - | - | - | - |
-| sol62-medium-1 | B | missing | - | - | - | - | - | - | - | - | - | - | - |
-| sol62-medium-2 | B | missing | - | - | - | - | - | - | - | - | - | - | - |
-| sol62-max-1 | C | missing | - | - | - | - | - | - | - | - | - | - | - |
-| sol62-max-2 | C | missing | - | - | - | - | - | - | - | - | - | - | - |
-| sol62-high-1 | D | missing | - | - | - | - | - | - | - | - | - | - | - |
-| sol62-high-2 | D | missing | - | - | - | - | - | - | - | - | - | - | - |
+| run | arm | outcome | findings | input tokens | not-cached input | output tokens | requests | first request | seconds | CLI | model | counts | input a changed line | prompt version |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| sol61-medium-1 | A | missing | - | - | - | - | - | - | - | - | - | - | - | - |
+| sol61-medium-2 | A | missing | - | - | - | - | - | - | - | - | - | - | - | - |
+| sol62-medium-1 | B | missing | - | - | - | - | - | - | - | - | - | - | - | - |
+| sol62-medium-2 | B | missing | - | - | - | - | - | - | - | - | - | - | - | - |
+| sol62-max-1 | C | missing | - | - | - | - | - | - | - | - | - | - | - | - |
+| sol62-max-2 | C | missing | - | - | - | - | - | - | - | - | - | - | - | - |
+| sol62-high-1 | D | missing | - | - | - | - | - | - | - | - | - | - | - | - |
+| sol62-high-2 | D | missing | - | - | - | - | - | - | - | - | - | - | - | - |
 
-### seeded: 0366ee0..80952ca
+### seeded: 0366ee0..80952ca, 292 changed lines
 
-| run | arm | outcome | findings | found | extra | input tokens | not-cached input | output tokens | requests | first request | seconds | CLI | model | input a changed line | prompt version |
-| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| sol61-medium-1 | A | missing | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| sol61-medium-2 | A | missing | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| sol62-medium-1 | B | missing | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| sol62-medium-2 | B | missing | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| sol62-max-1 | C | missing | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| sol62-max-2 | C | missing | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| sol62-high-1 | D | missing | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| sol62-high-2 | D | missing | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| run | arm | outcome | findings | found | extra | input tokens | not-cached input | output tokens | requests | first request | seconds | CLI | model | counts | input a changed line | prompt version |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| sol61-medium-1 | A | missing | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| sol61-medium-2 | A | missing | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| sol62-medium-1 | B | missing | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| sol62-medium-2 | B | missing | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| sol62-max-1 | C | missing | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| sol62-max-2 | C | missing | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| sol62-high-1 | D | missing | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| sol62-high-2 | D | missing | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
