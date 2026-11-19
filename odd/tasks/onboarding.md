@@ -228,8 +228,8 @@ talks with the owner, explains, understands and deduces; it asks only a few ques
 - **It guides** (S11: "me gusta mas que sea hablado y como guiado"). From what he says, the session follows the
   thread, explains in chat why each thing matters for the plan, and says in a line, every so often, what it has
   understood and what comes next. Where something is missing ("¿quién lo va a usar primero?") it asks through the
-  question tool, one question at a time, 2 to 4 options that give examples and the free answer in "Otro"
-  (`rule:questions-one-place`; L47). He can still answer at any length in "Otro", change his mind, ask back ("¿y por
+  question tool, one question at a time, 2 to 4 options that give examples and the free answer in "Otro", each
+  recorded before it is asked (`rule:questions-one-place`; L47, L48). He can still answer at any length in "Otro", change his mind, ask back ("¿y por
   qué no X?") or think out loud in chat.
 - **It deduces** (S12: "entender y descifrar lo que quiere el usuario"). It does not wait to be told what it can read
   from the conversation and the repository: the kind and the size, the developer's level in each layer (from how he
@@ -1454,3 +1454,8 @@ ceiling.
   the free answer in "Otro"; the explanation and his thread stay in chat. The `converse` and `summary` steps share
   one phrase for how a question is put (`ASK` in `bin/lib/onboard.mjs`). The opening's invitation to tell the
   project in his own words is not changed: his answer did not cover it.
+- L48 (2026-11-19) Reviews of `b972cb8`. Codex (incorrect, 0.97), three P2, all taken: a question is recorded with
+  `js-harness notify --to orchestrator --kind question` before it is asked, since the template gate refuses an
+  unrecorded one; it is written out with numbered options only where the host has no question tool, not "on Codex";
+  and the `kind` step's follow-ups (a kind or a size the thread leaves open) are put the same way. The lenses
+  (readability 0, reliability 1): the `summary` step's new wording had no test; it has one now.

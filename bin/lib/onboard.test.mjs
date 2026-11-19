@@ -514,6 +514,9 @@ const GIT = { branch: 'onboarding', defaultBranch: 'main', defaultHasRoadmap: fa
 const report = (over = {}, git = {}) => stageReport(files(over), { agentsTemplate: AGENTS_TEMPLATE, profiles: PROFILES, git: { ...GIT, ...git } });
 const has = (lines, text) => assert.ok(lines.some((line) => line.includes(text)), `no line holds "${text}":\n${lines.join('\n')}`);
 const nothing = { onboarding: null, origin: null, roadmap: null };
+// How every question of the conversation is put (question 351), as a pattern's source: written out here, not imported,
+// so a change to the wording fails a test.
+const ASKED = 'one at a time through the host\'s question tool \\(written out with numbered options only where the host has none\\), 2 to 4 options that give examples, the recommended one first, the free answer in "Other" \\("Otro"\\), each recorded before it is asked \\(js-harness notify --to orchestrator --kind question\\) and logged as a \\(session\\) Log line';
 
 test('stageReport: stage 1 starts the document, on the onboarding branch', () => {
   const { code, lines } = report(nothing, { branch: 'main' });
@@ -546,7 +549,9 @@ test('stageReport, stage 2: Conversation and advice prints what it covered, what
   // through the question tool with 2 to 4 options that give examples and the free answer in "Otro"
   // (rule:questions-one-place); the explanation and his thread stay in chat.
   assert.doesNotMatch(lines[4], /plain chat/);
-  assert.match(lines[4], /one at a time through the question tool \(on Codex, in plain text with numbered options\), 2 to 4 options that give examples, the recommended one first, the free answer in "Other" \("Otro"\), each logged as a \(session\) Log line before it is asked/);
+  // Recorded before it is asked, and written out only where the host has no question tool, as the protocol says
+  // (bin/lib/manifest.mjs, "Questions to the user"; Codex on b972cb8).
+  assert.match(lines[4], new RegExp(`ask what is missing ${ASKED}\\. Log what settles each item`));
   assert.match(lines[4], /explaining in chat, before each question, why it matters for the plan/);
   has(lines, 'js-harness onboard profile --area <id>');
   has(lines, 'Topics 1, 2, 3, 4 and 9 are checked only once the owner says or confirms them');
@@ -556,6 +561,8 @@ test('stageReport, stage 2: Conversation and advice prints what it covered, what
   assert.match(opening, /^Do: open the conversation: say who you are in this project \(the plan orchestrator/);
   assert.match(opening, /- Teaching: on \(L<n>\), and commit at once\.$/);
   assert.match(doOf({ setup: ['- Teaching: on (L2)', '- Mode: full'], advice: [] }), /^Do: follow the owner's thread; from it, write - Kind: .* and - Size: /);
+  // A follow-up for the kind or the size is a guided question too (question 351; Codex on b972cb8).
+  assert.match(doOf({ setup: ['- Teaching: on (L2)', '- Mode: full'], advice: [] }), new RegExp(`; ask what the thread leaves open ${ASKED}\\.$`));
   assert.match(doOf({ setup: ['- Kind: shop', '- Size: large (L3)', '- Teaching: on (L2)', '- Mode: full'], advice: [] }), /^Do: run js-harness onboard profile --checklist advice and paste what it prints under ## Advice/);
   // The paste completes Level, which D3 writes only once the conversation shows it (JH 43, finding 10): while topic 3,
   // the owner's level, is open, the conversation goes on first.
@@ -568,7 +575,9 @@ test('stageReport, stage 2: Conversation and advice prints what it covered, what
   summary[11] = SUMMARY_LINE;
   const summing = report({ onboarding: onboardingDoc({ topics: summary }) }).lines;
   assert.equal(summing[0], 'Stage 2 of 8, Conversation and advice: covered: 11 of 11 topics, 3 of 3 areas.');
-  assert.match(summing.find((line) => line.startsWith('Do: ')), /^Do: log the summary as a \(session\) Log line and give it.*through the question tool.*Check S with the Log line of the last answer\.$/);
+  assert.match(summing.find((line) => line.startsWith('Do: ')), /^Do: log the summary as a \(session\) Log line and give it.*through the host's question tool.*Check S with the Log line of the last answer\.$/);
+  // The deepening questions are put as the guided ones are (question 351): the same options, examples and "Otro".
+  assert.match(summing.find((line) => line.startsWith('Do: ')), new RegExp(`ask only the deepening questions still worth asking, ${ASKED}\\. Log each answer verbatim`));
   assert.equal(report({ onboarding: onboardingDoc({ setup: ['- Teaching: on (L2)', '- Mode: full'], advice: [] }) }).lines[0],
     'Stage 2 of 8, Conversation and advice: covered: 11 of 11 topics; areas not listed yet.');
 });
