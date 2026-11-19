@@ -121,7 +121,7 @@ The change column names the slice of the build plan.
 | D1 | 227 `rules-data.mjs` (`questions-one-place` subject, 13ef86a1) | "every other question, in the orchestrator's chat" | contradicts question 355 | 227 | Leaves 227's branch (the lead's order): the change, quoting his typed line 1362 with the tap of 4488 accepted, goes to slice H with `manifest.mjs:134,140` |
 | D1 | `bin/lib/manifest.mjs:134,140` | the questions reach him "in one place: the orchestrator's chat"; the lead asks them | contradicts question 355 | none | Stays out of 227's branch; written as a limit of today until slice H (the lead records a question for the orchestrator, then sends it to the Plan by direct message), and reworded with slice H |
 | D1 | `bin/lib/channel.mjs:136` | "a question goes to the orchestrator, who asks the user: --to orchestrator" | contradicts question 355 | none | A question is recorded for the Plan, and the lead's direct message delivers it (H) |
-| D1 | 227 `plan-opening.md:25` | the Plan starts the sessions a miniplan orders, on his go, and hands them over | open: question 354 is a tap, and his typed lines 3064 and 3459 point to the lead opening (read 8d32c0e7 on 227, Claude 2) | 227 | Card D-a6: no typed line settles who opens; 1853 is version 3's wave (L10) |
+| D1 | 227 `plan-opening.md:25` | the Plan starts the sessions a miniplan orders, on his go, and hands them over | open: question 354 is a tap, and his typed lines 3064 and 3459 point to the lead opening (read 8d32c0e7 on 227, Claude 2) | 227 | Decided by question 354 (tapped, line 4422), among the rule's accepted answers; no typed line settles it (L10); the rewording is JH 231's (question 357) |
 | D1 | 227 `plan-opening.md:29` and the `plan-pre-prompt` subject | the Plan "is sent no notices"; the lead sends it "once, 'miniplan N done'" | half-says after question 355: the lead now sends it every question of the execution | 227 | Say the questions come by direct message, never as a notice to follow (A) |
 | D1 | `bin/lib/manifest.mjs:120` | "Two kinds of session. A work session ... The orchestrator" | half-says (no Plan role in the installed skill) | none (227 writes the role in `odd/` only) | One line naming the Plan, pointing to the rule `plan-pre-prompt` (JH 227's, not yet on main) (C) |
 | D1 | `docs/ROADMAP.md` | no line names the Plan, a miniplan or the pre-prompt (searched `Plan\b`, `miniplan`, `pre-prompt`, `JH PLAN`) | half-says | none | One roadmap row (C) |
@@ -239,6 +239,11 @@ below is in `f5c3ee4d`, checked with `js-harness sessions --quote`.
 
 Covered by typed lines, so decided, no card (each rule quotes its lines; the taps 353 to 355 go among the accepted).
 Each line was read against the message it answered (L10):
+- Who opens the sessions a miniplan orders: the Plan, on his go, handing them to the lead. Decided by question 354,
+  "El Plan, con mi visto bueno (Recomendada)" (line 4422, 2026-11-19T01:12Z, tapped), which came after 343 and 3064
+  and answers exactly this. A tap is a valid decision; it goes among the rule's accepted answers, not as its quote.
+  No typed line settles it (L10), so it is not asked again; question 357 (line 5187) sent the rule's rewording to the
+  senior session JH 231, which takes L10 as input.
 - One approval covers the sessions of a piece of work (`owner-decisions`, one clause in protocol 1): "a session that
   a miniplan or a charter he approved names is started without asking him again". Line 2642, "No quiero que me pidas
   permiso para iniciar cada linea", typed while the Plan was opening the seven sessions of a wave he approved; line
@@ -255,21 +260,13 @@ Each line was read against the message it answered (L10):
   tienes comunicacion".
 
 Cards (no typed line covers them, or they are his by kind: removing what he uses, spend):
-- **D-a6, who opens the sessions a miniplan orders.** No typed line settles it. Line 1853 ("pero por que no lo
-  puedes abrir tu si yo te autorice a ti") answers a cut that asked him to paste the order for version 3's eight-session
-  wave in the lead's chat (question 340), not a miniplan; line 3064 says the lead "no tiene que preguntar nada
-  respecto a arbrir" once the Plan gave the order, so the lead opens; line 3459 says the lead "coloque a la sesion
-  respectiva a trabajar"; line 3672 answers a cut to paste "Ejecuta el miniplan 1" in the lead's chat, and says "tu
-  tienes comunicacion": send it, not start it. Subject, word for word: "the sessions a miniplan orders are started by
-  the Plan on his go in its chat and handed to the lead". Options: A, yes (the app starts a visible session only on a
-  turn he typed in that chat, and he types in the Plan's chat); B, the lead starts them, without asking him, on the
-  Plan's order (his lines 3064 and 3459), and the Plan's message is the order; his words in "Other". No
-  recommendation: his typed lines lean to B, and the app's limit to A.
 - **D-a1, `senior-model` to judgment only.** Line 3459 ("ser mucho mas eficientes con el poder de fable pero sin
   tener que utilizarlo todo") was typed about the Plan's use of Fable, not about a senior session, so it does not
-  cover this subject. Subject, word for word: "the model a senior session runs on, titled <code> SR · <purpose>,
-  which the lead opens with start_session and sends the judgment a task needs: a design, a depth pass, a decision".
-  Options: A, yes (recommended: the same spending of Fable on judgment); B, as today.
+  cover this subject. Subject, word for word: "the model a senior session runs on, titled, like every work session, with
+  its number from `js-harness sessions --next-number`, which the lead opens with start_session and sends the
+  judgment a task needs: a design, a depth pass, a decision". The title changes too: today's subject says "<code> SR ·
+  <purpose>", and a notice to a title with no number reaches nobody (the lead, L11). Options: A, yes (recommended:
+  Fable on judgment, and a title notices reach); B, as today.
 - **D-a4, review spend inside a miniplan.** Subject, word for word: "a review inside the Codex spend its miniplan's
   Budget states is not asked; a piece of work that passes it is asked once". Options: A, yes, as written
   (recommended: one approval a piece of work); B, every review over the allowance is asked, as today; his words in
@@ -339,3 +336,8 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
   miniplan's sessions: 1853 (version 3's wave, question 340), 3064 and 3459 (the lead opens), 3672 (send, not start);
   so that is card D-a6 again, with no recommendation. 3459 is about the Plan's Fable, not a senior session, so
   `senior-model` is card D-a1 again. No read ran; none was stopped.
+- L11 (the lead, by direct message): who opens a miniplan's sessions is decided by question 354 (line 4422, tapped), which
+  came after 343 and 3064; a tap is a decision and goes among a rule's accepted answers, so it is not asked again, and
+  question 357 (line 5187) sent the rule's rewording to JH 231. D-a1's subject titles a senior session with its number
+  from `sessions --next-number`, since a notice to an unnumbered title reaches nobody. Cards now: D-a1, D-a4, D-b1,
+  D-b2, D-c1, D-c2. No card goes to him and no read runs until the lead says so.
