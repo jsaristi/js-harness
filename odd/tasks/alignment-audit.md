@@ -9,7 +9,8 @@ pull request, landed by the lead (JH ORQ) · Brief: miniplan 3 of JH PLAN, 2026-
 PR 921 is a draft (the lead's order), so no land takes it; it is un-drafted once his D-block decisions are in. The
 cards go to him one at a time: this session records each as a question, the lead sends its number to JH PLAN, which
 asks him, and the next is recorded only once the last is answered. Decided: D-b1 (question 364, L16). Asked: D-b2
-(question 365). Still to ask: D-a1, D-a4, D-a7, D-c1, D-c2. No double review has run.
+(question 365). Still to ask, in the lead's order (L17): D-c2, D-c1 (its card covers D-a4, which its answer
+decides), D-a7, D-a1 (worded after `rules-data.mjs:665-667` is read). No double review has run.
 The audit and the build plan are written; nothing is built.
 
 ## Goal
@@ -377,3 +378,6 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
   for new work once plan v4's stretch closes, and until then C2 counts the open stretch's plan. Slice D is decided and
   still waits for `feat/codex-spend-t5`. The cards are now asked one at a time through the lead, the order from the one
   that blocks most.
+- L17 (the lead, by direct message): after 365 the order is D-c2, D-c1, D-a7, D-a1. D-c1's card says it covers D-a4,
+  and D-a4 is marked decided by its answer (one choice, one tap); D-a1 is worded after `rules-data.mjs:665-667` is
+  read, since D-a7 decides who starts a senior. Each card is recorded only once the lead says the last is answered.
