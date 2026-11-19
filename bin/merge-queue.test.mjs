@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test, { after, before } from 'node:test';
 import * as queue from './merge-queue.mjs';
 import { actionsState, failedRows, failingTests, landingLines, localSuite, mergeQueueMain, PUSH_MAIN_TIMEOUT_MS, staleBin, tellLeftOut } from './merge-queue.mjs';
@@ -22,7 +23,9 @@ import { recordLine } from './lib/codex-records.testkit.mjs';
 // counted on one machine (odd/tasks/merge-queue-dry-run.md, spec 2). A removal that fails fails the run, so a leak shows.
 let scratchRoot = null;
 const scratch = (prefix) => {
-  scratchRoot ??= fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-mq-'));
+  // A short root and short prefixes: a fixture's paths are no longer than when each was made in the temporary folder
+  // itself, since a project slug of one becomes a file name (Codex, 2026-11-18).
+  scratchRoot ??= fs.mkdtempSync(path.join(os.tmpdir(), 'jhmq-'));
   return fs.mkdtempSync(path.join(scratchRoot, prefix));
 };
 after(() => {
@@ -44,6 +47,16 @@ test('every folder this file makes is a scratch folder, under the one root its t
   // What each folder is made in: the first name inside each mkdtempSync call, through a path.join when there is one.
   const parents = [...fs.readFileSync(new URL(import.meta.url), 'utf8').matchAll(/mkdtempSync\(\s*(?:path\.join\(\s*)?([\w.]+)/g)].map((call) => call[1]);
   assert.deepEqual(parents.filter((parent) => parent !== 'scratchRoot'), ['os.tmpdir'], 'only the root is made in the temporary folder itself');
+});
+
+test('a fixture test run in a process of its own leaves its temporary folder empty: the root is removed, not only made (odd/tasks/merge-queue-dry-run.md, spec 2; Codex, 2026-11-18)', () => {
+  const tmp = scratch('child-');
+  const env = { ...process.env, TEMP: tmp, TMP: tmp, TMPDIR: tmp };
+  delete env.NODE_TEST_CONTEXT; // set by node --test for its own children; with it the child would report to this run
+  const child = spawnSync(process.execPath, ['--test', '--test-name-pattern=^the merges of the candidate run no hook', fileURLToPath(import.meta.url)], { encoding: 'utf8', env });
+  assert.equal(child.status, 0, child.stdout + child.stderr);
+  assert.match(child.stdout, /^ℹ pass 1$/m, 'the fixture test ran');
+  assert.deepEqual(fs.readdirSync(tmp), []);
 });
 
 const git = (cwd, ...args) => {
