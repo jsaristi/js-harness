@@ -3,8 +3,8 @@
 ## State
 He approved the run with a cap of 20 points of the weekly window (question 359, L9). T2 to T4 are built (L10), with
 no Codex token spent. Next: T5, the runs, right after the weekly reset of 2026-11-23 23:45 local, A first, a
-`js-harness notify` to the lead at the start and at the end. The code slice waits for its Codex and lens reviews,
-which spend Codex too: the lead decides when they run against the window. Next, on a yes: T2 to T4 (code for
+`js-harness notify` to the lead at the start and at the end. The code slice (c6c1ee2..350e960) passed the lenses
+(L11) and waits for its Codex review, which spends from the window: the lead decides when it runs. Next, on a yes: T2 to T4 (code for
 the arms and the repeats, no Codex), then T5, the runs, right after the weekly reset of 2026-11-23 23:45 local.
 Open: Q1; and whether the double review of this design (protocol section 1) runs, since it spends Codex tokens the
 brief does not allow before his answer (L6). The arms' models are named by their short versions above the Log and
@@ -186,3 +186,9 @@ three days.
   plan: no `--run` index; each run of an arm is a configuration of its own, the smallest change that keeps one
   reading a cell and every existing reading as it is. `--list` shows 25 cells, 9 recorded. Searched before adding:
   `CONFIGS`, `CELLS`, `readReading` and the report's columns in `evals/review`; nothing measured arms.
+- L11 2026-11-19, the lenses on c6c1ee2..ac1b927 (reliability, risk, with this document): reliability 1
+  SUGGESTION, that `perChangedLine`'s comment named the lines the review saw while the code divides by the range's;
+  fixed in 350e960 (the range's lines kept, as the price's base, the comment says so and a test divides a half-seen
+  range by all of it); risk 0. The lenses on ac1b927..350e960: 0 findings, the earlier one rechecked fixed. Codex's
+  review of c6c1ee2..350e960 has not run: it spends from the weekly window (48% on 2026-11-19), and when it runs is
+  the lead's.
