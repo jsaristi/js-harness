@@ -6,9 +6,9 @@ temporary folder. Item `mq-dryrun` of the plan of 2026-11-18 (version 4), sessio
 request; the lead (JH ORQ) reviews and lands it.
 
 ## State
-T1 to T3 are done (L3, L4); the first reviews and the verifier answered (L5). Next: the reviews of the fix, then the
-pull request. Open: the tick of
-`docs/ROADMAP.md`'s "Later" line, which JH 222 holds this stretch; it is owed in the ready notice.
+T1 to T3 are done and every review finding is fixed or answered (L5 to L10). Next: the reviews of `930685ae..HEAD`,
+a whole-file run at the final head, then the pull request and the ready notice. Open: the tick of
+`docs/ROADMAP.md`'s "Later" line, which JH 222 holds this stretch, owed in the ready notice.
 
 ## Goal
 A dry run from a copy whose `bin/` is not origin/main's stops as a land from it does, and running
@@ -27,6 +27,9 @@ sites in the queue's test make temporary folders and never remove them: 9,601 we
   names them (three, then a count), builds no
   worktree and writes no `lands.jsonl`; one whose copy matches (Windows line ends aside) exits 0.
 - A run of `bin/merge-queue.test.mjs` with TEMP, TMP and TMPDIR set to an empty folder leaves that folder empty.
+- The test that scans the file for calls that make a temporary folder is an exact-text allowlist on purpose: any
+  other form fails, a harmless reformat included, and is fixed by updating the list in the same edit. The proof that
+  nothing leaks is the child run and the whole-file run; the scan is a tripwire, not a parser.
 
 ## In scope / Out of scope
 - In: `bin/merge-queue.mjs` (the guard's condition, its message tail for a dry run, `USAGE`, the header comment),
