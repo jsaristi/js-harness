@@ -284,7 +284,7 @@ test('per landed PR: the fixture of PRs 864-868 gives the baseline, 3,173,294 ov
   const { notes, ...baseline } = report.baseline;
   const noCount = runs.find((run) => run.startedAt.startsWith('2026-11-14T12:16'));
   assert.deepEqual(baseline, { prs: [864, 865, 866, 867, 868], runs: 35, inputTokens: 3_173_294, uncounted: 1, uncountedRuns: [{ id: noCount.id, startedAt: noCount.startedAt }], day: '2026-11-14', dayInputTokens: 3_053_278 });
-  // The lead's two decisions of 2026-11-18 (L38), said with the baseline.
+  // The lead's two decisions of 2026-11-18 (L40), said with the baseline.
   assert.ok(notes.some((note) => /306,981/.test(note) && /beside new/.test(note)), notes.join('\n'));
   assert.ok(notes.some((note) => /866 09:28/.test(note) && /868 11:42, 11:49 and 12:10/.test(note) && /L5/.test(note)), notes.join('\n'));
   assert.deepEqual(prOf(report, 866).failed, { runs: 1, inputTokens: 220_599 });
@@ -317,16 +317,36 @@ test('per landed PR: the report prints a line for each PR, its rounds apart, the
   };
   const lines = perPrLines(report);
   const has = (line) => assert.ok(lines.includes(line), `${line}\nnot in\n${lines.join('\n')}`);
-  has('PR 867: 11 runs, 1,025,087 input tokens (600,000 of them cached) and 1 run with no count (2026-11-14); bought no new reading: failed 1 run, tokens unknown, no record 1 run 79,096, re-read of covered code alone 0 runs 0; re-read covered code beside new 3 runs 383,029 (11 of 14 code commits already covered); 1,000 lines reviewed by the runs that bought new reading, the beside-new runs among them, 700,000 tokens of theirs, 700 a line');
+  has('PR 867: 11 runs (1 of them with no count), 1,025,087 input tokens (600,000 of them cached) (2026-11-14); bought no new reading: failed 1 run, tokens unknown, no record 1 run 79,096, re-read of covered code alone 0 runs 0; re-read covered code beside new 3 runs 383,029 (11 of 14 code commits already covered); 1,000 lines reviewed by the runs that bought new reading, the beside-new runs among them, 700,000 tokens of theirs, 700 a line');
   has('  rounds after a clean pass (they overlap the classes above; do not add them): 4 runs 268,342');
-  has('Baseline, PRs 864-868: 35 runs over all their days, 3,173,294 input tokens, and 1 run with no count (ba57f25b-0000, 2026-11-14T12:16:11.982Z); of them on 2026-11-14 alone: 3,053,278');
+  has('Baseline, PRs 864-868: 35 runs (1 of them with no count: ba57f25b-0000, 2026-11-14T12:16:11.982Z) over all their days, 3,173,294 input tokens; of them on 2026-11-14 alone: 3,053,278');
   has('  A note.');
   has('Re-read of covered code alone: 0 of 1 PR');
-  has('Pending, on a branch not landed: 2 runs, 10 input tokens and 1 run with no count');
+  has('Pending, on a branch not landed: 2 runs (1 of them with no count), 10 input tokens');
   has('  2026-11-15T00:00:00Z abcdef123456 10');
   has('  2026-11-15T01:00:00Z abcdef123456 unknown');
   has('Double reviews: 2 reads, 1 with a Codex reader, 720,239 Codex input tokens');
   assert.ok(lines.some((line) => /--again/.test(line) && /not mark/.test(line)), lines.join('\n'));
+});
+
+test('per landed PR: a run with no count is one of the runs it stands beside, and what holds of no run is not said', () => {
+  const pr = {
+    pr: 900, runs: 2, inputTokens: 300, uncounted: 1, cachedInputTokens: 0, days: ['2026-11-15'], failed: { runs: 2, inputTokens: 300, uncounted: 1 }, unnamed: { runs: 0, inputTokens: 0 },
+    rereadOnly: { runs: 0, inputTokens: 0 }, rereadBeside: { runs: 0, inputTokens: 0, covered: 0, code: 0 }, rounds: { runs: 0, inputTokens: 0 },
+    reviewedLines: 10, boughtInputTokens: 300, tokensPerLine: 30, coverageUnknown: 0,
+  };
+  const none = { runs: 0, inputTokens: 0, ids: [], list: [] };
+  const report = {
+    prs: [pr], unattributed: { pending: none, byNoLand: none, orphaned: none },
+    baseline: { prs: [864, 865, 866, 867, 868], runs: 0, inputTokens: 0, uncounted: 0, uncountedRuns: [], day: '2026-11-14', dayInputTokens: 0, notes: ['A note of this repository.'] },
+    doubleReviews: { reads: 0, codexReads: 0, codexInputTokens: 0 },
+  };
+  const lines = perPrLines(report);
+  const [line] = lines.filter((one) => one.startsWith('PR 900: '));
+  assert.ok(line.includes('failed 2 runs (1 of them with no count) 300,'), line);
+  assert.ok(line.endsWith('10 lines reviewed by the runs that bought new reading, 300 tokens of theirs, 30 a line'), line);
+  // The baseline's notes speak of this repository's records: a repository with none of its runs prints none of them.
+  assert.ok(!lines.includes('  A note of this repository.'), lines.join('\n'));
 });
 
 // The baseline's fixture: what the real records of PRs 864-868 hold that the measure reads (lands.jsonl, the run log and

@@ -352,11 +352,16 @@ function doubleReviewFigures(lines) {
 
 const count = (value) => value.toLocaleString('en-US');
 const runsWord = (n) => `${count(n)} ${n === 1 ? 'run' : 'runs'}`;
+/** `<n> runs`, saying how many of them had no count (they are among the n, not beside them). */
+function runsCounted(runs, uncounted = 0) {
+  return uncounted ? `${runsWord(runs)} (${count(uncounted)} of them with no count)` : runsWord(runs);
+}
+
 /** A tally as `<n> runs <tokens>`, saying where runs had no count. */
 function spent({ runs, inputTokens, uncounted = 0 }) {
   if (uncounted === 0) return `${runsWord(runs)} ${count(inputTokens)}`;
   if (uncounted === runs) return `${runsWord(runs)}, tokens unknown`;
-  return `${runsWord(runs)} ${count(inputTokens)} and ${runsWord(uncounted)} with no count`;
+  return `${runsCounted(runs, uncounted)} ${count(inputTokens)}`;
 }
 
 /** The lines `js-harness codex-meter --per-pr` prints of `report` (`perLandedPr`). */
@@ -364,24 +369,24 @@ export function perPrLines(report) {
   const lines = ['Codex input per landed PR, over all its days (input tokens, the cached ones among them):'];
   for (const pr of report.prs) {
     // The beside-new runs bought new reading too: their tokens are among "tokens of theirs", not to be added to them.
-    const perLine = pr.tokensPerLine === null ? 'no line reviewed' : `${count(pr.reviewedLines)} lines reviewed by the runs that bought new reading, the beside-new runs among them, ${count(pr.boughtInputTokens)} tokens of theirs, ${count(pr.tokensPerLine)} a line`;
+    const perLine = pr.tokensPerLine === null ? 'no line reviewed' : `${count(pr.reviewedLines)} lines reviewed by the runs that bought new reading${pr.rereadBeside.runs > 0 ? ', the beside-new runs among them' : ''}, ${count(pr.boughtInputTokens)} tokens of theirs, ${count(pr.tokensPerLine)} a line`;
     const unknown = pr.coverageUnknown > 0 ? `; ${runsWord(pr.coverageUnknown)} whose coverage could not be told` : '';
     const beside = `re-read covered code beside new ${spent(pr.rereadBeside)} (${count(pr.rereadBeside.covered)} of ${count(pr.rereadBeside.code)} code commits already covered)`;
-    const noCount = pr.uncounted ? ` and ${runsWord(pr.uncounted)} with no count` : '';
-    lines.push(`PR ${pr.pr}: ${runsWord(pr.runs)}, ${count(pr.inputTokens)} input tokens (${count(pr.cachedInputTokens)} of them cached)${noCount} (${pr.days.join(', ')}); bought no new reading: failed ${spent(pr.failed)}, no record ${spent(pr.unnamed)}, re-read of covered code alone ${spent(pr.rereadOnly)}; ${beside}; ${perLine}${unknown}`);
+    lines.push(`PR ${pr.pr}: ${runsCounted(pr.runs, pr.uncounted)}, ${count(pr.inputTokens)} input tokens (${count(pr.cachedInputTokens)} of them cached) (${pr.days.join(', ')}); bought no new reading: failed ${spent(pr.failed)}, no record ${spent(pr.unnamed)}, re-read of covered code alone ${spent(pr.rereadOnly)}; ${beside}; ${perLine}${unknown}`);
     lines.push(`  rounds after a clean pass (they overlap the classes above; do not add them): ${spent(pr.rounds)}`);
   }
   const { baseline } = report;
-  const unnamedRuns = (baseline.uncountedRuns ?? []).map((run) => `${run.id}, ${run.startedAt}`).join('; ');
-  const noCount = baseline.uncounted ? `, and ${runsWord(baseline.uncounted)} with no count (${unnamedRuns})` : '';
-  lines.push(`Baseline, PRs ${baseline.prs[0]}-${baseline.prs.at(-1)}: ${runsWord(baseline.runs)} over all their days, ${count(baseline.inputTokens)} input tokens${noCount}; of them on ${baseline.day} alone: ${count(baseline.dayInputTokens)}`);
-  for (const note of baseline.notes ?? []) lines.push(`  ${note}`);
+  const uncountedList = (baseline.uncountedRuns ?? []).map((run) => `${run.id}, ${run.startedAt}`).join('; ');
+  const baselineRuns = baseline.uncounted ? `${runsWord(baseline.runs)} (${count(baseline.uncounted)} of them with no count: ${uncountedList})` : runsWord(baseline.runs);
+  lines.push(`Baseline, PRs ${baseline.prs[0]}-${baseline.prs.at(-1)}: ${baselineRuns} over all their days, ${count(baseline.inputTokens)} input tokens; of them on ${baseline.day} alone: ${count(baseline.dayInputTokens)}`);
+  // The notes speak of this repository's baseline runs; a repository that holds none of them is not told them.
+  if (baseline.runs > 0) for (const note of baseline.notes ?? []) lines.push(`  ${note}`);
   const alone = report.prs.filter((pr) => pr.rereadOnly.runs > 0).length;
   lines.push(`Re-read of covered code alone: ${count(alone)} of ${count(report.prs.length)} ${report.prs.length === 1 ? 'PR' : 'PRs'}`);
   const words = { pending: 'Pending, on a branch not landed', byNoLand: 'On the default branch by no land record', orphaned: 'Orphaned, on no branch (rebased away or gone)' };
   for (const [kind, label] of Object.entries(words)) {
     const bucket = report.unattributed[kind];
-    lines.push(`${label}: ${runsWord(bucket.runs)}, ${count(bucket.inputTokens)} input tokens${bucket.uncounted ? ` and ${runsWord(bucket.uncounted)} with no count` : ''}`);
+    lines.push(`${label}: ${runsCounted(bucket.runs, bucket.uncounted)}, ${count(bucket.inputTokens)} input tokens`);
     if (kind !== 'byNoLand') for (const run of bucket.list) lines.push(`  ${run.startedAt} ${String(run.head).slice(0, 12)} ${run.inputTokens === null ? 'unknown' : count(run.inputTokens)}`);
   }
   const doubles = report.doubleReviews;

@@ -228,11 +228,11 @@ test('--json keeps standard output JSON when the read fails: the debts alone, an
 // through the run log's path, the land records, the admitted Codex records, git's default branch and reviewCoverage.
 test('--per-pr reads the record files of the repository it runs in, and exits 1 when one cannot be read', async () => {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-per-pr-'));
+  const marks = path.join(os.tmpdir(), `${path.basename(repo)}.marks`);
   try {
     const data = (text) => `data ${Buffer.byteLength(text)}\n${text}`;
     const commit = (mark, ref, subject, from, merge) => [`commit ${ref}`, `mark :${mark}`, `committer T <t@example.com> ${1_700_000_000 + mark * 60} +0000`, data(subject),
       ...(from ? [`from :${from}`] : []), ...(merge ? [`merge :${merge}`] : []), `M 644 inline f${mark}.mjs`, data(`export const n = ${mark};`), ''].join('\n');
-    const marks = path.join(os.tmpdir(), `${path.basename(repo)}.marks`);
     withoutAutoMaintenance(() => {
       assert.equal(spawnSync('git', ['init', '-q', repo]).status, 0);
       const stream = [commit(1, 'refs/heads/main', 'm0'), commit(2, 'refs/heads/a', 'a1', 1), commit(5, 'refs/heads/a', 'a2', 2), commit(3, 'refs/remotes/origin/main', 'Merge pull request #1 from a', 1, 5), commit(4, 'refs/heads/open', 'p1', 3)].join('');
@@ -240,7 +240,6 @@ test('--per-pr reads the record files of the repository it runs in, and exits 1 
       assert.equal(imported.status, 0, imported.stderr);
     });
     const id = Object.fromEntries(fs.readFileSync(marks, 'utf8').trim().split('\n').map((line) => line.slice(1).split(' ')));
-    fs.rmSync(marks, { force: true });
     const dir = path.join(repo, '.git', 'js-harness');
     fs.mkdirSync(dir);
     const write = (name, lines) => fs.writeFileSync(path.join(dir, name), `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`);
@@ -273,5 +272,6 @@ test('--per-pr reads the record files of the repository it runs in, and exits 1 
     assert.match(err.at(-1), /^could not read the records for Codex input per landed PR: /);
   } finally {
     fs.rmSync(repo, { recursive: true, force: true });
+    fs.rmSync(marks, { force: true });
   }
 });
