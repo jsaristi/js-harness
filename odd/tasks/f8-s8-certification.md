@@ -305,3 +305,11 @@ Still open: C5.1 by hand, R3, T2 to T7. A second grading after T6 changes the gr
   (follow-ups). The `grade.mjs:NNN` references in `## Measures` and `## Result` point at lines that moved
   (`batchScore` is now at 716, `judge` at 562, `gradeTdd` at 642). Claude lenses on each commit: 3 findings, all
   fixed and rechecked; Codex held for the weekly reset (2026-11-23 23:45), recorded with `codex-review --unavailable`.
+- L7 (2026-11-19, JH 237, finishing T6 on his typed "Y sí, que una sesión nueva termine lo de JH 236.", transcript
+  `f5c3ee4d`, line 7721): correction to L6: fix 2 (moment 2 reads only the replies after tool output) was not written
+  test-first; its code came before its new tests, which were shown red afterwards against the old `grade.mjs`. History
+  is not rewritten. Also checked: a red `node --test tests/*.spec.mjs` (S8's current-2 ran one) read in the new
+  `gradeTdd` as a run of another file, because the glob word looks like a test file name. Its test was written first
+  and seen red (`no red run of its own test` for f1, f2 and f3), then `runsOwn` reads a glob as the whole suite;
+  `grade.test.mjs` passes 47 of 47. `gradeTdd` moved one line, to 643. Codex held for the weekly reset (2026-11-23
+  23:45), recorded with `codex-review --unavailable`.

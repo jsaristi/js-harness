@@ -231,6 +231,14 @@ test('moment 4 takes only a red run of the feature\'s own test, and a stub writt
   assert.match(stub.moments.tdd.why, /^f2: no red run of its own test between the test and src\/done\.mjs$/);
 });
 
+test('moment 4 reads a red run that names its test files by a glob as the whole suite', async (t) => {
+  // S8's current-2 ran `node --test tests/*.spec.mjs`: the word names no one file, so it holds the feature's own test.
+  for (const command of ['node --test tests/*.spec.mjs', 'node --test "tests/*.spec.mjs"', 'node --test tests/[a-z]*.spec.mjs']) {
+    const grade = await gradeRun({ record: record(), dir: kept(t, session({ habits: { red: { command, error: true, out: 'not ok 1\n# fail 1' } } })), turns: TURNS, askCodex: fakeCodex().ask });
+    assert.equal(grade.moments.tdd.pass, true, `${command}: ${grade.moments.tdd.why}`);
+  }
+});
+
 test('a run that stopped early keeps the verdicts of the features it built, and moment 4 stays not reached', async (t) => {
   const upTo = n('f2') + 1;
   const grade = await gradeRun({ record: record({ reached: upTo, stop: { reason: 'condition', turn: upTo + 1 } }), dir: kept(t, session({ upTo })), turns: TURNS, askCodex: fakeCodex().ask });
