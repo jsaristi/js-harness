@@ -136,6 +136,7 @@ The change column names the slice of the build plan.
 | D3 | `bin/lib/protocols-skill.mjs:37` | "spend outside the plan" is his | half-says (no text says a miniplan's Budget is the plan) | none | Slice F |
 | D3 | `bin/lib/manifest.mjs:213` | "spend what a planned step needs, up to the plan's limits" only while he is away | half-says | none | Slice F: holds always |
 | D3, D4 | `bin/lib/guard.mjs:174`, `:137-138` | a start naming no model passes; the starter's model is not held since PR 913 | contradicts (`rule:session-model` is unenforced; from the Plan the start runs on Fable) | none (`fix/starter-model-check` has no commits; `odd/tasks/starter-model-check.md:10-11` records it open) | Slice E |
+| D1, D3 | `bin/guard.mjs:198`, `bin/lib/session-title-guard.mjs:94`, `bin/sessions-background.mjs:177` | "a senior is started by the lead (the orchestrator ...)"; the guard refused the Plan's start of a senior session (the lead's report, L12) | contradicts question 354 (the Plan starts what a miniplan orders); with the app's typed-turn lock it costs him one message in the lead's chat for every senior | none | Card D-a7; slice E carries whichever way he settles it |
 | D3 | `bin/guard.mjs:193-231` | the `start_session` branch never asks whether a person typed the turn; nothing bounds a card's hold | contradicts in effect (`docs/FAILURES.md:1546-1550`: a hold of about 8 h) | none (reserve item `start-guard` exists only in JH PLAN's record and `FAILURES.md`) | Slice E |
 | D2 | `bin/lib/stall.mjs:21,81-84` | `waiting` counts as work given back; an unanswered question exempts the session from STALLED | contradicts (a blocked session's question reaches him only through an awake lead) | none (JH 221's T2 is a design: `odd/tasks/consistent-orders.md:179`) | Slice G |
 | D2, D3 | the host's next-step box (`wrap_up` ask); no text or check of the harness names it (`git grep -n -e wrap_up -e wrap-up -- bin CLAUDE.md`: no hit) | the lead's ask "¿Abro ya las 8 sesiones de la primera tanda?" (about 12:3x local) stayed drawn under its latest reply after JH 219 to 226 opened at 14:15, because later wrap_ups carried no ask; he read it at 21:21 as a new question (the lead's report of his screen, not checked in code) | contradicts in effect (a stale approval question per piece of work stays in front of him) | none | A closing whose earlier ask is overtaken says so: the next wrap_up carries the recap that withdraws it, or the skill says to close with a fresh ask or none; written in the skill with the closing rules (C) |
@@ -267,6 +268,12 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
   judgment a task needs: a design, a depth pass, a decision". The title changes too: today's subject says "<code> SR ·
   <purpose>", and a notice to a title with no number reaches nobody (the lead, L11). Options: A, yes (recommended:
   Fable on judgment, and a title notices reach); B, as today.
+- **D-a7, who starts a senior session a miniplan orders.** Question 354 says the Plan starts what a miniplan orders;
+  the guard says "a senior is started by the lead" (`bin/lib/session-title-guard.mjs:94`) and refused the Plan's
+  start of one. No typed line settles it. Subject, word for word: "a senior session a miniplan orders is started by
+  the Plan on his go, like every other session the miniplan orders". Options: A, yes: the guard admits the Plan's
+  start of a senior named in the miniplan it hands over (slice E); B, seniors stay the lead's to start, and each one
+  costs him one typed line in the lead's chat (the app's typed-turn lock); his words in "Other".
 - **D-a4, review spend inside a miniplan.** Subject, word for word: "a review inside the Codex spend its miniplan's
   Budget states is not asked; a piece of work that passes it is asked once". Options: A, yes, as written
   (recommended: one approval a piece of work); B, every review over the allowance is asked, as today; his words in
@@ -340,4 +347,8 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
   came after 343 and 3064; a tap is a decision and goes among a rule's accepted answers, so it is not asked again, and
   question 357 (line 5187) sent the rule's rewording to JH 231. D-a1's subject titles a senior session with its number
   from `sessions --next-number`, since a notice to an unnumbered title reaches nobody. Cards now: D-a1, D-a4, D-b1,
-  D-b2, D-c1, D-c2. No card goes to him and no read runs until the lead says so.
+  D-b2, D-c1, D-c2 (D-a7 added in L12). No card goes to him and no read runs until the lead says so.
+- L12 (the lead, by direct message): the guard refused the Plan's start of a senior session, "a senior is started by
+  the lead" (`bin/lib/session-title-guard.mjs:94`, `bin/guard.mjs:198`), against question 354; with the app's
+  typed-turn lock that costs him one message in the lead's chat for every senior. Recorded as a contradiction for his
+  one sitting, card D-a7, not decided by a typed line.
