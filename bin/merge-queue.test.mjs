@@ -44,12 +44,13 @@ before(() => {
 });
 
 test('every folder this file makes is a scratch folder, under the one root its tests remove (odd/tasks/merge-queue-dry-run.md, spec 2)', () => {
-  // Every call that makes a temporary folder, sync or not, read to the end of its line: only the root's and scratch's
-  // own may be there, so a call of any other form fails, not only one a parser recognises (Codex, 2026-11-18). The
-  // pattern is built from pieces so that this line holds no call itself.
-  const call = new RegExp('mkdtemp' + '(?:Sync)?\\s*\\(', 'g');
-  const calls = fs.readFileSync(new URL(import.meta.url), 'utf8').split(call).slice(1).map((rest) => rest.split('\n')[0].trim());
-  assert.deepEqual(calls, ["path.join(os.tmpdir(), 'jhmq-'));", 'path.join(scratchRoot, prefix));'], 'only the root is made in the temporary folder itself, and every other folder by scratch');
+  // Every call that makes a temporary folder, sync or not, as written from its name to the end of its line: only the
+  // root's and scratch's own may be there, byte for byte, so a call of any other form fails, a reformat included, not
+  // only one a parser recognises (Codex, 2026-11-18). The pattern and the two calls are built from pieces so that
+  // these lines hold no call themselves.
+  const name = 'mkdtemp';
+  const calls = [...fs.readFileSync(new URL(import.meta.url), 'utf8').matchAll(new RegExp(name + '(?:Sync)?\\s*\\(.*', 'g'))].map((found) => found[0].trim());
+  assert.deepEqual(calls, [`${name}Sync(path.join(os.tmpdir(), 'jhmq-'));`, `${name}Sync(path.join(scratchRoot, prefix));`], 'only the root is made in the temporary folder itself, and every other folder by scratch');
 });
 
 test('a fixture test run in a process of its own leaves its temporary folder empty: the root is removed, not only made (odd/tasks/merge-queue-dry-run.md, spec 2; Codex, 2026-11-18)', () => {
