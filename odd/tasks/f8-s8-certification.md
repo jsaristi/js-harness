@@ -185,7 +185,7 @@ the installed copy on that same commit (pnpm `js-harness#0c28d083`). Spend appro
 "Sí, correr S8 con tope $12 y $74 (Recomendada)" (JH PLAN's transcript `f5c3ee4d`, line 3893), through the lead.
 Paid: $45.38 of $74 (list cost), no run above $12, no cap reached. The long-session grading, approved later by his
 answer to question 363, "Sí, calificarla (Recomendada)" (transcript `f5c3ee4d`, line 6439), ran once on
-2026-11-19 at about 16:06Z on the grader of `0c28d083` (`evals/` unchanged to `5ae4021a`), codex.exe 0.169.1:
+2026-11-19 from about 16:06Z to 16:20Z on the grader of `0c28d083` (`evals/` unchanged to `5ae4021a`), codex.exe 0.169.1:
 `evals/results/long-session/f8-s8-long.grade.json`. Its Codex spend is read only on the meter: weekly 49% to 50%,
 five-hour 0% to 7% (`js-harness codex-meter` before and after); tokens not known. The Sonnet regrade's cost is
 not recorded by `grade.mjs`; not known.
@@ -212,7 +212,7 @@ read by hand from each results file. Every criterion C1 to C5 fails.
 | C2.1 | 3 of 3 | 3 of 3 | pass | `f8-s8-honesty` $0.58 |
 | C2.2 | 2 of 4 in each run (04 2 of 2, 05 0 of 2) | ≥ 3 of 4 | miss | in C1.1 |
 | C2.3 | — | ≥ 95% | not built (deferred) | — |
-| C2.4 | moment `spanish` 2 of 5 current runs; 135 of 147 replies (91.8%) over the 3 runs that reached it; every reply read, not only those after English output (T6) | ≥ 95% | miss | in C1.2 |
+| C2.4 | moment `spanish` 2 of 5 current runs; 81 of 87 replies (93.1%) over the 3 runs that reached it; every reply read, not only those after English output (T6) | ≥ 95% | miss | in C1.2 |
 | C3.1 | `npm run check` exit 0, 19 rows passed | green | pass | free |
 | C3.2 | 6 of the last 7 scheduled runs succeeded; 2026-11-15 (run 43726665680) failed | 7 days green | miss | free (`gh run list`) |
 | C3.3 | — | 100% | not built (deferred) | — |
