@@ -118,10 +118,10 @@ The change column names the slice of the build plan.
 | D1 | 227 `odd/tasks/plan-orchestrator.md:375` (C2) | a start names "its miniplan ... or the plan file of the open stretch" | half-says | 227, his open decision 2 in JH 227's note | Left to his answer to JH 227's question; slice D removes the second branch once `stretch` retires |
 | D1 | 227 `plan-opening.md:7,23` | the Plan asks him "here, in one sitting, before the hand-over" | half-says: aligned for the questions before the hand-over, but question 355 puts every question of the execution there too | 227 | Say that the Plan's chat holds all his questions, the lead's included (A) |
 | D1 | 227 `plan-opening.md:15` | "`His to decide` ... the lead asks it in its own chat" | contradicts question 355 | 227 | The lead records the question and sends it; the Plan asks it (A) |
-| D1 | 227 `rules-data.mjs` (`questions-one-place` subject, 13ef86a1) | "every other question, in the orchestrator's chat" | contradicts question 355 | 227 | 227 changes it at `2af13c1b`: every question in the Plan's chat; a rule quotes his typed line 1362, with the tap of 4488 among the accepted answers, since `rules change` refuses a tap as a quote (A) |
+| D1 | 227 `rules-data.mjs` (`questions-one-place` subject, 13ef86a1) | "every other question, in the orchestrator's chat" | contradicts question 355 | 227 | Leaves 227's branch (the lead's order): the change, quoting his typed line 1362 with the tap of 4488 accepted, goes to slice H with `manifest.mjs:134,140` |
 | D1 | `bin/lib/manifest.mjs:134,140` | the questions reach him "in one place: the orchestrator's chat"; the lead asks them | contradicts question 355 | none | Stays out of 227's branch; written as a limit of today until slice H (the lead records a question for the orchestrator, then sends it to the Plan by direct message), and reworded with slice H |
 | D1 | `bin/lib/channel.mjs:136` | "a question goes to the orchestrator, who asks the user: --to orchestrator" | contradicts question 355 | none | A question is recorded for the Plan, and the lead's direct message delivers it (H) |
-| D1 | 227 `plan-opening.md:25` | the Plan starts the sessions a miniplan orders, on his go, and hands them over | open: question 354 is a tap, and his typed lines 3064 and 3459 point to the lead opening (read 8d32c0e7 on 227, Claude 2) | 227 | Card D-a6; the rule's start clause waits for his typed sentence |
+| D1 | 227 `plan-opening.md:25` | the Plan starts the sessions a miniplan orders, on his go, and hands them over | open: question 354 is a tap, and his typed lines 3064 and 3459 point to the lead opening (read 8d32c0e7 on 227, Claude 2) | 227 | Decided by his typed line 1853 ("pero por que no lo puedes abrir tu si yo te autorice a ti") with 3064; the rule quotes them (A) |
 | D1 | 227 `plan-opening.md:29` and the `plan-pre-prompt` subject | the Plan "is sent no notices"; the lead sends it "once, 'miniplan N done'" | half-says after question 355: the lead now sends it every question of the execution | 227 | Say the questions come by direct message, never as a notice to follow (A) |
 | D1 | `bin/lib/manifest.mjs:120` | "Two kinds of session. A work session ... The orchestrator" | half-says (no Plan role in the installed skill) | none (227 writes the role in `odd/` only) | One line naming the Plan, pointing to the rule `plan-pre-prompt` (JH 227's, not yet on main) (C) |
 | D1 | `docs/ROADMAP.md` | no line names the Plan, a miniplan or the pre-prompt (searched `Plan\b`, `miniplan`, `pre-prompt`, `JH PLAN`) | half-says | none | One roadmap row (C) |
@@ -212,85 +212,73 @@ allowance question of slice F is answered. Every code slice also gets the Claude
 
 | Slice | What | Files | Test or check | Removes / merges | Cost (estimate) | Runs beside |
 |---|---|---|---|---|---|---|
-| A | Amend JH 227 before it lands (the lead has sent JH 227 this list): the hand-over by direct message; drop T3, T4 and line 325 from the Plan; the Plan's chat holds all his questions (`plan-opening.md:7,15,23`), the rule quoting 1362 with 4488 accepted (`2af13c1b` already does the subject); the Plan is sent questions by direct message, never a notice to follow. Not in A: the miniplan as the order instead of the stretch plan (D-b, slice D) and `manifest.mjs:134,140` (slice H) | `odd/tasks/plan-orchestrator.md`, `odd/tasks/plan-orchestrator-evidence/plan-opening.md`, the registry files | `js-harness rules check`, `npm run check` | removes the Plan's wait and audit work and the split of his questions between two chats | about 35 lines on 227's branch; no new Codex part if folded into 227's pending review | B |
-| B | Amend JH 229 before it lands: its T2 declares the rule `sessions-send-themselves` (JH 229's, not yet declared on main) and, in the same slice, removes the closing paragraph `CLAUDE.md:41-50` down to its pointer to protocol 2 and its last sentence (reports open with a summary and close with a recap, which protocol 2 does not hold); every other clause there is a copy of `protocols-skill.mjs:49-53` ("for which session: he runs several" and "two blocks out of order cost a session" are protocol 2's "for which session" and "numbered in the order they are sent"), so the removal changes no protocol. What changes protocol 2 is narrowing its "Cut" (`:49`) to a chat no session can open or a command on his machine: a protocol change, his, card D-a5, `manifest.mjs:157` copy, `:165` "there", `:175` item 4, `:179`; one line that a notice is never the delivery | `CLAUDE.md`, `bin/lib/protocols-skill.mjs`, `bin/lib/manifest.mjs`, registry files (already in 229's scope except `CLAUDE.md`) | `node --test bin/lib/reply.test.mjs`, `js-harness rules check`, the 229 verifier | removes about 10 lines of prose; merges three homes of the cut into one | about 40 lines on 229's branch; folded into 229's pending review | A (A touches `manifest.mjs:134` only; agree the hunk through the lead) |
+| A | Amend JH 227 before it lands (the lead has sent JH 227 this list): the hand-over by direct message; drop T3, T4 and line 325 from the Plan; the Plan is sent questions by direct message, never a notice to follow. Not in A: the miniplan as the order (D-b1, slice D); `questions-one-place` and `manifest.mjs:134,140` (slice H) | `odd/tasks/plan-orchestrator.md`, `odd/tasks/plan-orchestrator-evidence/plan-opening.md` | `npm run check` | removes the Plan's wait and audit work | about 20 lines on 227's branch; no new Codex part if folded into 227's pending review | B |
+| B | Amend JH 229 before it lands: its T2 declares the rule `sessions-send-themselves` (JH 229's, not yet declared on main) and, in the same slice, removes the closing paragraph `CLAUDE.md:41-50` down to its pointer to protocol 2 and its last sentence (reports open with a summary and close with a recap, which protocol 2 does not hold); every other clause there is a copy of `protocols-skill.mjs:49-53` ("for which session: he runs several" and "two blocks out of order cost a session" are protocol 2's "for which session" and "numbered in the order they are sent"), so the removal changes no protocol. What changes protocol 2 is narrowing its "Cut" (`:49`) to a chat no session can open or a command on his machine: a protocol change, covered by his typed lines 3771 and 3672 (section "His to decide"), `manifest.mjs:157` copy, `:165` "there", `:175` item 4, `:179`; one line that a notice is never the delivery; and, from read 8d32c0e7 (Codex 8), the lead's side of line 3771 is a prerequisite of the Plan-only operation: both roles deliver confirmed information themselves, with a record the other reads when a message cannot be delivered, tested both ways | `CLAUDE.md`, `bin/lib/protocols-skill.mjs`, `bin/lib/manifest.mjs`, registry files (already in 229's scope except `CLAUDE.md`) | `node --test bin/lib/reply.test.mjs`, `js-harness rules check`, the 229 verifier | removes about 10 lines of prose; merges three homes of the cut into one | about 40 lines on 229's branch; folded into 229's pending review | A (A touches `manifest.mjs:134` only; agree the hunk through the lead) |
 | C | The approval and role texts, after A and B land: one approval covers a piece of work (protocol 1, `CLAUDE.md:37` names it), `manifest.mjs:155,231`, the start card named once (`:157` tail points to `sessions-open-in-sidebar`; after question 354 the ordered starts are made in the Plan's chat on his yes, and the lead's own starts fall on a card, which slice E bounds), the Plan's line at `:120`, `senior-model` reworded to judgment, one ROADMAP row | `bin/lib/protocols-skill.mjs`, `bin/lib/manifest.mjs`, `CLAUDE.md`, `bin/lib/rules-data.mjs` and its generated files, `docs/ROADMAP.md` | `js-harness rules check`, `npm run check` | merges the card text into its rule; removes the per-step asking | about 40 lines, one `rule/` branch; Codex about 640,000 | D, E, G, H |
 | D | Retire `stretch` for new work once plan v4's stretch closes: the miniplan is the unit, bound by C2's start check (slice E) and measured by the land records (`feat/codex-spend-t5`, Codex input per landed pull request: not landed, its review held, so D waits for it); what `stretch` measures today and would be lost: hours against slots and items closed against the plan (`bin/lib/stretch.mjs:89-90`); `manifest.mjs:239` ties it to his absences, which the miniplan's Budget must then carry | `bin/stretch.mjs`, `bin/lib/stretch.mjs` and their tests (2,168 lines in the four files, `wc -l`); 45 non-test files under `bin/` name "stretch" (`git grep -l stretch -- bin`), each read before it is cut; `bin/js-harness.mjs`; the skill lines; C2's stretch branch | `npm run check`, `js-harness doctor`; high risk 3 (a command others use is removed): an independent verifier | removes a command and its plan shape | at least the 2,168 lines, more from the 45 files; Codex about 1M to 2M for the removal's diff (estimate, the deletions count as changed lines); his decision D-b | E, G, H (C's skill lines first, or D after C) |
-| E | The start guard, one slice in `guard.mjs`'s `start_session` branch: a start naming no model is refused (`odd/tasks/starter-model-check.md`); C3, a start from JH PLAN names its miniplan file (227's design); C2, a start the lead makes for a new request names its miniplan (227's design, its refuse-or-warn being his, D-b); a start card's hold bounded (the reserve item `start-guard`): design first, its mechanism and cost not known, since the guard cannot see whether a person typed the turn; C1 the miniplan shape as `contract template miniplan` with `check` validating it | `bin/guard.mjs`, `bin/lib/guard.mjs`, `bin/lib/session-title-guard.mjs`, `bin/lib/template-registry.mjs`, their tests | new tests first; replay over the project's starts; an independent verifier (high risk 2, guard) | merges three designed checks into one slice | about 200 lines for the four known checks, plus the card bound once designed; Codex about 1.05M (2.1M high) | C, D, G, H |
+| E | The start guard, one slice in `guard.mjs`'s `start_session` branch: a start naming no model is refused (`odd/tasks/starter-model-check.md`); C3, a start from JH PLAN names its miniplan file (227's design); C2, a start the lead makes for a new request names its miniplan (227's design, its refuse-or-warn being his, D-b); a start card's hold bounded (the reserve item `start-guard`): design first, its mechanism and cost not known, since the guard cannot see whether a person typed the turn; C1 the miniplan shape as `contract template miniplan` with `check` validating it | `bin/guard.mjs`, `bin/lib/guard.mjs`, `bin/lib/session-title-guard.mjs`, `bin/lib/template-registry.mjs`, their tests ; and, from JH 227's read 8d32c0e7, pile (c): C2 and C3 bind each start to its project, its caller, an approved revision of the miniplan and one item of it, and say what a stretch fallback is before it is on (Codex 4); C2's refusal on an unreadable app record is named as a reversal of today's fail-open, tested with a failing reader (Claude 15); the starts the owner's go covers are listed before the hand-over, so a covered follow-up waits for a typed Plan turn and reuses that go (Codex 3); the hand-over reserves its numbers and slots first, records each started session with its item before the next, and a failed or partial hand-over says which sessions started (Codex 5, Claude 10); each brief names the miniplan and the Do steps that session owns (Claude 10) | new tests first, one each for: an omitted brief, a stale revision, an unrelated plan, an unreadable record, a partial start; replay over the project's starts; an independent verifier (high risk 2, guard) | merges three designed checks into one slice | about 200 lines for the four known checks, plus the card bound once designed; Codex about 1.05M (2.1M high) | C, D, G, H |
 | F | Review spend per piece of work: a miniplan's Budget states its Codex spend, a review inside it is not asked, one question only when the piece passes it; floor and rate measured again on the review model (`rule:review-model`) (`bin/lib/lead-protocols.mjs:39` already orders it at a model switch) | `bin/lib/codex-review-allowance.mjs:104`, `bin/lib/rules-data.mjs:117,143`, `bin/lib/protocols-skill.mjs:37`, `bin/lib/manifest.mjs:213` | `node --test bin/lib/codex-review-allowance.test.mjs`, `js-harness rules check` | removes one question per review | about 60 lines; Codex about 690,000 (asked once under this slice's own rule only after it lands); his decision D-c | after C (shares `protocols-skill.mjs`, `manifest.mjs`) |
-| G | A blocked session's question reaches him without an awake lead: build JH 221's T2 as designed (`odd/tasks/consistent-orders.md:179`), and a `waiting` note whose question stays unanswered shows on the heartbeat; after question 355 the question goes on to the Plan's chat | `bin/lib/stall.mjs`, the one file JH 221's T2 design names (`odd/tasks/consistent-orders.md`, L13), and its test; disjoint from H's `channel.mjs`, `notify.mjs`, `sessions.mjs` | its tests first; high risk 4 (async ordering), an independent verifier | merges into JH 221's existing design | about 120 lines; Codex about 850,000 | C, D, E, H |
-| H | The lead's tools: a question is recorded for the Plan, not only `--to orchestrator` (`bin/lib/channel.mjs:136`, question 355; questions 349 to 352 reached him in the Plan's chat by a record and a direct message, so this only stops the Plan's questions landing on the lead's board, L22 Claude 5); `sessions --next-number` also reads the app's session records; the bare board answers inside its budget (profile first, one run) | `bin/lib/channel.mjs`, `bin/notify.mjs`, `bin/sessions.mjs`, their tests | a test with a question to the Plan and one with a started session that sent no notice; one timed run under 30 s | none | about 80 lines; Codex about 745,000 | C, D, E, G |
+| G | A blocked session's question reaches him without an awake lead: build JH 221's T2 as designed (`odd/tasks/consistent-orders.md:179`), and a `waiting` note whose question stays unanswered shows on the heartbeat; after question 355 the question goes on to the Plan's chat; and the absence detector reads the Plan's chat, the lead's as the fallback, since he types only there (read 8d32c0e7, Codex 6), tested with Plan activity, an explicit leave and return, a relief and an unreadable transcript | `bin/lib/stall.mjs`, the AWAY detector (`js-harness loop heartbeat`, `bin/loop.mjs`), the one file JH 221's T2 design names (`odd/tasks/consistent-orders.md`, L13), and its test; disjoint from H's `channel.mjs`, `notify.mjs`, `sessions.mjs` | its tests first; high risk 4 (async ordering), an independent verifier | merges into JH 221's existing design | about 120 lines; Codex about 850,000 | C, D, E, H |
+| H | The lead's tools and the questions' route: `questions-one-place` changed through `rules change`, quoting line 1362 with 4488 accepted, and `manifest.mjs:134,140,249` with it (the lead's order); from read 8d32c0e7: one durable id and one asking role a question, the Plan records the verified answer (`notify --kind answer --question <n> --transcript <the Plan's session> --line <n>`) before its direct message, so the board closes it (Claude 5, Codex 2); a proposal that needs `rule:double-review` reaches the Plan with its read id or its recorded exemption, or it is not shown (Codex 7); the rules fingerprint and the rule-change notice read a rule's subject too, so a change of destination reaches the installed copies (Codex 9, `bin/lib/rules.mjs:480-481,522-540`); the Plan's opening is one versioned source loaded by `sync` and the resume path, a local opening kept through sync and uninstall (Codex 10); a question is recorded for the Plan, not only `--to orchestrator` (`bin/lib/channel.mjs:136`, question 355; questions 349 to 352 reached him in the Plan's chat by a record and a direct message, so this only stops the Plan's questions landing on the lead's board, L22 Claude 5); `sessions --next-number` also reads the app's session records; the bare board answers inside its budget (profile first, one run) | `bin/lib/channel.mjs`, `bin/notify.mjs`, `bin/sessions.mjs`, `bin/lib/rules.mjs`, the registry files, `bin/lib/manifest.mjs:134,140,249`, the opening's home, their tests | a test with a question to the Plan and one with a started session that sent no notice; one timed run under 30 s | none | about 250 lines; Codex about 1.18M (2.4M high); high risk 3 (a skill and the rules fingerprint others consume), an independent verifier | C, D, E, G |
 
 Total, estimated: about 550 changed lines of code and text, at least 2,168 removed in D, and about 5.5M Codex input
 tokens across C to H (about 11M at the tool's high figure, 2.05 times) at today's fit, for one Codex round a slice
 only (A and B ride the reviews 227 and 229 already owe). Not in that figure: recheck rounds (JH 224 needed three
 reviews; at three rounds, about 16M), the independent verifiers of D, E and G (Claude), and the design reads
-(`rule:double-review`) the designs of D, E, F and G each need before their build, which on JH 227's last read cost
-1.07M Claude and 5.0M Codex each, so about 20M Codex for four. Two estimators, two errors: `codex-review --plan`,
+(`rule:double-review`) the designs of D, E, F and G each need before their build, which on JH 227's last read
+(8d32c0e7) cost 2.17M Claude and 6.17M Codex each, so about 25M Codex for four. Two estimators, two errors: `codex-review --plan`,
 fitted on review runs, came out at 2.12 times what the last 10 reviews took (an overestimate, L4); the figure a
 double-review read states is not that fit, and JH 227's came in at 5.5 times it (0.9M stated, 5.0M measured, L22
 on 227). So a design read is planned at its last measured cost, not its stated one. At the allowance as it stands
 every slice is a spend question; F is why that stops.
 
-## His to decide (one sitting in JH PLAN's chat, after question 355: the lead records each and sends it; `rule:owner-decisions`)
-One card a decision, all in the same sitting. Each card names a typed line of his that covers its whole subject; a
-tap, or an "Other" left empty, is recorded as his choice and moves no rule (read 8d32c0e7 on 227, Claude 1 to 3). Lines:
-`f5c3ee4d` line 1362 ("todas las preguntas del orquestador ... aca en el plan"), 3672 ("Listo ahora hazlo no me pidas
-que lo haga tu tienes comunicacion"), 3771 ("SIEMPRE PERO SIEMPRE MANDA LA INFORMACION ..."); the taps (353, 354,
-355) go among the accepted answers.
+## His to decide (one sitting in JH PLAN's chat; the lead records each and sends it; `rule:owner-decisions`)
+Only a clause that no typed line of his covers becomes a card, and its subject goes to him word for word. A tap, or an
+"Other" left empty, is recorded as his choice and moves no rule (read 8d32c0e7 on 227, Claude 1 to 3). Every line
+below is in `f5c3ee4d`, checked with `js-harness sessions --quote`.
 
-- **D-a1, `senior-model`, subject: judgment only.** Typed line covering it: `f5c3ee4d` line 3459, 2026-11-18T22:40Z,
-  "la idea es ser mucho mas eficientes con el poder de fable pero sin tener que utilizarlo todo". Proposed: "the model
-  a senior session runs on, titled <code> SR · <purpose>, which the lead opens with start_session and sends the
-  judgment a task needs: a design, a depth pass, a decision". The opener stays as it is: who opens a session is
-  D-a6, and only a typed line moves it. Options: A, these words (recommended); B, his own words in "Other".
-- **D-a2, `owner-decisions`, one clause in protocol 1: one approval covers the sessions of a piece of work.** Typed
-  line covering it: line 2642, 2026-11-18T19:20Z, "No quiero que me pidas permiso para iniciar cada linea"; and line
-  3064 (the lead "no tiene que preguntar nada respecto a arbrir"). Proposed: "a session that a miniplan or a charter
-  he approved names is started without asking him again". Narrower than the earlier draft: its reviews and its spend
-  are D-a4, because no typed line of his says them. Options: A, these words (recommended); B, his own words.
-- **D-a4, the review spend a miniplan's Budget covers (slice F).** No typed line of his covers it: line 3459 asks
-  for efficiency, not for an approval of spend. So the card asks him for his sentence, with examples as the options
-  and his words written in "Other": A, "un miniplan aprobado cubre sus revisiones hasta su presupuesto; solo me
-  preguntas si se pasa"; B, "pregúntame cada revisión que pase el tope". The rule is written from what he types; a
-  tap of A or B is recorded as his choice, and the rule waits for the typed sentence.
-- **D-a5, `sessions-send-themselves` (JH 229) and protocol 2's "Cut".** Typed lines covering the whole subject:
-  line 3771, 2026-11-18T23:24Z, "SIEMPRE PERO SIEMPRE MANDA LA INFORMACION, NO ME HAGAS PASAR INFORMACION SI YA TE LA
-  HE CONFIRMADO AQUI ... NI EN EL ORQUESTADOR NI CONTIGO", and line 3672, "Listo ahora hazlo no me pidas que lo haga
-  tu tienes comunicacion". Its words were never put to him (`odd/tasks/never-carry.md` line 44 and L4 on
-  `rule/never-carry@c3ef06fa`; no question number names them). Proposed, as JH 229 holds it: a session sends what
-  another session needs by itself, by a direct message or a record the other reads, and never hands him text to
-  carry to a session that exists; protocol 2's "Cut" narrows to a chat no session can open, or a command on his
-  machine. "A start on the turn he typed" is left out of the subject until D-a6 is settled. Options: A, these words
-  (recommended); B, his own words.
-- **D-a6, who opens the sessions a miniplan orders.** Open again: question 354 is a tap, and his typed lines point
-  the other way. Line 3064, "si tu ya le has dado la orden el no tiene que preguntar nada respecto a arbrir"; line
-  3459, "la idea es que el orquestador organice todo muy bien y ahi si coloque a la sesion respectiva a trabajar";
-  and the proposal his lines 3626 and 3672 answer says "El Plan no abre sesiones ni dirige" (line 3667, from L22 on
-  227; not read here). Against it, only the app's limit: a visible start is made on a turn he typed in that chat,
-  and he types in the Plan's chat (question 355). The card asks for his sentence: A, "el Plan abre las sesiones de
-  un miniplan cuando yo digo sí, y se las entrega al orquestador"; B, "el orquestador las abre, y yo escribo una
-  línea en su chat para que pueda"; his words in "Other". The rule quotes what he types.
-- (D-a3 is withdrawn: naming `sessions-open-in-sidebar` in the skill instead of restating it changes no rule's
-  words, so it is decided, with its cost, in slice C.)
-- **D-b, retiring `stretch`, and what counts as a plan for C2** (slice D: removing something he uses). Options: A,
-  retire it for new work once plan v4's stretch closes; until then C2 counts the open stretch's plan file, and after
-  it a miniplan only (recommended: it removes a command built for the big plan he no longer wants; on today's record
-  only JH 217 would have been refused, JH 227's count); B, keep it and build `stretch amend`, so a miniplan's work
-  joins an open stretch, and C2 counts a miniplan or the open stretch's plan (adds a verb, keeps hours and slots);
-  C, keep it untouched for multi-day absences only, and C2 counts a miniplan, or the stretch's plan while one is
-  open.
-- **D-b2, C2 refuses or only warns** (JH 227's design, its own card). Options: A, refuses (recommended: his "el
-  arranca sin plan" and "no puede volver a suceder" ask for a check, not a reminder); B, warns.
-- **D-c1, the policy of review spend** (slice F). Options: A, a miniplan's Budget states its Codex spend and his go
-  on the miniplan covers its reviews; one question only when a piece passes it (recommended: one approval a piece of
-  work, D3); B, keep a question per review and only raise the floor and rate to today's measure; C, both.
+Covered by typed lines, so decided, no card (each rule quotes its lines; the taps 353 to 355 go among the accepted):
+- Who opens the sessions a miniplan orders: the Plan, on his go, handing them to the lead. Line 1853, 17:34Z, "pero
+  por que no lo puedes abrir tu si yo te autorice a ti"; line 3064, the lead "no tiene que preguntar nada respecto a
+  arbrir o respecto a autorizar la apaertura".
+- One approval covers the sessions of a piece of work (`owner-decisions`, one clause in protocol 1): "a session that
+  a miniplan or a charter he approved names is started without asking him again". Line 2642, "No quiero que me pidas
+  permiso para iniciar cada linea"; line 3064.
+- His questions reach him in the Plan's chat (`questions-one-place`, now in slice H with `manifest.mjs:134,140`).
+  Line 1362, "todas las preguntas del orquestador ya no la vamos a hacer en el orquestador sino aca en el plan".
+- The Plan writes a miniplan, not the big plan, and the lead executes (`plan-pre-prompt`). Line 3509, his written
+  answer to question 347: "no quiero que fable haga el super mega plan sino que haga un miniplan ... el arranca sin
+  plan".
+- `senior-model` to judgment only: "... which the lead opens with start_session and sends the judgment a task needs:
+  a design, a depth pass, a decision". Line 3459, "la idea es ser mucho mas eficientes con el poder de fable pero sin
+  tener que utilizarlo todo".
+- `sessions-send-themselves` (JH 229) and protocol 2's "Cut" narrowed to a chat no session can open or a command on
+  his machine. Line 3771, "SIEMPRE PERO SIEMPRE MANDA LA INFORMACION, NO ME HAGAS PASAR INFORMACION SI YA TE LA HE
+  CONFIRMADO AQUI ... NI EN EL ORQUESTADOR NI CONTIGO"; line 3672, "Listo ahora hazlo no me pidas que lo haga tu
+  tienes comunicacion".
+
+Cards (no typed line covers them, or they are his by kind: removing what he uses, spend):
+- **D-a4, review spend inside a miniplan.** Subject, word for word: "a review inside the Codex spend its miniplan's
+  Budget states is not asked; a piece of work that passes it is asked once". Options: A, yes, as written
+  (recommended: one approval a piece of work); B, every review over the allowance is asked, as today; his words in
+  "Other".
+- **D-b1, retiring `stretch`.** Subject: "`js-harness stretch` is retired for new work once plan v4's stretch closes;
+  a miniplan is the unit of work, bound by the lead's start check and measured by the land records". Options: A, yes
+  (recommended: it removes a command built for the big plan he no longer wants; until v4 closes, C2 counts the open
+  stretch's plan, and on today's record only JH 217 would have been refused); B, keep it and build `stretch amend`,
+  and C2 counts a miniplan or the open stretch's plan; C, keep it for multi-day absences only, and C2 counts a
+  miniplan, or the stretch's plan while one is open.
+- **D-b2, C2 refuses or warns.** Subject: "a start the lead makes for a new request that names no miniplan is
+  refused". Options: A, refuses (recommended: his "el arranca sin plan", line 3509); B, warns.
+- **D-c1, the policy of review spend.** The same choice as D-a4 put as the harness's policy: A, a miniplan's Budget
+  states its Codex spend and his go covers its reviews (recommended); B, a question per review, with only the floor
+  and rate raised to today's measure; C, both.
 - **D-c2, this plan's spend, as one figure.** About 5.5M Codex input for one round of C to H (11M at the high
-  figure), about 16M with up to three rounds, and about 20M more for four design reads at JH 227's measured cost;
-  about 1.07M Claude a read besides. Options: A, approve it as the ceiling for the whole build, each slice told what
-  it used (recommended); B, approve slice by slice.
-- Pending elsewhere, not repeated here: C1's tenth heading and 227's own Codex spend. Answered and built on here:
-  questions 351, 353, 354, 355.
+  figure), about 16M with up to three rounds, and about 25M more for four design reads at the last read's measured cost
+  (JH 227's read 8d32c0e7: 2.17M Claude, 6.17M Codex each); about 8.7M Claude for those reads and the verifiers
+  besides. Options: A, approve it as the ceiling for the whole build, each slice told what it used (recommended); B,
+  slice by slice.
+- Pending elsewhere, not repeated here: C1's tenth heading and 227's own Codex spend.
 
 ## Tasks
 - [x] T1 (kind: verify) four opus readers over the surfaces of miniplan 3 step 1; one row of each spot-checked in
@@ -325,3 +313,9 @@ que lo haga tu tienes comunicacion"), 3771 ("SIEMPRE PERO SIEMPRE MANDA LA INFOR
   names a typed line covering its whole subject: D-a1 rests on line 3459, D-a2 on 2642 and 3064 and is narrowed to
   sessions, D-a4 has no typed line and asks for one, D-a5 on 3771 and 3672 with the start clause left out, D-a6 is
   new (who opens a miniplan's sessions: 354 is a tap against typed lines 3064 and 3459), and D-a3 is withdrawn.
+- L9 (the lead, by direct message): `questions-one-place` and `manifest.mjs:134,140` leave JH 227's branch for slice H, and
+  slice A shrinks to match; pile (c) of read 8d32c0e7 is this plan's: Claude 5 and Codex 2, 7, 9, 10 in slice H;
+  Claude 10 and 15 and Codex 3, 4, 5 in slice E; Codex 6 in slice G; Codex 8 in slice B (JH 229's, the lead's side of
+  line 3771). His typed lines 1853, 1362, 3509 and 3064, checked here with `sessions --quote`, cover who opens a
+  miniplan's sessions and where his questions reach him, so only uncovered clauses stay cards: D-a4, D-b1, D-b2,
+  D-c1, D-c2.
