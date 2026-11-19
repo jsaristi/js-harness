@@ -184,7 +184,7 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
 - [x] T2 (kind: build) spec 2 — PR 883, main c7afe0be — `bin/lib/codex-review-turns.mjs`, `bin/codex-review.mjs` + tests — commit `fix(codex-review): review the gap below a merge of main alone`
 - [x] T3 (kind: build) spec 3 — branch fix/codex-spend-t3 (L34-L37) — `bin/merge-queue.mjs`, `bin/lib/pull-request.mjs`, `bin/lib/merge-queue-reviews.mjs:97` (cleared L36) + tests — commit `fix(merge-queue): a conflict with main names its fix`
 - [ ] T4 (kind: build) specs 4, 5 — `rules change double-review` on `rule/double-review-sequence`, `bin/double-review.mjs`, `bin/js-harness.mjs` usage + tests — commits `chore(rules): a question's double review reads Claude first` and `feat(double-review): Codex reads what Claude passed`
-- [ ] T5 (kind: build) spec 6 — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
+- [x] T5 (kind: build) spec 6 — branch feat/codex-spend-t5 (L38-L42) — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
 - [ ] T6 (kind: verify) — the measure after the slices land, against the baseline, by Done-when's T6 line; result in the Log
 
 ## Log
@@ -487,3 +487,50 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   (0.99). T3's reviews end at three: Codex 915,136 + 297,006 + 195,381 = 1,407,523 input tokens; lenses risk 0 each
   round, readability's follow-up (say in a comment why the two loops count an empty conflict list apart) left for
   the next change of those lines, since a code edit now would need a fourth review. Merge-queue tests 133 of 133.
+- L38 2026-11-18, T5's writer, round 1 (sub-agent of JH 220), worktree `D:\js-harness-worktrees\codex-spend-t5` on
+  feat/codex-spend-t5 from main b044dbf7: 9d9b5b55 `feat(codex-meter): Codex input per landed PR`. A run is a landed
+  PR's when its head is among the commits the land's merge brought in (`<merge>^1..<merge>^2`), lands of exit 0 only;
+  a run of no landed PR is pending (on a branch not landed), on the default branch by no land, or orphaned. The
+  baseline on the real records: 3,173,294 over all their days and 3,053,278 on 2026-11-14, L3's figures exactly. Run
+  lines carry no `--again` marker; the report says so and leaves none out. Real run 121 s.
+- L39 2026-11-18, the verifier (opus, read-only) on 9d9b5b55 and round 2, 2e40eb81. Taken, tests first: M1, a re-read
+  run that also read uncovered code is no "bought no new reading" (the baseline's 911,660 all were): re-reads split
+  into "covered code alone" and "covered code beside new" with k of n code commits; tokens a line divide the tokens
+  of the runs that bought new reading by their `coverage.total`. M2, rounds were 6, 9 and 5 for PRs 866-868 against
+  L5's 3, 4 and 0: a round is now a fresh `reviewed` run (no recheck, no remerge) above a clean pass of the same PR on
+  its first-parent line, printed on its own line that says not to add it. M3, one failing-first test each for the
+  `^1` exclusion, the exit-0 filter and "first land wins". Low: a PR merged twice keeps both merges' runs (PR 731, 2
+  runs, 117,860), as `pullRequestsOf` (`bin/lib/report-git.mjs:77`) joins them; a run with no count prints unknown;
+  cached tokens print. The rule gives L5's lists for PR 864 (08:17) and 867 (09:46, 09:55, 10:05, 10:52) and more for
+  866 (09:28 too) and 868 (11:42, 11:49, 12:10, where L5 has none): reported, not tuned. Answered: report-git's
+  merge-subject regex is not exported, so `MERGE_OF_PR` copies it. `where` handed to `reviewCoverage` cut git
+  processes 537 to 506 (`show-cdup` 80 to 49); the run times, 98 s and 127 s, are noise beside that.
+- L40 2026-11-18, the confirming verifier and the lenses on 2e40eb81, and the lead's decisions (JH ORQ), 18:13
+  local: "(1) T6 compares the 'beside new' figure: the 306,981 now sits there, and covered-alone is 0 for all 410
+  PRs. Write in the baseline line that the depth pass's figure moved from alone to beside new, and why. (2) Add no
+  size cut, since no rule supports one: PR 866 09:28 keeps counting as a round." 18:24 local: "keep the rounds rule
+  as you wrote it (fresh reviews above a clean pass of the same PR). Name 866 09:28 and 868 11:42, 11:49 and 12:10 in
+  the baseline as counted by that rule, beside L5's narrower reading. No criterion for next-work-unit reviews exists,
+  so do not invent one." Round 3, f6c388e1, taken: the baseline names its run with no count and says both decisions
+  (`BASELINE.notes`); "(C of them cached)" stands beside its total, not beside the uncounted run; the beside-new runs
+  are said to be among "tokens of theirs"; a test pins `coverage.total` as the lines measure (the code was right, a
+  mutant reading `part.changedLines` first fails it); the dead `pass.head !== run.head` goes; the fixture comment says
+  11:49 and 12:10 sit above fresh clean passes. Lens reliability: a test runs `workingPerPr` over a throwaway
+  repository with record files, exit 1 when `lands.jsonl` cannot be read; it failed first by reading this
+  repository's records (`codexMeterMain` now takes `cwd`). Its mutants fail it for `read`, `isValid`, the default
+  ref and the admission; `beyondTip: false` survives, since only records whose head is in the run's range are handed
+  on, and `where` only saves git processes. Lens readability (`MERGE_OF_PR` copies report-git's regex): left, L42.
+  No Codex review of T5 ran (held, L36).
+- L41 2026-11-18, the real report at f6c388e1, exit 0 in 206 s (run alone; 84-127 s in round 2, about 500 git
+  processes of 30 `reviewCoverage` calls), as printed: "Baseline, PRs 864-868: 35 runs over all their days, 3,173,294
+  input tokens, and 1 run with no count (ba57f254-b216-4807-ac21-a69f1b9f331e, 2026-11-14T12:16:11.982Z); of them on
+  2026-11-14 alone: 3,053,278", then the two notes and "Re-read of covered code alone: 0 of 412 PRs" (the lead's 410
+  was counted before; covered-alone is 0 still). Bought no new reading: PR 866 failed 1 run 220,599; PR 867 failed 1 run
+  65,993 and no record 1 run 79,096; PR 868 failed 1 run, tokens unknown. Beside new: PR 866 3 runs 528,631 (21 of 24
+  code commits covered), PR 867 3 runs 383,029 (11 of 14). Rounds: 864 1 run 69,498, 865 0, 866 4 runs 364,992, 867 4
+  runs 268,543, 868 3 runs 212,698. Pending 37 runs 9,268,560 and 1 with no count; by no land 720 runs 121,777,561;
+  orphaned 36 runs 3,642,490. Double reviews: 47 reads, 42,715,604 Codex input tokens.
+- L42 2026-11-18, T5's follow-ups, outside its files: the help line `bin/js-harness.mjs:34` lacks `--per-pr`;
+  README's codex-meter section does not show it; `MERGE_OF_PR` in `bin/lib/land-records.mjs` copies the regex of
+  `bin/lib/report-git.mjs`, which exports none; run lines carry no `--again` marker (their writer); zeros outside a
+  repository are left as they are.
