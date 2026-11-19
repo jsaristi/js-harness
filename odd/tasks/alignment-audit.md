@@ -10,8 +10,9 @@ PR 921 is a draft (the lead's order), so no land takes it; it is un-drafted once
 cards go to him one at a time: this session records each as a question, the lead sends its number to JH PLAN, which
 asks him, and the next is recorded only once the last is answered. Decided: D-b1 (question 364, L16), D-b2 (question
 365, L18), D-c2 (question 367, L21; 366 withdrawn), D-c1 and with it D-a4 (question 370, L23), D-a7 (question 371, L24). Asked: D-a1, the last card (question 372, L24).
-No double review has run. Next: when D-a1 is answered, write it in, un-draft PR 921 (`gh pr ready 921`) and tell
-the lead; the double review waits for the lead's go.
+No double review has run. Next: when D-a1 is answered, write it in and push; PR 921 stays a draft and the double
+review does not run until the lead says so after the Codex weekly reset of 2026-11-23 23:45 local (Codex runs only
+under 50% weekly until then, miniplan-009 Budget lines 31-33; the meter read 51%); then the read, then un-draft (L25).
 The audit and the build plan are written; nothing is built.
 
 ## Goal
@@ -440,3 +441,7 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
   took it (the lead): slice E's start check lets the Plan start a senior named in a miniplan he approved, nothing
   outside one; until slice E lands with its reviews the guard stands as it is. D-a1, the last card, is worded against
   `rules-data.mjs:665-667` without its opener clause, asked as question 372, his yes asked in writing (an owner's rule).
+- L25 (the lead, by direct message): PR 921 stays a draft and the double review does not run now: the meter is over
+  50% weekly, and Codex runs only under 50% until the reset of 2026-11-23 23:45 local (miniplan-009 Budget lines
+  31-33). After 372 is answered: write it in, push, keep the notice wait; after the reset the lead says to run the
+  read, then the PR leaves draft.
