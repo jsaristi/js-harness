@@ -1459,3 +1459,7 @@ ceiling.
   unrecorded one; it is written out with numbered options only where the host has no question tool, not "on Codex";
   and the `kind` step's follow-ups (a kind or a size the thread leaves open) are put the same way. The lenses
   (readability 0, reliability 1): the `summary` step's new wording had no test; it has one now.
+- L49 (2026-11-19) Codex's recheck of `2d3648f` (2 fixed, 1 not): recording was not enough, since the gate also
+  holds the tool's text and option labels to the record's (`bin/lib/template-question.mjs`, `admit`); the question
+  is now put to the owner as `js-harness template ask <n>` prints it, unchanged. Lenses: 0 findings, their one
+  earlier finding fixed.

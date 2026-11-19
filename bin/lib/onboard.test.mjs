@@ -516,7 +516,7 @@ const has = (lines, text) => assert.ok(lines.some((line) => line.includes(text))
 const nothing = { onboarding: null, origin: null, roadmap: null };
 // How every question of the conversation is put (question 351), as a pattern's source: written out here, not imported,
 // so a change to the wording fails a test.
-const ASKED = 'one at a time through the host\'s question tool \\(written out with numbered options only where the host has none\\), 2 to 4 options that give examples, the recommended one first, the free answer in "Other" \\("Otro"\\), each recorded before it is asked \\(js-harness notify --to orchestrator --kind question\\) and logged as a \\(session\\) Log line';
+const ASKED = 'one at a time through the host\'s question tool \\(written out with numbered options only where the host has none\\), 2 to 4 options that give examples, the recommended one first, the free answer in "Other" \\("Otro"\\), each recorded before it is asked \\(js-harness notify --to orchestrator --kind question\\), put to the owner as js-harness template ask <n> prints it, unchanged, and logged as a \\(session\\) Log line';
 
 test('stageReport: stage 1 starts the document, on the onboarding branch', () => {
   const { code, lines } = report(nothing, { branch: 'main' });

@@ -829,8 +829,9 @@ const THEN = 'Then: commit, and run js-harness onboard again.';
 
 /** How every question of the conversation is put (rule:questions-one-place; his answer to question 351, 2026-11-19,
  * "A: con opciones"): through the host's question tool, the free answer typed in its Other, each recorded in the
- * channel first as the protocol's "Questions to the user" says, since the template gate refuses an unrecorded one. */
-const ASK = 'one at a time through the host\'s question tool (written out with numbered options only where the host has none), 2 to 4 options that give examples, the recommended one first, the free answer in "Other" ("Otro"), each recorded before it is asked (js-harness notify --to orchestrator --kind question) and logged as a (session) Log line';
+ * channel first as the protocol's "Questions to the user" says, since the template gate refuses one that is not
+ * the record's as `template ask` renders it. */
+const ASK = 'one at a time through the host\'s question tool (written out with numbered options only where the host has none), 2 to 4 options that give examples, the recommended one first, the free answer in "Other" ("Otro"), each recorded before it is asked (js-harness notify --to orchestrator --kind question), put to the owner as js-harness template ask <n> prints it, unchanged, and logged as a (session) Log line';
 
 /** What the session does next in the conversation, by the step `conversation` names (D3, D15). */
 const CONVERSATION_STEPS = {
