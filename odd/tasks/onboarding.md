@@ -619,8 +619,8 @@ conversation). Added after the readers of 9de068be.
   the change. An ADR is superseded only after `O3`.
 - **Accepted ADR**: one named by a checked area, neither superseded nor withdrawn, once `O3` is checked. That is what
   D5's `## Decided` and D6 mean by "accepted". An owner's own decision's status reads `decided by the owner (L<n>)`.
-- **Codex** has no question tool: the deepening questions and the approvals are asked in plain text, one at a time,
-  with numbered options and the recommended one first.
+- **A host with no question tool** (Codex, where it exposes none): the guided and deepening questions and the
+  approvals are written out, one at a time, with numbered options and the recommended one first (L48).
 - **Through a lead** (a project that already has one): the owner may only see the lead's chat. So the deepening
   questions and both approvals go through the lead. Each carries its explanation in its text, and an approval
   carries the area lines. Each answer is logged verbatim from the transcript (`js-harness sessions --quote`), never
@@ -1463,3 +1463,7 @@ ceiling.
   holds the tool's text and option labels to the record's (`bin/lib/template-question.mjs`, `admit`); the question
   is now put to the owner as `js-harness template ask <n>` prints it, unchanged. Lenses: 0 findings, their one
   earlier finding fixed.
+- L50 (2026-11-19) The lead's ruling on this session's scope reading: the `kind` and `summary` steps are part of the
+  guided interview, and his answer to question 351 covered every question it asks (its text: "La entrevista guiada
+  hace hoy sus preguntas abiertas en el chat ... ¿Cuál vale para la entrevista guiada?"). The "Codex has no question
+  tool" line of the hosts list now says a host with no question tool, as L48 took.

@@ -28,7 +28,8 @@ His answer to question 351, read with `js-harness sessions --quote f5c3ee4d-2c09
   said "there are no options to tap in this part"; told to the lead by note at 2026-11-18T19:38:20Z.
 - His, through the lead and JH PLAN: question 351, A (options), with D3 corrected in this item (the lead's message).
 - This session: the `kind` step's follow-ups and the `summary` step take the same phrase, from Codex's findings on
-  b972cb8; named to the lead as a scope reading to check. Recorded in L47 and L48.
+  b972cb8; named to the lead as a scope reading. The lead's ruling: inside his A, since question 351 asked about
+  every question of the guided interview. Recorded in L47, L48 and L50.
 
 ## Failures and lessons
 - The first script edits of `onboarding.md` and of the test failed (CRLF lines; an escaped pattern in a heredoc);
@@ -37,10 +38,14 @@ His answer to question 351, read with `js-harness sessions --quote f5c3ee4d-2c09
 - Codex found what the first commit missed: recording before asking, the host-without-tool wording, the kind step,
   and then the `template ask` rendering the gate checks. Lesson: a question's wording in a printed step follows
   the protocol's "Questions to the user" (`bin/lib/manifest.mjs`) whole, not the rule's one phrase.
+- The first commit of this summary was refused by the pre-commit: the document tests (`bin/rules.test.mjs
+  bin/sessions.test.mjs`) passed their 120 s under the machine's load, with a PowerShell spawn `ETIMEDOUT`. Found
+  because HEAD had not moved although the background task exited 0; retried once, and it passed.
+- Not fixed here, told to the lead: `docs/FAILURES.md` is owed `- Seen:` lines for the script edits that failed on
+  escaping and for the code changed before its test; the document-tests sensor timing out on a docs-only commit.
 
 ## Left
 - PR 920 to land: the lead.
-- Whether the kind and summary steps are inside his A: the lead.
 
 ## Cost
 - First notice 2026-11-18T19:38:20Z, ready 2026-11-19T01:09:54Z (most of that waiting for question 351); context 43%
@@ -48,4 +53,6 @@ His answer to question 351, read with `js-harness sessions --quote f5c3ee4d-2c09
 - Codex, three reviews on gpt-6.2-sol at max: 1,336,099, 428,039 and 110,713 input tokens (about 1.87M), each over its
   300,000 allowance.
 - Claude lenses (readability, reliability), three runs on claude-opus-5-5, about 47,000 input tokens in all.
-- Gate: `npm run check` in the pre-commit, three runs, PASS.
+- Gate: `npm run check` in the pre-commit, three code commits PASS; the summary's commits: one refused (the timeout
+  above), then PASS, then this correction.
+- PR 920's checks on GitHub: `gh pr checks 920` reported none on the branch when read.
