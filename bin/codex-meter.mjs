@@ -88,6 +88,7 @@ function workingPerPr(cwd = process.cwd()) {
   };
   const { commonGitDir } = gitDirs(cwd, spawnSync);
   const where = commonGitDir ? { commonGitDir } : undefined;
+  // Read only to throw when the file exists but cannot be read: the admission below reads such a file as no records.
   readRecordLines(codexReviewsPath(cwd, { where }), fs);
   const { records, admitted } = admittedCodexReviews(cwd, { where });
   return perLandedPr({

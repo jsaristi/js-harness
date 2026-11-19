@@ -307,7 +307,11 @@ test('--per-pr measures against the branch the merge queue lands on, gh\'s word 
     return key ? { ok: true, out: said[key], err: '' } : { ok: false, out: '', err: 'no' };
   };
   assert.equal(landingBranch(answers({ 'gh repo view': 'trunk\n', 'git rev-parse --verify --quiet refs/remotes/origin/trunk^{commit}': 'abc\n' })), 'refs/remotes/origin/trunk');
+  assert.ok(asked.some((one) => one.startsWith('gh repo view')), asked.join('\n'));
+  asked.length = 0;
   assert.equal(landingBranch(answers({ 'git symbolic-ref': 'refs/remotes/origin/main\n', 'git rev-parse --verify --quiet refs/remotes/origin/main^{commit}': 'abc\n' })), 'refs/remotes/origin/main');
+  // GitHub is asked only when origin names no HEAD.
+  assert.ok(!asked.some((one) => one.startsWith('gh ')), asked.join('\n'));
   assert.equal(landingBranch(answers({ 'git rev-parse': 'abc\n' })), null, 'no name, though origin holds main');
   assert.equal(landingBranch(answers({ 'gh repo view': 'trunk\n' })), null, 'a name this clone holds no ref of');
 });
