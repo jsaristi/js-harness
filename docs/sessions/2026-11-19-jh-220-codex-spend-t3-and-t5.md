@@ -23,7 +23,7 @@ The task came from the lead session JH ORQ, not typed by the owner; it is this s
     - 75840bac, 62cfe896: the recheck's fix.
     - 27cb11f9: L46.
   - What it does: `js-harness codex-meter --per-pr` prints Codex input per landed PR.
-  - Log: L38-L46.
+  - Log: L38-L48.
   - Baseline: 35 runs (1 with no count), 3,173,294 input tokens over all days, and 3,053,278 on 2026-11-14. These are L3's figures.
 
 ## Decisions
@@ -36,7 +36,7 @@ The task came from the lead session JH ORQ, not typed by the owner; it is this s
 - **The lead, 16:24 local:** cleared `conflictOnto` at `bin/lib/merge-queue-reviews.mjs:97` for T3. Recorded in L36.
 - **The lead:** Codex for T5 is covered by question 346 (wave 1, stop at 60% weekly).
 - **This session:** Codex reviews T5 from base `04b7ac53`, the range `check --push` named. `codex-review` has no `--head`, and `b044dbf7..HEAD` would also read main's 13 files.
-- **This session:** Codex's finding 3 (P3) is answered without a code change, in L46. The waiver is the owner's, through the lead.
+- **This session:** Codex's finding 3 (P3) is answered without a code change, in L46. The owner waived it on question 360 ("Dispensarlo y que entre (Recomendada)"), recorded in L48.
 
 ## Failures and lessons
 - **Three Codex reviews did not settle T5:** one P3 is open, "Scope the fixed baseline to the js-harness repository". It is passed to the lead with the ready.
@@ -50,7 +50,7 @@ The task came from the lead session JH ORQ, not typed by the owner; it is this s
 - **A heredoc through node lost backslash escapes twice,** in T3 and in round 4's test. Lesson: edit test text with the Edit tool.
 
 ## Left
-- **Finding 3's waiver:** the owner's, through the lead.
+- **Finding 3:** waived by the owner on question 360 (L48); it lands open.
 - **Follow-ups in L42:**
   - The help line `bin/js-harness.mjs:34` lacks `--per-pr`.
   - The README's codex-meter section does not show it.

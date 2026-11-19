@@ -184,7 +184,7 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
 - [x] T2 (kind: build) spec 2 — PR 883, main c7afe0be — `bin/lib/codex-review-turns.mjs`, `bin/codex-review.mjs` + tests — commit `fix(codex-review): review the gap below a merge of main alone`
 - [x] T3 (kind: build) spec 3 — branch fix/codex-spend-t3 (L34-L37) — `bin/merge-queue.mjs`, `bin/lib/pull-request.mjs`, `bin/lib/merge-queue-reviews.mjs:97` (cleared L36) + tests — commit `fix(merge-queue): a conflict with main names its fix`
 - [ ] T4 (kind: build) specs 4, 5 — `rules change double-review` on `rule/double-review-sequence`, `bin/double-review.mjs`, `bin/js-harness.mjs` usage + tests — commits `chore(rules): a question's double review reads Claude first` and `feat(double-review): Codex reads what Claude passed`
-- [x] T5 (kind: build) spec 6 — branch feat/codex-spend-t5 (L38-L47) — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
+- [x] T5 (kind: build) spec 6 — branch feat/codex-spend-t5 (L38-L48) — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
 - [ ] T6 (kind: verify) — the measure after the slices land, against the baseline, by Done-when's T6 line; result in the Log
 
 ## Log
