@@ -184,7 +184,7 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
 - [x] T2 (kind: build) spec 2 — PR 883, main c7afe0be — `bin/lib/codex-review-turns.mjs`, `bin/codex-review.mjs` + tests — commit `fix(codex-review): review the gap below a merge of main alone`
 - [x] T3 (kind: build) spec 3 — branch fix/codex-spend-t3 (L34-L37) — `bin/merge-queue.mjs`, `bin/lib/pull-request.mjs`, `bin/lib/merge-queue-reviews.mjs:97` (cleared L36) + tests — commit `fix(merge-queue): a conflict with main names its fix`
 - [ ] T4 (kind: build) specs 4, 5 — `rules change double-review` on `rule/double-review-sequence`, `bin/double-review.mjs`, `bin/js-harness.mjs` usage + tests — commits `chore(rules): a question's double review reads Claude first` and `feat(double-review): Codex reads what Claude passed`
-- [x] T5 (kind: build) spec 6 — branch feat/codex-spend-t5 (L38-L44) — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
+- [x] T5 (kind: build) spec 6 — branch feat/codex-spend-t5 (L38-L45) — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
 - [ ] T6 (kind: verify) — the measure after the slices land, against the baseline, by Done-when's T6 line; result in the Log
 
 ## Log
@@ -568,3 +568,16 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   their days, 3,173,294 input tokens; of them on 2026-11-14 alone: 3,053,278", its two notes; per-PR figures and
   rounds as L41 (864 1, 865 0, 866 4, 867 4, 868 3); by no land 720 runs (3 with no count, 2 before), orphaned 36,
   pending 55 (new runs since L41). Left: the recheck and the second recheck.
+- L45 2026-11-19, the lenses on round 5 (d4c78af..c23201a): reliability 0, resilience 0, readability two suggestions
+  (a read kept only to throw looked dead; the `landingBranch` test filled an `asked` list no assertion read), taken in
+  4e13e2ae (a comment on the line; the test pins that gh is asked only when origin names no HEAD, and a mutant that
+  always asks gh fails it), lenses 0 and 0 on it. Codex's recheck of d4c78af..4e13e2a, `--base 97fa01db^`: 9 of 12
+  fixed, 3 not, incorrect (0.98), 1,489,161 input tokens. Taken in 75840bac, inline by JH 220: findings 3 and 10, a
+  fork that kept this history and landed its own PR 864 (or its land record left in a clone) still joined the
+  baseline once git held the baseline's merge; `landedOwners` now keeps the merge that brought each commit in, and a
+  baseline run is one its PR's own merge (`BASELINE.merges`) brought in (the test, PR 7 merged twice, counted 2 runs
+  before and 1 now). Finding 12, Windows git honours `git_dir` as `GIT_DIR` and the case-sensitive filter kept it:
+  both test files drop `/^GIT_/i`, as `bin/check.test.mjs` does; with `git_dir` set to a scratch repository the old
+  filter leaked 12 refs (land-records) and 5 (codex-meter), the new one none. Lenses on 4e13e2a..75840ba: 0 and 0.
+  The real report at 75840bac, exit 0 in 85 s: the baseline line as at e709d8f4 (35 runs, 1 with no count, 3,173,294,
+  3,053,278), per-PR figures as L41. Left: the second recheck, the last review of the range.
