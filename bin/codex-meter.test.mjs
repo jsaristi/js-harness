@@ -12,7 +12,7 @@ import { withoutAutoMaintenance } from './lib/git-fixture.testkit.mjs';
 // A git hook, or a gate's run, hands GIT_DIR, GIT_INDEX_FILE and friends to what it starts; inherited here, they would
 // send the wiring test's git calls to that repository instead of its own (as bin/lib/project.test.mjs says).
 before(() => {
-  for (const key of Object.keys(process.env)) if (key.startsWith('GIT_')) delete process.env[key];
+  for (const key of Object.keys(process.env)) if (/^GIT_/i.test(key)) delete process.env[key];
 });
 
 // A fake `codex app-server` (see bin/lib/codex-meter.test.mjs): nothing here starts Codex.

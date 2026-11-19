@@ -10,7 +10,7 @@ import { BASELINE, busySeconds, codexFacts, landFacts, median, perLandedPr, perP
 // A git hook, or a gate's run, hands GIT_DIR, GIT_INDEX_FILE and friends to what it starts; inherited here, they would
 // send the fixture's git calls to that repository instead of the test's own (as bin/lib/project.test.mjs says).
 before(() => {
-  for (const key of Object.keys(process.env)) if (key.startsWith('GIT_')) delete process.env[key];
+  for (const key of Object.keys(process.env)) if (/^GIT_/i.test(key)) delete process.env[key];
 });
 
 const from = Date.parse('2026-10-16T00:00:00Z');
@@ -324,6 +324,11 @@ test('per landed PR: the baseline is the runs of its PRs\' own merges, so anothe
   const foreign = { ...BASELINE, prs: [1], merges: { 1: 'e'.repeat(40) } };
   const report = layoutReport(runs, { baseline: foreign });
   assert.deepEqual({ runs: report.baseline.runs, inputTokens: report.baseline.inputTokens }, { runs: 0, inputTokens: 0 });
+  // A run of another merge of a baseline PR's number, where git holds the baseline's merge too (a fork that kept this
+  // history and landed its own PR 7, or its land record left in this clone), is none of it: PR 7's land (15) is not
+  // the merge the baseline names (13).
+  const both = layoutReport([layoutRun('by-hand', 12, 10), layoutRun('by-land', 14, 12)], { baseline: { ...BASELINE, prs: [7], merges: { 7: id[13] } } });
+  assert.equal(both.baseline.runs, 1);
   assert.deepEqual(Object.keys(BASELINE.merges).map(Number), BASELINE.prs);
 });
 

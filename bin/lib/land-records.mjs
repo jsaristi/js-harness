@@ -195,12 +195,17 @@ function firstParentMerges(graph, from, to) {
  * brought in, `<merge>^1..<merge>^2`. A commit two lands brought in is the first one's. Then, as `pullRequestsOf`
  * (bin/lib/report-git.mjs) joins the commits of every merge of one PR, the other merges on the default branch's
  * first-parent line (`tip`) that name a PR a land landed: PR 731 was merged by hand (bd45a5b2) and then by its land
- * (d0cc6e69), which brought in only what the first had not. */
+ * (d0cc6e69), which brought in only what the first had not. `mergeOf` keeps the merge that brought each commit in. */
 function landedOwners(graph, lands, tip) {
   const owner = new Map();
+  const mergeOf = new Map();
   const claim = (merge, pr) => {
     const { parents } = graph.get(merge);
-    for (const id of reachable(graph, parents[1], reachable(graph, parents[0]))) if (!owner.has(id)) owner.set(id, pr);
+    for (const id of reachable(graph, parents[1], reachable(graph, parents[0]))) {
+      if (owner.has(id)) continue;
+      owner.set(id, pr);
+      mergeOf.set(id, merge);
+    }
   };
   const prOf = (merge) => Number(MERGE_OF_PR.exec(graph.get(merge).subject)?.[1]);
   const landed = lands
@@ -216,7 +221,7 @@ function landedOwners(graph, lands, tip) {
   }
   const landedPrs = new Set(landed.flatMap((land) => land.landed));
   for (const merge of firstParentMerges(graph, tip, null)) if (!claimed.has(merge) && landedPrs.has(prOf(merge))) claim(merge, prOf(merge));
-  return owner;
+  return { owner, mergeOf };
 }
 
 /** Codex input per landed PR, from the records alone. `runs` the run log's lines, `records` the Codex review records,
@@ -246,7 +251,7 @@ function landedOwners(graph, lands, tip) {
  * have been refused (L4). Rounds overlap the classes above. */
 export function perLandedPr({ runs, records = [], lands, doubleReviews = [], git, defaultRef = null, admitted = () => true, coverage, baseline = BASELINE }) {
   const { graph, tip } = commitGraph(git, lands, defaultRef);
-  const owner = landedOwners(graph, lands, tip);
+  const { owner, mergeOf } = landedOwners(graph, lands, tip);
   // With the default branch read, a branch's commits outside it are pending and its own commits, reached from its tip,
   // are on it (a failed land's candidate, which the graph holds too, puts nothing there). Without it the two are not
   // told apart: a commit on any branch is on a branch, and only one on none is orphaned. Asked only where a run is of no
@@ -279,9 +284,10 @@ export function perLandedPr({ runs, records = [], lands, doubleReviews = [], git
     else unattributed[kindOf(run.head)].push(run);
   }
   const prs = [...byPr].sort(([a], [b]) => a - b).map(([pr, own]) => prFigures(pr, own, { named, reread, graph, owner, cleanPasses }));
-  // A baseline PR is this repository's where git holds its merge (`BASELINE.merges`), never by its number alone.
-  const isBaseline = (pr) => baseline.prs.includes(pr) && graph.has(baseline.merges?.[pr]);
-  const baselineRuns = prs.filter((one) => isBaseline(one.pr)).flatMap((one) => one.ids.map((id) => runById.get(id)));
+  // A baseline run is one its PR's own merge brought in (`BASELINE.merges`), never one of the PR's number alone: another
+  // merge of that number, a fork's that kept this history or its land record left in this clone, is none of it.
+  const isBaseline = (run) => baseline.prs.includes(owner.get(run.head)) && mergeOf.get(run.head) === baseline.merges?.[owner.get(run.head)];
+  const baselineRuns = prs.filter((one) => baseline.prs.includes(one.pr)).flatMap((one) => one.ids.map((id) => runById.get(id))).filter(isBaseline);
   const onDay = baselineRuns.filter((run) => String(run.startedAt).startsWith(baseline.day));
   const listed = (bucket) => ({ ...tally(bucket), ids: bucket.map((run) => run.id), list: bucket.map((run) => ({ id: run.id, startedAt: run.startedAt, head: run.head, inputTokens: countOf(run) })) });
   return {
