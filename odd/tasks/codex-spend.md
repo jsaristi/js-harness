@@ -184,7 +184,7 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
 - [x] T2 (kind: build) spec 2 — PR 883, main c7afe0be — `bin/lib/codex-review-turns.mjs`, `bin/codex-review.mjs` + tests — commit `fix(codex-review): review the gap below a merge of main alone`
 - [x] T3 (kind: build) spec 3 — branch fix/codex-spend-t3 (L34-L37) — `bin/merge-queue.mjs`, `bin/lib/pull-request.mjs`, `bin/lib/merge-queue-reviews.mjs:97` (cleared L36) + tests — commit `fix(merge-queue): a conflict with main names its fix`
 - [ ] T4 (kind: build) specs 4, 5 — `rules change double-review` on `rule/double-review-sequence`, `bin/double-review.mjs`, `bin/js-harness.mjs` usage + tests — commits `chore(rules): a question's double review reads Claude first` and `feat(double-review): Codex reads what Claude passed`
-- [x] T5 (kind: build) spec 6 — branch feat/codex-spend-t5 (L38-L43) — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
+- [x] T5 (kind: build) spec 6 — branch feat/codex-spend-t5 (L38-L44) — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
 - [ ] T6 (kind: verify) — the measure after the slices land, against the baseline, by Done-when's T6 line; result in the Log
 
 ## Log
@@ -548,3 +548,23 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   days, 3,173,294 input tokens; of them on 2026-11-14 alone: 3,053,278", its two notes, "Re-read of covered code
   alone: 0 of 412 PRs"; per-PR figures and rounds as L41. Codex reads T5 once, as `check --push` names it:
   `codex-review --base 04b7ac53a258 --at e709d8f44f33` (3 parts, 930 changed lines, 3.96M-8.5M planned).
+- L44 2026-11-18, Codex's review of 04b7ac5..d4c78af (3 parts, 7,475,215 input tokens, 7,021,440 cached; planned
+  5.6M-12.7M): 12 findings, 7 P2 and 5 P3, verdict incorrect (0.99, 0.99, 0.98). Round 5, 97fa01db, writer of JH 220,
+  takes all twelve, tests first, each failed before its code: an unreadable `codex-reviews.jsonl` exits 1
+  (`readCodexReviews` read it as none); the default branch is the merge queue's (`defaultBranchOf`: origin's HEAD,
+  else `gh repo view`; `landingBranch`), and with none pending and on the default branch are one bucket, `onABranch`,
+  the branch walk still run; a count is one only from a rollout reading (`usageSource: 'rollout'`; one line, 2026-10-07,
+  no `usageSource` and 0 tokens, moves to no count); tokens a line take the runs with a count alone, both sides; on the
+  default branch is reached from its tip, so a failed candidate's ancestry stays orphaned; a round's clean pass is on
+  the reviewed head's first-parent line too; the baseline PRs are matched by their merges on main (`BASELINE.merges`);
+  "0 of 412 PRs with Codex runs (529 PRs landed)". The GIT_* reset of both test files: with GIT_DIR at a scratch
+  repository, 12 and 5 refs leaked without it, 0 with it. The trailing-space top (P3): no test, Windows holds no such
+  folder; `where` carries the common git dir alone and `reviewCoverage` reads the top with `--show-cdup` as the push
+  does, giving back round 2's 31 saved calls. Found by the advisor before the commit: with no default branch the walk
+  ran outside a repository and exited 1; it runs now only for a run of no landed PR (test first). Mutants: the 9
+  earlier still caught; of the wiring ones only `beyondTip` (equivalent) and `where` (saves processes) survive. The
+  real report at 97fa01db, exit 0 in 129 s (98 s just before the commit, same tree), as printed: "Baseline, PRs
+  864-868: 35 runs (1 of them with no count: ba57f254-b216-4807-ac21-a69f1b9f331e, 2026-11-14T12:16:11.982Z) over all
+  their days, 3,173,294 input tokens; of them on 2026-11-14 alone: 3,053,278", its two notes; per-PR figures and
+  rounds as L41 (864 1, 865 0, 866 4, 867 4, 868 3); by no land 720 runs (3 with no count, 2 before), orphaned 36,
+  pending 55 (new runs since L41). Left: the recheck and the second recheck.
