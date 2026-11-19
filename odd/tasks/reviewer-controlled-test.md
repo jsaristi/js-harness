@@ -1,9 +1,10 @@
 # reviewer-controlled-test: Codex 6.1 against 6.2, and the effort apart from the model
 
 ## State
-Steps 1 to 3 of miniplan 6 are done, with no Codex token spent: the design and the price are below, and the spend
-question (Q1) is the lead's question 359, put to him through the Plan when he is back (L8). Nothing paid runs, and
-T2 to T4 wait, until his answer. Next, on a yes: T2 to T4 (code for
+He approved the run with a cap of 20 points of the weekly window (question 359, L9). T2 to T4 are built (L10), with
+no Codex token spent. Next: T5, the runs, right after the weekly reset of 2026-11-23 23:45 local, A first, a
+`js-harness notify` to the lead at the start and at the end. The code slice waits for its Codex and lens reviews,
+which spend Codex too: the lead decides when they run against the window. Next, on a yes: T2 to T4 (code for
 the arms and the repeats, no Codex), then T5, the runs, right after the weekly reset of 2026-11-23 23:45 local.
 Open: Q1; and whether the double review of this design (protocol section 1) runs, since it spends Codex tokens the
 brief does not allow before his answer (L6). The arms' models are named by their short versions above the Log and
@@ -139,9 +140,9 @@ three days.
 
 ## Tasks
 - [x] T1 (kind: design) Read `evals/review` and the run log, price each arm, write this design. Spec: 5. Commit: this one.
-- [ ] T2 (kind: build) Arms B, C, D as `CONFIGS` entries on `own` with the document, A as a new entry on the current CLI; tests first. Spec: 1, 2. On his yes.
-- [ ] T3 (kind: build) A run index on a reading (`--run <n>`, the file `<config>__<range>__<n>.json`), the old readings kept as they are; tests first. Spec: 2. On his yes.
-- [ ] T4 (kind: build) The report shows every run of an arm and the arm's table of T6; tests first. Spec: 4. On his yes.
+- [x] T2 (kind: build) Arms A to D (`ARMS` in `evals/review/compare.mjs`) as configurations on `own` with the document, each run one of its own (`sol61-medium-1` to `sol62-high-2`); tests first. Spec: 1, 2. Commit: this one (L10).
+- [x] T3 (kind: build) Folded into T2: each run of an arm is a configuration of its own, so a reading stays one file a cell and no run index is needed; the old readings are untouched. Spec: 2 (L10).
+- [x] T4 (kind: build) The report's section of the arms: one table a range, one row a run, with input a changed line and prompt version; the comparison's count and `--require-complete` over its own nine cells. Spec: 4. Commit: this one (L10).
 - [ ] T5 (kind: verify) The approved runs, one at a time, meter before and after, after 2026-11-23 23:45 local. Spec: 3.
 - [ ] T6 (kind: docs) The table: arm, found of 7, invented on `real` (and its classes), `extra` on `seeded`, input a changed line, minutes, verdicts; what the sample cannot show. Then the lead's question with the pairs.
 
@@ -149,7 +150,7 @@ three days.
 - X1: harder planted defects, so recall can separate the arms; after the table, if he wants it.
 
 ## Questions
-- Q1 (his, through the lead, 2026-11-19): the spend of the run and its cap. Sent to the lead as L6 says; recorded as question 359 (L8).
+- Q1 (his, through the lead, 2026-11-19): the spend of the run and its cap. Sent to the lead as L6 says; recorded as question 359 (L8). Answered: yes, cap 20 points (L9).
 
 ## Log
 - L1 2026-11-19, his request, JH PLAN transcript `f5c3ee4d`, typed: "Dime como a mejorado de la version de 6.1 a 6.2 de sol?"
@@ -175,3 +176,13 @@ three days.
 - L8 2026-11-19, the lead (JH ORQ): Q1 recorded as question 359, to go to him through the Plan when he is back (away
   about eight hours); its card says the double review did not run and why. Until his answer nothing that spends
   runs, T2 to T4 wait, nothing is pushed.
+- L9 2026-11-19, his answer to question 359, tapped, JH PLAN transcript `f5c3ee4d` line 6312, 15:46:06Z (checked
+  here with `js-harness sessions --quote f5c3ee4d 6312`): "Sí, con tope de 20 puntos (Recomendada)". The lead's
+  terms: start right after the reset of 2026-11-23 23:45; cap 20 points, stop at 50% of the window, no reset
+  credits; A to C first, cheapest first, one at a time, the meter before each run; D only if A to C leave room;
+  no change to `rule:review-model` or `rule:review-effort`; notify the lead at the start and the end.
+- L10 2026-11-19, T2 to T4, tests first: 5 of 39 compare tests and 1 report test red before the code
+  (`node --test evals/review/compare.test.mjs`, `evals/review/report.test.mjs`), then green. Design change from the
+  plan: no `--run` index; each run of an arm is a configuration of its own, the smallest change that keeps one
+  reading a cell and every existing reading as it is. `--list` shows 25 cells, 9 recorded. Searched before adding:
+  `CONFIGS`, `CELLS`, `readReading` and the report's columns in `evals/review`; nothing measured arms.

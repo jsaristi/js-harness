@@ -26,7 +26,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CELLS, CONFIGS, RANGES, readReading } from './compare.mjs';
+import { ARM_RUNS, ARMS, CELLS, CONFIGS, RANGES, readReading } from './compare.mjs';
 
 const USAGE = 'Usage: node evals/review/report.mjs [--out <file>] [--require-complete]';
 
@@ -95,13 +95,16 @@ function usualCli(readings) {
 export function reportMarkdown({ readingsDir, ranges = RANGES }) {
   const missing = [];
   const sections = [];
+  // The comparison's own cells: the runs of the arms are a section of their own (`armsSection`), and not one of
+  // them makes the comparison incomplete.
+  const compared = CELLS.filter((cell) => CONFIGS.some((one) => one.name === cell.config && one.arm === null));
   for (const range of ranges) {
     const scored = range.seeded === true;
     const shown = columns(scored);
     const rows = [];
     const notes = [];
     const read = [];
-    for (const config of CONFIGS.filter((one) => CELLS.some((cell) => cell.config === one.name && cell.range === range.name))) {
+    for (const config of CONFIGS.filter((one) => one.arm === null && compared.some((cell) => cell.config === one.name && cell.range === range.name))) {
       const found = readReading(readingsDir, config.name, range.name);
       if (!found.ok) {
         missing.push(`${config.name}:${range.name}`);
@@ -143,19 +146,63 @@ export function reportMarkdown({ readingsDir, ranges = RANGES }) {
       '',
     ].join('\n'));
   }
-  const recorded = CELLS.length - missing.length;
+  const recorded = compared.length - missing.length;
   const text = [
     '# Codex review: the configurations, side by side',
     '',
-    `One Codex review a cell, read by \`evals/review/compare.mjs\`: ${recorded} of ${CELLS.length} cells are recorded. A cell with no reading is a row of dashes; ` +
+    `One Codex review a cell, read by \`evals/review/compare.mjs\`: ${recorded} of ${compared.length} cells are recorded. A cell with no reading is a row of dashes; ` +
       'a count the run did not report is `unknown`. Findings are those the review gave as data; for the seeded range, `found` is how many of its known defects they name and `extra` how many findings name none.',
     '',
     `\`model\` is the model and the reasoning effort the review session ran with, as its own rollout file says. One followed by \`${NOT_MEASURED}\` was not measured: ` +
       'it is what the command passed or what the user\'s configuration names, and the session may have run another.',
     '',
     ...sections,
+    armsSection({ readingsDir, ranges }),
   ].join('\n');
   return { text, recorded, missing };
+}
+
+/** The input a reading spent on each changed line its review saw, rounded: `unknown` when it saw none or did
+ * not say how many. */
+const perChangedLine = ({ usage, coverage }) => (Number.isFinite(usage?.inputTokens) && Number.isFinite(coverage?.total) && coverage.total > 0 ? counted(Math.round(usage.inputTokens / coverage.total)) : 'unknown');
+
+/** The section of the arms of the controlled test of the reviewer (`ARMS` in `./compare.mjs`,
+ * odd/tasks/reviewer-controlled-test.md): one table a range, one row a run, with the columns of the comparison,
+ * the input a changed line (the runs are compared on ranges of other sizes than the reviews of real work) and the
+ * version of the prompt each was asked with, which every arm must share for the rows to compare. A run with no
+ * reading is a row of dashes, as a cell is above. */
+function armsSection({ readingsDir, ranges }) {
+  const runs = CONFIGS.filter((one) => one.arm !== null);
+  const cells = CELLS.filter((cell) => runs.some((one) => one.name === cell.config));
+  let recorded = 0;
+  const tables = ranges.map((range) => {
+    const shown = [...columns(range.seeded === true), ['input a changed line', perChangedLine], ['prompt version', (reading) => reading.promptVersion ?? 'unknown']];
+    const rows = runs.filter((config) => cells.some((cell) => cell.config === config.name && cell.range === range.name)).map((config) => {
+      const found = readReading(readingsDir, config.name, range.name);
+      if (!found.ok) return [config.name, config.arm, 'missing', ...shown.slice(1).map(() => '-')];
+      recorded += 1;
+      return [config.name, config.arm, ...shown.map(([, cell]) => String(cell(found.reading)))];
+    });
+    const headings = ['run', 'arm', ...shown.map(([heading]) => heading)];
+    return [
+      `### ${range.name}: ${range.base.slice(0, 7)}..${range.head.slice(0, 7)}`,
+      '',
+      `| ${headings.join(' | ')} |`,
+      `| ${headings.map((heading, at) => (at < 3 ? '---' : '---:')).join(' | ')} |`,
+      ...rows.map((row) => `| ${row.join(' | ')} |`),
+      '',
+    ].join('\n');
+  });
+  return [
+    '## The arms of the controlled test',
+    '',
+    `The runs of odd/tasks/reviewer-controlled-test.md, ${ARM_RUNS} a range an arm, each on the model and at the effort of its arm: ${recorded} of ${cells.length} runs are recorded. ` +
+      'They are not cells of the comparison above, and a run that has not been made leaves it complete.',
+    '',
+    ...ARMS.map(({ arm, model, effort, why }) => `- ${arm}: ${model} at ${effort}, ${why}.`),
+    '',
+    ...tables,
+  ].join('\n');
 }
 
 class ArgError extends Error {}
@@ -192,7 +239,7 @@ export function reportMain(argv = process.argv.slice(2), deps = {}) {
   }
   const results = path.join(repoRoot, 'evals', 'results', 'review');
   const out = args.out === null ? path.join(results, 'report.md') : path.resolve(args.out);
-  const { text, missing } = reportMarkdown({ readingsDir: path.join(results, 'readings') });
+  const { text, recorded, missing } = reportMarkdown({ readingsDir: path.join(results, 'readings') });
   log(text.trimEnd());
   try {
     fs.mkdirSync(path.dirname(out), { recursive: true });
@@ -202,7 +249,7 @@ export function reportMain(argv = process.argv.slice(2), deps = {}) {
     return 1;
   }
   if (args.requireComplete && missing.length > 0) {
-    error(`${missing.length} of ${CELLS.length} cells have no reading: ${missing.join(', ')}. Each is one Codex review: \`node evals/review/compare.mjs --cell <cell>\`.`);
+    error(`${missing.length} of ${recorded + missing.length} cells have no reading: ${missing.join(', ')}. Each is one Codex review: \`node evals/review/compare.mjs --cell <cell>\`.`);
     return 1;
   }
   return 0;

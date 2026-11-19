@@ -104,6 +104,42 @@ test('a recorded cell is a row of what its reading holds: the outcome, the findi
   assert.doesNotMatch(text, /default|should|recommend|better|winner/i, 'it reports, and chooses nothing');
 });
 
+/** The section of the arms of the controlled test, and in it the table of the range `name`. */
+const arms = (text) => text.split(/^## /m).find((part) => part.startsWith('The arms of the controlled test')) ?? '';
+const armTable = (text, name) => arms(text).split(/^### /m).find((part) => part.startsWith(`${name}:`)) ?? '';
+const ARM_COLUMNS = (scored) => ['run', 'arm', ...(scored ? SEEDED_COLUMNS : REAL_COLUMNS).slice(1), 'input a changed line', 'prompt version'];
+const ARM_RUNS = ['sol61-medium-1', 'sol61-medium-2', 'sol62-medium-1', 'sol62-medium-2', 'sol62-max-1', 'sol62-max-2', 'sol62-high-1', 'sol62-high-2'];
+
+test('the arms of the controlled test are a section of their own: one table a range, one row a run, with the input a changed line and the prompt version', () => {
+  const repo = repository();
+  const empty = run([], repo);
+  assert.equal(empty.code, 0, empty.err);
+  let text = fs.readFileSync(repo.out, 'utf8');
+  // Their runs are not cells of the comparison: the tables above and its count are what they were.
+  assert.match(text, /0 of 9 cells are recorded/);
+  assert.equal(row(section(text, 'real'), 'sol61-medium-1'), undefined, 'an arm is not a row of the comparison');
+  assert.match(arms(text), /0 of 16 runs are recorded/);
+  for (const name of ['real', 'seeded']) {
+    const table = armTable(text, name);
+    assert.deepEqual(row(table, 'run'), ARM_COLUMNS(name === 'seeded'), name);
+    for (const config of ARM_RUNS) assert.deepEqual(row(table, config).slice(0, 3), [config, config === ARM_RUNS[0] || config === ARM_RUNS[1] ? 'A' : config.startsWith('sol62-medium') ? 'B' : config.startsWith('sol62-max') ? 'C' : 'D', 'missing'], `${name} ${config}`);
+  }
+  // A run that is recorded: the input over the changed lines its review saw, rounded, and the version of its prompt.
+  record(repo, 'sol62-max-1', 'seeded', { model: 'gpt-6.2-sol', effort: 'max', modelSource: 'session', configuredModel: 'gpt-6.2-sol', configuredEffort: 'max', prompt: 'own', promptVersion: 'js-harness.codex-review-prompt/v4', coverage: { seen: 226, total: 226 }, usage: { inputTokens: 1000000, cachedInputTokens: 900000, outputTokens: 5000, reasoningOutputTokens: 3000 } });
+  assert.equal(run([], repo).code, 0);
+  text = fs.readFileSync(repo.out, 'utf8');
+  assert.match(arms(text), /1 of 16 runs are recorded/);
+  assert.deepEqual(row(armTable(text, 'seeded'), 'sol62-max-1'), ['sol62-max-1', 'C', 'reviewed', '3', '2/7', '1', '1,000,000', '100,000', '5,000', '2', '18,200', '60', '0.160.1', 'gpt-6.2-sol max', '4,425', 'js-harness.codex-review-prompt/v4']);
+  // A run whose review saw no changed line, or did not say how many, has no input a changed line to give.
+  record(repo, 'sol62-max-2', 'seeded', { coverage: { seen: 0, total: 0 } });
+  run([], repo);
+  assert.equal(row(armTable(fs.readFileSync(repo.out, 'utf8'), 'seeded'), 'sol62-max-2').at(-2), 'unknown');
+  // The arms that have not run do not make the comparison incomplete.
+  recordAll(repo, (config) => (config.startsWith('sol') ? { outcome: 'reviewed' } : {}));
+  for (const config of ARM_RUNS) for (const range of ['real', 'seeded']) fs.rmSync(readingFile(repo.readings, config, range), { force: true });
+  assert.equal(run(['--require-complete'], repo).code, 0);
+});
+
 test('a reading that is no review shows its outcome, and a count that is not known says `unknown`, never zero', () => {
   const repo = repository();
   const nothing = { inputTokens: null, cachedInputTokens: null, outputTokens: null, reasoningOutputTokens: null };
@@ -214,7 +250,7 @@ test('--require-complete exits 1 and lists the cells with no reading, and exits 
   const none = run(['--require-complete'], repo);
   assert.equal(none.code, 1);
   assert.match(none.err, /9 of 9 cells have no reading/);
-  for (const { config, range } of CELLS) assert.ok(none.err.includes(`${config}:${range}`), `${config}:${range}`);
+  for (const { config, range } of CELLS) assert.equal(none.err.includes(`${config}:${range}`), !config.startsWith('sol'), `${config}:${range}: a cell of the comparison is named, a run of an arm is not`);
   assert.ok(fs.existsSync(repo.out), 'the report is written all the same');
   recordAll(repo);
   fs.rmSync(readingFile(repo.readings, 'lean-codegraph', 'real'));
