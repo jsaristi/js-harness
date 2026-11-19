@@ -217,3 +217,8 @@ three days.
   Incorrect: 19 of 19 first reviews, 34 of 43 in all. The lead's 104k to 1.46M, 0.51 to 5.06 findings and 17 of 17
   were not reproduced under any definition tried, and the question says so. No Codex ran; the double review was not
   run because the lead barred Codex.
+- L15 2026-11-19, his answer to question 378, tapped at 15:53 local: "Pasar a high" (JH PLAN transcript
+  f5c3ee4d-2c09-416a-addb-ea2b5e6c3e8d line 7639, read with `js-harness sessions --quote`). His choice is high
+  for the review effort on 6.2 until this test reports. The rules change has not run, on the lead's word: two
+  typed lines are owed, his yes to high and "no quiero la revisión" for the double review the question skipped.
+  The lead relays both when he types them. No Codex ran.
