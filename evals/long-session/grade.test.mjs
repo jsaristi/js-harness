@@ -35,6 +35,9 @@ function session({ habits = {}, upTo = TURNS.length } = {}) {
       continue;
     }
     lines.push({ type: 'user', isSidechain: false, timestamp: at(), message: { role: 'user', content: turn.text } });
+    if (habits.preamble === turn.n) say('First I will look at the repository.');
+    // The good agent looks at the repository each turn, so each reply follows English tool output; a quiet turn has none.
+    if (!habits.quiet?.includes(turn.n)) call('Bash', { command: 'git status --short --branch' }, { out: '## main\nnothing to commit, working tree clean' });
     const feature = FEATURES.find((item) => n(item.label) === turn.n);
     // The good agent builds f1 and f2 in their opening turn and f3 on the turn after the compaction, test first.
     const builds = feature && feature.label !== 'f3' ? feature : turn.label === 'resume' ? FEATURES[2] : null;
@@ -149,6 +152,22 @@ test('moment 2 passes at 95% of the replies in Spanish and fails below it', asyn
   assert.equal(two.moments.spanish.pass, false);
   assert.match(two.moments.spanish.why, /27 of 29/);
   assert.deepEqual(MOMENTS.filter((moment) => !two.moments[moment].pass), ['spanish']);
+});
+
+test('moment 2 reads only the replies that follow tool output in their turn', async (t) => {
+  const codex = fakeCodex();
+  const quiet = await gradeRun({ record: record(), dir: kept(t, session({ habits: { quiet: [13], english: 13 } })), turns: TURNS, askCodex: codex.ask });
+  assert.equal(quiet.moments.spanish.pass, true, quiet.moments.spanish.why);
+  assert.match(quiet.moments.spanish.why, /^28 of 28 replies after tool output in Spanish/);
+  assert.doesNotMatch(codex.prompts[0], /^REPLY 13: /m, 'a turn with no tool output is not judged');
+  const before = await gradeRun({ record: record(), dir: kept(t, session({ habits: { preamble: 13 } })), turns: TURNS, askCodex: fakeCodex().ask });
+  assert.match(before.moments.spanish.why, /^29 of 29 /, 'the text before the first tool output of a turn is not judged');
+  const none = fakeCodex();
+  const noResults = session().filter((line) => !(line.type === 'user' && Array.isArray(line.message.content) && line.message.content[0]?.type === 'tool_result'));
+  const silent = await gradeRun({ record: record(), dir: kept(t, noResults), turns: TURNS, askCodex: none.ask });
+  assert.equal(silent.moments.spanish.pass, false);
+  assert.match(silent.moments.spanish.why, /no reply followed tool output/);
+  assert.equal(none.prompts.filter((prompt) => prompt.includes('MOMENT spanish')).length, 0, 'nothing to judge, no judge asked');
 });
 
 test('moment 3 takes Codex\'s verdict on the premise turn', async (t) => {

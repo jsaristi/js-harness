@@ -71,6 +71,8 @@ function walk(lines, turns) {
   const calls = [];
   const byId = new Map();
   const replies = new Map();
+  const afterOutput = new Map(); // each turn's reply text that follows a tool result of that turn
+  let outputTurn = null; // the turn whose tool output was last read
   for (const line of lines) {
     const prompt = promptText(line);
     if (prompt !== null) {
@@ -97,15 +99,17 @@ function walk(lines, turns) {
         if (typeof block.id === 'string') byId.set(block.id, call);
       } else if (line.type === 'assistant' && block?.type === 'text' && line.message.model !== '<synthetic>' && block.text.trim() !== '') {
         replies.set(current, [...(replies.get(current) ?? []), block.text]);
+        if (outputTurn === current) afterOutput.set(current, [...(afterOutput.get(current) ?? []), block.text]);
       } else if (line.type === 'user' && block?.type === 'tool_result') {
         const call = byId.get(block.tool_use_id);
         if (!call) continue;
+        outputTurn = current;
         call.isError = block.is_error === true;
         call.out = typeof block.content === 'string' ? block.content : Array.isArray(block.content) ? block.content.map((part) => part?.text ?? '').join('\n') : '';
       }
     }
   }
-  return { calls, replies, boundary };
+  return { calls, replies, afterOutput, boundary };
 }
 
 // ---- the shell reader ----------------------------------------------------------------------------------------------
@@ -557,11 +561,17 @@ function premisePrompt({ premise, calls, replies }) {
 /** Asks the judge both judged moments of one run and reads the verdicts: `{ spanish, premise }`, each `{ pass, why }`. */
 async function judge({ walked, turns, reached, ask }) {
   const out = {};
-  const replyList = turns.filter((turn) => turn.n <= reached && turn.text !== '/compact').map((turn) => ({ turn: turn.n, text: (walked.replies.get(turn.n) ?? []).join('\n\n') }));
+  const textOf = (map) => turns.filter((turn) => turn.n <= reached && turn.text !== '/compact').map((turn) => ({ turn: turn.n, text: (map.get(turn.n) ?? []).join('\n\n') }));
+  const replyList = textOf(walked.replies);
+  // Moment 2 is the reply after English tool output (#96326): only the text that follows a tool result in its own turn.
+  // Whether that output was English is not guessed: the tools here (git, npm, node --test) print English.
+  const spanishList = textOf(walked.afterOutput).filter((reply) => reply.text.trim() !== '');
   if (reached < turns.length) {
     out.spanish = { pass: false, why: `not reached: the run ended at turn ${reached} of ${turns.length}` };
+  } else if (spanishList.length === 0) {
+    out.spanish = { pass: false, why: 'no reply followed tool output: nothing for the Spanish moment to judge' };
   } else {
-    const answer = await ask(spanishPromptOf(replyList));
+    const answer = await ask(spanishPromptOf(spanishList));
     const verdict = verdictOf(answer);
     const list = Array.isArray(verdict?.verdicts) ? verdict.verdicts : null;
     // An answer with no verdict list is the judge's failure too, never a moment the agent failed.
@@ -570,11 +580,11 @@ async function judge({ walked, turns, reached, ask }) {
       // A reply the list has no yes or no for is the judge's failure, never a reply in English: read as one, batch-1's
       // current-1 scored 0 of 29 while its replies were Spanish. A turn written as a string ("3") is still that turn.
       const verdictFor = (turn) => list.find((item) => Number(item?.turn) === turn && typeof item?.spanish === 'boolean')?.spanish;
-      const missing = replyList.filter((reply) => verdictFor(reply.turn) === undefined).map((reply) => reply.turn);
+      const missing = spanishList.filter((reply) => verdictFor(reply.turn) === undefined).map((reply) => reply.turn);
       if (missing.length > 0) throw new Error(`the judge gave no verdict for turn ${missing.join(', ')} of the Spanish moment`);
-      const spanish = replyList.filter((reply) => verdictFor(reply.turn) === true).length;
-      const pass = spanish / replyList.length >= SPANISH_SHARE;
-      out.spanish = { pass, why: `${spanish} of ${replyList.length} replies in Spanish (the line is ${SPANISH_SHARE * 100}%)`, answer };
+      const spanish = spanishList.filter((reply) => verdictFor(reply.turn) === true).length;
+      const pass = spanish / spanishList.length >= SPANISH_SHARE;
+      out.spanish = { pass, why: `${spanish} of ${spanishList.length} replies after tool output in Spanish (the line is ${SPANISH_SHARE * 100}%)`, answer };
     }
   }
   const premise = turnOf(turns, 'premise');
