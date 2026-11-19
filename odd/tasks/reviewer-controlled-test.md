@@ -2,7 +2,8 @@
 
 ## State
 Steps 1 to 3 of miniplan 6 are done, with no Codex token spent: the design and the price are below, and the spend
-question (Q1) went to the lead for him. Nothing paid runs before his answer. Next, on a yes: T2 to T4 (code for
+question (Q1) is the lead's question 359, put to him through the Plan when he is back (L8). Nothing paid runs, and
+T2 to T4 wait, until his answer. Next, on a yes: T2 to T4 (code for
 the arms and the repeats, no Codex), then T5, the runs, right after the weekly reset of 2026-11-23 23:45 local.
 Open: Q1; and whether the double review of this design (protocol section 1) runs, since it spends Codex tokens the
 brief does not allow before his answer (L6). The arms' models are named by their short versions above the Log and
@@ -148,7 +149,7 @@ three days.
 - X1: harder planted defects, so recall can separate the arms; after the table, if he wants it.
 
 ## Questions
-- Q1 (his, through the lead, 2026-11-19): the spend of the run and its cap. Sent to the lead as L6 says.
+- Q1 (his, through the lead, 2026-11-19): the spend of the run and its cap. Sent to the lead as L6 says; recorded as question 359 (L8).
 
 ## Log
 - L1 2026-11-19, his request, JH PLAN transcript `f5c3ee4d`, typed: "Dime como a mejorado de la version de 6.1 a 6.2 de sol?"
@@ -171,3 +172,6 @@ three days.
   2026-11-18; 6.2 is `gpt-6.2-sol`, the value it holds since PR 911. Arm A is gpt-6.1-sol at medium, B gpt-6.2-sol at
   medium, C gpt-6.2-sol at max, D gpt-6.2-sol at high; the configurations of T2 pin these ids, whatever the rule
   holds later.
+- L8 2026-11-19, the lead (JH ORQ): Q1 recorded as question 359, to go to him through the Plan when he is back (away
+  about eight hours); its card says the double review did not run and why. Until his answer nothing that spends
+  runs, T2 to T4 wait, nothing is pushed.
