@@ -9,7 +9,7 @@ pull request, landed by the lead (JH ORQ) · Brief: miniplan 3 of JH PLAN, 2026-
 PR 921 is a draft (the lead's order), so no land takes it; it is un-drafted once his D-block decisions are in. The
 cards go to him one at a time: this session records each as a question, the lead sends its number to JH PLAN, which
 asks him, and the next is recorded only once the last is answered. Decided: D-b1 (question 364, L16), D-b2 (question
-365, L18). Asked: D-c2 (question 366, L18). Still to ask, in the lead's order (L17): D-c1 (its card covers D-a4, which its answer
+365, L18). Asked: D-c2 (question 367, L19; 366 withdrawn). Still to ask, in the lead's order (L17): D-c1 (its card covers D-a4, which its answer
 decides), D-a7, D-a1 (worded after `rules-data.mjs:665-667` is read). No double review has run.
 The audit and the build plan are written; nothing is built.
 
@@ -302,7 +302,10 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
   figure), about 16M with up to three rounds, and about 25M more for four design reads at the last read's measured cost
   (JH 227's read 8d32c0e7: 2.17M Claude, 6.17M Codex each), and 6.17M for this document's own double review: about
   47M Codex central, about 64M at the high figure (three rounds at 11M a round), which the card puts as the ceiling;
-  about 11M Claude for the five reads, the verifiers of D, E and G not costed. A yes is his answer, given once, to
+  about 11M Claude for the five reads, the verifiers of D, E and G not costed. In the Codex week (an estimate: 1
+  weekly point is about 0.75M, from JH 235's read priced at 2.9M to 7M for 4 to 9 points), 47M is about 63 points and
+  64M about 85, more than a whole week under his 60% stop (question 346), so C to H spans two or three weekly windows;
+  the stop holds each week, and the ceiling is spent across windows, never past 60% in one. A yes is his answer, given once, to
   each review of C to H inside the ceiling; the rule that asks each review over its allowance
   (`bin/lib/codex-review-allowance.mjs:104`) changes only with D-c1 and slice F. Options: A, approve it as the ceiling
   for the whole build, each slice told what it used (recommended); B, slice by slice, at least one question a slice.
@@ -389,3 +392,8 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
   (`2026-11-19T16:26:00Z`, read with `sessions --quote`); JH PLAN recorded it, verified. C2 refuses a start the lead
   makes for a new request that names no miniplan (slice E). PR 923 (`feat/codex-spend-t5`), which slice D waits on, is
   landing (the lead). D-c2 is asked as question 366, its ceiling put at the high figure.
+- L19 (the lead, by direct message): question 366 left out how the ceiling sits against the weekly window and his 60%
+  stop (question 346, whose option says the lead stops and tells him at 60% weekly, f5c3ee4d:3359). Withdrawn ("weekly
+  share missing") and asked again as question 367: about 63 points central and 85 high at an estimated 0.75M a point
+  (JH 235's read, 2.9M to 7M for 4 to 9 points), two or three weekly windows, never past 60% in one; the meter read
+  51% weekly, resetting 2026-11-23 23:45 local. The lead had not sent 366 to JH PLAN.
