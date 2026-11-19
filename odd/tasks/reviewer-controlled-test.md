@@ -206,3 +206,6 @@ three days.
   fixed; one not: the CLI and prompt version were compared within each range's table, so a range read wholly on
   another version agreed with itself. Answered: they are now compared against the runs of both ranges, with a test
   that a `real` run on another CLI than the `seeded` runs is noted. No third round, on the lead's word.
+  The lenses on f5994b6..a47f50f (reliability, risk, with this document): reliability 1 SUGGESTION, an arm
+  table's heading read "undefined changed lines" for a range that names none; fixed with a test in the next
+  commit. Risk 0.

@@ -233,7 +233,7 @@ function armsSection({ readingsDir, ranges }) {
     }
     const headings = ['run', 'arm', ...shown.map(([heading]) => heading), 'counts', ...more.map(([heading]) => heading)];
     return [
-      `### ${range.name}: ${range.base.slice(0, 7)}..${range.head.slice(0, 7)}, ${range.changedLines} changed lines`,
+      `### ${range.name}: ${range.base.slice(0, 7)}..${range.head.slice(0, 7)}, ${Number.isInteger(range.changedLines) ? counted(range.changedLines) : 'unknown'} changed lines`,
       '',
       `| ${headings.join(' | ')} |`,
       `| ${headings.map((heading, at) => (at < 3 ? '---' : '---:')).join(' | ')} |`,

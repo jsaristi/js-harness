@@ -321,3 +321,12 @@ test('--out names the file the report is written to; a bad command line is a usa
   assert.equal(blocked.code, 1);
   assert.match(blocked.err, /Could not write the report/);
 });
+
+test('an arm table whose range names no changed lines says unknown, not undefined', () => {
+  const readingsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'arms-heading-'));
+  const ranges = RANGES.map(({ changedLines, ...range }) => range);
+  const markdown = reportMarkdown({ readingsDir, ranges }).text;
+  assert.doesNotMatch(markdown, /undefined/);
+  assert.match(markdown, /^### real: \w{7}\.\.\w{7}, unknown changed lines$/m);
+  fs.rmSync(readingsDir, { recursive: true, force: true });
+});
