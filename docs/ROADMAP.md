@@ -931,8 +931,8 @@ of the first version.
   `docs/stretch-state-after-879`. Owner: the next stretch-protocol session, JH 201 having closed (2026-11-14, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
 - [ ] The plan review with a verifier pass, run on Opus because the guard refused Fable for sub-agents: if it
   proves useful, it becomes a plan-review command. Owner: this entry, until a session takes it (2026-11-14, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
-- [ ] `merge-queue --dry-run` passed on a stale installed copy while `--land` refused it (the 882 land, 2026-11-15
-  06:29 local): the dry-run checks copy == origin/main's bin too. Owner: the next merge-queue session (2026-11-15, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
+- [x] `merge-queue --dry-run` passed on a stale installed copy while `--land` refused it (the 882 land, 2026-11-15
+  06:29 local): the dry-run checks copy == origin/main's bin too. Owner: the next merge-queue session (2026-11-15, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`). Done: PR 922 (`d7b98f92`).
 - [ ] `sessions start` takes a base: the lead made JH 207's worktree by hand on PR 883's head
   (`git worktree add -b feat/review-gate ... 08653f93`) because start has no base option; and a brief template, since
   the review-gate brief was patched four times and three briefs carried a stale gate step. Owner: the next
