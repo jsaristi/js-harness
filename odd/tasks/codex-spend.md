@@ -184,7 +184,7 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
 - [x] T2 (kind: build) spec 2 — PR 883, main c7afe0be — `bin/lib/codex-review-turns.mjs`, `bin/codex-review.mjs` + tests — commit `fix(codex-review): review the gap below a merge of main alone`
 - [x] T3 (kind: build) spec 3 — branch fix/codex-spend-t3 (L34-L37) — `bin/merge-queue.mjs`, `bin/lib/pull-request.mjs`, `bin/lib/merge-queue-reviews.mjs:97` (cleared L36) + tests — commit `fix(merge-queue): a conflict with main names its fix`
 - [ ] T4 (kind: build) specs 4, 5 — `rules change double-review` on `rule/double-review-sequence`, `bin/double-review.mjs`, `bin/js-harness.mjs` usage + tests — commits `chore(rules): a question's double review reads Claude first` and `feat(double-review): Codex reads what Claude passed`
-- [x] T5 (kind: build) spec 6 — branch feat/codex-spend-t5 (L38-L45) — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
+- [x] T5 (kind: build) spec 6 — branch feat/codex-spend-t5 (L38-L46) — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
 - [ ] T6 (kind: verify) — the measure after the slices land, against the baseline, by Done-when's T6 line; result in the Log
 
 ## Log
@@ -581,3 +581,12 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   filter leaked 12 refs (land-records) and 5 (codex-meter), the new one none. Lenses on 4e13e2a..75840ba: 0 and 0.
   The real report at 75840bac, exit 0 in 85 s: the baseline line as at e709d8f4 (35 runs, 1 with no count, 3,173,294,
   3,053,278), per-PR figures as L41. Left: the second recheck, the last review of the range.
+- L46 2026-11-19, Codex's second recheck of 4e13e2a..62cfe89, `--base 75840bac^`, the last of the three reviews:
+  2 of 3 fixed (10, 12), 1 not (3, P3), incorrect (0.98), 300,514 input tokens; T5's Codex reviews come to
+  7,475,215 + 1,489,161 + 300,514 = 9,264,890. Finding 3, as it stands: a js-harness clone whose `origin` is
+  switched to a fork that kept the upstream merges still prints the baseline from its own record files. Answered,
+  not changed: the baseline is the runs this clone's records hold of the merges `BASELINE.merges` names, which are
+  those PRs' spend wherever `origin` now points; no run line, record or land line carries a repository identity, and
+  `origin`'s URL is no such identity either (a rename or a mirror would drop the baseline). The command only
+  reads and prints. A change would need a fourth review, which the rules do not give a range, so it goes to the lead
+  with the ready.
