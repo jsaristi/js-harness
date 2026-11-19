@@ -9,8 +9,8 @@ pull request, landed by the lead (JH ORQ) · Brief: miniplan 3 of JH PLAN, 2026-
 PR 921 is a draft (the lead's order), so no land takes it; it is un-drafted once his D-block decisions are in. The
 cards go to him one at a time: this session records each as a question, the lead sends its number to JH PLAN, which
 asks him, and the next is recorded only once the last is answered. Decided: D-b1 (question 364, L16), D-b2 (question
-365, L18). Asked: D-c2 (question 367, L19; 366 withdrawn). Still to ask, in the lead's order (L17): D-c1 (its card covers D-a4, which its answer
-decides), D-a7, D-a1 (worded after `rules-data.mjs:665-667` is read). No double review has run.
+365, L18), D-c2 (question 367, L21; 366 withdrawn). Asked: D-c1, which decides D-a4 too (question 370, L21). Still to ask, in the lead's
+order (L17): D-a7, D-a1 (worded after `rules-data.mjs:665-667` is read). No double review has run.
 The audit and the build plan are written; nothing is built.
 
 ## Goal
@@ -231,6 +231,11 @@ JH 234 builds the closing of finished sessions now on `bin/check.mjs`, `bin/doct
 `bin/lib/lens-review-rows.mjs`, `bin/lib/codex-review-rows.mjs` and `bin/lib/rules-data.mjs`; no slice here edits
 those files while JH 234 is open, so C's and F's lines in `rules-data.mjs` start only after JH 234 lands (L15).
 
+Order of the build (L21): after the Codex weekly reset of 2026-11-23 23:45 local, JH 233's test arms run first (his
+question 359, tapped, f5c3ee4d:6312: "empezando justo después del reinicio"), then S8, then this plan's slices (S8
+before the slices on the lead's word); the slices spend within question 367's ceiling and
+never past 60% of one week.
+
 Total, estimated: about 550 changed lines of code and text, at least 2,168 removed in D, and about 5.5M Codex input
 tokens across C to H (about 11M at the tool's high figure, 2.05 times) at today's fit, for one Codex round a slice
 only (A and B ride the reviews 227 and 229 already owe). Not in that figure: recheck rounds (JH 224 needed three
@@ -281,7 +286,7 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
   the Plan on his go, like every other session the miniplan orders". Options: A, yes: the guard admits the Plan's
   start of a senior named in the miniplan it hands over (slice E); B, seniors stay the lead's to start, and each one
   costs him one typed line in the lead's chat (the app's typed-turn lock); his words in "Other".
-- **D-a4, review spend inside a miniplan.** Subject, word for word: "a review inside the Codex spend its miniplan's
+- **D-a4, review spend inside a miniplan: asked with D-c1, question 370.** Subject, word for word: "a review inside the Codex spend its miniplan's
   Budget states is not asked; a piece of work that passes it is asked once". Options: A, yes, as written
   (recommended: one approval a piece of work); B, every review over the allowance is asked, as today; his words in
   "Other".
@@ -295,10 +300,12 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
 - **D-b2, C2 refuses or warns: decided A, question 365** ("Rechaza (Recomendada)", tapped, f5c3ee4d:6616,
   `2026-11-19T16:26:00Z`, recorded verified by JH PLAN; L18). Subject: "a start the lead makes for a new request that names no miniplan is
   refused". Options: A, refuses (recommended: his "el arranca sin plan", line 3509); B, warns.
-- **D-c1, the policy of review spend.** The same choice as D-a4 put as the harness's policy: A, a miniplan's Budget
-  states its Codex spend and his go covers its reviews (recommended); B, a question per review, with only the floor
-  and rate raised to today's measure; C, both.
-- **D-c2, this plan's spend, as one figure.** About 5.5M Codex input for one round of C to H (11M at the high
+- **D-c1, the policy of review spend.** The same choice as D-a4 put as the harness's policy, asked as one card that
+  decides both (L17): A, a miniplan's Budget states its Codex spend and his go covers its reviews, with the floor and
+  rate measured again as slice F does (recommended; this was C, "both", which F already is); B, a question per
+  review, with only the floor and rate raised to today's measure.
+- **D-c2, this plan's spend, as one figure: decided A, question 367** ("Sí, un tope para todo (Recomendada)", tapped,
+  f5c3ee4d:6765, `2026-11-19T17:06:54Z`, recorded verified by JH PLAN; L21). About 5.5M Codex input for one round of C to H (11M at the high
   figure), about 16M with up to three rounds, and about 25M more for four design reads at the last read's measured cost
   (JH 227's read 8d32c0e7: 2.17M Claude, 6.17M Codex each), and 6.17M for this document's own double review: about
   47M Codex central, about 64M at the high figure (three rounds at 11M a round), which the card puts as the ceiling;
@@ -400,3 +407,11 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
 - L20 (the lead, by direct message): PR 923 (`feat/codex-spend-t5`) is in main (`196c555d`, main at `c2e3ccd0`,
   checked with `git log origin/main`), so question 364's condition, that slice D starts nothing before it lands, now
   holds. Main merged into this branch.
+- L21 (question 367, D-c2): he answered "Sí, un tope para todo (Recomendada)", tapped in JH PLAN's chat,
+  f5c3ee4d:6765 (`2026-11-19T17:06:54Z`, read with `sessions --quote`); JH PLAN recorded it, verified. The ceiling is
+  about 64M Codex (47M central) and 11M Claude for C to H, spent across weekly windows, never past 60% in one. The lead
+  reports his order: after the 2026-11-23 reset, JH 233's test arms, then S8, then these slices. His line for that
+  order: JH 233 first is his question 359 (f5c3ee4d:6312, tapped), which starts it right after the reset; S8 before
+  the slices stands on the lead's word, not found in the answers or the questions of 361 (6239), 368 (6815) or 359. D-c1 is asked as question 370, its card covering D-a4; its option C (both) was
+  folded into A, which slice F already builds as both (this session's call, told to the lead). A review with no
+  miniplan Budget stays on the allowance, re-measured.
