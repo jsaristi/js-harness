@@ -170,7 +170,6 @@ test('moment 2 reads only the replies that follow tool output in their turn', as
   assert.equal(quiet.moments.spanish.pass, true, quiet.moments.spanish.why);
   assert.match(quiet.moments.spanish.why, /^28 of 28 replies after tool output in Spanish/);
   assert.doesNotMatch(codex.prompts[0], /^REPLY 13: /m, 'a turn with no tool output is not judged');
-  const before = await gradeRun({ record: record(), dir: kept(t, session({ habits: { preamble: 13 } })), turns: TURNS, askCodex: fakeCodex().ask });
   const preambled = fakeCodex();
   await gradeRun({ record: record(), dir: kept(t, session({ habits: { preamble: 13 } })), turns: TURNS, askCodex: preambled.ask });
   assert.match(preambled.prompts[0], /^REPLY 13: Hecho, turno 13/m, 'the reply after the tool output is judged');

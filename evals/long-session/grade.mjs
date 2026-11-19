@@ -617,9 +617,9 @@ const baseName = (file) => slashed(file).split('/').at(-1);
 const TEST_FILE = /\.(?:spec|test)\.[cm]?[jt]s$/;
 
 /** The test files of a feature a call wrote: a file under `test/` or `tests/` whose name holds the source's (`list` for
- * `src/list.mjs`), or any test file when the text written names the source file, as a test added to an existing spec
- * imports it. The text is what a writing tool carries (`content`, `new_string`) or the shell command itself; what a
- * script file or `git apply` writes is not read. */
+ * `src/list.mjs`), or any file under those folders when the text written names the source file, as a test added to an
+ * existing spec imports it. The text is what a writing tool carries (`content`, `new_string`) or the shell command
+ * itself; what a script file or `git apply` writes is not read, nor a test kept beside its source (`src/list.test.mjs`). */
 function ownTests(call, feature) {
   if (!writesTest(call)) return [];
   const source = baseName(feature.source);
