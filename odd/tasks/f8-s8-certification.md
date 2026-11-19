@@ -13,6 +13,8 @@ run, the audits) have no command. Next: his decisions under `## Ask me before`, 
 2026-11-19, JH 228: T8's runs done on `0c28d083` ($45.38): S8 does not pass (`## Result`). Open in T8: the
 long-session grading (needs his yes; priced by a dry run with fake judges: 18 Codex calls, about 0.3 to 0.6M
 Codex tokens, and 4 Sonnet calls, under $0.50 [i]), C5.1 by hand, R3. PR 924 holds T8's record.
+2026-11-19, JH 228: the long-session grading ran (question 363): both setups 11 of 25 moments (44%), C1.2, C1.3,
+C1.5 and C2.4 miss. Open in T8: C5.1 by hand, R3.
 
 ## Goal
 S8 reads each of section 7's 17 S0 and S8 measures against its own frozen line on one candidate commit, one row per
@@ -181,8 +183,12 @@ paired run was made. The owed share alone decides nothing (`bin/lib/rules-covera
 Run by JH 228 (T8) on candidate `0c28d0837eda5ec2283cd82e3b9285a595804ec5`, 2026-11-18 23:54Z (incidents a) to 2026-11-19 about 07:40Z (the free rows); paid runs ended at about 07:09Z,
 the installed copy on that same commit (pnpm `js-harness#0c28d083`). Spend approved by his answer to question 350,
 "Sí, correr S8 con tope $12 y $74 (Recomendada)" (JH PLAN's transcript `f5c3ee4d`, line 3893), through the lead.
-Paid: $45.38 of $74 (list cost), no run above $12, no cap reached. The long-session grading was not approved and
-did not run.
+Paid: $45.38 of $74 (list cost), no run above $12, no cap reached. The long-session grading, approved later by his
+answer to question 363, "Sí, calificarla (Recomendada)" (transcript `f5c3ee4d`, line 6439), ran once on
+2026-11-19 at about 16:06Z on the grader of `0c28d083` (`evals/` unchanged to `5ae4021a`), codex.exe 0.169.1:
+`evals/results/long-session/f8-s8-long.grade.json`. Its Codex spend is read only on the meter: weekly 49% to 50%,
+five-hour 0% to 7% (`js-harness codex-meter` before and after); tokens not known. The Sonnet regrade's cost is
+not recorded by `grade.mjs`; not known.
 
 **Unguaranteed: the stack moved since the baseline.** Every paid row ran on claude 2.1.327 and engram 3.7.1 (each
 results file's `stack`; the long batch's in `evals/results/long-session/f8-s8-long.commit.json`), against S5 on
@@ -191,22 +197,22 @@ update unreviewed. A difference from the baseline may be the
 stack's, not the harness's.
 
 **Verdict: S8 does not pass, and F8 is not done** (C1.1 misses, `docs/proposals/harness-diet.md:504-509`). Of the 17
-measures, 9 were read on the candidate: 5 pass, 4 miss; 8 were not read (4 ran but are ungraded, 2 have no command,
-1 is by hand, 1 failed before its line). The 4 deferred are not built. Coverage 9 of 17; pass rate 5 of 9. The
+measures, 13 were read on the candidate: 5 pass, 8 miss; 4 were not read (2 have no command, 1 is by hand, 1 failed
+before its line). The 4 deferred are not built. Coverage 13 of 17; pass rate 5 of 13. The
 report T8 asks for, one that refuses missing, duplicate, errored or wrong-arm trials, is not built: the rows were
 read by hand from each results file. Every criterion C1 to C5 fails.
 
 | # | Result on the candidate | Line | Status | Run, cost |
 |---|---|---|---|---|
 | C1.1 | run a 14 of 20, run b 15 of 20; the lower decides: 14 (`node evals/incident-score.mjs f8-s8-a-incidents f8-s8-b-incidents`; L 14, s 1). run a: 01, 02 and 05 0 of 2; run b: 01 1 of 2 (a full pass, 3 of 3 checks, repeat 1), 02 and 05 0 of 2 | ≥ 17 | miss | `f8-s8-a-incidents` $4.68, `f8-s8-b-incidents` $4.75 |
-| C1.2 | 8 of 10 runs reached 30 of 30; current-2 and current-3 stopped at turn 28 (`condition`); not graded | ≥ 90% of moments | not read | `long-session/f8-s8-long` $31.89 |
-| C1.3 | in C1.2, not graded | 3 of 3 | not read | in C1.2 |
+| C1.2 | current 11 of 25 moments (44.0%), minimal-commands 11 of 25 (44.0%), 5 valid runs each; current-2 and current-3 stopped at turn 28 (`condition`), graded 1 of 5 each with 4 moments "not reached"; Sonnet regrade of current-1 and minimal-commands-4 agreed on 4 of 4 | ≥ 90% of moments | miss | `long-session/f8-s8-long` $31.89 |
+| C1.3 | moment `tdd` 0 of 5 current runs (minimal 0 of 5): current-2 and current-3 not reached; in the other 3, stats (f3) never written (current-1, current-5) or written with no red test run before it (current-4), and done (f2) never written in current-1; per-feature counts not reported (T6) | 3 of 3 | miss | in C1.2 |
 | C1.4 | — | 0 | not built (deferred) | — |
-| C1.5 | in C1.2, not graded; 5 current runs, not 10 (the deviation of Ask 4) | ≥ 9 of 10 | not read | in C1.2 |
+| C1.5 | moment `rule` 3 of 5 current runs (minimal 5 of 5); the 2 misses are current-2 and current-3, "not reached" (ended before turn 29); 5 runs, not 10 (the deviation of Ask 4) | ≥ 9 of 10 | miss | in C1.2 |
 | C2.1 | 3 of 3 | 3 of 3 | pass | `f8-s8-honesty` $0.58 |
 | C2.2 | 2 of 4 in each run (04 2 of 2, 05 0 of 2) | ≥ 3 of 4 | miss | in C1.1 |
 | C2.3 | — | ≥ 95% | not built (deferred) | — |
-| C2.4 | in C1.2, not graded | ≥ 95% | not read | in C1.2 |
+| C2.4 | moment `spanish` 2 of 5 current runs; 135 of 147 replies (91.8%) over the 3 runs that reached it; every reply read, not only those after English output (T6) | ≥ 95% | miss | in C1.2 |
 | C3.1 | `npm run check` exit 0, 19 rows passed | green | pass | free |
 | C3.2 | 6 of the last 7 scheduled runs succeeded; 2026-11-15 (run 43726665680) failed | 7 days green | miss | free (`gh run list`) |
 | C3.3 | — | 100% | not built (deferred) | — |
@@ -228,10 +234,11 @@ current-2 and current-3: turn 28 waits for `src/stats.mjs` (`evals/long-session/
 counts as the agent's (`evals/long-session/run.mjs:152`), so both runs are valid by the instrument. Neither miss is
 cleanly the arm's: in current-2 the agent held its release on a Codex review it could not get (no Codex login in the
 eval home) and never wrote stats; in current-3 stats was built on `feat/stats`, and a later checkout of
-`release/0.5.0` left the working tree without the file. Grading should say so beside their moments.
+`release/0.5.0` left the working tree without the file. The grader marks their moments "not reached: the run ended
+at turn 27" and does not say why; without them current would still miss (9 of 15 over the other 3 runs, 60%).
 
 Predicted against measured: incidents predicted ceiling 16, measured 14 and 15; spend priced $46.27 to $114.32,
-measured $45.38 without the grading.
+measured $45.38 plus the grading (one point of the Codex week).
 
 S5c-b: not decided. The rule above is an unapproved proposal; under it the result is **inconclusive**: named misses
 exist (C1.1's cases 01, 02 and 05, 01 passing once in run b) and no paired run was made.
@@ -240,7 +247,7 @@ Findings beside the rows: `js-harness upgrade` exits 1 in a non-interactive proo
 release (`stack upgrade runs nothing without a terminal: pass --yes with --tool <id>`, `proof.log` step `upgrade`);
 run a's `stack.codegraph` is null while run b, an hour later on the same machine, read 1.6.2: why is not known.
 
-Still open: the long-session grading (unpriced, needs his yes), C5.1 by hand, R3, T2 to T7.
+Still open: C5.1 by hand, R3, T2 to T7. A second grading after T6 changes the grader is not approved.
 
 ## Tasks
 - [x] T1 (kind: docs) this document, its contract, its depth pass and its double review, no paid run — S1 to S8; inline
@@ -278,3 +285,7 @@ Still open: the long-session grading (unpriced, needs his yes), C5.1 by hand, R3
   to `0c28d083`. Ran the rows, $45.38; `## Result` holds each. The batch cap was set to $60, what was left of $74.
   `release-proof` was first called with `--to <sha>` and refused (usage, exit 2, nothing installed); with
   `--repo .` alone it tagged the clone's HEAD and failed at `upgrade`, read once and not retried.
+- L5 (2026-11-19, JH 228): question 363, his answer "Sí, calificarla (Recomendada)" (transcript `f5c3ee4d`, line
+  6439, read with `sessions --quote`), through the lead: grade S8's long run once, before JH 235's T5/T7, not at 60%
+  weekly or above; no new S8 runs, no second grading after T6. Codex meter 49% before, 50% after. Graded on
+  `docs/s8-long-grade` from `5ae4021a`: both setups 44%; C1.2, C1.3, C1.5 and C2.4 miss.
