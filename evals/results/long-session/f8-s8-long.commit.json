@@ -1,0 +1,8 @@
+{
+  "batch": "f8-s8-long",
+  "candidate": "0c28d0837eda5ec2283cd82e3b9285a595804ec5",
+  "installedCopy": "0c28d0837eda5ec2283cd82e3b9285a595804ec5",
+  "stack": { "claude": "2.1.327 (Claude Code)", "engram": "engram 3.7.1", "codegraph": "1.6.2" },
+  "readAt": "2026-11-19T07:09:44Z",
+  "why": "run.mjs records no commit or stack; this sidecar names them, read right after the batch on the same machine (S8 T8)"
+}
