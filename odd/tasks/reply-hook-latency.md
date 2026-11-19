@@ -65,12 +65,15 @@ Nothing here is his but the hook's timeout: if the fix needs it changed, a recor
 - [x] T2 (kind: build) spec 4: the measuring script and the budget test on a lead-sized fixture, run before the cuts
 - [x] T3 (kind: build) specs 2, 3: the cuts, each check answering as before
 - [x] T4 (kind: verify) spec 1: the measure after, on the fixture and the lead's real files
-- [ ] T5 (kind: docs) spec 5: the recorded question on the timeout, if the measure says the fix needs it
+- [x] T5 (kind: docs) spec 5: the recorded question on the timeout, if the measure says the fix needs it — question
+  138, answered "Sí, 15 s" and built by JH 119 (`odd/tasks/reply-hook-timeout.md`, `bin/lib/hook-entries.mjs:129`); L12
 - [ ] T6 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice
 - [x] T6a (kind: verify) spec 6: Codex reads again the fix of its partly fixed finding (`c76d97d1`) and whatever the
   verifier changes, from `8dd55c84` with `--again` (it runs no second recheck of the review that ended at `3543c9f`)
-- [ ] T8 (kind: build) out of scope, for the lead: the command-block check's PowerShell parser costs 1.4–2.3 s a stop
-  whose reply hands him a block (`## Measure`); started beside the other checks or kept warm, or the timeout raised
+- [x] T8 (kind: build) out of scope, for the lead: the command-block check's PowerShell parser costs 1.4–2.3 s a stop
+  whose reply hands him a block (`## Measure`); started beside the other checks or kept warm, or the timeout raised —
+  the timeout raised (T5); measured again, no cut in the parser's file keeps its answers, and its exit-1 defect fixed
+  (`## Measure`, The parser's cost; L12, L13)
 - [ ] T7 (kind: docs) spec 6: the summary under `docs/sessions/` and the closed notice
 
 ## Measure
@@ -191,6 +194,71 @@ After the verifier (2026-10-31, the project asked of git again, once a stop; the
   process's start, not the hook's own work) and says so. What lowers it is the timeout (question 138) or a follow-up
   that starts the parser differently (beside the other checks, or kept warm): out of this feature's scope.
 
+### The parser's cost (T8, 2026-11-18, main at `b044dbf7`)
+
+Bad news first: nothing in `bin/lib/reply-commands.mjs` makes the parser cheaper without changing what it answers. Its
+cost is PowerShell's start; what lowers a stop's time is outside this file. Measured while four other sessions ran
+(the machine loaded, as at a stop), PowerShell 7.7.0 from the Store (`pwsh.exe` is its WindowsApps alias), Node 24.15.
+
+- The check on the lead's files with a handed block: `node scripts/reply-hook-time.mjs profile --transcript <copy of
+  699d7c29, 23 MB, with a reply handing a powershell block appended> --cwd D:/js-harness`, 12 runs: the command check
+  1590–3097 ms, of which the parser 1346–2711 ms; the rest, `transcriptRuns` and the matching, about 300 ms. On the old
+  0f71b2c6 (128 MB, the size of October's lead), 12 runs: the check 2728–3056 ms, the parser 1386–2007 ms,
+  `transcriptRuns` alone 630–868 ms (five runs, in process). Today's lead-sized transcripts are 23–25 MB
+  (`find ~/.claude/projects -name "*.jsonl" -newermt 2026-11-17 -size +20M`).
+- The whole hook on that 23 MB payload: `node scripts/reply-hook-time.mjs runs --transcript <the same copy> --cwd
+  D:/js-harness --runs 6`: p50 4879, p90 5405 ms (4181–5405), under the 15 s timeout (`replyHookEntry`,
+  `bin/lib/hook-entries.mjs:129`) and the parser answered every time (the refusal was the run's, not the parser's).
+- Where the parser's time goes (a timed copy of `POWERSHELL_CHECK`, five runs a block, scratch script): PowerShell's
+  start until the script's first line 494–1423 ms; the script itself 228–537 ms for a native program or a cmdlet,
+  320–646 ms for the six blocks of the real test together. Inside the script (`-File`, three runs): decoding and
+  parsing about 50 ms, the first `Get-Command` 100–120 ms (command discovery's warm-up), each later one 1–5 ms,
+  `-ArgumentList` 5–11 ms. Nothing in it is worth cutting.
+- A name PowerShell cannot find costs pwsh 1.5–2.1 s on its first miss (module discovery over the 97 module folders
+  of `PSModulePath`), Windows PowerShell 67–132 ms. `Get-Command -CommandType Alias, Cmdlet, Function` did not help
+  (1490–2112 ms, three fresh processes): any cut there would have to skip module discovery, which is what finds a
+  cmdlet of a module not yet loaded, so it would weaken a refusal. Such a name is rare in a handed block (a typo, a
+  program not installed).
+- The start options, 12 interleaved runs each, a `Get-Command Remove-Item` script (scratch `start.mjs`): the alias
+  p50 4123, p90 6252 ms; with `POWERSHELL_TELEMETRY_OPTOUT=1` and `POWERSHELL_UPDATECHECK=Off`, p50 4137, p90 6370;
+  `powershell.exe` p50 4154, p90 5775. No difference beyond the noise of the load (that load ran those starts to
+  4 s; earlier, quieter, `pwsh.exe` started in 399–1187 ms and `powershell.exe` in 262–696). The package's own
+  `pwsh.exe` cannot be started by its path (ENOENT). Putting Windows PowerShell first is rejected: it is not faster
+  under load and it reads `&&` and `||` as errors, so verdicts would change.
+- Whether the deadline or the parser ever failed in situ: `grep -rho "could not check it (PowerShell[^)]*)"
+  ~/.claude/projects/` finds no hook refusal in any transcript, only this session's own search.
+- Found by the measure, fixed (tests first, red on `b044dbf7`): a block whose last command PowerShell cannot find was
+  refused as "its parser could not check it (PowerShell: it exited 1)", while the same text passed when the miss was not
+  last. The script's exit code was its last statement's `$?`, false after Get-Command misses. It now ends on `exit 0`;
+  a `throw` before its end still exits 1 (`pwsh -Command "throw 'x'; exit 0"`, both shells). A refusal becomes a pass
+  in a guard, so the verifier reads it.
+
+What would lower the stop's time, none of it in this item's files: starting the parser beside the other checks
+(`bin/reply.mjs`, an async spawn; the gain is capped by the other checks' 0.3–0.7 s), or a parser kept warm (a
+process outside the hook's life, which `uninstall` would have to know). Under a load that takes a PowerShell start to
+4–6 s the check's 4 s deadline (`COMMANDS_DEADLINE_MS`, kept at 4 s by `odd/tasks/reply-hook-timeout.md`) can pass, and
+the block is refused as one its parser could not check: a refusal, not a pass, and none recorded so far.
+
+### Refusals main made that this change drops (L21)
+
+The brief said "keeps every refusal". Each case below was refused on main (`b044dbf7`) only because the parser's exit
+was the `$?` of the spawn's last statement. A refusal of the form "its parser could not check it (PowerShell: it exited
+1)" covers every block of that spawn. The same text passed on main whenever the miss was not last. Each is dropped on
+purpose; no other refusal is dropped (L22).
+
+1. An `own` block whose last command PowerShell cannot find (`nosuchprog-jh223 --a`). Pinned through `commandRefusals`
+   by the test "through commandRefusals, a block whose last command PowerShell cannot find is no refusal" (red on
+   main).
+2. A handed block when the transcript cannot be read (Codex, a missing file): such a block goes to the parser, so it
+   is case 1 again (the same test).
+3. Valid sibling blocks of the same reply: the spawn's exit 1 refused every block in it, though a sibling had nothing
+   wrong. Now each keeps its own answer, and a sibling's real error is still named (the same test, and "each block
+   gets its own answer").
+4. A miss of another kind as the spawn's last statement: an alias to a missing target, a `.ps1` or `.exe` path that
+   does not exist, a module-qualified name whose module or command does not exist (the second verifier, L20).
+
+Whether an unknown command should be refused on purpose is a new check, for the lead.
+
 ### What the timeout needs (T5)
 
 In the same transcript the host cancelled `guard --stop` at its 5 s in 52 of 503 stops and `backup --hook` in 55, as
@@ -258,10 +326,105 @@ a longer timeout for the reply hook seldom lengthens a stop. That value is his: 
   (Windows): the budget test lead p90 666 ms, work p90 919 ms; `bin/reply.test.mjs` 29 of 29; the merge's gate green.
   gentle-ai's Stop hook offered the merge commit (main's 60 files, reviewed in their own PRs): its status run, nothing
   started, as no work unit of this branch.
+- L12 (2026-11-18, JH 223, item `replyparser` of the stretch's plan version 4, approved by question 340, his answer
+  "Sí, las 8"; the brief: "Measured first, then the smallest change that keeps every refusal", and T5 "is not ticked as
+  stale: the session records why no question is needed, or leaves it open"): T5 is closed, not stale: question 138 was
+  asked and answered "Sí, 15 s" (JH 119, L1 of `odd/tasks/reply-hook-timeout.md`), and the entry `install` writes has
+  `timeout: 15` (`bin/lib/hook-entries.mjs:129`). Searched before writing: `grep` for `shellParser`'s callers
+  (`bin/reply.mjs:221`, `scripts/reply-hook-time.mjs:204`, the test), this document's measure and
+  `scripts/reply-hook-time.mjs` (its `profile` and `runs`, used as they are; no new script in the repo).
+- L13 (2026-11-18, JH 223, the measure, `## Measure`, The parser's cost): the parser's time is PowerShell's start, not
+  the script; no start option beats the load's noise; Windows PowerShell first is rejected (it reads `&&` as an error).
+  Decided: no cut to the parser, since none in its file keeps its answers. The fix of its exit-1 defect, tests first: the
+  test "a block whose last command PowerShell cannot find" red on `b044dbf7` (`failed: 'PowerShell: it exited 1'`),
+  green with `exit 0`. For the lead, not built here: the parser started beside the other checks (`bin/reply.mjs`), and
+  whether the 4 s deadline should follow the 15 s timeout under a load that runs a start to 4–6 s.
+- L14 (2026-11-18, JH 223, the independent verifier, read-only, over the fix against `b044dbf7`, both shells, old and
+  new module): no refusal became a wrongful pass. Only a failing last statement changes: an unknown name, an alias to
+  a missing target, and a real error hidden by a later miss (`["Get-Date -zz","nosuchprog-jh223"]` refused both with
+  "it exited 1"; now `-zz` is named). A `throw` still exits 1; a statement-terminating error (`[int]::Parse('x')`)
+  never stopped the script, before or after. Huge input (2.4 MB) still times out, a 50,000-deep nesting is a parse
+  error. The new test is red on `b044dbf7`, green after; `node --test bin/lib/reply-commands.test.mjs bin/reply.test.mjs`
+  46 pass, 1 skipped. It measured the deadline too: one of three back-to-back `shellParser('win32')(['Get-Date -zz'], {
+  timeout: 4000 })` timed out (4851 ms), so the deadline refusal of L13 is likely in a loaded stop. Older defects it
+  found, not in this change and left for the lead: `Get-Date -?` refused as ambiguous, `Get-Date -F*` passed (the
+  parameter name reaches `-like` as a pattern), `* -x` checked against an unrelated command. Not checked by it: the
+  whole hook path, a host crash, a profile or constrained language mode, off Windows, `npm run check`.
+- L15 (2026-11-18, JH 223, reviews over `b044dbf..0339273`): the Claude lenses (risk, resilience, reliability) 0
+  findings. Codex (627,015 input tokens, 456 s, run on the lead's word after question 344 was withdrawn): one P2,
+  accepted: an unconditional `exit 0` also let a lookup that failed for another reason than a miss pass, as
+  `& 'Get-Ite[m' -x` (an unmatched `[`, `WildcardPatternException`), so that block's parameters went unchecked. Fixed,
+  tests first (red on `0339273`: the block passed): the lookups go through `Find-Command`, where only
+  `CommandNotFoundException` is a miss and any other failure makes the script exit 1, in both shells; the same failure
+  earlier in the text, which the old script also passed, now refuses too.
+- L16 (2026-11-18, JH 223, reviews over `0339273..cc56e0f`): Codex: correct (confidence 0.99), its P2 fixed. The
+  lenses: risk 0; resilience and reliability one finding each, the same, accepted: the script-wide exit 1 made one
+  failed lookup take every block of the spawn down to "could not check it", dropping a sibling's `rm has no parameter
+  -rf`. Fixed, tests first (red on `cc56e0f`): the failed lookup is that block's own error line, "PowerShell could not
+  look up <name>: <why>", the other blocks keep their answers, and the script ends on `exit 0` again.
+- L17 (2026-11-18, JH 223, reviews over `cc56e0f..5fd74a2`): the lenses 0 findings, both earlier ones rechecked
+  fixed. Codex (510,998 input tokens): one P2, accepted: a carriage return or U+2028 in a quoted name split the lookup's
+  error line, which `shellParser` then dropped, so the block passed unchecked. Fixed, tests first (red on `5fd74a2`):
+  every line the script prints goes through `Say`, which turns CR, LF, U+0085, U+2028 and U+2029 into a space; the
+  parse-error and parameter lines too, since a name reaches them as well.
+- L18 (2026-11-18, JH 223, reviews over `5fd74a2..b45380f`): the lenses 0 findings; Codex correct (confidence 0.99),
+  its P2 fixed. Every code commit of the branch is covered by both records. The independent verifier (L14) read the
+  first fix (`9a47edbf`); the three fixes after it were read by Codex and the lenses, not by a second verifier.
+- L19 (2026-11-18, JH 223, PR 916 open): the advisor, before the ready notice, found the script's helper functions
+  (`Find-Command`, `Say`) visible to its own `Get-Command`: `Find-Command -zz` (PowerShellGet's) was refused on
+  `b044dbf7` and passed at `b45380f`, both shells (a scratch comparison of the old and new modules). Fixed, tests first
+  (`66e91c91`): the helpers are script blocks in variables; the real test runs one spawn a shell, each case a text, the
+  plain miss last, with no assertion that always holds. Old and new compared over 16 names (paths, module-qualified
+  names, wildcards, aliases, the helpers' names): no difference, both shells. Reviews over `4a3fc21..66e91c9`: the
+  lenses 0; Codex one P2, accepted: the case leaned on PowerShellGet; the test's spawn now defines its own advanced
+  `Find-Command` (`9760618b`, red on `b45380f`'s script); its recheck over `66e91c9..9760618` correct (0.99), the
+  reliability lens 0. The PR's body keeps the generated-with line, as PR 911's does.
+- L20 (2026-11-18, JH 223, the second independent verifier, read-only, `b044dbf7` against `66e91c91`, 63 texts alone,
+  in batches forward and reversed, and in pairs, both shells): no error line lost without a replacement, no sibling's
+  answer lost. What the base refused and HEAD passes is one class, accepted as the change's intent: a miss as the
+  spawn's last statement (`gti status`, `.\x.ps1 -zz`, `NoSuchModule\Get-Thing -zz`, an alias to a missing target),
+  which the base passed anywhere else. Its one real loss: an `own` block whose last command is a typo was refused by
+  that accident and passes now; neither version says "command not found". Lines replaced, more exact: a failed lookup
+  at the base kept the previous command's `$cmd` and judged `a[b -zz` against Remove-Item's parameters; HEAD says it
+  could not look it up. New refusals: an unmatched `[` in a name, and `Remove-* -zz` (a wildcard's first match, an
+  alias with an empty `Definition`, so the message names an empty name: cosmetic). Older, both versions, left for the
+  lead: an empty text shifts the later indices (`commandBlocks` likely never sends one), `Remove-Item -re[ x` passes,
+  `Get-AppPackage -Name x -zz` passes on PowerShell 7. `node --test bin/lib/reply-commands.test.mjs`: 13 pass, 1 skipped.
+  Not checked by it: a module whose autoload throws, profiles, the deadline under load.
+- L21 (2026-11-18, JH 223): the lead made PR 916 a draft. JH PLAN found that it drops refusals main made, against the
+  brief's "keeps every refusal", and set three conditions, decided and not asked of him (the lead's message): a test
+  through `commandRefusals` that pins an `own` block ending in an unknown command; the dropped cases listed here; the
+  verifier's word that no other refusal is lost. The list is in `## Measure`, "Refusals main made that this change
+  drops". The test (`5df63e00`) was red on `b044dbf7`. Reviews over `f5b2c3b..5df63e0`: Codex (1,065,496 input tokens
+  against an estimate of 140,000): three P2s and a P3; the reliability lens one warning. Accepted and fixed: the
+  test's own 60 s deadline, a parse count that shows each passing case was parsed, and the sibling's exact refusal.
+  Answered, not changed: Codex's P2 and the lens's warning that the test requires a pass for a block main refused.
+  That pass is the decision JH PLAN set as condition 1, and the test pins it so a later change has to undo it on
+  purpose.
+- L22 (2026-11-18, JH 223, condition 3, the second verifier again, read-only): it compared main (`b044dbf7`) and
+  HEAD through `commandRefusals`, 65 texts and 8 pairs, 341 replies a shell plus the alias case, both shells, with a
+  60 s deadline for both. The forms: an `own` block, a handed block with a transcript, a handed block with none, and
+  two-block replies. Its word: "No other refusal is lost." Each reply refused on main and passed at HEAD (68 a shell,
+  17 texts) falls into one of the four cases above, and main's only reason for each was "it exited 1". A handed block
+  with a readable transcript keeps its "no run of this session" refusal. No sibling loses its real error. A block with
+  an unmatched `[` is still refused, and now with the right reason: on main it was judged against an earlier
+  command's parameters. Not checked by it: replies of more than two blocks, other fence tags, the hook's real 4 s
+  deadline. The reliability lens over `5df63e0..4f98993` repeated its warning on the pinned pass, answered in L21.
+- L23 (2026-11-18, JH 223): Codex's recheck over `5df63e0..dc88947` (`--again`, 172,287 input tokens): 3 fixed, 1 not
+  fixed, verdict incorrect (confidence 0.97). The one open is its P2 "Do not require a pass for a previously refused
+  block", the pass JH PLAN set as condition 1; answered in L21, not changed. The third review it offers, a range from
+  `dc88947`, was not run: it would recheck only that decided pass. `node --test bin/lib/reply-commands.test.mjs`: 14
+  pass, 1 skipped. PR 916 mergeable with main.
 
 ## Next step
-Code: `b42532d7`, `8c746b16`, `c76d97d1` and the verifier's fixes (L9), each committed with the gate green. Question
-138 (T5) is recorded and sent, no answer yet; on a yes, change `replyHookEntry`'s timeout to 15 with its test. Reviews
-done: the lenses over every code commit up to `c76d97d1`, Codex over `f91cbcc..8c746b1`, the verifier. Next: T6a,
-`js-harness codex-review --base 8dd55c84 --again` and the lenses over the verifier's fixes; push, PR, `notify --kind
-ready --pr <n>`; the summary under `docs/sessions/`; `notify --kind closed`. Nothing edited while a review runs.
+JH 223 (2026-11-18): T5 and T8 are done, and JH PLAN's three conditions are met (L21, L22). The module is final at
+`9760618b` and its test at `4f989932`. PR 916 is on branch `claude/reply-parser-cost-c8d92b`; every code commit has
+its Codex and lens records; the verifier ran three times (L14, L20, L22); Codex's one open P2 is answered (L23).
+Next: `gh pr ready 916`; `js-harness notify --to orchestrator --kind ready --pr 916`, naming the four dropped cases
+and the open P2; then `notify --kind closed --summary docs/sessions/2026-11-18-jh-223-reply-parser-cost-jh-116-t8.md`.
+Left for the lead:
+- starting the parser beside the other checks (`bin/reply.mjs`);
+- whether the 4 s deadline should follow the 15 s timeout;
+- whether an unknown command in an `own` block should be refused on purpose, which would be a new check;
+- the older parameter-check defects of L14 and L20.
+T6 and T7 belong to JH 116's own pull request, which this session did not read.

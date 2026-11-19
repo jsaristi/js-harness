@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { fencedBlocks } from './reply.mjs';
 import { commandRefusals, runParts, shellParser } from './reply-commands.mjs';
 
@@ -121,6 +122,65 @@ test('real: PowerShell reads each block as he would, its parse errors and parame
   assert.match(checked.errors[5].join('\n'), /^Remove-Item: -f is ambiguous, it could be -(Filter|Force), -(Filter|Force)/);
   assert.deepEqual([checked.errors[1], checked.errors[2], checked.errors[4]], [[], [], []], 'a prefix of a parameter binds, as PowerShell binds it');
   assert.match(checked.errors[3].join('\n'), /^PowerShell cannot parse it: /);
+});
+
+test('real: each block gets its own answer from PowerShell 7 and Windows PowerShell: a miss is no failure, a lookup that fails is its block\'s refusal', { skip: process.platform !== 'win32' && 'PowerShell is checked on Windows' }, () => {
+  // One spawn a shell, each case a text (odd/tasks/reply-hook-latency.md, T8, L13 to L19). The plain miss stays last: a
+  // script whose exit was its last statement's `$?` read it as a parser that could not run.
+  const texts = [
+    'rm -rf x',
+    // An unmatched `[` is no wildcard pattern: the lookup fails for another reason than a miss (Codex, b044dbf..0339273),
+    // and the rest of its block is still checked (the lenses, 0339273..cc56e0f).
+    "& 'Get-Ite[m' -x; Get-Date -zz",
+    // A line break in a name stays out of the line the parser reads (Codex, cc56e0f..5fd74a2).
+    '& "Get-Ite[m`rx" -x',
+    "& 'Get-Ite[m\u2028x' -x",
+    // The check adds no command of its own that a block could name (the advisor, over b45380f): the test's own advanced
+    // function of that name, defined in the child shell, so no module is needed (Codex, 4a3fc21..66e91c9).
+    'Find-Command -zz',
+    'nosuchprog-jh223 --a',
+  ];
+  const ownFindCommand = (program, args, options) => {
+    const script = Buffer.from(args.at(-1), 'base64').toString('utf16le');
+    const defined = `function global:Find-Command { [CmdletBinding()] param($Name) }\n${script}`;
+    return spawnSync(program, [...args.slice(0, -1), Buffer.from(defined, 'utf16le').toString('base64')], options);
+  };
+  const windowsPowerShell = (program, args, options) => (program === 'pwsh.exe'
+    ? { error: Object.assign(new Error('spawn pwsh.exe ENOENT'), { code: 'ENOENT' }) }
+    : ownFindCommand(program, args, options));
+  for (const [shell, spawn] of [['PowerShell 7', ownFindCommand], ['Windows PowerShell', windowsPowerShell]]) {
+    const checked = shellParser('win32', spawn)(texts, { timeout: 30000 });
+    assert.equal(checked.failed, undefined, `${shell}: ${checked.failed}`);
+    assert.deepEqual(checked.errors[0], ['rm has no parameter -rf'], shell);
+    assert.match(checked.errors[1].join('\n'), /^PowerShell could not look up Get-Ite\[m: [^\n]*\nGet-Date has no parameter -zz$/, shell);
+    assert.match(checked.errors[2].join('\n'), /^PowerShell could not look up Get-Ite\[m x: [^\n]*$/, shell);
+    assert.match(checked.errors[3].join('\n'), /^PowerShell could not look up Get-Ite\[m x: [^\n]*$/, shell);
+    assert.deepEqual(checked.errors[4], ['Find-Command has no parameter -zz'], shell);
+    assert.deepEqual(checked.errors[5], [], shell);
+  }
+});
+
+test('real: through commandRefusals, a block whose last command PowerShell cannot find is no refusal, as when it is not last (dropped on purpose, odd/tasks/reply-hook-latency.md, L20)', { skip: process.platform !== 'win32' && 'PowerShell is checked on Windows' }, () => {
+  // The test's own deadline: a slow spawn on a loaded machine is no verdict of the parser (Codex, f5b2c3b..5df63e0).
+  // Each call's texts are kept, so a case that passes is known to have been parsed.
+  const parsed = [];
+  const parse = (texts, options) => { parsed.push(texts); return shellParser('win32')(texts, options); };
+  const check = (reply, transcript) => {
+    parsed.length = 0;
+    return commandRefusals(fencedBlocks(reply), { platform: 'win32', transcript, parse, until: Date.now() + 60000 });
+  };
+  // His own block, parsed only: the miss last, and the same miss before a command that is found.
+  assert.deepEqual(check('```powershell own\nnosuchprog-jh223 --a\n```', DOCTOR_RUN), []);
+  assert.deepEqual(parsed, [['nosuchprog-jh223 --a']]);
+  assert.deepEqual(check('```powershell own\nnosuchprog-jh223 --a; git status\n```', DOCTOR_RUN), []);
+  assert.deepEqual(parsed, [['nosuchprog-jh223 --a; git status']]);
+  // A handed block with no transcript to read goes to the parser too.
+  assert.deepEqual(check('```powershell\nnosuchprog-jh223 --a\n```', null), []);
+  assert.deepEqual(parsed, [['nosuchprog-jh223 --a']]);
+  // A sibling's refusal is kept beside it, and it is the only one.
+  assert.deepEqual(check('```powershell own\nrm -rf x\n```\n\n```powershell own\nnosuchprog-jh223\n```', DOCTOR_RUN),
+    ['the block that starts "rm -rf x" (line 1): rm has no parameter -rf']);
+  assert.deepEqual(parsed, [['rm -rf x', 'nosuchprog-jh223']]);
 });
 
 test('real: bash -n reads each block off Windows', { skip: process.platform === 'win32' && 'bash is checked off Windows' }, () => {
