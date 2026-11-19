@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { FEATURES, scriptOf, turnOf } from './script.mjs';
-import { MOMENTS, batchScore, gradeMain, gradeRun, judgeOf, readSession, regradeSample, releases, spanishPromptOf, writes, writesTest } from './grade.mjs';
+import { MIN_RUNS, MOMENTS, batchScore, gradeMain, gradeRun, judgeOf, readSession, regradeSample, releases, spanishPromptOf, writes, writesTest } from './grade.mjs';
 
 const TURNS = scriptOf(30);
 const n = (label) => turnOf(TURNS, label).n;
@@ -204,6 +204,17 @@ test('batchScore pools the moments of an arm\'s valid runs against the 90% line,
   assert.deepEqual(batchScore([], 'current'), { arm: 'current', runs: 0, excluded: 0, passed: 0, total: 0, share: null, pass: null });
 });
 
+test('a share from fewer than 5 valid runs is reported and cannot certify', () => {
+  assert.equal(MIN_RUNS, 5);
+  const graded = Array.from({ length: 5 }, () => ({ arm: 'current', valid: true, passed: 5, total: 5 }));
+  assert.equal(batchScore(graded, 'current').pass, true, '5 valid runs at 100% certify');
+  graded[4].valid = false;
+  const four = batchScore(graded, 'current');
+  assert.equal(four.share, 1, 'the share is still reported');
+  assert.equal(four.pass, null, '4 valid runs and 1 excluded cannot certify');
+  assert.match(four.why, /4 valid runs, fewer than 5: cannot certify/);
+});
+
 test('a run stopped by its cap or by the eval is graded invalid; one stopped by a release condition is valid', async (t) => {
   const dir = kept(t, session({ upTo: 15 }));
   for (const [reason, valid] of [['cap', false], ['compaction', false], ['agent', false], ['condition', true]]) {
@@ -261,13 +272,15 @@ test('regradeSample takes one run in five, at least one, and reports the judges\
 test('gradeMain grades a batch, scores each arm, reports the regrade and writes the grade beside it', async (t) => {
   const resultsDir = scratch(t);
   const dir = kept(t, session());
-  const runs = ['current-1', 'minimal-commands-1'].map((id) => ({ ...record({ id, arm: id.replace(/-\d+$/, '') }), transcripts: dir }));
+  const ids = ['current-1', 'current-2', 'current-3', 'current-4', 'current-5', 'minimal-commands-1'];
+  const runs = ids.map((id) => ({ ...record({ id, arm: id.replace(/-\d+$/, '') }), transcripts: dir }));
   fs.writeFileSync(path.join(resultsDir, 'b.json'), JSON.stringify({ turns: 30, runs }));
   const out = [];
   const code = await gradeMain(['--name', 'b'], { askCodex: fakeCodex().ask, askJudge: fakeCodex().ask, resultsDir, stdout: { write: (text) => out.push(text) }, stderr: { write: (text) => out.push(text) } });
   assert.equal(code, 0, out.join(''));
-  assert.match(out.join(''), /^current: 5 of 5 moments over 1 valid run\(s\); 100\.0%, at or above the 90% line$/m);
-  assert.match(out.join(''), /^regrade: current-1; claude-sonnet-5-5 agreed on 2 of 2 judged moments$/m);
+  assert.match(out.join(''), /^current: 25 of 25 moments over 5 valid run\(s\); 100\.0%, at or above the 90% line$/m);
+  assert.match(out.join(''), /^minimal-commands: 5 of 5 moments over 1 valid run\(s\); 100\.0%, 1 valid runs, fewer than 5: cannot certify$/m);
+  assert.match(out.join(''), /^regrade: current-1, minimal-commands-1; claude-sonnet-5-5 agreed on 4 of 4 judged moments$/m);
   assert.ok(fs.existsSync(path.join(resultsDir, 'b.grade.json')));
   fs.writeFileSync(path.join(resultsDir, 'c.json'), JSON.stringify({ calibration: true, turns: 5, runs: [] }));
   assert.equal(await gradeMain(['--name', 'c'], { resultsDir, stdout: { write: () => {} }, stderr: { write: () => {} } }), 1, 'a calibration is not graded');

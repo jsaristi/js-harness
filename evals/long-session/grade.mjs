@@ -665,16 +665,22 @@ const isValid = (record) => record.stop === null || record.stop === undefined ||
 /** S8's pass line: at least this share of the moments, pooled over the valid runs of the final arm. */
 export const PASS_SHARE = 0.9;
 
+/** The fewest valid runs an arm's share certifies from (the plan: "at least 5 runs per setup"). */
+export const MIN_RUNS = 5;
+
 /** The score of one arm: the moments passed over the moments of its valid runs, pooled, `{ arm, runs, excluded,
  * passed, total, share, pass }`; an invalid run is excluded and counted, never scored. `share` and `pass` are null with
- * no valid run. */
+ * no valid run. With fewer than MIN_RUNS valid runs the share is still reported, `pass` is null and `why` says it
+ * cannot certify: batch-1's 60% came from 3 runs. */
 export function batchScore(graded, arm) {
   const own = graded.filter((grade) => arm === undefined || grade.arm === arm);
   const valid = own.filter((grade) => grade.valid !== false);
   const passed = valid.reduce((sum, grade) => sum + grade.passed, 0);
   const total = valid.reduce((sum, grade) => sum + grade.total, 0);
   const share = total === 0 ? null : passed / total;
-  return { arm: arm ?? null, runs: valid.length, excluded: own.length - valid.length, passed, total, share, pass: share === null ? null : share >= PASS_SHARE };
+  const score = { arm: arm ?? null, runs: valid.length, excluded: own.length - valid.length, passed, total, share, pass: share === null ? null : share >= PASS_SHARE };
+  if (share !== null && valid.length < MIN_RUNS) return { ...score, pass: null, why: `${valid.length} valid runs, fewer than ${MIN_RUNS}: cannot certify` };
+  return score;
 }
 
 /** The regrade of one run in five (the first and every fifth after it, at least one), by a fresh judge on the two
@@ -767,7 +773,7 @@ export async function gradeMain(argv, { askCodex, askJudge, resultsDir = RESULTS
   const scores = arms.map((arm) => batchScore(graded, arm));
   const lines = [
     ...graded.map((grade) => `${grade.id}: ${grade.passed} of ${grade.total}${grade.valid ? '' : ' (invalid, excluded)'}; ${MOMENTS.filter((moment) => !grade.moments[moment].pass).map((moment) => `${moment}: ${grade.moments[moment].why}`).join('; ') || 'every moment passed'}`),
-    ...scores.map((score) => `${score.arm}: ${score.passed} of ${score.total} moments over ${score.runs} valid run(s)${score.excluded ? `, ${score.excluded} excluded` : ''}; ${score.share === null ? 'no score' : `${(score.share * 100).toFixed(1)}%, ${score.pass ? 'at or above' : 'under'} the ${PASS_SHARE * 100}% line`}`),
+    ...scores.map((score) => `${score.arm}: ${score.passed} of ${score.total} moments over ${score.runs} valid run(s)${score.excluded ? `, ${score.excluded} excluded` : ''}; ${score.share === null ? 'no score' : `${(score.share * 100).toFixed(1)}%, ${score.pass === null ? score.why : `${score.pass ? 'at or above' : 'under'} the ${PASS_SHARE * 100}% line`}`}`),
     `regrade: ${regrade.runs.join(', ') || 'none'}; ${JUDGE_MODEL} agreed on ${regrade.agreement.agreed} of ${regrade.agreement.compared} judged moments`,
   ];
   fs.writeFileSync(path.join(resultsDir, `${name}.grade.json`), `${JSON.stringify({ name, gradedAt: new Date().toISOString(), graded, scores, regrade }, null, 2)}\n`);
