@@ -426,7 +426,7 @@ test('readyProblems gives pullRequestProblems\' words, and reads UNKNOWN mergeab
   const evidence = () => ({ pass: true, detail: 'covered' });
   assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, isDraft: true }).run, evidence }), ['PR 360 is a draft.']);
   assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, mergeable: 'UNKNOWN' }).run, evidence }), []);
-  assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, mergeable: 'CONFLICTING' }).run, evidence }), ['PR 360 is not mergeable (CONFLICTING).']);
+  assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, mergeable: 'CONFLICTING' }).run, evidence }), ['PR 360 is not mergeable (CONFLICTING): merge main into its branch and push it, since it conflicts with main itself.']);
 });
 
 test('readyProblems gives reviewEvidence\'s detail when the reviews do not cover the head', async () => {

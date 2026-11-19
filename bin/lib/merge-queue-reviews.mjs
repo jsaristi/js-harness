@@ -94,7 +94,9 @@ export function reviewEvidence(cwd, main, head, onto = main) {
   const alone = onto === main ? null : reviewEvidence(cwd, main, head);
   if (alone && !alone.pass) return alone;
   const merged = asMerged(cwd, onto, head, onto === main ? 'main' : 'the candidate so far');
-  if (merged.error) return { pass: false, detail: merged.error, next: merged.next, ...(merged.conflicted && { conflicted: merged.conflicted }) };
+  // `conflictOnto` says which merge conflicted, main's or the candidate's, so the queue names the fix without asking
+  // main again (odd/tasks/codex-spend.md, spec 3; main's own answer is the one returned above when it fails).
+  if (merged.error) return { pass: false, detail: merged.error, next: merged.next, ...(merged.conflicted && { conflicted: merged.conflicted, conflictOnto: onto === main ? 'main' : 'candidate' }) };
   const { tip } = merged;
   const codex = checkCodexReviews(cwd, tip);
   const refused = codex.pass ? lensDoor(cwd, tip) : codex;

@@ -184,7 +184,7 @@ the only one; section 7.2 still says $60).
 - [x] T5 (kind: build) the ten incident tasks and their scorer — S3, S6; inline
 - [x] T6 (kind: verify) run a and run b, `/context`, `fixed load`, the read surface; record the spread and the target here and in the diet — S3, S5; inline
 - [x] T7 (kind: design) the long-session eval's build plan, for S8 — S4; inline
-- [ ] T8 (kind: verify) `npm run check`, Codex review per code slice, push, PR, notify — S5; inline
+- [x] T8 (kind: verify) `npm run check`, Codex review per code slice, push, PR, notify — S5; inline; PR 599, 84b6b7ed
 
 ## Log
 - L1 (2026-10-26, the brief from JH ORQ, relaying Sebastián's "Une el PR 597 y arranca S0, la
