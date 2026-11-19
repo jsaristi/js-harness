@@ -5,8 +5,9 @@
 // run (`defaultBranchOf`): origin's HEAD, else gh's word, else the run refuses. A pull request is ready
 // when nothing of its own keeps it from merging (`pullRequestProblems`), every code commit of it has a Codex
 // review record (`checkCodexReviews`), and it merges into the candidate so far with no conflict. `--dry-run`
-// builds and prints the candidate; `--land` tests it and moves the default branch to it (`landCandidate`), then
-// retargets the open pull requests stacked on a branch it landed (`retargetStacked`).
+// builds and prints the candidate, refusing as `--land` does a copy whose bin/ is not main's (`staleBin`); `--land`
+// tests it and moves the default branch to it (`landCandidate`), then retargets the open pull requests stacked on a
+// branch it landed (`retargetStacked`).
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -46,7 +47,8 @@ has not yet computed (mergeable UNKNOWN) is decided by its merge into the candid
 request it leaves out and why. Each pull request merged into the candidate passes main's rule rows first (check --door), and one that fails leaves the batch.
 For each ready pull request the queue prints, commit by commit, the Codex record that covers it.
 
---dry-run builds and prints the candidate, tests and pushes nothing, and removes it before it ends.
+--dry-run builds and prints the candidate, tests and pushes nothing, and removes it before it ends. Like --land, it
+stops first, exit 1, when the merge-queue it runs from is not origin's default branch's bin/, naming the files that differ.
 --land tests the candidate: the whole suite on this machine under the gate lock, its gate first in the
 line by a gate-first ticket for the running session (js-harness gate first; with no session id or a
 refused ticket it waits its turn, and says which), and at the same time GitHub Actions' run (.github/workflows/gate.yml) of a queue/*
@@ -865,12 +867,14 @@ async function queueRun(args, { run = spawnSync, covered = null, suite = null, e
   log.record.main = main;
   // A land run from a merge-queue that is not main's runs code main no longer has: the lead's lands ran a stale
   // checkout's, so D and B2 never ran (odd/tasks/land-unattended.md, L17). Only where main holds the queue: a
-  // project that runs the installed harness has none of its own. Line ends do not count.
-  if (args.land) {
+  // project that runs the installed harness has none of its own. Line ends do not count. A dry run stops there too:
+  // it is the land's preview, and one passed on a stale copy the land then refused (odd/tasks/merge-queue-dry-run.md).
+  if (args.land || args.dryRun) {
     const stale = staleBin(self, main, (...gitArgs) => gitIn(cwd, ...gitArgs));
     if (stale.length) {
       const named = stale.slice(0, 3).join(', ') + (stale.length > 3 ? ` and ${stale.length - 3} more` : '');
-      return fail(`${self} is not origin/${defaultBranch}'s bin/ (differs: ${named}): a land run from it would run code main no longer has. Land from a checkout at origin/${defaultBranch}.`);
+      const why = `${self} is not origin/${defaultBranch}'s bin/ (differs: ${named}): a land run from it would run code main no longer has`;
+      return fail(args.land ? `${why}. Land from a checkout at origin/${defaultBranch}.` : `${why}, and this dry run stops where that land would. Run it from a checkout at origin/${defaultBranch}.`);
     }
   }
   const isCovered = covered ?? ((head, onto) => reviewEvidence(cwd, main, head, onto));

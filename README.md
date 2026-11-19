@@ -1204,7 +1204,8 @@ and names both commands, so a project whose default is not `main` lands on its o
 Ready means the pull request is open, not a draft, mergeable, based on the default branch, has a Codex review record and a complete Claude lens record (no lens skip) for every code commit, and merges into the
 candidate so far with no conflict; one whose mergeability GitHub has not computed yet is decided by
 its merge into the candidate. Each pull request merged into the candidate passes main's rule rows
-first (`check --door`), and one that fails leaves the batch. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
+first (`check --door`), and one that fails leaves the batch. `--dry-run` prints it and pushes nothing, and like `--land` stops first when the copy it runs from is not
+the default branch's `bin/`. `--land` tests it, the whole suite on
 this machine under the gate lock and, at the same time, on GitHub Actions (`.github/workflows/gate.yml`) on a
 `queue/*` branch pushed before the suite starts, so the run's checkout is the candidate, main as it would become, and when both are green moves the default branch to it by fast-forward, leased on the commit it was built from (odd/tasks/merge-queue.md).
 After a land, each open pull request whose base is a branch that land merged is retargeted to the default branch
