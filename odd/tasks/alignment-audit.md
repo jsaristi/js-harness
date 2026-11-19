@@ -9,10 +9,9 @@ pull request, landed by the lead (JH ORQ) · Brief: miniplan 3 of JH PLAN, 2026-
 PR 921 is a draft (the lead's order), so no land takes it; it is un-drafted once his D-block decisions are in. The
 cards go to him one at a time: this session records each as a question, the lead sends its number to JH PLAN, which
 asks him, and the next is recorded only once the last is answered. Decided: D-b1 (question 364, L16), D-b2 (question
-365, L18), D-c2 (question 367, L21; 366 withdrawn), D-c1 and with it D-a4 (question 370, L23). Asked: D-a7 (question 371, L23). Still
-to ask: D-a1 (worded after `rules-data.mjs:665-667` is read). No double review has run. Next: when the lead says 371 is answered, write it in and record D-a1, worded
-after `rules-data.mjs:665-667` and D-a7's answer (if A, its subject drops "which the lead opens"); its edit is in
-`rules-data.mjs`, so slice C waits for JH 234.
+365, L18), D-c2 (question 367, L21; 366 withdrawn), D-c1 and with it D-a4 (question 370, L23), D-a7 (question 371, L24). Asked: D-a1, the last card (question 372, L24).
+No double review has run. Next: when D-a1 is answered, write it in, un-draft PR 921 (`gh pr ready 921`) and tell
+the lead; the double review waits for the lead's go.
 The audit and the build plan are written; nothing is built.
 
 ## Goal
@@ -278,12 +277,17 @@ Each line was read against the message it answered (L10):
   tienes comunicacion".
 
 Cards (no typed line covers them, or they are his by kind: removing what he uses, spend):
-- **D-a1, `senior-model` to judgment only.** Line 3459 ("ser mucho mas eficientes con el poder de fable pero sin
+- **D-a1, `senior-model` to judgment only: asked as question 372** (L24). Line 3459 ("ser mucho mas eficientes con el poder de fable pero sin
   tener que utilizarlo todo") was typed about the Plan's use of Fable, not about a senior session, so it does not
-  cover this subject. Subject, word for word: "the model a senior session runs on, titled <code> SR · <purpose>, which the
-  lead opens with start_session and sends the judgment a task needs: a design, a depth pass, a decision". The title
-  stays as the rule in force has it (L13). Options: A, yes (recommended: Fable on judgment); B, as today.
-- **D-a7, who starts a senior session a miniplan orders: asked as question 371** (L23). Question 354 says the Plan starts what a miniplan orders;
+  cover this subject. Subject, word for word: "the model a senior session runs on, titled <code> SR · <purpose>, sent the
+  judgment a task needs: a design, a depth pass, a decision". The title stays as the rule in force has it (L13).
+  The opener clause ("which the lead opens with start_session") leaves whichever option he takes: question 371
+  decided who starts a senior, and its home is the start check (slice E). An owner's rule changes only with his typed
+  words (`bin/lib/rules-change.mjs:239` refuses a tap), so the card asks him to write his yes in "Other"; a tap alone
+  leaves slice C one typed line short. The edit is in `bin/lib/rules-data.mjs:666`, JH 234's file, so
+  slice C waits for JH 234. Options: A, yes (recommended: Fable on judgment); B, as today.
+- **D-a7, who starts a senior session a miniplan orders: decided A, question 371** ("Sí, el Plan la arranca
+  (Recomendada)", tapped, f5c3ee4d:6995, `2026-11-19T18:08:34Z`, recorded verified by JH PLAN; L24). Question 354 says the Plan starts what a miniplan orders;
   the guard says "a senior is started by the lead" (`bin/lib/session-title-guard.mjs:94`) and refused the Plan's
   start of one. No typed line settles it. Subject, word for word: "a senior session a miniplan orders is started by
   the Plan on his go, like every other session the miniplan orders". Options: A, yes: the guard admits the Plan's
@@ -431,3 +435,8 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
   Budget covers its reviews and one question comes only when the work passes it; a review with no miniplan Budget
   stays on the allowance, re-measured (slice F, after JH 234 and C). D-a4 is decided by the same answer. D-a7 is
   asked as question 371, recommended A as this session's call, its cost to him written as not measured; then D-a1.
+- L24 (question 371, D-a7): he answered "Sí, el Plan la arranca (Recomendada)", tapped in JH PLAN's chat,
+  f5c3ee4d:6995 (`2026-11-19T18:08:34Z`, read with `sessions --quote`); JH PLAN recorded it, verified. Scope as he
+  took it (the lead): slice E's start check lets the Plan start a senior named in a miniplan he approved, nothing
+  outside one; until slice E lands with its reviews the guard stands as it is. D-a1, the last card, is worded against
+  `rules-data.mjs:665-667` without its opener clause, asked as question 372, his yes asked in writing (an owner's rule).
