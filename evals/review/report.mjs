@@ -199,6 +199,7 @@ function armsSection({ readingsDir, ranges }) {
   const cells = CELLS.filter((cell) => runs.some((one) => one.name === cell.config));
   let recorded = 0;
   let counting = 0;
+  const everyRun = cells.map(({ config, range }) => readReading(readingsDir, config, range)).filter((found) => found.ok).map(({ reading }) => reading);
   const tables = ranges.map((range) => {
     const shown = columns(range.seeded === true);
     const more = [['input a changed line', perChangedLine(range)], ['prompt version', (reading) => reading.promptVersion ?? 'unknown']];
@@ -220,8 +221,10 @@ function armsSection({ readingsDir, ranges }) {
       }
       return [config.name, config.arm, ...shown.map(([, cell]) => String(cell(reading))), verdict, ...more.map(([, cell]) => String(cell(reading)))];
     });
-    const cli = usual(read, (reading) => reading.cli);
-    const prompt = usual(read, (reading) => reading.promptVersion ?? null);
+    // Against what most runs of every range hold, not of this table alone: the two cases are one experiment, and
+    // a range read wholly on another version would agree with itself.
+    const cli = usual(everyRun, (reading) => reading.cli);
+    const prompt = usual(everyRun, (reading) => reading.promptVersion ?? null);
     for (const reading of read) {
       if (reading.cli !== cli) notes.push(`- \`${reading.config}\` ran on codex-cli ${reading.cli}, the others on ${cli}: the comparison is only fair on one version.`);
       if ((reading.promptVersion ?? null) !== prompt) {

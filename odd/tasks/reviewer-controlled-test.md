@@ -1,14 +1,12 @@
 # reviewer-controlled-test: Codex 6.1 against 6.2, and the effort apart from the model
 
 ## State
-He approved the run with a cap of 20 points of the weekly window (question 359, L9). T2 to T4 are built (L10), with
-no Codex token spent. Next: T5, the runs, right after the weekly reset of 2026-11-23 23:45 local, A first, a
-`js-harness notify` to the lead at the start and at the end. Codex's review of the slice found four (L12), all fixed in the
-commit after f5994b6; a second round waits for the lead's word. Then push and a draft pull request. Next, on a yes: T2 to T4 (code for
-the arms and the repeats, no Codex), then T5, the runs, right after the weekly reset of 2026-11-23 23:45 local.
-Open: Q1; and whether the double review of this design (protocol section 1) runs, since it spends Codex tokens the
-brief does not allow before his answer (L6). The arms' models are named by their short versions above the Log and
-by their full ids in L7.
+He approved the run with a cap of 20 points of the weekly window (question 359, L9). T2 to T4 are built (L10).
+Codex reviewed the slice twice (L12, L13): seven findings, all fixed, the last answered with no third round on the
+lead's word. Next: push and a draft pull request; then T5, the runs, right after the weekly reset of 2026-11-23
+23:45 local, when the lead says, A first, a `js-harness notify` to the lead at the start and at the end. Open:
+whether the double review of this design (protocol section 1) runs (L6). The arms' models are named by their short
+versions above the Log and by their full ids in L7.
 
 ## Goal
 Numbers that say which pair the Codex reviewer should run on (`rule:review-model`, `rule:review-effort`): planted
@@ -203,3 +201,8 @@ three days.
   reason; the note gives it. Bad news it brought: the price he answered (question 359) used 226 lines for seeded;
   at 292 the high of A to C is 28.6M, not 25.1M, and of A to D 42.3M, not 37.1M; the lows are the same, and his cap
   of 20 points binds whatever the estimate. Recorded in docs/FAILURES.md, `estimate-passed-as-fact`.
+- L13 2026-11-19, Codex's second round on f5994b6..4d490c9, on the lead's word: incorrect (0.98), 516,090 input
+  tokens (439,296 of them cached), 178 s; with L12 the two rounds spent 1,766,967 input tokens. Three of L12's four
+  fixed; one not: the CLI and prompt version were compared within each range's table, so a range read wholly on
+  another version agreed with itself. Answered: they are now compared against the runs of both ranges, with a test
+  that a `real` run on another CLI than the `seeded` runs is noted. No third round, on the lead's word.

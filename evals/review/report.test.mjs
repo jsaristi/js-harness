@@ -161,6 +161,12 @@ test('the arms of the controlled test are a section of their own: one table a ra
   assert.match(seeded, /^- `sol62-medium-2` was asked with js-harness\.codex-review-prompt\/v5, the others with js-harness\.codex-review-prompt\/v4: the comparison is only fair on one prompt\.$/m);
   assert.match(seeded, /^- `sol61-medium-2`: sol61-medium-2__seeded\.json is not JSON/m);
   assert.equal(row(seeded, 'sol61-medium-2')[2], 'missing');
+  // Across the two cases too: a range read wholly on another CLI agrees with itself, and is still flagged.
+  for (const config of ARM_RUNS) for (const range of ['real', 'seeded']) fs.rmSync(readingFile(repo.readings, config, range), { force: true });
+  for (const config of ['sol61-medium-1', 'sol61-medium-2', 'sol62-max-1']) record(repo, config, 'seeded', measuredAs('gpt-6.2-sol', 'max'));
+  record(repo, 'sol62-max-1', 'real', { ...measuredAs('gpt-6.2-sol', 'max'), cli: '0.170.0' });
+  run([], repo);
+  assert.match(armTable(fs.readFileSync(repo.out, 'utf8'), 'real'), /^- `sol62-max-1` ran on codex-cli 0\.170\.0, the others on 0\.160\.1/m);
   // The arms that have not run do not make the comparison incomplete.
   recordAll(repo, (config) => (config.startsWith('sol') ? { outcome: 'reviewed' } : {}));
   for (const config of ARM_RUNS) for (const range of ['real', 'seeded']) fs.rmSync(readingFile(repo.readings, config, range), { force: true });
