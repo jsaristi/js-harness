@@ -596,3 +596,7 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   Codex review left: with no default branch the text lists every run of `onABranch` (1,648 lines against 929);
   the JSON keeps the baseline's notes at 0 runs; a second merge of a baseline PR's number is left out of the
   baseline by design; a gh timeout costs 20 s and says nothing. PR 923 handed to the lead.
+- L48 2026-11-19, the owner on question 360 (JH PLAN's transcript f5c3ee4d, line 6376, 15:54:34Z, checked with
+  `js-harness sessions --quote`): "Dispensarlo y que entre (Recomendada)". Finding 3 (P3, L46) is known and
+  waived: T5 lands with it open, no code change and no more Codex. PR 923 was a draft for one land batch while
+  the question waited, and is ready again.
