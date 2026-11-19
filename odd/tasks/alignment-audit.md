@@ -233,7 +233,8 @@ those files while JH 234 is open, so C's and F's lines in `rules-data.mjs` start
 
 Order of the build (L21): after the Codex weekly reset of 2026-11-23 23:45 local, JH 233's test arms run first (his
 question 359, tapped, f5c3ee4d:6312: "empezando justo después del reinicio"), then S8, then this plan's slices (S8
-before the slices on the lead's word); the slices spend within question 367's ceiling and
+before the slices is the Plan's order, told to him, not answered: JH PLAN proposed it before his answer to 367, the
+lead's report, L22; JH PLAN settles it with him); the slices spend within question 367's ceiling and
 never past 60% of one week.
 
 Total, estimated: about 550 changed lines of code and text, at least 2,168 removed in D, and about 5.5M Codex input
@@ -415,3 +416,7 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
   the slices stands on the lead's word, not found in the answers or the questions of 361 (6239), 368 (6815) or 359. D-c1 is asked as question 370, its card covering D-a4; its option C (both) was
   folded into A, which slice F already builds as both (this session's call, told to the lead). A review with no
   miniplan Budget stays on the allowance, re-measured.
+- L22 (the lead, by direct message): "S8 before the slices" is JH PLAN's proposal, told to him before his answer to
+  367, not a typed answer of his; written as the Plan's order, told to him, not answered. This session's search of
+  JH PLAN's replies in f5c3ee4d from line 6440 to 6765 did not find the message (a script matching S8 with 233), so
+  the source is the lead's report. The lead asked JH PLAN to settle it with him. 370 is with him.
