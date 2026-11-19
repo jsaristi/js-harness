@@ -6,9 +6,8 @@ temporary folder. Item `mq-dryrun` of the plan of 2026-11-18 (version 4), sessio
 request; the lead (JH ORQ) reviews and lands it.
 
 ## State
-T1 to T3 are done and every review finding is fixed or answered (L5 to L10). Next: the reviews of `930685ae..HEAD`,
-a whole-file run at the final head, then the pull request and the ready notice. Open: the tick of
-`docs/ROADMAP.md`'s "Later" line, which JH 222 holds this stretch, owed in the ready notice.
+Done: T1 to T4, pull request 922 ready for the lead. Open: the tick of `docs/ROADMAP.md`'s "Later" line (JH 222
+holds ROADMAP), named in the ready notice.
 
 ## Goal
 A dry run from a copy whose `bin/` is not origin/main's stops as a land from it does, and running
@@ -96,7 +95,7 @@ sites in the queue's test make temporary folders and never remove them: 9,601 we
   bin/merge-queue.test.mjs`.
 - [x] T3 (kind: build) spec 1: the dry-run tests seen red, then the guard, `USAGE` and the header; route: tests first,
   `npm run check`.
-- [ ] T4 (kind: verify) Codex and the lenses on the slice, and an independent verifier.
+- [x] T4 (kind: verify) Codex and the lenses on the slice, and an independent verifier.
 
 ## Log
 - L1 The request, as the brief gives it (JH ORQ, 2026-11-18, item `mq-dryrun` of plan version 4, approved by his
