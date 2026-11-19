@@ -47,7 +47,7 @@ test('every folder this file makes is a scratch folder, under the one root its t
   // Every call that makes a temporary folder, sync or not, read to the end of its line: only the root's and scratch's
   // own may be there, so a call of any other form fails, not only one a parser recognises (Codex, 2026-11-18). The
   // pattern is built from pieces so that this line holds no call itself.
-  const call = new RegExp('mkdtemp' + '(?:Sync)?\\(', 'g');
+  const call = new RegExp('mkdtemp' + '(?:Sync)?\\s*\\(', 'g');
   const calls = fs.readFileSync(new URL(import.meta.url), 'utf8').split(call).slice(1).map((rest) => rest.split('\n')[0].trim());
   assert.deepEqual(calls, ["path.join(os.tmpdir(), 'jhmq-'));", 'path.join(scratchRoot, prefix));'], 'only the root is made in the temporary folder itself, and every other folder by scratch');
 });
