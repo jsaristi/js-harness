@@ -226,10 +226,11 @@ talks with the owner, explains, understands and deduces; it asks only a few ques
   what it is, for whom, why now. The session logs that it said so, as a Log line marked `(session)`, and `## Setup`
   records `Teaching: on (L<n>)`.
 - **It guides** (S11: "me gusta mas que sea hablado y como guiado"). From what he says, the session follows the
-  thread, asks open questions in plain chat where something is missing ("¿quién lo va a usar primero?"), explains why
-  each thing matters for the plan, and says in a line, every so often, what it has understood and what comes next.
-  He can answer at any length, change his mind, ask back ("¿y por qué no X?") or think out loud; there are no
-  options to tap in this part.
+  thread, explains in chat why each thing matters for the plan, and says in a line, every so often, what it has
+  understood and what comes next. Where something is missing ("¿quién lo va a usar primero?") it asks through the
+  question tool, one question at a time, 2 to 4 options that give examples and the free answer in "Otro"
+  (`rule:questions-one-place`; L47). He can still answer at any length in "Otro", change his mind, ask back ("¿y por
+  qué no X?") or think out loud in chat.
 - **It deduces** (S12: "entender y descifrar lo que quiere el usuario"). It does not wait to be told what it can read
   from the conversation and the repository: the kind and the size, the developer's level in each layer (from how he
   talks about it, as L10 first proposed), the outcome, the constraints. Each deduction is written down with the words
@@ -1447,3 +1448,9 @@ ceiling.
 - Codex: `9cb4eb2..7892774` correct (0.89), recorded.
 - For JH 43's visa site, write `- Areas: +answer-engines (L9)` under `## Setup`, then paste again what
   `js-harness onboard profile --checklist advice` prints, and add `A:answer-engines` to Level.
+- L47 (2026-11-19) His answer to question 351 (JH PLAN transcript f5c3ee4d line 4083, 2026-11-19T00:15:41Z, tapped),
+  asked because S11's plain-chat questions contradicted `rule:questions-one-place` (2026-11-17): "A: con opciones
+  (Recomendada)". D3's guided questions now go through the question tool with 2 to 4 options that give examples and
+  the free answer in "Otro"; the explanation and his thread stay in chat. The `converse` and `summary` steps share
+  one phrase for how a question is put (`ASK` in `bin/lib/onboard.mjs`). The opening's invitation to tell the
+  project in his own words is not changed: his answer did not cover it.

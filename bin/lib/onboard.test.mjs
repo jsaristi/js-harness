@@ -542,6 +542,12 @@ test('stageReport, stage 2: Conversation and advice prints what it covered, what
     'Then: commit every three settled items, and at the summary, and run js-harness onboard again.',
   ]);
   assert.match(lines[4], /^Do: guide the conversation toward what is still open/);
+  // His answer to question 351 (2026-11-19, JH PLAN f5c3ee4d line 4083), "A: con opciones": each guided question goes
+  // through the question tool with 2 to 4 options that give examples and the free answer in "Otro"
+  // (rule:questions-one-place); the explanation and his thread stay in chat.
+  assert.doesNotMatch(lines[4], /plain chat/);
+  assert.match(lines[4], /one at a time through the question tool \(on Codex, in plain text with numbered options\), 2 to 4 options that give examples, the recommended one first, the free answer in "Other" \("Otro"\), each logged as a \(session\) Log line before it is asked/);
+  assert.match(lines[4], /explaining in chat, before each question, why it matters for the plan/);
   has(lines, 'js-harness onboard profile --area <id>');
   has(lines, 'Topics 1, 2, 3, 4 and 9 are checked only once the owner says or confirms them');
 
