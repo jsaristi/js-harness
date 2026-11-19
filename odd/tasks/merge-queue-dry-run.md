@@ -136,3 +136,8 @@ sites in the queue's test make temporary folders and never remove them: 9,601 we
   TAP and the test reads `# pass 1`, as `bin/js-harness.test.mjs:270` does; 2 pass with FORCE_COLOR=1. Its note that
   the scan missed a template literal is fixed too: the scan reads the first name after `${` (checked on a sample:
   `os.tmpdir`, `scratchRoot`, `os.tmpdir`). The lens on `49a708fb..959045fd`: 0 findings, the earlier one fixed.
+- L9 2026-11-18, Codex on `959045fd..be4c1b0b`: its third look at the same P3, not fixed: a call the scan could not
+  parse (a template opening with `${(os.tmpdir())}`) was skipped, not refused. The tool says three reviews did not
+  settle it and to raise it; this session is on claude-opus-5-5, the model it names, and the lead is told in the ready
+  notice. Fixed: the scan lists every `mkdtemp` or `mkdtempSync` call of the file to the end of its line and wants
+  exactly the two known ones; Codex's example planted is red, removed green (2 pass). The lens on the same range: 0.
