@@ -184,7 +184,7 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
 - [x] T2 (kind: build) spec 2 — PR 883, main c7afe0be — `bin/lib/codex-review-turns.mjs`, `bin/codex-review.mjs` + tests — commit `fix(codex-review): review the gap below a merge of main alone`
 - [x] T3 (kind: build) spec 3 — branch fix/codex-spend-t3 (L34-L37) — `bin/merge-queue.mjs`, `bin/lib/pull-request.mjs`, `bin/lib/merge-queue-reviews.mjs:97` (cleared L36) + tests — commit `fix(merge-queue): a conflict with main names its fix`
 - [ ] T4 (kind: build) specs 4, 5 — `rules change double-review` on `rule/double-review-sequence`, `bin/double-review.mjs`, `bin/js-harness.mjs` usage + tests — commits `chore(rules): a question's double review reads Claude first` and `feat(double-review): Codex reads what Claude passed`
-- [x] T5 (kind: build) spec 6 — branch feat/codex-spend-t5 (L38-L42) — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
+- [x] T5 (kind: build) spec 6 — branch feat/codex-spend-t5 (L38-L43) — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
 - [ ] T6 (kind: verify) — the measure after the slices land, against the baseline, by Done-when's T6 line; result in the Log
 
 ## Log
@@ -534,3 +534,17 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   README's codex-meter section does not show it; `MERGE_OF_PR` in `bin/lib/land-records.mjs` copies the regex of
   `bin/lib/report-git.mjs`, which exports none; run lines carry no `--again` marker (their writer); zeros outside a
   repository are left as they are.
+- L43 2026-11-18, round 4, e709d8f4, written inline by JH 220 (no writer, no verifier pass; the lenses read it). The
+  confirming verifier (opus, read-only) on f6c388e1: all eight claims of L40 hold, no High or Medium; six Low, all
+  taken: "35 runs ..., and 1 run with no count" read as 36, now "35 runs (1 of them with no count: ...)" in every tally;
+  "the beside-new runs among them" printed for a PR with none; the baseline's notes printed in any repository, now
+  only when the baseline has runs; `codexDebts` read `process.cwd()` beside `--per-pr`'s `cwd`, now both read `cwd`
+  (no test pins the debts' `cwd`: that path spawns the app-server); the test cited L38 for the decisions (L40); the
+  wiring test left its marks file on a failure. The lenses on 85e918f..26ecda2: reliability 0, readability two
+  suggestions (`unnamedRuns` beside the "no record" class `unnamed`, now `uncountedList`; the L38 citation), both
+  fixed; on 26ecda2..e709d8f 0 and 0, both rechecked fixed. Tests first: 2 of 20 failed before the code changed. The
+  real report at e709d8f4, exit 0 in 130 s (206 s at f6c388e1, unexplained), as printed: "Baseline, PRs 864-868: 35
+  runs (1 of them with no count: ba57f254-b216-4807-ac21-a69f1b9f331e, 2026-11-14T12:16:11.982Z) over all their
+  days, 3,173,294 input tokens; of them on 2026-11-14 alone: 3,053,278", its two notes, "Re-read of covered code
+  alone: 0 of 412 PRs"; per-PR figures and rounds as L41. Codex reads T5 once, as `check --push` names it:
+  `codex-review --base 04b7ac53a258 --at e709d8f44f33` (3 parts, 930 changed lines, 3.96M-8.5M planned).
