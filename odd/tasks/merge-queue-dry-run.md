@@ -149,3 +149,8 @@ sites in the queue's test make temporary folders and never remove them: 9,601 we
   green. (2) The allowlist refuses a reformatted call (a comment or a line break inside it): answered, not changed:
   it fails safe, so whoever reformats it sees the test red and updates the list in the same edit; a parser that
   forgives formatting is what let the earlier forms through.
+- L11 2026-11-18, Codex on `930685ae..89b97b00`: both P3 of L10 read as fixed; one new P3, blocking: the space
+  allowed before the parenthesis let an allowed call be reformatted unseen. Fixed: each call is compared as written from
+  its name; an allowed call with a space added is red, the file green. The lens on the same range: 0. The whole file at
+  `89b97b00` with TEMP at an empty `%TEMP%jh226`: 137 pass, the folder empty after. This is the last edit to the scan:
+  further findings on it are answered against Done when, not coded.
