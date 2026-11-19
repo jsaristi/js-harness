@@ -1,11 +1,17 @@
-import { test } from 'node:test';
+import { before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { withoutAutoMaintenance } from './git-fixture.testkit.mjs';
-import { busySeconds, codexFacts, landFacts, median, perLandedPr, perPrLines, readRecordLines } from './land-records.mjs';
+import { BASELINE, busySeconds, codexFacts, landFacts, median, perLandedPr, perPrLines, readRecordLines } from './land-records.mjs';
+
+// A git hook, or a gate's run, hands GIT_DIR, GIT_INDEX_FILE and friends to what it starts; inherited here, they would
+// send the fixture's git calls to that repository instead of the test's own (as bin/lib/project.test.mjs says).
+before(() => {
+  for (const key of Object.keys(process.env)) if (key.startsWith('GIT_')) delete process.env[key];
+});
 
 const from = Date.parse('2026-10-16T00:00:00Z');
 const to = Date.parse('2026-10-17T00:00:00Z');
@@ -83,6 +89,8 @@ const commitText = (mark, ref, subject, from, merge) => [
 // main: m0, then the merges of PR 1, of PR 2 (stacked on PR 1), of PR 3 (rebased onto PR 2's merge), of PR 5, which only a
 // failed land names, and PR 7 twice: by hand (13), then by its land (15). PR 3's head from before its rebase stays on a ref
 // that is no branch; PR 4 is an open branch; 16 is the candidate of a later land that brought PR 3's commit in again.
+// 17 is the candidate of a land that failed, on no branch, whose ancestry holds PR 3's head from before its rebase. PR 9
+// (21) is s1, then s2 with a side commit t1 merged into it (20): t1 is on no first-parent line of the PR's head.
 const LAYOUT = [
   [1, 'refs/heads/main', 'm0'], [2, 'refs/heads/a', 'a1', 1], [3, 'refs/heads/b', 'b1', 2],
   [4, 'refs/heads/main', 'Merge pull request #1 from a', 1, 2], [5, 'refs/heads/main', 'Merge pull request #2 from b', 4, 3],
@@ -90,6 +98,9 @@ const LAYOUT = [
   [9, 'refs/heads/d', 'd1', 8], [10, 'refs/heads/main', 'Merge pull request #5 from d', 8, 9], [11, 'refs/heads/open', 'p1', 10],
   [12, 'refs/heads/h', 'h1', 10], [13, 'refs/heads/main', 'Merge pull request #7 from h', 10, 12], [14, 'refs/heads/h', 'h2', 12],
   [15, 'refs/heads/main', 'Merge pull request #7 from h', 13, 14], [16, 'refs/heads/other', 'Merge pull request #6 from r', 5, 7],
+  [17, 'refs/failed/candidate', 'Merge pull request #8 from r', 5, 6],
+  [18, 'refs/heads/s', 's1', 15], [19, 'refs/heads/t', 't1', 18], [22, 'refs/heads/s', 's2', 18], [20, 'refs/heads/s', 'Merge branch t into s', 22, 19],
+  [21, 'refs/heads/main', 'Merge pull request #9 from s', 15, 20],
 ];
 let built = null;
 function layoutRepo() {
@@ -113,11 +124,13 @@ function layoutRepo() {
   const lands = [
     land('2026-11-01T04:00:00Z', 5, 16, [6]), land('2026-11-01T01:00:00Z', 1, 4, [1]), land('2026-11-01T02:00:00Z', 4, 5, [2]),
     land('2026-11-01T03:00:00Z', 5, 8, [3]), land('2026-11-01T03:30:00Z', 8, 10, [5], 1), land('2026-11-01T05:00:00Z', 13, 15, [7]),
+    land('2026-11-01T02:30:00Z', 5, 17, [8], 1), land('2026-11-01T06:00:00Z', 15, 21, [9]),
   ];
   built = { id, git, lands };
   return built;
 }
-const layoutRun = (name, mark, from, extra = {}) => ({ id: name, startedAt: '2026-11-01T00:30:00Z', from, base: from, head: mark, outcome: 'reviewed', usage: { inputTokens: 1000 }, ...extra });
+// `usageSource: 'rollout'`: the count was read from Codex's rollout files, a measurement (bin/lib/codex-review-runs.mjs).
+const layoutRun = (name, mark, from, extra = {}) => ({ id: name, startedAt: '2026-11-01T00:30:00Z', from, base: from, head: mark, outcome: 'reviewed', usage: { inputTokens: 1000 }, usageSource: 'rollout', ...extra });
 function layoutReport(runs, more = {}) {
   const { id, git, lands } = layoutRepo();
   const shaped = runs.map((run) => ({ ...run, from: id[run.from] ?? run.from, base: id[run.base] ?? run.base, head: id[run.head] ?? run.head }));
@@ -134,6 +147,8 @@ test('per landed PR: a stacked PR\'s run counts for the PR whose merge brought i
 });
 
 test('per landed PR: a run on a head that was rebased away is orphaned, and the run on the rebased head counts for the PR', () => {
+  // The head from before the rebase is in the ancestry of a failed land's candidate (17), which git reads, but on no
+  // branch and not on the default branch: orphaned still.
   const report = layoutReport([layoutRun('before', 6, 1), layoutRun('after', 7, 5)]);
   assert.deepEqual(prOf(report, 3).ids, ['after']);
   assert.deepEqual(report.unattributed.orphaned.ids, ['before']);
@@ -221,6 +236,45 @@ test('per landed PR: the lines reviewed are the changed lines Codex was handed, 
   assert.equal(prOf(layoutReport([run], { records }), 7).reviewedLines, 40);
 });
 
+test('per landed PR: tokens a line are taken over the runs with a count alone, their lines and their tokens', () => {
+  const { id } = layoutRepo();
+  const runs = [
+    layoutRun('counted', 12, 10, { coverage: { seen: 40, total: 40 }, usage: { inputTokens: 4000 } }),
+    layoutRun('no-count', 14, 12, { startedAt: '2026-11-01T00:40:00Z', coverage: { seen: 60, total: 60 }, usage: {}, usageSource: null }),
+  ];
+  const records = [{ base: id[10], head: id[12], reviewedAt: '2026-11-01T00:31:00Z', outcome: 'reviewed', run: 'counted' }, { base: id[12], head: id[14], reviewedAt: '2026-11-01T00:41:00Z', outcome: 'reviewed', run: 'no-count' }];
+  const pr = prOf(layoutReport(runs, { records, coverage: () => ({ codeCommits: [], covers: [] }) }), 7);
+  assert.deepEqual({ lines: pr.reviewedLines, tokens: pr.boughtInputTokens, perLine: pr.tokensPerLine, left: pr.boughtUncounted }, { lines: 40, tokens: 4000, perLine: 100, left: 1 });
+});
+
+test('per landed PR: a run line with no usageSource holds no measurement, so its zeros are no count', () => {
+  // bin/lib/codex-review-runs.mjs: a line written before `usageSource` holds what `turn.completed` reported, zeros by
+  // construction; `usageSource: null` says no count was read.
+  const runs = [
+    layoutRun('old', 12, 10, { usage: { inputTokens: 0, cachedInputTokens: 0 }, usageSource: undefined }),
+    layoutRun('unread', 12, 10, { usage: { inputTokens: 5, cachedInputTokens: 5 }, usageSource: null }),
+    layoutRun('read', 12, 10, { usage: { inputTokens: 700, cachedInputTokens: 300 } }),
+  ];
+  delete runs[0].usageSource;
+  const pr = prOf(layoutReport(runs), 7);
+  assert.deepEqual({ runs: pr.runs, inputTokens: pr.inputTokens, uncounted: pr.uncounted, cached: pr.cachedInputTokens }, { runs: 3, inputTokens: 700, uncounted: 2, cached: 300 });
+});
+
+test('per landed PR: what is on the default branch is told by reaching it from the default tip, and with no default branch on a branch is not told apart', () => {
+  const runs = [layoutRun('open', 11, 10), layoutRun('direct', 9, 8), layoutRun('gone', 'f'.repeat(40), 1), layoutRun('before', 6, 1)];
+  const { git } = layoutRepo();
+  const asked = [];
+  const report = layoutReport(runs, { defaultRef: null, git: (args, input) => (asked.push(args.join(' ')), git(args, input)) });
+  assert.ok(asked.includes('rev-list --branches --remotes'), asked.join('\n'));
+  assert.equal(report.unattributed.pending, null);
+  assert.equal(report.unattributed.byNoLand, null);
+  assert.deepEqual(report.unattributed.onABranch.ids, ['open', 'direct']);
+  assert.deepEqual(report.unattributed.orphaned.ids, ['gone', 'before']);
+  const lines = perPrLines(report);
+  assert.ok(lines.includes('On a branch, pending or on the default branch by no land, which no default branch read tells apart: 2 runs, 2,000 input tokens'), lines.join('\n'));
+  assert.ok(lines.includes('Orphaned, on no branch (rebased away or gone): 2 runs, 2,000 input tokens'), lines.join('\n'));
+});
+
 test('per landed PR: a round is a fresh review that passed no failure, above a clean pass on the PR\'s first-parent line', () => {
   const { id } = layoutRepo();
   const at = (minute) => `2026-11-01T07:${minute}:00Z`;
@@ -238,6 +292,46 @@ test('per landed PR: a round is a fresh review that passed no failure, above a c
   const pr = prOf(layoutReport(runs, { records, coverage }), 7);
   assert.deepEqual(pr.roundIds, ['above']);
   assert.deepEqual(pr.rounds, { runs: 1, inputTokens: 1000 });
+});
+
+test('per landed PR: with no run to place, git is asked nothing, so a folder outside a repository reads as no runs', () => {
+  const report = perLandedPr({ runs: [], lands: [], git: () => null, coverage: () => assert.fail('no range to cover') });
+  assert.deepEqual({ prs: report.prs, orphaned: report.unattributed.orphaned.runs, landed: report.landedPrs }, { prs: [], orphaned: 0, landed: 0 });
+});
+
+test('per landed PR: a round\'s clean pass is on the first-parent line of the head it reviews, not on a side branch merged into it', () => {
+  const { id } = layoutRepo();
+  const at = (minute) => `2026-11-01T09:${minute}:00Z`;
+  const runs = [
+    // t1 (19), a side commit of PR 9, passed clean; a review from it to the PR's head (20) reads the merge of t1 into s.
+    layoutRun('side-pass', 19, 18, { startedAt: at(10), findings: { total: 0 } }),
+    layoutRun('from-the-side', 20, 19, { startedAt: at(20), findings: { total: 1 } }),
+    // s1 (18), on the head's first-parent line, passed clean: a review from it is a round.
+    layoutRun('line-pass', 18, 15, { startedAt: at(30), findings: { total: 0 } }),
+    layoutRun('from-the-line', 20, 18, { startedAt: at(40), findings: { total: 1 } }),
+  ];
+  const records = runs.map((run) => ({ base: id[run.from], head: id[run.head], reviewedAt: at(Number(run.startedAt.slice(14, 16)) + 1), outcome: 'reviewed', run: run.id }));
+  const pr = prOf(layoutReport(runs, { records, coverage: () => ({ codeCommits: [], covers: [] }) }), 9);
+  assert.deepEqual(pr.roundIds, ['from-the-line']);
+});
+
+test('per landed PR: the baseline is the runs of its PRs\' own merges, so another repository\'s PRs of those numbers are none of it', () => {
+  const { id } = layoutRepo();
+  const runs = [layoutRun('on-a', 2, 1)];
+  const theirs = { ...BASELINE, prs: [1], merges: { 1: id[4] } };
+  assert.equal(layoutReport(runs, { baseline: theirs }).baseline.runs, 1);
+  // PR 1 of this repository was merged by another commit than the baseline's PR 1.
+  const foreign = { ...BASELINE, prs: [1], merges: { 1: 'e'.repeat(40) } };
+  const report = layoutReport(runs, { baseline: foreign });
+  assert.deepEqual({ runs: report.baseline.runs, inputTokens: report.baseline.inputTokens }, { runs: 0, inputTokens: 0 });
+  assert.deepEqual(Object.keys(BASELINE.merges).map(Number), BASELINE.prs);
+});
+
+test('per landed PR: re-reads of covered code alone are counted among the PRs with Codex runs, and the PRs landed are said beside them', () => {
+  const report = layoutReport([layoutRun('on-a', 2, 1)]);
+  // Lands that landed: PRs 1, 2, 3, 6, 7 and 9; one of them has a run.
+  assert.equal(report.landedPrs, 6);
+  assert.ok(perPrLines(report).includes('Re-read of covered code alone: 0 of 1 PR with Codex runs (6 PRs landed)'), perPrLines(report).join('\n'));
 });
 
 test('per landed PR: a clean part of a range in parts is no clean pass, and a pass counts only for a run started after it ended', () => {
@@ -262,7 +356,7 @@ test('per landed PR: a clean part of a range in parts is no clean pass, and a pa
 
 test('per landed PR: the fixture of PRs 864-868 gives the baseline, 3,173,294 over all their days and 3,053,278 on 2026-11-14', () => {
   const runs = BASELINE_RUNS.map(([id, startedAt, durationMs, from, head, outcome, inputTokens, total, findings, recheck, , , of]) => ({
-    id, startedAt, durationMs, from, base: from, head, outcome, usage: inputTokens === null ? {} : { inputTokens }, coverage: { seen: total, total },
+    id, startedAt, durationMs, from, base: from, head, outcome, usage: inputTokens === null ? {} : { inputTokens }, usageSource: inputTokens === null ? null : 'rollout', coverage: { seen: total, total },
     findings: { total: findings }, ...(recheck ? { recheck: { of: from } } : {}), ...(of === null ? {} : { part: { of } }),
   }));
   const records = BASELINE_RECORDS.map(([base, head, reviewedAt, names]) => ({ base, head, reviewedAt, outcome: 'reviewed', runs: names }));
@@ -311,6 +405,7 @@ test('per landed PR: the report prints a line for each PR, its rounds apart, the
   const none = { runs: 0, inputTokens: 0, ids: [], list: [] };
   const report = {
     prs: [pr],
+    landedPrs: 410,
     unattributed: { pending: { runs: 2, inputTokens: 10, uncounted: 1, ids: ['p', 'q'], list: [{ id: 'p', startedAt: '2026-11-15T00:00:00Z', head: 'abcdef1234567', inputTokens: 10 }, { id: 'q', startedAt: '2026-11-15T01:00:00Z', head: 'abcdef1234567', inputTokens: null }] }, byNoLand: none, orphaned: none },
     baseline: { prs: [864, 865, 866, 867, 868], runs: 35, inputTokens: 3_173_294, uncounted: 1, uncountedRuns: [{ id: 'ba57f25b-0000', startedAt: '2026-11-14T12:16:11.982Z' }], day: '2026-11-14', dayInputTokens: 3_053_278, notes: ['A note.'] },
     doubleReviews: { reads: 2, codexReads: 1, codexInputTokens: 720_239 },
@@ -321,7 +416,7 @@ test('per landed PR: the report prints a line for each PR, its rounds apart, the
   has('  rounds after a clean pass (they overlap the classes above; do not add them): 4 runs 268,342');
   has('Baseline, PRs 864-868: 35 runs (1 of them with no count: ba57f25b-0000, 2026-11-14T12:16:11.982Z) over all their days, 3,173,294 input tokens; of them on 2026-11-14 alone: 3,053,278');
   has('  A note.');
-  has('Re-read of covered code alone: 0 of 1 PR');
+  has('Re-read of covered code alone: 0 of 1 PR with Codex runs (410 PRs landed)');
   has('Pending, on a branch not landed: 2 runs (1 of them with no count), 10 input tokens');
   has('  2026-11-15T00:00:00Z abcdef123456 10');
   has('  2026-11-15T01:00:00Z abcdef123456 unknown');
@@ -337,7 +432,7 @@ test('per landed PR: a run with no count is one of the runs it stands beside, an
   };
   const none = { runs: 0, inputTokens: 0, ids: [], list: [] };
   const report = {
-    prs: [pr], unattributed: { pending: none, byNoLand: none, orphaned: none },
+    prs: [pr], landedPrs: 1, unattributed: { pending: none, byNoLand: none, orphaned: none },
     baseline: { prs: [864, 865, 866, 867, 868], runs: 0, inputTokens: 0, uncounted: 0, uncountedRuns: [], day: '2026-11-14', dayInputTokens: 0, notes: ['A note of this repository.'] },
     doubleReviews: { reads: 0, codexReads: 0, codexInputTokens: 0 },
   };

@@ -16,17 +16,19 @@
 // no process.
 //
 // `--per-pr` answers the other half of the question, what Codex was spent on (odd/tasks/codex-spend.md, spec 6): Codex
-// input per landed PR, from the records under `<git common dir>/js-harness/` alone (`perLandedPr`,
-// ./lib/land-records.mjs), so it starts no app-server. It exits 0 with its report, 1 when the records cannot be read.
+// input per landed PR, from the records under `<git common dir>/js-harness/` and git (`perLandedPr`,
+// ./lib/land-records.mjs), so it starts no app-server. The branch the merge queue lands on is read as the queue reads
+// it: origin's HEAD, else `gh repo view` (`landingBranch`), which asks GitHub where origin names no HEAD. It exits 0
+// with its report, 1 when the records cannot be read.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import path from 'node:path';
 import { unknownArgument } from './lib/args.mjs';
 import { failureLine, humanLines, parseRateLimits, readRateLimits } from './lib/codex-meter.mjs';
 import { floorDebtLines } from './lib/codex-meter.mjs';
-import { admittedCodexReviews, defaultBranch, gitOut, reviewCoverage } from './lib/codex-review-coverage.mjs';
+import { admittedCodexReviews, gitOut, reviewCoverage } from './lib/codex-review-coverage.mjs';
 import { codexReviewRunsPath } from './lib/codex-review-runs.mjs';
-import { isValidCodexReview, jsonLinesPath, readCodexReviews } from './lib/codex-reviews.mjs';
+import { codexReviewsPath, isValidCodexReview, jsonLinesPath, readCodexReviews } from './lib/codex-reviews.mjs';
+import { defaultBranchOf } from './lib/default-branch.mjs';
 import { DOUBLE_REVIEWS_FILE } from './lib/double-review-records.mjs';
 import { perLandedPr, perPrLines, readLandRecord, readRecordLines } from './lib/land-records.mjs';
 import { gitDirs } from './lib/project.mjs';
@@ -60,16 +62,33 @@ function debtLines(debts) {
   return debts.length === 0 ? ['Codex debts: none'] : debts.map((debt) => `Codex debt: ${debt}`);
 }
 
-/** Codex input per landed PR in the repository of `cwd`, read from its records: the run log and the land records read
- * so that a file there that cannot be read throws, the Codex review records with the run log's admission, and git
- * for the commits each land brought in. Each re-read is counted by `reviewCoverage` as the push counts it, handed
- * where the repository is (`where`: its top, its common git dir, and the marks it was told), as a `codex-review` run
- * hands it, so each of its calls asks git none of that again. */
+/** The branch the merge queue lands on, as the ref of origin this clone holds: the name `defaultBranchOf` reads, origin's
+ * HEAD else GitHub's word, as the queue does (bin/merge-queue.mjs), and not `defaultBranch` of the push, which tries
+ * main and master and asks GitHub nothing. `null` when no name is read or this clone holds no such ref. `answer(command,
+ * args)` runs one command in the repository and gives `{ ok, out, err }`. */
+export function landingBranch(answer) {
+  const { name } = defaultBranchOf(answer);
+  if (!name) return null;
+  const ref = `refs/remotes/origin/${name}`;
+  return answer('git', ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]).ok ? ref : null;
+}
+
+/** Codex input per landed PR in the repository of `cwd`, read from its records: the run log, the Codex review records
+ * and the land records read so that a file there that cannot be read throws (`readCodexReviews`, which the admission
+ * reads by, reads such a file as none), the Codex review records with the run log's admission, and git for the commits
+ * each land brought in. The common git dir is asked once and handed to the readers of the record files (`where`). Each
+ * re-read is counted by `reviewCoverage` as the push counts it, with the records handed in (`read`); the top of the
+ * repository is left to it, which reads it as the push does (`git rev-parse --show-cdup`), never trimmed of a space a
+ * folder's name ends in. */
 function workingPerPr(cwd = process.cwd()) {
   const git = (args, input) => gitOut(spawnSync, cwd, args, input);
-  const top = gitOut(spawnSync, cwd, ['rev-parse', '--show-toplevel']);
+  const answer = (command, args) => {
+    const result = spawnSync(command, args, { cwd, encoding: 'utf8', windowsHide: true, timeout: 20_000 });
+    return { ok: !result.error && result.status === 0, out: String(result.stdout ?? ''), err: String(result.stderr ?? '') };
+  };
   const { commonGitDir } = gitDirs(cwd, spawnSync);
-  const where = top && commonGitDir ? { top: path.resolve(top), marks: new Map(), commonGitDir } : undefined;
+  const where = commonGitDir ? { commonGitDir } : undefined;
+  readRecordLines(codexReviewsPath(cwd, { where }), fs);
   const { records, admitted } = admittedCodexReviews(cwd, { where });
   return perLandedPr({
     runs: readRecordLines(codexReviewRunsPath(cwd, { where }), fs),
@@ -78,7 +97,7 @@ function workingPerPr(cwd = process.cwd()) {
     lands: readLandRecord(cwd, spawnSync, fs),
     doubleReviews: readRecordLines(jsonLinesPath(cwd, DOUBLE_REVIEWS_FILE, { where }), fs),
     git,
-    defaultRef: defaultBranch(spawnSync, cwd, 'origin')?.ref ?? null,
+    defaultRef: landingBranch(answer),
     coverage: ({ from, tip, records: before }) => reviewCoverage(cwd, { from, tip, where, read: () => before, isValid: () => true, beyondTip: false }),
   });
 }

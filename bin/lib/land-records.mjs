@@ -101,9 +101,18 @@ export function readRecordLines(file, fileSystem) {
 // what Codex read for each PR that landed, over all its days, and what of it bought no new reading.
 
 /** The PRs and the day of the baseline the measure is held to: PRs 864-868, and 2026-11-14, the day Codex's five-hour
- * window reached 100%, kept apart (the document's L3). */
+ * window reached 100%, kept apart (the document's L3). `merges` names each PR's merge on this repository's main: a PR
+ * counts for the baseline only where git holds that commit, so another repository's PRs of those numbers are none of
+ * it. */
 export const BASELINE = {
   prs: [864, 865, 866, 867, 868],
+  merges: {
+    864: '4a77d99097f8ead95ec9c3ff891aee6fd7d9bf9f',
+    865: '6ba747e38fcc3d7045fb3afc746081d83e5c2a82',
+    866: '96ce3c90920cb5c0ee7de2e18607efd80081bc9b',
+    867: 'b07c7b5195a7d966cf99529e36b0fc2a10b5f049',
+    868: '67455a84b51170e92670d07520b89e0d9fac0509',
+  },
   day: '2026-11-14',
   // The lead's decisions of 2026-11-18 (odd/tasks/codex-spend.md, L40), said with the baseline they read it by.
   notes: [
@@ -116,7 +125,12 @@ export const BASELINE = {
  * GitHub's merge button writes too. bin/lib/report-git.mjs reads the same subject with a regex it does not export. */
 const MERGE_OF_PR = /^Merge pull request #(\d+) from /;
 
-const countOf = (run) => (Number.isFinite(run.usage?.inputTokens) ? run.usage.inputTokens : null);
+/** A run's input tokens, or `null` where its line holds no measurement: only a count read from Codex's rollout files
+ * (`usageSource: 'rollout'`) is one; a line with no `usageSource` holds `turn.completed`'s zeros, and `null` says none
+ * was read (bin/lib/codex-review-runs.mjs). */
+const measured = (run) => run.usageSource === 'rollout';
+const countOf = (run) => (measured(run) && Number.isFinite(run.usage?.inputTokens) ? run.usage.inputTokens : null);
+const cachedOf = (run) => (measured(run) && Number.isFinite(run.usage?.cachedInputTokens) ? run.usage.cachedInputTokens : 0);
 /** `{ runs, inputTokens }` of `runs`, the tokens of those with a count, and `uncounted`, the runs with none, where any. */
 const tally = (runs) => {
   const uncounted = runs.filter((run) => countOf(run) === null).length;
@@ -212,27 +226,36 @@ function landedOwners(graph, lands, tip) {
  * with those records alone. All are handed in, so this module asks nothing of git or the disk itself.
  *
  * A run counts for the PR whose land's merge brought its head in (`landedOwners`). One of no landed PR is pending (its
- * head on a branch not merged into the default branch), on the default branch by no land record (before lands.jsonl,
- * or merged by hand only), or orphaned (its head on no branch: rebased away, or gone). Each run of a PR is in the first
+ * head on a branch not merged into the default branch), on the default branch by no land record (reached from its tip:
+ * before lands.jsonl, or merged by hand only), or orphaned (its head on no branch: rebased away, or gone). With no
+ * default branch read the first two are one bucket, `onABranch`. Each run of a PR is in the first
  * class that holds it: failed (any outcome but `reviewed`), no record (a `reviewed` run no record names, by `run` or
  * `runs`), re-read (a code commit of its range covered by a `reviewed` record written before it started, as the push
  * counts it, `beyondTip` off), or the rest. A re-read whose code commits were all covered bought no new reading; one
  * that also read code no record covered is counted apart, with how many of its code commits were covered. A remerge
  * run (`diff: 'remerge'`) is no re-read, and a skip record is no reading; `--again` runs are not marked in the run log,
- * so none is left out. A run with no token count is counted as a run and its tokens as unknown (`uncounted`).
+ * so none is left out. A run with no token count (`countOf`) is counted as a run and its tokens as unknown
+ * (`uncounted`).
  *
  * The runs that bought new reading are the `reviewed` runs a record names that are no re-read of covered code alone;
- * tokens a line are their input over their changed lines (`coverage.total`, which every run line carries; `part`
- * lacks on lines of whole ranges written before parts). A round, as L5 measured it, is a fresh review (`reviewed`, no
- * `recheck`, no remerge) whose head lies above a clean pass of the same PR on its first-parent line, started after
+ * tokens a line are the input of those with a count over their changed lines (`coverage.total`, which every run line
+ * carries; `part` lacks on lines of whole ranges written before parts). A round, as L5 measured it, is a fresh review
+ * (`reviewed`, no `recheck`, no remerge) whose range starts at or above a clean pass of the same PR, on the
+ * first-parent line of the head it reviews, started after
  * that pass: a record whose runs all found nothing, or a run of a whole range that found nothing, whose record may
  * have been refused (L4). Rounds overlap the classes above. */
 export function perLandedPr({ runs, records = [], lands, doubleReviews = [], git, defaultRef = null, admitted = () => true, coverage, baseline = BASELINE }) {
   const { graph, tip } = commitGraph(git, lands, defaultRef);
   const owner = landedOwners(graph, lands, tip);
-  const unlanded = defaultRef ? git(['rev-list', '--branches', '--remotes', '--not', defaultRef]) : '';
+  // With the default branch read, a branch's commits outside it are pending and its own commits, reached from its tip,
+  // are on it (a failed land's candidate, which the graph holds too, puts nothing there). Without it the two are not
+  // told apart: a commit on any branch is on a branch, and only one on none is orphaned. Asked only where a run is of no
+  // landed PR, so a folder outside a repository, which holds no run, asks git nothing.
+  const placed = runs.every((run) => typeof run?.head !== 'string' || owner.has(run.head));
+  const unlanded = placed ? '' : git(['rev-list', '--branches', '--remotes', ...(tip ? ['--not', tip] : [])]);
   if (unlanded === null) throw new Error('git could not list the commits of the branches not landed');
-  const pending = new Set(unlanded.split('\n').map((line) => line.trim()).filter(Boolean));
+  const onBranch = new Set(unlanded.split('\n').map((line) => line.trim()).filter(Boolean));
+  const onDefault = tip ? reachable(graph, tip) : new Set();
   const named = new Set(records.flatMap(namesOf));
   const reviewed = records.filter((rec) => rec?.outcome === 'reviewed' && admitted(rec)).sort((a, b) => Date.parse(a.reviewedAt) - Date.parse(b.reviewedAt));
   const runById = new Map(runs.map((run) => [run?.id, run]));
@@ -244,20 +267,28 @@ export function perLandedPr({ runs, records = [], lands, doubleReviews = [], git
   ];
   const reread = rereadOf({ graph, reviewed, coverage });
   const byPr = new Map();
-  const unattributed = { pending: [], byNoLand: [], orphaned: [] };
+  const unattributed = tip ? { pending: [], byNoLand: [], orphaned: [] } : { onABranch: [], orphaned: [] };
+  const kindOf = (head) => {
+    if (!tip) return onBranch.has(head) ? 'onABranch' : 'orphaned';
+    return onBranch.has(head) ? 'pending' : onDefault.has(head) ? 'byNoLand' : 'orphaned';
+  };
   for (const run of runs) {
     if (typeof run?.head !== 'string') continue;
     const pr = owner.get(run.head);
     if (pr !== undefined) byPr.set(pr, [...(byPr.get(pr) ?? []), run]);
-    else unattributed[pending.has(run.head) ? 'pending' : graph.has(run.head) ? 'byNoLand' : 'orphaned'].push(run);
+    else unattributed[kindOf(run.head)].push(run);
   }
   const prs = [...byPr].sort(([a], [b]) => a - b).map(([pr, own]) => prFigures(pr, own, { named, reread, graph, owner, cleanPasses }));
-  const baselineRuns = prs.filter((one) => baseline.prs.includes(one.pr)).flatMap((one) => one.ids.map((id) => runById.get(id)));
+  // A baseline PR is this repository's where git holds its merge (`BASELINE.merges`), never by its number alone.
+  const isBaseline = (pr) => baseline.prs.includes(pr) && graph.has(baseline.merges?.[pr]);
+  const baselineRuns = prs.filter((one) => isBaseline(one.pr)).flatMap((one) => one.ids.map((id) => runById.get(id)));
   const onDay = baselineRuns.filter((run) => String(run.startedAt).startsWith(baseline.day));
   const listed = (bucket) => ({ ...tally(bucket), ids: bucket.map((run) => run.id), list: bucket.map((run) => ({ id: run.id, startedAt: run.startedAt, head: run.head, inputTokens: countOf(run) })) });
   return {
     prs,
-    unattributed: Object.fromEntries(Object.entries(unattributed).map(([kind, bucket]) => [kind, listed(bucket)])),
+    landedPrs: new Set(lands.filter((land) => land?.exit === 0 && Array.isArray(land.landed)).flatMap((land) => land.landed)).size,
+    // Without a default branch, pending and on the default branch are not told apart: both `null`, and `onABranch` holds them.
+    unattributed: { pending: null, byNoLand: null, ...Object.fromEntries(Object.entries(unattributed).map(([kind, bucket]) => [kind, listed(bucket)])) },
     baseline: {
       prs: baseline.prs,
       ...tally(baselineRuns),
@@ -313,20 +344,24 @@ function prFigures(pr, own, { named, reread, graph, owner, cleanPasses }) {
   };
   const passes = cleanPasses.filter((pass) => owner.get(pass.head) === pr);
   const fresh = (run) => run.outcome === 'reviewed' && run.recheck === undefined && run.diff !== 'remerge';
-  // Commits above a clean pass: the range starts at the pass's head or above it, so a range from below it is no round.
+  // Commits above a clean pass: the range starts at the pass's head or above it, so a range from below it is no round,
+  // and the pass is on the first-parent line of the head reviewed, so one on a side branch merged into it is none.
   const rounds = sorted.filter((run) => {
     if (!fresh(run)) return false;
     const from = run.from ?? run.base;
     const startLine = new Set([from, ...lineBelow(from)]);
-    return passes.some((pass) => pass.at < Date.parse(run.startedAt) && startLine.has(pass.head));
+    const headLine = new Set([run.head, ...lineBelow(run.head)]);
+    return passes.some((pass) => pass.at < Date.parse(run.startedAt) && startLine.has(pass.head) && headLine.has(pass.head));
   });
-  const reviewedLines = bought.reduce((sum, run) => sum + (Number.isFinite(run.coverage?.total) ? run.coverage.total : 0), 0);
-  const boughtInputTokens = tally(bought).inputTokens;
+  // Tokens a line over the runs with a count alone, on both sides: a run with no count adds neither its lines nor tokens.
+  const counted = bought.filter((run) => countOf(run) !== null);
+  const reviewedLines = counted.reduce((sum, run) => sum + (Number.isFinite(run.coverage?.total) ? run.coverage.total : 0), 0);
+  const boughtInputTokens = tally(counted).inputTokens;
   const sum = (list, field) => list.reduce((total, run) => total + said.get(run)[field], 0);
   return {
     pr,
     ...tally(sorted),
-    cachedInputTokens: sorted.reduce((total, run) => total + (Number.isFinite(run.usage?.cachedInputTokens) ? run.usage.cachedInputTokens : 0), 0),
+    cachedInputTokens: sorted.reduce((total, run) => total + cachedOf(run), 0),
     days: [...new Set(sorted.map((run) => String(run.startedAt).slice(0, 10)))],
     ids: sorted.map((run) => run.id),
     failed: tally(failed),
@@ -338,6 +373,7 @@ function prFigures(pr, own, { named, reread, graph, owner, cleanPasses }) {
     roundIds: rounds.map((run) => run.id),
     reviewedLines,
     boughtInputTokens,
+    boughtUncounted: bought.length - counted.length,
     tokensPerLine: reviewedLines > 0 ? Math.round(boughtInputTokens / reviewedLines) : null,
   };
 }
@@ -369,7 +405,8 @@ export function perPrLines(report) {
   const lines = ['Codex input per landed PR, over all its days (input tokens, the cached ones among them):'];
   for (const pr of report.prs) {
     // The beside-new runs bought new reading too: their tokens are among "tokens of theirs", not to be added to them.
-    const perLine = pr.tokensPerLine === null ? 'no line reviewed' : `${count(pr.reviewedLines)} lines reviewed by the runs that bought new reading${pr.rereadBeside.runs > 0 ? ', the beside-new runs among them' : ''}, ${count(pr.boughtInputTokens)} tokens of theirs, ${count(pr.tokensPerLine)} a line`;
+    const left = pr.boughtUncounted > 0 ? ` (${runsWord(pr.boughtUncounted)} with no count left out of both)` : '';
+    const perLine = pr.tokensPerLine === null ? `no line reviewed by a run with a count${left}` : `${count(pr.reviewedLines)} lines reviewed by the runs that bought new reading${pr.rereadBeside.runs > 0 ? ', the beside-new runs among them' : ''}, ${count(pr.boughtInputTokens)} tokens of theirs, ${count(pr.tokensPerLine)} a line${left}`;
     const unknown = pr.coverageUnknown > 0 ? `; ${runsWord(pr.coverageUnknown)} whose coverage could not be told` : '';
     const beside = `re-read covered code beside new ${spent(pr.rereadBeside)} (${count(pr.rereadBeside.covered)} of ${count(pr.rereadBeside.code)} code commits already covered)`;
     lines.push(`PR ${pr.pr}: ${runsCounted(pr.runs, pr.uncounted)}, ${count(pr.inputTokens)} input tokens (${count(pr.cachedInputTokens)} of them cached) (${pr.days.join(', ')}); bought no new reading: failed ${spent(pr.failed)}, no record ${spent(pr.unnamed)}, re-read of covered code alone ${spent(pr.rereadOnly)}; ${beside}; ${perLine}${unknown}`);
@@ -382,10 +419,17 @@ export function perPrLines(report) {
   // The notes speak of this repository's baseline runs; a repository that holds none of them is not told them.
   if (baseline.runs > 0) for (const note of baseline.notes ?? []) lines.push(`  ${note}`);
   const alone = report.prs.filter((pr) => pr.rereadOnly.runs > 0).length;
-  lines.push(`Re-read of covered code alone: ${count(alone)} of ${count(report.prs.length)} ${report.prs.length === 1 ? 'PR' : 'PRs'}`);
-  const words = { pending: 'Pending, on a branch not landed', byNoLand: 'On the default branch by no land record', orphaned: 'Orphaned, on no branch (rebased away or gone)' };
+  const prsWord = (n) => `${count(n)} ${n === 1 ? 'PR' : 'PRs'}`;
+  lines.push(`Re-read of covered code alone: ${count(alone)} of ${prsWord(report.prs.length)} with Codex runs (${prsWord(report.landedPrs)} landed)`);
+  const words = {
+    pending: 'Pending, on a branch not landed',
+    byNoLand: 'On the default branch by no land record',
+    onABranch: 'On a branch, pending or on the default branch by no land, which no default branch read tells apart',
+    orphaned: 'Orphaned, on no branch (rebased away or gone)',
+  };
   for (const [kind, label] of Object.entries(words)) {
     const bucket = report.unattributed[kind];
+    if (!bucket) continue;
     lines.push(`${label}: ${runsCounted(bucket.runs, bucket.uncounted)}, ${count(bucket.inputTokens)} input tokens`);
     if (kind !== 'byNoLand') for (const run of bucket.list) lines.push(`  ${run.startedAt} ${String(run.head).slice(0, 12)} ${run.inputTokens === null ? 'unknown' : count(run.inputTokens)}`);
   }
