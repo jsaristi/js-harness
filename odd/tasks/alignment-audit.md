@@ -6,6 +6,7 @@ pull request, landed by the lead (JH ORQ) · Brief: miniplan 3 of JH PLAN, 2026-
 `miniplan-003-alignment-audit.md`), amended the same evening after his "Listo quiero que lo alineemos todo" (L2).
 
 ## State
+PR 921 open at 0e194243, held by the lead. Waiting on the lead's go: no double review and no card to him until then; on the go, `codex-meter` first (weekly under 50%, five-hour under 80%), one `double-review read` of this file, every finding answered, then the read id, its cost and the cards (D-a1, D-a4, D-a7, D-b1, D-b2, D-c1, D-c2) to the lead by direct message.
 The audit and the build plan are written; nothing is built. Next: the lead reads it, sends the in-flight
 amendments to JH 227 and JH 229 (slices A and B), and records the one block of his decisions and sends it to JH PLAN, which asks him in one sitting (question 355).
 
