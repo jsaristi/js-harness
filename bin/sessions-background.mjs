@@ -124,7 +124,7 @@ function baseCut(run, root, ref, name) {
   const named = ref.startsWith('-') ? null : run('git', ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], { cwd: root });
   const [sha] = String(named?.stdout ?? '').split(/\r?\n/).filter((line) => line.trim() !== '');
   if (named === null || named.error || named.status !== 0 || sha === undefined) return { refusal: `--base ${ref} names no commit in ${root}` };
-  const place = path.join(root, '.claude', 'worktrees', name);
+  const place = worktreeOf({ root, worktree: name });
   const branch = `worktree-${name}`;
   if (fs.existsSync(place)) return { refusal: `the worktree folder ${place} is already there, and claude -w would take it as it is` };
   const held = run('git', ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], { cwd: root });
@@ -139,6 +139,13 @@ function uncut(run, root, { sha, place, branch }) {
   if (gone.error || gone.status !== 0) return `the worktree ${place} stays (${saidBy(gone)})`;
   const unbranched = run('git', ['update-ref', '-d', `refs/heads/${branch}`, sha], { cwd: root });
   return unbranched.error || unbranched.status !== 0 ? `the branch ${branch} stays (${saidBy(unbranched)})` : null;
+}
+
+/** The folders `git worktree list` names for the checkout at `root`, or null when it cannot be read. */
+function worktreePaths(run, root) {
+  const listed = run('git', ['worktree', 'list', '--porcelain'], { cwd: root });
+  if (listed.error || listed.status !== 0) return null;
+  return String(listed.stdout).split(/\r?\n/).filter((line) => line.startsWith('worktree ')).map((line) => path.resolve(line.slice('worktree '.length)));
 }
 
 /** The line a start or a resume prints for its Remote Control. */
@@ -346,6 +353,8 @@ export function sessionsStartMain(argv, given = {}) {
       return 1;
     }
   }
+  // The worktrees before claude runs: one it makes of its own, rather than taking the one cut, is a base not taken.
+  const worktreesBefore = cut === null ? null : worktreePaths(run, root);
   // What a start that ran no session says of the worktree it cut: removed, or why it stays.
   const uncutWords = () => (cut === null ? '' : `; ${uncut(run, root, cut) ?? `the worktree ${cut.place} it cut is removed`}`);
   let result;
@@ -385,9 +394,13 @@ export function sessionsStartMain(argv, given = {}) {
     stderr(`js-harness sessions start: claude printed no id for the session, and claude agents lists no new session titled ${JSON.stringify(parsed.title)} in this project, so nothing is recorded: if claude agents lists it later, claude stop <id> and claude rm <id> remove it; its brief stays at ${copy}${cut === null ? '' : `, and the worktree ${cut.place} cut from ${cut.sha.slice(0, 7)} stays, since the session may run in it`}\n${saidBy(result)}`);
     return 1;
   }
+  // claude -w takes the worktree cut only while its folder and branch are claude's own (`baseCut`): a worktree that
+  // appears beside it means claude cut one from HEAD, and the base is said not taken and not recorded.
+  const strays = worktreesBefore === null ? [] : (worktreePaths(run, root) ?? []).filter((folder) => !worktreesBefore.some((was) => within(folder, was) && within(was, folder)));
+  if (strays.length > 0) stderr(`js-harness sessions start: --base did not take: claude made the worktree ${strays.join(', ')} of its own beside ${cut.place}, cut from ${cut.sha.slice(0, 7)}, which stays; the session runs from claude's`);
   const entry = {
     event: 'started', at: new Date(now()).toISOString(), id, sessionId: agent?.sessionId ?? null, title: parsed.title, root, cwd,
-    worktree: parsed.worktree ?? null, base: cut?.sha ?? null, worktreePath: worktreeOf({ root, worktree: parsed.worktree, worktreePath: agent?.cwd }), model: model ?? null, effort: effort ?? null, advisor: advisor ?? null, remoteControl: parsed.remoteControl, brief: copy,
+    worktree: parsed.worktree ?? null, base: strays.length > 0 ? null : cut?.sha ?? null, worktreePath: worktreeOf({ root, worktree: parsed.worktree, worktreePath: agent?.cwd }), model: model ?? null, effort: effort ?? null, advisor: advisor ?? null, remoteControl: parsed.remoteControl, brief: copy,
   };
   try {
     appendRecord(home, entry);

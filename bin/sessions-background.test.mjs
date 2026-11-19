@@ -27,7 +27,7 @@ const FAKE = String.raw`
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 const file = process.env.FAKE_CLAUDE_STATE;
 const state = JSON.parse(fs.readFileSync(file, 'utf8'));
 const argv = process.argv.slice(2);
@@ -56,6 +56,8 @@ if (argv.includes('--bg')) {
     // claude lists a session it just started in the folder it was started from, and in its worktree only later.
     if (!state.rootCwd) cwd = worktree;
   }
+  // A claude whose -w makes a worktree of its own, from HEAD, instead of taking the one start cut.
+  if (state.strayWorktree) spawnSync('git', ['worktree', 'add', '-q', '-b', 'stray', path.join(process.cwd(), '.claude', 'worktrees', 'stray')], { cwd: process.cwd() });
   if (state.sibling) state.agents.push({ ...state.sibling, kind: 'background', startedAt: state.now, name, status: 'busy' });
   if (!state.ghost) state.agents.push({ pid: 4242, id, cwd, worktree, kind: 'background', startedAt: state.now, sessionId: id + '-0000-4000-8000-000000000000', name, status: 'busy', state: 'working' });
   save();
@@ -505,6 +507,18 @@ test('sessions start --base refuses a ref that names no commit, a base with no -
   assert.deepEqual(readState(world).calls, []);
   assert.deepEqual(recordLines(world), []);
   assert.equal(fs.existsSync(worktreeAt(world, 'thing')), false);
+}));
+
+// Lens readability on 3d89c37..edd772a: --base rests on claude -w taking the worktree start cut; a claude that makes its
+// own instead must not leave a start that says nothing and records the base it did not use.
+test('sessions start --base says so, and records no base, when claude makes a worktree of its own', withWorld((world) => {
+  const first = firstOfTwo(world);
+  patchState(world, { strayWorktree: true });
+  const result = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing', '--base', first]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stderr, /--base did not take/);
+  assert.ok(result.stderr.includes(worktreeAt(world, 'stray')), result.stderr);
+  assert.equal(startedLines(world)[0].base, null);
 }));
 
 test('sessions start --base removes the worktree it cut when claude refuses, and keeps it when a session may run in it', withWorld((world) => {
