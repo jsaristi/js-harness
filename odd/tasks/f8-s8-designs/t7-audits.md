@@ -56,6 +56,8 @@ baseline, the candidate and the spend are the owner's. Written 2026-11-19 by JH 
   deltas read (section 8's one run moved the five-hour window 6 points), then the other runs planned over windows.
 - Claude: about 1M to 4M input a run, on his plan's limits, no dollars.
 
-## For his decision
-The baseline (fresh, 12 runs, or section 8, 6 runs); the candidate; the pilot and the spread of the Codex runs over
-weekly windows.
+## His decision
+Question 369, his answer "Sí, piloto tras el reinicio (Recomendada)" (2026-11-19, JH PLAN's transcript `f5c3ee4d`,
+line 6881, verified by the lead): this design is approved, with one pilot audit first, run after the weekly reset of
+2026-11-23 23:45. The pilot's spend is asked before it runs. Still his: the baseline (fresh, 12 runs, or section 8,
+6 runs); the candidate; how the remaining Codex runs spread over weekly windows, once the pilot is measured.
