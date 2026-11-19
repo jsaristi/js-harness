@@ -310,6 +310,7 @@ Still open: C5.1 by hand, R3, T2 to T7. A second grading after T6 changes the gr
   test-first; its code came before its new tests, which were shown red afterwards against the old `grade.mjs`. History
   is not rewritten. Also checked: a red `node --test tests/*.spec.mjs` (S8's current-2 ran one) read in the new
   `gradeTdd` as a run of another file, because the glob word looks like a test file name. Its test was written first
-  and seen red (`no red run of its own test` for f1, f2 and f3), then `runsOwn` reads a glob as the whole suite;
-  `grade.test.mjs` passes 47 of 47. `gradeTdd` moved one line, to 643. Codex held for the weekly reset (2026-11-23
-  23:45), recorded with `codex-review --unavailable`.
+  and seen red (`no red run of its own test` for f1, f2 and f3), then `runsOwn` read a glob as the whole suite. Both
+  Claude lenses found that too loose (`tests/store*.spec.mjs` credited every feature); now a glob counts only when it
+  matches the name of the feature's own test, test first and seen red; `grade.test.mjs` passes 47 of 47. `gradeTdd`
+  moved, to 646. Codex held for the weekly reset (2026-11-23 23:45), recorded with `codex-review --unavailable`.
