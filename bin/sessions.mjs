@@ -68,7 +68,7 @@ import { DEFAULT_CONTEXT_COMPACTION_PERCENT, DEFAULT_CONTEXT_PAUSE_PERCENT, DEFA
 import { harnessHome } from './lib/home.mjs';
 import { readRelief, tailOfFile, workFile } from './lib/board-files.mjs';
 import { backgroundChanges, boardBackground, claudeRunner, listAgents, recordFileOf, recordedFolders } from './lib/background.mjs';
-import { LIVE_USAGE, START_USAGE, nextNumberMain, sessionsLiveMain, sessionsStartMain, sessionsStopMain } from './sessions-background.mjs';
+import { LIVE_USAGE, START_USAGE, nextNumberMain, sessionsBriefMain, sessionsLiveMain, sessionsStartMain, sessionsStopMain } from './sessions-background.mjs';
 
 export const USAGE = [
   'Usage: js-harness sessions [--hours <n>] [--tail <n>] [--self <session id>] [--json]',
@@ -478,8 +478,8 @@ export async function sessionsMain(
   } = {},
 ) {
   // Start and stop a background session (odd/tasks/background-sessions.md), and live, the live board's rows (live-board.md), write.
-  if (argv[0] === 'start' || argv[0] === 'stop' || argv[0] === 'live') {
-    return ({ start: sessionsStartMain, stop: sessionsStopMain, live: sessionsLiveMain })[argv[0]](argv.slice(1), { cwd: defaultCwd, stdout, stderr, env, now, homedir, run });
+  if (['start', 'stop', 'live', 'brief'].includes(argv[0])) {
+    return ({ start: sessionsStartMain, stop: sessionsStopMain, live: sessionsLiveMain, brief: sessionsBriefMain })[argv[0]](argv.slice(1), { cwd: defaultCwd, stdout, stderr, env, now, homedir, run });
   }
   let parsed;
   // The host's window, from the Claude home the board reads the transcripts from and the folder it runs in: files

@@ -432,6 +432,97 @@ test('sessions start refuses a missing brief, a missing title and an unknown fla
   assert.deepEqual(readState(world).calls, []);
 }));
 
+// docs/ROADMAP.md, "sessions start takes a base": the lead made JH 207's worktree by hand on PR 883's head because start
+// had no base option. With --base, start cuts the worktree where claude -w puts it (`<root>/.claude/worktrees/<name>`,
+// branch `worktree-<name>`) from the commit the ref names, and claude -w takes the one already there.
+const gitOut = (cwd, ...args) => {
+  const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  return result.stdout.trim();
+};
+/** A second commit on the world's main, so a base on the first is not where main stands; the first commit's sha. */
+const firstOfTwo = (world) => {
+  const first = gitOut(world.project, 'rev-parse', 'HEAD');
+  gitOut(world.project, 'commit', '-q', '--allow-empty', '-m', 'second');
+  return first;
+};
+const worktreeAt = (world, name) => path.join(world.project, '.claude', 'worktrees', name);
+const branchOf = (world, name) => spawnSync('git', ['rev-parse', '--verify', '--quiet', `refs/heads/worktree-${name}`], { cwd: world.project, encoding: 'utf8' }).stdout.trim();
+
+// The brief template is its own verb: where the rule sessions-open-in-sidebar is declared the guard refuses every
+// `sessions start` line, and the lead still writes a brief for start_session to point at.
+test('sessions brief prints the brief template under the title given, runs no claude, and refuses another argument', withWorld((world) => {
+  const result = js(world, ['sessions', 'brief', '--title', 'JH 240 · build the thing']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.ok(result.stdout.startsWith('# Brief — JH 240 · build the thing\n'), result.stdout);
+  assert.match(result.stdout, /^## Done when$/m);
+  assert.match(js(world, ['sessions', 'brief']).stdout, /^# Brief — <code> <n> · <purpose>$/m);
+  const wrong = js(world, ['sessions', 'brief', '--bogus']);
+  assert.equal(wrong.code, 2);
+  assert.match(wrong.stderr, /unknown argument: --bogus/);
+  assert.equal(js(world, ['sessions', 'brief', '--title']).code, 2);
+  assert.deepEqual(readState(world).calls, []);
+}, { rules: 'all' }));
+
+test('sessions start --base cuts the session\'s worktree from the commit the ref names, and records it', withWorld((world) => {
+  const first = firstOfTwo(world);
+  gitOut(world.project, 'tag', 'stacked', first);
+  const result = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing', '--base', 'stacked']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(gitOut(worktreeAt(world, 'thing'), 'rev-parse', 'HEAD'), first);
+  assert.equal(branchOf(world, 'thing'), first);
+  const [call] = actions(world);
+  assert.equal(call[call.indexOf('-w') + 1], 'thing');
+  const [record] = startedLines(world);
+  assert.equal(record.base, first);
+  assert.equal(record.worktree, 'thing');
+  // A start with no --base records none, and cuts nothing itself.
+  patchState(world, { nextId: 'c779ed44' });
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Other', '--brief', world.brief, '--worktree', 'other']).code, 0);
+  assert.equal(startedLines(world)[1].base, null);
+  assert.equal(branchOf(world, 'other'), '');
+}));
+
+test('sessions start --base refuses a ref that names no commit, a base with no --worktree or with --resume, and a worktree or branch already there, before claude runs', withWorld((world) => {
+  firstOfTwo(world);
+  const missing = js(world, ['sessions', 'start', '--title', 'x', '--brief', world.brief, '--worktree', 'thing', '--base', 'no-such-ref']);
+  assert.equal(missing.code, 2);
+  assert.match(missing.stderr, /--base no-such-ref names no commit/);
+  // An option is no ref: git is never handed one as a revision.
+  assert.equal(js(world, ['sessions', 'start', '--title', 'x', '--brief', world.brief, '--worktree', 'thing', '--base', '-q']).code, 2);
+  const alone = js(world, ['sessions', 'start', '--title', 'x', '--brief', world.brief, '--base', 'main']);
+  assert.equal(alone.code, 2);
+  assert.match(alone.stderr, /--base takes --worktree/);
+  assert.equal(js(world, ['sessions', 'start', '--resume', 'abc12345', '--base', 'main']).code, 2);
+  gitOut(world.project, 'branch', 'worktree-taken', 'main');
+  const branch = js(world, ['sessions', 'start', '--title', 'x', '--brief', world.brief, '--worktree', 'taken', '--base', 'main']);
+  assert.equal(branch.code, 2);
+  assert.match(branch.stderr, /worktree-taken is already a branch/);
+  fs.mkdirSync(worktreeAt(world, 'there'), { recursive: true });
+  const folder = js(world, ['sessions', 'start', '--title', 'x', '--brief', world.brief, '--worktree', 'there', '--base', 'main']);
+  assert.equal(folder.code, 2);
+  assert.ok(folder.stderr.includes(worktreeAt(world, 'there')), folder.stderr);
+  assert.deepEqual(readState(world).calls, []);
+  assert.deepEqual(recordLines(world), []);
+  assert.equal(fs.existsSync(worktreeAt(world, 'thing')), false);
+}));
+
+test('sessions start --base removes the worktree it cut when claude refuses, and keeps it when a session may run in it', withWorld((world) => {
+  const first = firstOfTwo(world);
+  patchState(world, { refuseStart: 'Workspace not trusted.' });
+  const refused = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing', '--base', first]);
+  assert.equal(refused.code, 1);
+  assert.equal(fs.existsSync(worktreeAt(world, 'thing')), false);
+  assert.equal(branchOf(world, 'thing'), '');
+  assert.deepEqual(recordLines(world), []);
+  // No id and no listing that names the session: it may run in the worktree, which stays, and start says where.
+  patchState(world, { refuseStart: undefined, quiet: true, ghost: true });
+  const unknown = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing', '--base', first]);
+  assert.equal(unknown.code, 1);
+  assert.equal(gitOut(worktreeAt(world, 'thing'), 'rev-parse', 'HEAD'), first);
+  assert.ok(unknown.stderr.includes(worktreeAt(world, 'thing')), unknown.stderr);
+}));
+
 test('sessions start says so when claude is not on PATH', withWorld((world) => {
   const result = spawnSync(process.execPath, [BIN, 'sessions', 'start', '--title', 'x', '--brief', world.brief], {
     cwd: world.project, env: { ...envOf(world), PATH: emptyDir(world) }, encoding: 'utf8',
