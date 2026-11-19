@@ -214,6 +214,13 @@ test('per landed PR: failed, unnamed and re-read runs apart, re-reads beside new
   assert.deepEqual({ lines: pr.reviewedLines, tokens: pr.boughtInputTokens, perLine: pr.tokensPerLine }, { lines: 100, tokens: 3200, perLine: 32 });
 });
 
+test('per landed PR: the lines reviewed are the changed lines Codex was handed, coverage.total, where a run also carries part.changedLines', () => {
+  const run = layoutRun('both', 12, 10, { coverage: { seen: 40, total: 40 }, part: { index: 1, of: 1, files: 1, changedLines: 999 } });
+  const { id } = layoutRepo();
+  const records = [{ base: id[10], head: id[12], reviewedAt: '2026-11-01T00:31:00Z', outcome: 'reviewed', run: 'both' }];
+  assert.equal(prOf(layoutReport([run], { records }), 7).reviewedLines, 40);
+});
+
 test('per landed PR: a round is a fresh review that passed no failure, above a clean pass on the PR\'s first-parent line', () => {
   const { id } = layoutRepo();
   const at = (minute) => `2026-11-01T07:${minute}:00Z`;
@@ -274,7 +281,12 @@ test('per landed PR: the fixture of PRs 864-868 gives the baseline, 3,173,294 ov
   const report = perLandedPr({ runs, records, lands: BASELINE_LANDS, git, defaultRef: null, coverage });
   // L3: PR 864 counts its run of 2026-11-13 (230,174; 110,158 without it).
   assert.deepEqual(report.prs.map((pr) => [pr.pr, pr.runs, pr.inputTokens]), [[864, 3, 230_174], [865, 2, 172_425], [866, 12, 1_280_533], [867, 11, 1_025_087], [868, 7, 465_075]]);
-  assert.deepEqual(report.baseline, { prs: [864, 865, 866, 867, 868], runs: 35, inputTokens: 3_173_294, uncounted: 1, day: '2026-11-14', dayInputTokens: 3_053_278 });
+  const { notes, ...baseline } = report.baseline;
+  const noCount = runs.find((run) => run.startedAt.startsWith('2026-11-14T12:16'));
+  assert.deepEqual(baseline, { prs: [864, 865, 866, 867, 868], runs: 35, inputTokens: 3_173_294, uncounted: 1, uncountedRuns: [{ id: noCount.id, startedAt: noCount.startedAt }], day: '2026-11-14', dayInputTokens: 3_053_278 });
+  // The lead's two decisions of 2026-11-18 (L38), said with the baseline.
+  assert.ok(notes.some((note) => /306,981/.test(note) && /beside new/.test(note)), notes.join('\n'));
+  assert.ok(notes.some((note) => /866 09:28/.test(note) && /868 11:42, 11:49 and 12:10/.test(note) && /L5/.test(note)), notes.join('\n'));
   assert.deepEqual(prOf(report, 866).failed, { runs: 1, inputTokens: 220_599 });
   assert.deepEqual(prOf(report, 867).failed, { runs: 1, inputTokens: 65_993 });
   assert.deepEqual(prOf(report, 868).failed, { runs: 1, inputTokens: 0, uncounted: 1 });
@@ -284,14 +296,15 @@ test('per landed PR: the fixture of PRs 864-868 gives the baseline, 3,173,294 ov
   assert.deepEqual(prOf(report, 866).rereadBeside, { runs: 3, inputTokens: 528_631, covered: 21, code: 24 });
   assert.deepEqual(prOf(report, 867).rereadBeside, { runs: 3, inputTokens: 383_029, covered: 11, code: 14 });
   // L5's fresh reviews of small follow-ups after a clean pass, PR by PR: 864 and 867 as L5 lists them; 866 has 09:28
-  // and 868 three that L5 does not list, each a fresh review whose range starts above a clean recheck of its PR.
+  // and 868 three that L5 does not list, each a fresh review whose range starts above a clean pass of its PR: 866 09:28
+  // and 868 11:42 above a clean recheck, 868 11:49 and 12:10 above a fresh review that found nothing.
   const startsOf = (pr) => prOf(report, pr).roundIds.map((one) => runs.find((run) => run.id === one).startedAt.slice(11, 16));
   assert.deepEqual([864, 865, 866, 867, 868].map(startsOf), [['08:17'], [], ['09:00', '09:28', '09:50', '10:01'], ['09:46', '09:55', '10:05', '10:52'], ['11:42', '11:49', '12:10']]);
 });
 
 test('per landed PR: the report prints a line for each PR, its rounds apart, the baseline with its day apart, the runs of no landed PR, and the double reviews', () => {
   const pr = {
-    pr: 867, runs: 11, inputTokens: 1_025_087, cachedInputTokens: 600_000, days: ['2026-11-14'], failed: { runs: 1, inputTokens: 0, uncounted: 1 }, unnamed: { runs: 1, inputTokens: 79_096 },
+    pr: 867, runs: 11, inputTokens: 1_025_087, uncounted: 1, cachedInputTokens: 600_000, days: ['2026-11-14'], failed: { runs: 1, inputTokens: 0, uncounted: 1 }, unnamed: { runs: 1, inputTokens: 79_096 },
     rereadOnly: { runs: 0, inputTokens: 0 }, rereadBeside: { runs: 3, inputTokens: 383_029, covered: 11, code: 14 }, rounds: { runs: 4, inputTokens: 268_342 },
     reviewedLines: 1_000, boughtInputTokens: 700_000, tokensPerLine: 700, coverageUnknown: 0,
   };
@@ -299,14 +312,16 @@ test('per landed PR: the report prints a line for each PR, its rounds apart, the
   const report = {
     prs: [pr],
     unattributed: { pending: { runs: 2, inputTokens: 10, uncounted: 1, ids: ['p', 'q'], list: [{ id: 'p', startedAt: '2026-11-15T00:00:00Z', head: 'abcdef1234567', inputTokens: 10 }, { id: 'q', startedAt: '2026-11-15T01:00:00Z', head: 'abcdef1234567', inputTokens: null }] }, byNoLand: none, orphaned: none },
-    baseline: { prs: [864, 865, 866, 867, 868], runs: 35, inputTokens: 3_173_294, day: '2026-11-14', dayInputTokens: 3_053_278 },
+    baseline: { prs: [864, 865, 866, 867, 868], runs: 35, inputTokens: 3_173_294, uncounted: 1, uncountedRuns: [{ id: 'ba57f25b-0000', startedAt: '2026-11-14T12:16:11.982Z' }], day: '2026-11-14', dayInputTokens: 3_053_278, notes: ['A note.'] },
     doubleReviews: { reads: 2, codexReads: 1, codexInputTokens: 720_239 },
   };
   const lines = perPrLines(report);
   const has = (line) => assert.ok(lines.includes(line), `${line}\nnot in\n${lines.join('\n')}`);
-  has('PR 867: 11 runs, 1,025,087 input tokens, 600,000 of them cached (2026-11-14); bought no new reading: failed 1 run, tokens unknown, no record 1 run 79,096, re-read of covered code alone 0 runs 0; re-read covered code beside new 3 runs 383,029 (11 of 14 code commits already covered); 1,000 lines reviewed by the runs that bought new reading, 700,000 tokens of theirs, 700 a line');
+  has('PR 867: 11 runs, 1,025,087 input tokens (600,000 of them cached) and 1 run with no count (2026-11-14); bought no new reading: failed 1 run, tokens unknown, no record 1 run 79,096, re-read of covered code alone 0 runs 0; re-read covered code beside new 3 runs 383,029 (11 of 14 code commits already covered); 1,000 lines reviewed by the runs that bought new reading, the beside-new runs among them, 700,000 tokens of theirs, 700 a line');
   has('  rounds after a clean pass (they overlap the classes above; do not add them): 4 runs 268,342');
-  has('Baseline, PRs 864-868: 35 runs, 3,173,294 input tokens over all their days; of them on 2026-11-14 alone: 3,053,278');
+  has('Baseline, PRs 864-868: 35 runs over all their days, 3,173,294 input tokens, and 1 run with no count (ba57f25b-0000, 2026-11-14T12:16:11.982Z); of them on 2026-11-14 alone: 3,053,278');
+  has('  A note.');
+  has('Re-read of covered code alone: 0 of 1 PR');
   has('Pending, on a branch not landed: 2 runs, 10 input tokens and 1 run with no count');
   has('  2026-11-15T00:00:00Z abcdef123456 10');
   has('  2026-11-15T01:00:00Z abcdef123456 unknown');

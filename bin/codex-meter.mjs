@@ -97,9 +97,10 @@ function parseArgs(argv) {
 
 /** Runs the command; returns its exit code. `deps` (all optional) pass to `readRateLimits` (`spawn`, `kill`,
  * `platform`, `timeoutMs`, `now`), `codexDebts` gives the Codex debts of the branch, `perPr` the report of Codex input
- * per landed PR, and `log` and `error` take the lines printed, so the tests run no server and read no repository. */
+ * per landed PR (by default read from the records of the repository at `cwd`), and `log` and `error` take the lines
+ * printed, so the tests run no server and read no repository of their own. */
 export async function codexMeterMain(argv = process.argv.slice(2), deps = {}) {
-  const { log = console.log, error = console.error, codexDebts = workingDebts, perPr = workingPerPr } = deps;
+  const { log = console.log, error = console.error, codexDebts = workingDebts, cwd = process.cwd(), perPr = () => workingPerPr(cwd) } = deps;
   let json;
   let perPrOnly;
   try {

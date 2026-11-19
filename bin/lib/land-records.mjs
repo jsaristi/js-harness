@@ -102,7 +102,15 @@ export function readRecordLines(file, fileSystem) {
 
 /** The PRs and the day of the baseline the measure is held to: PRs 864-868, and 2026-11-14, the day Codex's five-hour
  * window reached 100%, kept apart (the document's L3). */
-export const BASELINE = { prs: [864, 865, 866, 867, 868], day: '2026-11-14' };
+export const BASELINE = {
+  prs: [864, 865, 866, 867, 868],
+  day: '2026-11-14',
+  // The lead's decisions of 2026-11-18 (odd/tasks/codex-spend.md, L40), said with the baseline they read it by.
+  notes: [
+    "The depth pass's 306,981 (6ba747e..4977072's passing parts) moved from re-read of covered code alone to re-read beside new: each of those runs also read a code commit no record covered (1d982b38), so T6 compares the beside-new figure.",
+    'Rounds are fresh reviews above a clean pass of the same PR: by that rule PR 866 09:28 and PR 868 11:42, 11:49 and 12:10 count, beside L5\'s narrower reading, which did not list them; no criterion tells a review of the next work unit apart, so none is left out.',
+  ],
+};
 
 /** The subject the merge queue writes on the merge of a PR (bin/lib/pull-request.mjs, `mergeMessage`), which
  * GitHub's merge button writes too. bin/lib/report-git.mjs reads the same subject with a regex it does not export. */
@@ -250,7 +258,14 @@ export function perLandedPr({ runs, records = [], lands, doubleReviews = [], git
   return {
     prs,
     unattributed: Object.fromEntries(Object.entries(unattributed).map(([kind, bucket]) => [kind, listed(bucket)])),
-    baseline: { prs: baseline.prs, ...tally(baselineRuns), day: baseline.day, dayInputTokens: tally(onDay).inputTokens },
+    baseline: {
+      prs: baseline.prs,
+      ...tally(baselineRuns),
+      uncountedRuns: baselineRuns.filter((run) => countOf(run) === null).map((run) => ({ id: run.id, startedAt: run.startedAt })),
+      day: baseline.day,
+      dayInputTokens: tally(onDay).inputTokens,
+      notes: baseline.notes ?? [],
+    },
     doubleReviews: doubleReviewFigures(doubleReviews),
   };
 }
@@ -303,7 +318,7 @@ function prFigures(pr, own, { named, reread, graph, owner, cleanPasses }) {
     if (!fresh(run)) return false;
     const from = run.from ?? run.base;
     const startLine = new Set([from, ...lineBelow(from)]);
-    return passes.some((pass) => pass.at < Date.parse(run.startedAt) && pass.head !== run.head && startLine.has(pass.head));
+    return passes.some((pass) => pass.at < Date.parse(run.startedAt) && startLine.has(pass.head));
   });
   const reviewedLines = bought.reduce((sum, run) => sum + (Number.isFinite(run.coverage?.total) ? run.coverage.total : 0), 0);
   const boughtInputTokens = tally(bought).inputTokens;
@@ -348,15 +363,21 @@ function spent({ runs, inputTokens, uncounted = 0 }) {
 export function perPrLines(report) {
   const lines = ['Codex input per landed PR, over all its days (input tokens, the cached ones among them):'];
   for (const pr of report.prs) {
-    const perLine = pr.tokensPerLine === null ? 'no line reviewed' : `${count(pr.reviewedLines)} lines reviewed by the runs that bought new reading, ${count(pr.boughtInputTokens)} tokens of theirs, ${count(pr.tokensPerLine)} a line`;
+    // The beside-new runs bought new reading too: their tokens are among "tokens of theirs", not to be added to them.
+    const perLine = pr.tokensPerLine === null ? 'no line reviewed' : `${count(pr.reviewedLines)} lines reviewed by the runs that bought new reading, the beside-new runs among them, ${count(pr.boughtInputTokens)} tokens of theirs, ${count(pr.tokensPerLine)} a line`;
     const unknown = pr.coverageUnknown > 0 ? `; ${runsWord(pr.coverageUnknown)} whose coverage could not be told` : '';
     const beside = `re-read covered code beside new ${spent(pr.rereadBeside)} (${count(pr.rereadBeside.covered)} of ${count(pr.rereadBeside.code)} code commits already covered)`;
-    const tokens = pr.uncounted ? `${count(pr.inputTokens)} input tokens and ${runsWord(pr.uncounted)} with no count` : `${count(pr.inputTokens)} input tokens`;
-    lines.push(`PR ${pr.pr}: ${runsWord(pr.runs)}, ${tokens}, ${count(pr.cachedInputTokens)} of them cached (${pr.days.join(', ')}); bought no new reading: failed ${spent(pr.failed)}, no record ${spent(pr.unnamed)}, re-read of covered code alone ${spent(pr.rereadOnly)}; ${beside}; ${perLine}${unknown}`);
+    const noCount = pr.uncounted ? ` and ${runsWord(pr.uncounted)} with no count` : '';
+    lines.push(`PR ${pr.pr}: ${runsWord(pr.runs)}, ${count(pr.inputTokens)} input tokens (${count(pr.cachedInputTokens)} of them cached)${noCount} (${pr.days.join(', ')}); bought no new reading: failed ${spent(pr.failed)}, no record ${spent(pr.unnamed)}, re-read of covered code alone ${spent(pr.rereadOnly)}; ${beside}; ${perLine}${unknown}`);
     lines.push(`  rounds after a clean pass (they overlap the classes above; do not add them): ${spent(pr.rounds)}`);
   }
   const { baseline } = report;
-  lines.push(`Baseline, PRs ${baseline.prs[0]}-${baseline.prs.at(-1)}: ${runsWord(baseline.runs)}, ${count(baseline.inputTokens)} input tokens over all their days; of them on ${baseline.day} alone: ${count(baseline.dayInputTokens)}`);
+  const unnamedRuns = (baseline.uncountedRuns ?? []).map((run) => `${run.id}, ${run.startedAt}`).join('; ');
+  const noCount = baseline.uncounted ? `, and ${runsWord(baseline.uncounted)} with no count (${unnamedRuns})` : '';
+  lines.push(`Baseline, PRs ${baseline.prs[0]}-${baseline.prs.at(-1)}: ${runsWord(baseline.runs)} over all their days, ${count(baseline.inputTokens)} input tokens${noCount}; of them on ${baseline.day} alone: ${count(baseline.dayInputTokens)}`);
+  for (const note of baseline.notes ?? []) lines.push(`  ${note}`);
+  const alone = report.prs.filter((pr) => pr.rereadOnly.runs > 0).length;
+  lines.push(`Re-read of covered code alone: ${count(alone)} of ${count(report.prs.length)} ${report.prs.length === 1 ? 'PR' : 'PRs'}`);
   const words = { pending: 'Pending, on a branch not landed', byNoLand: 'On the default branch by no land record', orphaned: 'Orphaned, on no branch (rebased away or gone)' };
   for (const [kind, label] of Object.entries(words)) {
     const bucket = report.unattributed[kind];
