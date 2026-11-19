@@ -256,9 +256,9 @@ Still open: C5.1 by hand, R3, T2 to T7. A second grading after T6 changes the gr
 - [ ] T2 (kind: build) the `doctor` row for hooks cancelled or timed out: which 20 sessions, terminal events per expected invocation; tests for a cancel, a timeout, a truncated trace and fewer than 20 sessions; on his yes — S8; inline
 - [ ] T3 (kind: build) a read-only age check for C4.2's roots, locks and processes, one snapshot time; tests for a 25-hour folder, a stale lock, a lingering process; on his yes — S8; inline
 - [ ] T4 (kind: build) the closing count per class with ids and host-caused exceptions; on his yes — S4; inline
-- [ ] T5 (kind: design) R1's behavioural run: case inventory, repeats, acceptance, the paired proof standard; on his yes — S3; inline
+- [ ] T5 (kind: design) R1's behavioural run: case inventory, repeats, acceptance, the paired proof standard; on his yes — S3; inline; design: `odd/tasks/f8-s8-designs/t5-behavioural-run.md`
 - [ ] T6 (kind: build) the long-session grader fixes: a share from fewer than 5 valid runs cannot certify; tdd per feature with the feature's own test; spanish after English tool output only; tests first; on his yes — S2; inline
-- [ ] T7 (kind: design) the audits: a frozen package and rubric, pinned model and effort, blind baseline and candidate, three runs each, their cost; on his yes — S7; inline
+- [ ] T7 (kind: design) the audits: a frozen package and rubric, pinned model and effort, blind baseline and candidate, three runs each, their cost; on his yes — S7; inline; design: `odd/tasks/f8-s8-designs/t7-audits.md`
 - [ ] T8 (kind: verify) the candidate tag; the runs of `## Measures`, each priced with `--plan` first, on his yes; a report reading each row against its line that refuses missing, duplicate, errored or wrong-arm trials; `## Result` — S1 to S8; inline
 
 ## Log
