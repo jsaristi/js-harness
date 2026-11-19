@@ -53,7 +53,8 @@ test('a fixture test run in a process of its own leaves its temporary folder emp
   const tmp = scratch('child-');
   const env = { ...process.env, TEMP: tmp, TMP: tmp, TMPDIR: tmp };
   delete env.NODE_TEST_CONTEXT; // set by node --test for its own children; with it the child would report to this run
-  const child = spawnSync(process.execPath, ['--test', '--test-name-pattern=^the merges of the candidate run no hook', fileURLToPath(import.meta.url)], { encoding: 'utf8', env });
+  // The reporter is named: the summary line read below is the spec reporter's, which not every Node gives a pipe.
+  const child = spawnSync(process.execPath, ['--test', '--test-reporter=spec', '--test-name-pattern=^the merges of the candidate run no hook', fileURLToPath(import.meta.url)], { encoding: 'utf8', env });
   assert.equal(child.status, 0, child.stdout + child.stderr);
   assert.match(child.stdout, /^ℹ pass 1$/m, 'the fixture test ran');
   assert.deepEqual(fs.readdirSync(tmp), []);
