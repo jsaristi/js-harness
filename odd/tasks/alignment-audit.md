@@ -121,7 +121,7 @@ The change column names the slice of the build plan.
 | D1 | 227 `rules-data.mjs` (`questions-one-place` subject, 13ef86a1) | "every other question, in the orchestrator's chat" | contradicts question 355 | 227 | 227 changes it at `2af13c1b`: every question in the Plan's chat; a rule quotes his typed line 1362, with the tap of 4488 among the accepted answers, since `rules change` refuses a tap as a quote (A) |
 | D1 | `bin/lib/manifest.mjs:134,140` | the questions reach him "in one place: the orchestrator's chat"; the lead asks them | contradicts question 355 | none | Stays out of 227's branch; written as a limit of today until slice H (the lead records a question for the orchestrator, then sends it to the Plan by direct message), and reworded with slice H |
 | D1 | `bin/lib/channel.mjs:136` | "a question goes to the orchestrator, who asks the user: --to orchestrator" | contradicts question 355 | none | A question is recorded for the Plan, and the lead's direct message delivers it (H) |
-| D1 | 227 `plan-opening.md:25` | the Plan starts the sessions a miniplan orders, on his go, and hands them over | aligned: miniplan 1, "The hand-over start", and question 354 | 227 | none (two readers marked it a contradiction; refuted by question 354) |
+| D1 | 227 `plan-opening.md:25` | the Plan starts the sessions a miniplan orders, on his go, and hands them over | open: question 354 is a tap, and his typed lines 3064 and 3459 point to the lead opening (read 8d32c0e7 on 227, Claude 2) | 227 | Card D-a6; the rule's start clause waits for his typed sentence |
 | D1 | 227 `plan-opening.md:29` and the `plan-pre-prompt` subject | the Plan "is sent no notices"; the lead sends it "once, 'miniplan N done'" | half-says after question 355: the lead now sends it every question of the execution | 227 | Say the questions come by direct message, never as a notice to follow (A) |
 | D1 | `bin/lib/manifest.mjs:120` | "Two kinds of session. A work session ... The orchestrator" | half-says (no Plan role in the installed skill) | none (227 writes the role in `odd/` only) | One line naming the Plan, pointing to the rule `plan-pre-prompt` (JH 227's, not yet on main) (C) |
 | D1 | `docs/ROADMAP.md` | no line names the Plan, a miniplan or the pre-prompt (searched `Plan\b`, `miniplan`, `pre-prompt`, `JH PLAN`) | half-says | none | One roadmap row (C) |
@@ -233,30 +233,46 @@ on 227). So a design read is planned at its last measured cost, not its stated o
 every slice is a spend question; F is why that stops.
 
 ## His to decide (one sitting in JH PLAN's chat, after question 355: the lead records each and sends it; `rule:owner-decisions`)
-One card a decision, all in the same sitting. Each rule quotes his typed lines, never a tap alone (L22 on 227):
+One card a decision, all in the same sitting. Each card names a typed line of his that covers its whole subject; a
+tap, or an "Other" left empty, is recorded as his choice and moves no rule (read 8d32c0e7 on 227, Claude 1 to 3). Lines:
 `f5c3ee4d` line 1362 ("todas las preguntas del orquestador ... aca en el plan"), 3672 ("Listo ahora hazlo no me pidas
 que lo haga tu tienes comunicacion"), 3771 ("SIEMPRE PERO SIEMPRE MANDA LA INFORMACION ..."); the taps (353, 354,
 355) go among the accepted answers.
 
-- **D-a1, `senior-model`, subject.** Proposed: "the model a senior session runs on, titled <code> SR · <purpose>,
-  which a session opens with start_session as `rule:session-model` says (the Plan, on his yes, for a miniplan's;
-  the lead for its own work) and sends the judgment a task needs: a design, a depth pass, a decision". Options: A,
-  these words (recommended: judgment only, D4, and no opener that contradicts question 354); B, his own words.
-- **D-a2, `owner-decisions`, one clause in protocol 1.** Proposed: "one approval covers a whole piece of work: a
-  miniplan or a charter he approved names its sessions, its reviews and its spend, and none of them is asked
-  again". Options: A, these words (recommended: his "No quiero que me pidas permiso para iniciar cada linea"); B,
-  his own words.
-- **D-a3, `sessions-open-in-sidebar`.** Its subject stays; the skill names it instead of restating the card
-  (`manifest.mjs:157`). Options: A, as proposed (recommended: one home); B, the skill keeps its sentence.
-- **D-a4, the allowance (slice F).** Proposed: "a review inside the Codex spend its miniplan's Budget states is not
-  asked; a piece of work that passes it is asked once". Options: A, these words (recommended); B, his own words.
-- **D-a5, `sessions-send-themselves` (JH 229) and protocol 2's "Cut".** Its words were never put to him:
-  `odd/tasks/never-carry.md` on `rule/never-carry@c3ef06fa` says "his words decide it" (line 44) and that JH 227
-  agreed the wording (L4); no question number names it. Proposed, as JH 229 holds it: a session sends what another
-  session needs by itself, by a direct message, a start on the turn he typed or a record the other reads, and
-  never hands him text to carry to a session that exists; protocol 2's "Cut" narrows to a chat no session can
-  open, or a command on his machine. Options: A, these words (recommended: his lines 3672 and 3771 say it); B, his
-  own words.
+- **D-a1, `senior-model`, subject: judgment only.** Typed line covering it: `f5c3ee4d` line 3459, 2026-11-18T22:40Z,
+  "la idea es ser mucho mas eficientes con el poder de fable pero sin tener que utilizarlo todo". Proposed: "the model
+  a senior session runs on, titled <code> SR · <purpose>, which the lead opens with start_session and sends the
+  judgment a task needs: a design, a depth pass, a decision". The opener stays as it is: who opens a session is
+  D-a6, and only a typed line moves it. Options: A, these words (recommended); B, his own words in "Other".
+- **D-a2, `owner-decisions`, one clause in protocol 1: one approval covers the sessions of a piece of work.** Typed
+  line covering it: line 2642, 2026-11-18T19:20Z, "No quiero que me pidas permiso para iniciar cada linea"; and line
+  3064 (the lead "no tiene que preguntar nada respecto a arbrir"). Proposed: "a session that a miniplan or a charter
+  he approved names is started without asking him again". Narrower than the earlier draft: its reviews and its spend
+  are D-a4, because no typed line of his says them. Options: A, these words (recommended); B, his own words.
+- **D-a4, the review spend a miniplan's Budget covers (slice F).** No typed line of his covers it: line 3459 asks
+  for efficiency, not for an approval of spend. So the card asks him for his sentence, with examples as the options
+  and his words written in "Other": A, "un miniplan aprobado cubre sus revisiones hasta su presupuesto; solo me
+  preguntas si se pasa"; B, "pregúntame cada revisión que pase el tope". The rule is written from what he types; a
+  tap of A or B is recorded as his choice, and the rule waits for the typed sentence.
+- **D-a5, `sessions-send-themselves` (JH 229) and protocol 2's "Cut".** Typed lines covering the whole subject:
+  line 3771, 2026-11-18T23:24Z, "SIEMPRE PERO SIEMPRE MANDA LA INFORMACION, NO ME HAGAS PASAR INFORMACION SI YA TE LA
+  HE CONFIRMADO AQUI ... NI EN EL ORQUESTADOR NI CONTIGO", and line 3672, "Listo ahora hazlo no me pidas que lo haga
+  tu tienes comunicacion". Its words were never put to him (`odd/tasks/never-carry.md` line 44 and L4 on
+  `rule/never-carry@c3ef06fa`; no question number names them). Proposed, as JH 229 holds it: a session sends what
+  another session needs by itself, by a direct message or a record the other reads, and never hands him text to
+  carry to a session that exists; protocol 2's "Cut" narrows to a chat no session can open, or a command on his
+  machine. "A start on the turn he typed" is left out of the subject until D-a6 is settled. Options: A, these words
+  (recommended); B, his own words.
+- **D-a6, who opens the sessions a miniplan orders.** Open again: question 354 is a tap, and his typed lines point
+  the other way. Line 3064, "si tu ya le has dado la orden el no tiene que preguntar nada respecto a arbrir"; line
+  3459, "la idea es que el orquestador organice todo muy bien y ahi si coloque a la sesion respectiva a trabajar";
+  and the proposal his lines 3626 and 3672 answer says "El Plan no abre sesiones ni dirige" (line 3667, from L22 on
+  227; not read here). Against it, only the app's limit: a visible start is made on a turn he typed in that chat,
+  and he types in the Plan's chat (question 355). The card asks for his sentence: A, "el Plan abre las sesiones de
+  un miniplan cuando yo digo sí, y se las entrega al orquestador"; B, "el orquestador las abre, y yo escribo una
+  línea en su chat para que pueda"; his words in "Other". The rule quotes what he types.
+- (D-a3 is withdrawn: naming `sessions-open-in-sidebar` in the skill instead of restating it changes no rule's
+  words, so it is decided, with its cost, in slice C.)
 - **D-b, retiring `stretch`, and what counts as a plan for C2** (slice D: removing something he uses). Options: A,
   retire it for new work once plan v4's stretch closes; until then C2 counts the open stretch's plan file, and after
   it a miniplan only (recommended: it removes a command built for the big plan he no longer wants; on today's record
@@ -304,3 +320,8 @@ que lo haga tu tienes comunicacion"), 3771 ("SIEMPRE PERO SIEMPRE MANDA LA INFOR
   Both read with `js-harness sessions --quote`. The table and slices A, G and H rest on them; the lead noted the
   limit `bin/lib/channel.mjs:136`, read and confirmed.
 - L7 (the lead, JH ORQ, by direct message on PR 921): slice A cannot quote the tap 4488 (`rules change` refuses it), so 1362 is quoted and 4488 accepted; the order as the miniplan is D-b, out of A; `manifest.mjs:134,140` stays out of 227 until slice H; B's removal in `CLAUDE.md` is copies only, and protocol 2's narrowed "Cut" is his (D-a5); one card a rule; `senior-model` no longer names the lead as opener (question 354); `sessions-send-themselves` was never put to him (D-a5); D-b's options say what counts for C2, and refuse-or-warn is its own card (D-b2); D-c split into the policy and this plan's spend, the spend naming what it leaves out; the 2.12 of L4 and the 5.5 times of JH 227's read are two estimators. The double review (`rule:double-review`) runs after these fixes, priced first.
+- L8 (the lead, by direct message, after JH 227's confirming read 8d32c0e7 failed; text `jh227-read-8d32c0e7.txt` in the
+  shared notes): the go for this document's double review is withdrawn until the lead's next go. Each D-a card now
+  names a typed line covering its whole subject: D-a1 rests on line 3459, D-a2 on 2642 and 3064 and is narrowed to
+  sessions, D-a4 has no typed line and asks for one, D-a5 on 3771 and 3672 with the start clause left out, D-a6 is
+  new (who opens a miniplan's sessions: 354 is a tap against typed lines 3064 and 3459), and D-a3 is withdrawn.
