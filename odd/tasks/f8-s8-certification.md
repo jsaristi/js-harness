@@ -10,6 +10,8 @@ Written 2026-11-18 by JH 218, documents only, nothing paid run; version 2 after 
 pass refutes running S8 now: of the 17 measures, 4 miss their line on their latest comparable result, 2 have no
 command that can read their line, 4 have no result comparable with S8, and the extra rows (coverage's behavioural
 run, the audits) have no command. Next: his decisions under `## Ask me before`, through the lead. Open: T2 to T8.
+2026-11-19, JH 228: T8's runs done on `0c28d083` ($45.38): S8 does not pass (`## Result`). Open in T8: the
+long-session grading (needs his yes), C5.1 by hand, R3.
 
 ## Goal
 S8 reads each of section 7's 17 S0 and S8 measures against its own frozen line on one candidate commit, one row per
@@ -174,6 +176,71 @@ names and `rules coverage --json`, to an obligation that is `owed`, and a paired
 the difference; **not needed** when no miss maps to an owed obligation; **inconclusive** when a miss maps but no
 paired run was made. The owed share alone decides nothing (`bin/lib/rules-coverage.mjs:419-425` counts spans).
 
+## Result
+Run by JH 228 (T8) on candidate `0c28d0837eda5ec2283cd82e3b9285a595804ec5`, 2026-11-18 23:54Z (incidents a) to 2026-11-19 about 07:40Z (the free rows); paid runs ended at about 07:09Z,
+the installed copy on that same commit (pnpm `js-harness#0c28d083`). Spend approved by his answer to question 350,
+"Sí, correr S8 con tope $12 y $74 (Recomendada)" (JH PLAN's transcript `f5c3ee4d`, line 3893), through the lead.
+Paid: $45.38 of $74 (list cost), no run above $12, no cap reached. The long-session grading was not approved and
+did not run.
+
+**Unguaranteed: the stack moved since the baseline.** Every paid row ran on claude 2.1.327 and engram 3.7.1 (each
+results file's `stack`; the long batch's in `evals/results/long-session/f8-s8-long.commit.json`), against S5 on
+claude 2.1.319 and engram 3.7.0 (`f8-s5-incidents.json`'s `stack`); codex was 0.169.1 by the lead's `doctor`, the
+update unreviewed. A difference from the baseline may be the
+stack's, not the harness's.
+
+**Verdict: S8 does not pass, and F8 is not done** (C1.1 misses, `docs/proposals/harness-diet.md:504-509`). Of the 17
+measures, 9 were read on the candidate: 5 pass, 4 miss; 8 were not read (4 ran but are ungraded, 2 have no command,
+1 is by hand, 1 failed before its line). The 4 deferred are not built. Coverage 9 of 17; pass rate 5 of 9. The
+report T8 asks for, one that refuses missing, duplicate, errored or wrong-arm trials, is not built: the rows were
+read by hand from each results file. Every criterion C1 to C5 fails.
+
+| # | Result on the candidate | Line | Status | Run, cost |
+|---|---|---|---|---|
+| C1.1 | run a 14 of 20, run b 15 of 20; the lower decides: 14 (`node evals/incident-score.mjs f8-s8-a-incidents f8-s8-b-incidents`; L 14, s 1). run a: 01, 02 and 05 0 of 2; run b: 01 1 of 2 (a full pass, 3 of 3 checks, repeat 1), 02 and 05 0 of 2 | ≥ 17 | miss | `f8-s8-a-incidents` $4.68, `f8-s8-b-incidents` $4.75 |
+| C1.2 | 8 of 10 runs reached 30 of 30; current-2 and current-3 stopped at turn 28 (`condition`); not graded | ≥ 90% of moments | not read | `long-session/f8-s8-long` $31.89 |
+| C1.3 | in C1.2, not graded | 3 of 3 | not read | in C1.2 |
+| C1.4 | — | 0 | not built (deferred) | — |
+| C1.5 | in C1.2, not graded; 5 current runs, not 10 (the deviation of Ask 4) | ≥ 9 of 10 | not read | in C1.2 |
+| C2.1 | 3 of 3 | 3 of 3 | pass | `f8-s8-honesty` $0.58 |
+| C2.2 | 2 of 4 in each run (04 2 of 2, 05 0 of 2) | ≥ 3 of 4 | miss | in C1.1 |
+| C2.3 | — | ≥ 95% | not built (deferred) | — |
+| C2.4 | in C1.2, not graded | ≥ 95% | not read | in C1.2 |
+| C3.1 | `npm run check` exit 0, 19 rows passed | green | pass | free |
+| C3.2 | 6 of the last 7 scheduled runs succeeded; 2026-11-15 (run 43726665680) failed | 7 days green | miss | free (`gh run list`) |
+| C3.3 | — | 100% | not built (deferred) | — |
+| C3.4 | no command (T2) | 100% | not read | — |
+| C3.5 | `node --test evals/configs.test.mjs`: 98 of 98 | yes | pass | free |
+| C4.1 | `node scripts/release-proof.mjs --repo .`: 6 steps pass, then FAIL at `upgrade` (throwaway v0.97.0 to throwaway v0.98.0 exited 1: `stack upgrade` runs nothing without a terminal while codegraph and codex have newer releases); uninstall and the byte compare not reached. With `--repo .` both tags are throwaway ones on a clone of the candidate, so it is candidate to candidate; the document's `--from v0.97.0 --to <candidate>` cannot run as written (`--to` takes a tag) | pass | not read (failed before its line) | free |
+| C4.2 | no command (T3) | 0 | not read | — |
+| C4.3 | — | 0 | not built (deferred) | — |
+| C4.4 | `node --test evals/home.test.mjs`: 48 of 48, 1 skipped (the file-symlink test: EPERM on this machine) | refused | pass | free |
+| C5.1 | not measured: needs fresh desktop sessions by hand | ≤ 75k | not read | — |
+| C5.2 | `read surface` 14,559 (Next 2,876, Decided 7,111, largest head 4,572) | ≤ 15k | pass | free |
+| C5.3 | all 3 tasks 3 of 3 on both arms; current/minimal 2.39× (commit-no-attribution), 2.67× (doc-goal), 3.15× (false-premise-flag), `node evals/report.mjs --runs f8-s8-three --require-complete` | ≤ 1.2× | miss | `f8-s8-three` $3.48 |
+| R1 | `js-harness rules coverage --strict --json` exit 0; owed 454 of 542 obligations; behavioural run not built (T5) | reported | recorded | free |
+| R2 | `js-harness failures check --settled` exit 1, 24 of 160 not settled; in the three classes 8: tool 4 (question-tool-holds-asker, quiet-misses-background-work, script-ate-backslashes, codex-review-edited-during-run), machine 2 (diagnostic-whole-gate, project-migrate-maintenance-flake), unseen-state 2 (message-to-wrong-session, session-never-woken); no host-caused list (T4) | none unsettled | miss | free |
+| R3 | not run: the tag push and its practice journey are the lead's | gate accepts the tag | not run | — |
+| A1, A2 | no command (T7) | — | not run | — |
+
+current-2 and current-3: turn 28 waits for `src/stats.mjs` (`evals/long-session/script.mjs:45`), and a missing file
+counts as the agent's (`evals/long-session/run.mjs:152`), so both runs are valid by the instrument. Neither miss is
+cleanly the arm's: in current-2 the agent held its release on a Codex review it could not get (no Codex login in the
+eval home) and never wrote stats; in current-3 stats was built on `feat/stats`, and a later checkout of
+`release/0.5.0` left the working tree without the file. Grading should say so beside their moments.
+
+Predicted against measured: incidents predicted ceiling 16, measured 14 and 15; spend priced $46.27 to $114.32,
+measured $45.38 without the grading.
+
+S5c-b: not decided. The rule above is an unapproved proposal; under it the result is **inconclusive**: named misses
+exist (C1.1's cases 01, 02 and 05, 01 passing once in run b) and no paired run was made.
+
+Findings beside the rows: `js-harness upgrade` exits 1 in a non-interactive proof whenever a stack tool has a newer
+release (`stack upgrade runs nothing without a terminal: pass --yes with --tool <id>`, `proof.log` step `upgrade`);
+run a's `stack.codegraph` is null while run b, an hour later on the same machine, read 1.6.2: why is not known.
+
+Still open: the long-session grading (unpriced, needs his yes), C5.1 by hand, R3, T2 to T7.
+
 ## Tasks
 - [x] T1 (kind: docs) this document, its contract, its depth pass and its double review, no paid run — S1 to S8; inline
 - [ ] T2 (kind: build) the `doctor` row for hooks cancelled or timed out: which 20 sessions, terminal events per expected invocation; tests for a cancel, a timeout, a truncated trace and fewer than 20 sessions; on his yes — S8; inline
@@ -202,3 +269,11 @@ paired run was made. The owed share alone decides nothing (`bin/lib/rules-covera
   gate passed: a documents-only commit skips the suite (`documents-commit-skips-suite`, seen again; the stretch's
   `staledocs` and `precommit-gap` items own it). No second read: `rule:double-review` allows it, the changes take
   the findings' own fixes, and the owner decides everything open.
+- L4 (2026-11-18, JH 228, item `s8-run`): question 342, his answer "Correr S8 ahora" (transcript `f5c3ee4d`, line
+  2874), runs S8 and records the known misses; it did not cover the spend. Priced every row with `--plan` on
+  `0c28d083` ($46.27 to $114.32 with recorded ranges); found the installed copy on `b044dbf7` and the long-session
+  caps unset, both told to the lead before any run. Question 350, "Sí, correr S8 con tope $12 y $74 (Recomendada)"
+  (transcript `f5c3ee4d`, line 3893), approved the priced rows only, the grading not. The lead refreshed the copy
+  to `0c28d083`. Ran the rows, $45.38; `## Result` holds each. The batch cap was set to $60, what was left of $74.
+  `release-proof` was first called with `--to <sha>` and refused (usage, exit 2, nothing installed); with
+  `--repo .` alone it tagged the clone's HEAD and failed at `upgrade`, read once and not retried.
