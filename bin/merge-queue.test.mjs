@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test, { after, before } from 'node:test';
 import * as queue from './merge-queue.mjs';
 import { actionsState, failedRows, failingTests, landingLines, localSuite, mergeQueueMain, PUSH_MAIN_TIMEOUT_MS, staleBin, tellLeftOut } from './merge-queue.mjs';
@@ -17,17 +18,51 @@ import { declarationOf } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { recordLine } from './lib/codex-records.testkit.mjs';
 
+// Every folder this file makes is a scratch folder: under one root, made at the first call and removed once the file's
+// tests have ended, pass or fail. Each copy of the queue's repository had left a folder in the temporary folder, 9,601
+// counted on one machine (odd/tasks/merge-queue-dry-run.md, spec 2). A removal that fails fails the run, so a leak shows.
+let scratchRoot = null;
+const scratch = (prefix) => {
+  // A short root and short prefixes: a fixture's paths are no longer than when each was made in the temporary folder
+  // itself, since a project slug of one becomes a file name (Codex, 2026-11-18).
+  scratchRoot ??= fs.mkdtempSync(path.join(os.tmpdir(), 'jhmq-'));
+  return fs.mkdtempSync(path.join(scratchRoot, prefix));
+};
+after(() => {
+  if (scratchRoot) fs.rmSync(scratchRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+});
+
 // The fixtures are real repositories: the host's git configuration (hooks, signing, rename or identity settings)
 // would change what they do, so it is left out of every git this file starts (Codex, 2026-10-14).
 let configDir;
 before(() => {
   for (const key of Object.keys(process.env)) if (key.startsWith('GIT_')) delete process.env[key];
-  configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-gitconfig-'));
+  configDir = scratch('gitconfig-');
   process.env.GIT_CONFIG_GLOBAL = path.join(configDir, 'empty.gitconfig');
   fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '');
   process.env.GIT_CONFIG_NOSYSTEM = '1';
 });
-after(() => fs.rmSync(configDir, { recursive: true, force: true }));
+
+test('every folder this file makes is a scratch folder, under the one root its tests remove (odd/tasks/merge-queue-dry-run.md, spec 2)', () => {
+  // Every call that makes a temporary folder, sync or not, as written from its name to the end of its line: only the
+  // root's and scratch's own may be there, byte for byte, so a call of any other form fails, a reformat included, not
+  // only one a parser recognises (Codex, 2026-11-18). The pattern and the two calls are built from pieces so that
+  // these lines hold no call themselves.
+  const name = 'mkdtemp';
+  const calls = [...fs.readFileSync(new URL(import.meta.url), 'utf8').matchAll(new RegExp(name + '(?:Sync)?\\s*\\(.*', 'g'))].map((found) => found[0].trim());
+  assert.deepEqual(calls, [`${name}Sync(path.join(os.tmpdir(), 'jhmq-'));`, `${name}Sync(path.join(scratchRoot, prefix));`], 'only the root is made in the temporary folder itself, and every other folder by scratch');
+});
+
+test('a fixture test run in a process of its own leaves its temporary folder empty: the root is removed, not only made (odd/tasks/merge-queue-dry-run.md, spec 2; Codex, 2026-11-18)', () => {
+  const tmp = scratch('child-');
+  const env = { ...process.env, TEMP: tmp, TMP: tmp, TMPDIR: tmp };
+  delete env.NODE_TEST_CONTEXT; // set by node --test for its own children; with it the child would report to this run
+  // TAP, named, as the other runs of a test file in a child process read it: no colour, and the same on every Node.
+  const child = spawnSync(process.execPath, ['--test', '--test-reporter=tap', '--test-name-pattern=^the merges of the candidate run no hook', fileURLToPath(import.meta.url)], { encoding: 'utf8', env });
+  assert.equal(child.status, 0, child.stdout + child.stderr);
+  assert.match(child.stdout, /^# pass 1$/m, 'the fixture test ran');
+  assert.deepEqual(fs.readdirSync(tmp), []);
+});
 
 const git = (cwd, ...args) => {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
@@ -39,7 +74,7 @@ const git = (cwd, ...args) => {
  * a draft. `{ root, origin, main, heads }`. The pair is built once and copied as one folder
  * (`lib/git-fixture.testkit.mjs`); the copy's clone is then pointed at the copy's origin. */
 function makeQueueRepo() {
-  const top = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-'));
+  const top = scratch('repo-');
   const origin = path.join(top, 'origin.git');
   const root = path.join(top, 'clone');
   const { main, heads } = queueRepo(top);
@@ -1271,7 +1306,7 @@ function makeRuleRepo(lines, { sources } = {}) {
   git(root, 'push', '--quiet', 'origin', 'rule/a');
   const head = git(root, 'rev-parse', 'HEAD');
   git(root, 'checkout', '--quiet', '--detach', main);
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-home-'));
+  const home = scratch('home-');
   const slug = projectSlug(mainCheckout((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8' }), root));
   const reliefFile = path.join(home, '.js-harness', 'relief', `${slug}.md`);
   fs.mkdirSync(path.dirname(reliefFile), { recursive: true });
@@ -1300,7 +1335,7 @@ test('--land of a rule/ branch appends one line that confirms the newest proposa
 /** A push to origin's main from another clone, at the first read of GitHub Actions: the land then exits 3. */
 const moveMainOf = (origin) => (call) => {
   if (call !== 0) return;
-  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-other-'));
+  const other = scratch('other-');
   git(other, 'clone', '--quiet', origin, 'clone');
   const clone = path.join(other, 'clone');
   git(clone, 'config', 'user.email', 'js-harness-test@example.invalid');
@@ -1627,7 +1662,7 @@ test('a land whose suite did not run and whose queue branch origin keeps names t
 });
 
 // A(b) (odd/tasks/land-unattended.md, Design 6): the session of a pull request a land leaves out is told why.
-const harnessHome = () => fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-home-'));
+const harnessHome = () => scratch('home-');
 const slugOf = (root) => projectSlug(mainCheckout((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8' }), root));
 const readyFrom = (title, pr, at = '2026-10-17T01:00:00.000Z') =>
   newNotice({ at, from: { host: 'pc', id: 'abc', source: 'transcript', title }, to: 'orchestrator', kind: 'ready', text: `PR ${pr} ready to land`, pr });
@@ -1747,7 +1782,7 @@ function guardedBinRepo(files) {
   git(root, 'add', '.');
   git(root, 'commit', '--quiet', '-m', 'the queue and its modules on main');
   git(root, 'push', '--quiet', 'origin', 'HEAD:main');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-self-'));
+  const dir = scratch('self-');
   return { ...made, dir, self: path.join(dir, 'merge-queue.mjs') };
 }
 function writeCopy(dir, files) {
@@ -1769,6 +1804,31 @@ test('--land stops before it builds anything when the merge-queue it runs from i
   assert.equal(out.at(-1), `merge-queue: ${self} is not origin/main's bin/ (differs: bin/merge-queue.mjs): a land run from it would run code main no longer has. Land from a checkout at origin/main.`);
   assert.equal(git(origin, 'rev-parse', 'main'), main);
   assert.ok(!calls.some((line) => line.startsWith('git push')), calls.join('\n'));
+});
+
+// odd/tasks/merge-queue-dry-run.md, spec 1: a dry run passed on a stale installed copy while --land refused it (the 882
+// land, 2026-11-15), so the preview said yes to a land that could not run. It now stops where that land would.
+test('--dry-run stops before it lists or builds anything when the merge-queue it runs from is not origin/main\'s, as --land does (odd/tasks/merge-queue-dry-run.md, spec 1)', async () => {
+  const { root, origin, self } = guardedRepo('export const queue = 2;\n');
+  fs.writeFileSync(self, 'export const queue = 1;\n', 'utf8');
+  const { run, calls } = runner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))]);
+  const out = [];
+  const code = await mergeQueueMain(['--dry-run', '--cwd', root], { run, self, covered: () => ({ pass: true }), stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  assert.equal(code, 1, out.join('\n'));
+  assert.deepEqual(out, [`merge-queue: ${self} is not origin/main's bin/ (differs: bin/merge-queue.mjs): a land run from it would run code main no longer has, and this dry run stops where that land would. Run it from a checkout at origin/main.`]);
+  assert.ok(!calls.some((line) => line.startsWith('gh pr list') || line.startsWith('git worktree add')), calls.join('\n'));
+  assert.equal(git(root, 'worktree', 'list').split('\n').length, 1, 'no worktree was made');
+  assert.equal(fs.existsSync(path.join(root, '.git', 'js-harness', 'lands.jsonl')), false, 'a dry run writes no land record');
+});
+
+test('--dry-run from a merge-queue that is origin/main\'s, Windows line ends aside, builds the candidate as before (odd/tasks/merge-queue-dry-run.md, spec 1)', async () => {
+  const { root, origin, self } = guardedRepo('export const queue = 2;\n');
+  fs.writeFileSync(self, 'export const queue = 2;\r\n', 'utf8');
+  const { run } = runner([pr(1, 'feat/a', git(origin, 'rev-parse', 'feat/a'))]);
+  const out = [];
+  const code = await mergeQueueMain(['--dry-run', '--cwd', root], { run, self, covered: () => ({ pass: true }), stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(out.at(-1), 'Dry run: nothing was tested or pushed, and the candidate was removed.', out.join('\n'));
 });
 
 test('the land guard reads a merge-queue with Windows line ends as origin/main\'s, and lands', async () => {
@@ -1898,7 +1958,7 @@ test('a land removes the worktree of a landed pull request that is clean and idl
 // `sessions start --worktree` puts every session's, so a land closes the finished sessions by their own rule.
 test('a land closes the finished background session whose work it landed: its worktree by git, its job by claude, named in its record', async () => {
   const { root, heads } = makeQueueRepo();
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-land-home-'));
+  const home = scratch('home-');
   const main = mainCheckout((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8' }), root);
   const place = idle(worktree(root, path.join(root, '.claude', 'worktrees', 'a'), 'feat/a'));
   const entry = { event: 'started', at: new Date(Date.now() - 3_600_000).toISOString(), id: 'aaaa1111', sessionId: 'aaaa1111-0000-4000-8000-000000000000', title: 'JH 1 · a', root: main, cwd: main, worktree: 'a', worktreePath: place, brief: null };
@@ -1922,7 +1982,7 @@ test('a land closes the finished background session whose work it landed: its wo
 
 test('a land whose close of the finished sessions fails says so in a line, and its exit and its record stand', async () => {
   const { root, heads } = makeQueueRepo();
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-land-home-'));
+  const home = scratch('home-');
   const main = mainCheckout((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8' }), root);
   const entry = { event: 'started', at: new Date(Date.now() - 3_600_000).toISOString(), id: 'aaaa1111', sessionId: 'aaaa1111-0000-4000-8000-000000000000', title: 'JH 1 · a', root: main, cwd: main, worktree: null, worktreePath: null, brief: null };
   appendRecord(home, entry);
@@ -2168,7 +2228,7 @@ async function landRefreshing(root, prs, { refresh = () => 0, args = ['--land', 
 // waited 30 minutes on it. Its transcript, under CLAUDE_CONFIG_DIR, says it only waits; another session runs a test.
 test('--land --refresh-copy refreshes at once beside a busy session whose transcript only waits, and waits for one that runs', async () => {
   const { root, heads } = makeQueueRepo();
-  const claudeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-claude-'));
+  const claudeDir = scratch('claude-');
   const write = (id, ...entries) => {
     fs.mkdirSync(path.join(claudeDir, 'projects', 'any'), { recursive: true });
     fs.writeFileSync(path.join(claudeDir, 'projects', 'any', `${id}.jsonl`), entries.map((entry) => JSON.stringify(entry)).join('\n') + '\n');

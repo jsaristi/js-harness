@@ -702,8 +702,8 @@ test('resume --pause loads the loader of resume and runs it with its arguments, 
   assert.deepEqual(ran, [['resume', ['--pause']]]);
 });
 
-test('the merge-queue help says a land from a copy whose bin/ is not origin/main\'s stops before it builds anything (batch item 1)', () => {
-  assert.match(run(['--help']).stdout, /merge-queue .*A land run from a copy whose bin\/ is not origin\/main's stops before it builds anything\./);
+test('the merge-queue help says a land or a dry run from a copy whose bin/ is not origin/main\'s stops before it builds anything (batch item 1; odd/tasks/merge-queue-dry-run.md)', () => {
+  assert.match(run(['--help']).stdout, /merge-queue .*A land or a dry run from a copy whose bin\/ is not origin\/main's stops before it builds anything\./);
 });
 
 test('the merge-queue help says a land asks gate first for its gate and exits 5 when its gate ran nothing (odd/tasks/land-unattended.md)', () => {
