@@ -162,8 +162,10 @@ export function reportMarkdown({ readingsDir, ranges = RANGES }) {
   return { text, recorded, missing };
 }
 
-/** The input a reading spent on each changed line its review saw, rounded: `unknown` when it saw none or did
- * not say how many. */
+/** The input a reading spent on each changed line of its range (`coverage.total`, not the lines its review saw),
+ * rounded: the base the price of the controlled test and the run log's figures are on, so a review that stopped
+ * before it saw every line is not made to look dearer a line than one that finished. `unknown` when the range
+ * has no changed line or the reading does not say how many. */
 const perChangedLine = ({ usage, coverage }) => (Number.isFinite(usage?.inputTokens) && Number.isFinite(coverage?.total) && coverage.total > 0 ? counted(Math.round(usage.inputTokens / coverage.total)) : 'unknown');
 
 /** The section of the arms of the controlled test of the reviewer (`ARMS` in `./compare.mjs`,

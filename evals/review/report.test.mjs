@@ -130,7 +130,11 @@ test('the arms of the controlled test are a section of their own: one table a ra
   text = fs.readFileSync(repo.out, 'utf8');
   assert.match(arms(text), /1 of 16 runs are recorded/);
   assert.deepEqual(row(armTable(text, 'seeded'), 'sol62-max-1'), ['sol62-max-1', 'C', 'reviewed', '3', '2/7', '1', '1,000,000', '100,000', '5,000', '2', '18,200', '60', '0.160.1', 'gpt-6.2-sol max', '4,425', 'js-harness.codex-review-prompt/v4']);
-  // A run whose review saw no changed line, or did not say how many, has no input a changed line to give.
+  // The lines are the range's, not those the review saw: a review that stopped at half the range is divided by all of it.
+  record(repo, 'sol62-max-1', 'real', { coverage: { seen: 100, total: 200 }, usage: { inputTokens: 100000, cachedInputTokens: 0, outputTokens: 1, reasoningOutputTokens: 0 } });
+  run([], repo);
+  assert.equal(row(armTable(fs.readFileSync(repo.out, 'utf8'), 'real'), 'sol62-max-1').at(-2), '500');
+  // A run whose range has no changed line, or that does not say how many, has no input a changed line to give.
   record(repo, 'sol62-max-2', 'seeded', { coverage: { seen: 0, total: 0 } });
   run([], repo);
   assert.equal(row(armTable(fs.readFileSync(repo.out, 'utf8'), 'seeded'), 'sol62-max-2').at(-2), 'unknown');
