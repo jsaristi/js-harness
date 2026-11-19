@@ -131,3 +131,8 @@ sites in the queue's test make temporary folders and never remove them: 9,601 we
   in both: the child test reads the spec reporter's summary line, which a Node that gives a pipe TAP would not print.
   Fixed: the child is run with `--test-reporter=spec` (1 pass). Codex did not run: its usage limit, until 22:16
   local; no record was written, and it runs again after that.
+- L8 2026-11-18, Codex on `a2ef43c5..959045fd` (run after its limit reset): one P2, blocking: with FORCE_COLOR the
+  spec reporter colours the summary line, so the child test fails with the cleanup right. Fixed: the child reports
+  TAP and the test reads `# pass 1`, as `bin/js-harness.test.mjs:270` does; 2 pass with FORCE_COLOR=1. Its note that
+  the scan missed a template literal is fixed too: the scan reads the first name after `${` (checked on a sample:
+  `os.tmpdir`, `scratchRoot`, `os.tmpdir`). The lens on `49a708fb..959045fd`: 0 findings, the earlier one fixed.
