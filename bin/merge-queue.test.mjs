@@ -17,17 +17,34 @@ import { declarationOf } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { recordLine } from './lib/codex-records.testkit.mjs';
 
+// Every folder this file makes is a scratch folder: under one root, made at the first call and removed once the file's
+// tests have ended, pass or fail. Each copy of the queue's repository had left a folder in the temporary folder, 9,601
+// counted on one machine (odd/tasks/merge-queue-dry-run.md, spec 2). A removal that fails fails the run, so a leak shows.
+let scratchRoot = null;
+const scratch = (prefix) => {
+  scratchRoot ??= fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-mq-'));
+  return fs.mkdtempSync(path.join(scratchRoot, prefix));
+};
+after(() => {
+  if (scratchRoot) fs.rmSync(scratchRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+});
+
 // The fixtures are real repositories: the host's git configuration (hooks, signing, rename or identity settings)
 // would change what they do, so it is left out of every git this file starts (Codex, 2026-10-14).
 let configDir;
 before(() => {
   for (const key of Object.keys(process.env)) if (key.startsWith('GIT_')) delete process.env[key];
-  configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-gitconfig-'));
+  configDir = scratch('gitconfig-');
   process.env.GIT_CONFIG_GLOBAL = path.join(configDir, 'empty.gitconfig');
   fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, '');
   process.env.GIT_CONFIG_NOSYSTEM = '1';
 });
-after(() => fs.rmSync(configDir, { recursive: true, force: true }));
+
+test('every folder this file makes is a scratch folder, under the one root its tests remove (odd/tasks/merge-queue-dry-run.md, spec 2)', () => {
+  // What each folder is made in: the first name inside each mkdtempSync call, through a path.join when there is one.
+  const parents = [...fs.readFileSync(new URL(import.meta.url), 'utf8').matchAll(/mkdtempSync\(\s*(?:path\.join\(\s*)?([\w.]+)/g)].map((call) => call[1]);
+  assert.deepEqual(parents.filter((parent) => parent !== 'scratchRoot'), ['os.tmpdir'], 'only the root is made in the temporary folder itself');
+});
 
 const git = (cwd, ...args) => {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
@@ -39,7 +56,7 @@ const git = (cwd, ...args) => {
  * a draft. `{ root, origin, main, heads }`. The pair is built once and copied as one folder
  * (`lib/git-fixture.testkit.mjs`); the copy's clone is then pointed at the copy's origin. */
 function makeQueueRepo() {
-  const top = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-'));
+  const top = scratch('repo-');
   const origin = path.join(top, 'origin.git');
   const root = path.join(top, 'clone');
   const { main, heads } = queueRepo(top);
@@ -1271,7 +1288,7 @@ function makeRuleRepo(lines, { sources } = {}) {
   git(root, 'push', '--quiet', 'origin', 'rule/a');
   const head = git(root, 'rev-parse', 'HEAD');
   git(root, 'checkout', '--quiet', '--detach', main);
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-home-'));
+  const home = scratch('home-');
   const slug = projectSlug(mainCheckout((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8' }), root));
   const reliefFile = path.join(home, '.js-harness', 'relief', `${slug}.md`);
   fs.mkdirSync(path.dirname(reliefFile), { recursive: true });
@@ -1300,7 +1317,7 @@ test('--land of a rule/ branch appends one line that confirms the newest proposa
 /** A push to origin's main from another clone, at the first read of GitHub Actions: the land then exits 3. */
 const moveMainOf = (origin) => (call) => {
   if (call !== 0) return;
-  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-other-'));
+  const other = scratch('other-');
   git(other, 'clone', '--quiet', origin, 'clone');
   const clone = path.join(other, 'clone');
   git(clone, 'config', 'user.email', 'js-harness-test@example.invalid');
@@ -1627,7 +1644,7 @@ test('a land whose suite did not run and whose queue branch origin keeps names t
 });
 
 // A(b) (odd/tasks/land-unattended.md, Design 6): the session of a pull request a land leaves out is told why.
-const harnessHome = () => fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-home-'));
+const harnessHome = () => scratch('home-');
 const slugOf = (root) => projectSlug(mainCheckout((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8' }), root));
 const readyFrom = (title, pr, at = '2026-10-17T01:00:00.000Z') =>
   newNotice({ at, from: { host: 'pc', id: 'abc', source: 'transcript', title }, to: 'orchestrator', kind: 'ready', text: `PR ${pr} ready to land`, pr });
@@ -1747,7 +1764,7 @@ function guardedBinRepo(files) {
   git(root, 'add', '.');
   git(root, 'commit', '--quiet', '-m', 'the queue and its modules on main');
   git(root, 'push', '--quiet', 'origin', 'HEAD:main');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-merge-queue-self-'));
+  const dir = scratch('self-');
   return { ...made, dir, self: path.join(dir, 'merge-queue.mjs') };
 }
 function writeCopy(dir, files) {
@@ -1898,7 +1915,7 @@ test('a land removes the worktree of a landed pull request that is clean and idl
 // `sessions start --worktree` puts every session's, so a land closes the finished sessions by their own rule.
 test('a land closes the finished background session whose work it landed: its worktree by git, its job by claude, named in its record', async () => {
   const { root, heads } = makeQueueRepo();
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-land-home-'));
+  const home = scratch('home-');
   const main = mainCheckout((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8' }), root);
   const place = idle(worktree(root, path.join(root, '.claude', 'worktrees', 'a'), 'feat/a'));
   const entry = { event: 'started', at: new Date(Date.now() - 3_600_000).toISOString(), id: 'aaaa1111', sessionId: 'aaaa1111-0000-4000-8000-000000000000', title: 'JH 1 · a', root: main, cwd: main, worktree: 'a', worktreePath: place, brief: null };
@@ -1922,7 +1939,7 @@ test('a land closes the finished background session whose work it landed: its wo
 
 test('a land whose close of the finished sessions fails says so in a line, and its exit and its record stand', async () => {
   const { root, heads } = makeQueueRepo();
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-land-home-'));
+  const home = scratch('home-');
   const main = mainCheckout((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8' }), root);
   const entry = { event: 'started', at: new Date(Date.now() - 3_600_000).toISOString(), id: 'aaaa1111', sessionId: 'aaaa1111-0000-4000-8000-000000000000', title: 'JH 1 · a', root: main, cwd: main, worktree: null, worktreePath: null, brief: null };
   appendRecord(home, entry);
@@ -2168,7 +2185,7 @@ async function landRefreshing(root, prs, { refresh = () => 0, args = ['--land', 
 // waited 30 minutes on it. Its transcript, under CLAUDE_CONFIG_DIR, says it only waits; another session runs a test.
 test('--land --refresh-copy refreshes at once beside a busy session whose transcript only waits, and waits for one that runs', async () => {
   const { root, heads } = makeQueueRepo();
-  const claudeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-claude-'));
+  const claudeDir = scratch('claude-');
   const write = (id, ...entries) => {
     fs.mkdirSync(path.join(claudeDir, 'projects', 'any'), { recursive: true });
     fs.writeFileSync(path.join(claudeDir, 'projects', 'any', `${id}.jsonl`), entries.map((entry) => JSON.stringify(entry)).join('\n') + '\n');
