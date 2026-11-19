@@ -79,8 +79,8 @@ not read here with `js-harness sessions --quote`, since the brief gives no line.
   140,000, and 172,287 input tokens); the Claude lenses eight runs (about 7,000 to 10,700 input tokens a lens).
   Independent verifiers: over the first fix (about 90,000 tokens, 22 min), over the final code against the base (about
   120,000 tokens, 18 min), and again through `commandRefusals` for condition 3 (L22).
-- Gate runs: eleven commit gates green, from 9a47edbf to the last docs commit; one more was stopped while it waited on
+- Gate runs: one commit gate green a commit, from 9a47edbf to the commit of this line, sixteen; one more was stopped while it waited on
   another session's gate, and made again.
-- Time: the first commit at 15:14 and the last code commit at 16:35 local (2026-11-18, `git log --date`); the first
-  notice was question 344 and the last the closed notice. The context share at the end was over the window (the host's
-  pause notice said 157%).
+- Time: the first commit at 15:14 and the last code commit (4f989932) at 18:10 local (2026-11-18, `git log --date`); the first
+  notice was question 344 and the last the closed notice. The host's pause notice said 157% of the window before
+  the compaction at 18:53; 28% after it.
