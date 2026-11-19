@@ -39,6 +39,9 @@ export function readShell(source, { body = false } = {}) {
         // Inside a substitution bash 5.3 also ends the body at a line that starts with the delimiter and has a `)`
         // after it (`EOF)`, `EOF x)`): where that is cannot be told here, so the reading is broken.
         if (bare.startsWith(heredoc.end) && bare.indexOf(')', heredoc.end.length) !== -1) broken = true;
+        // An unquoted body joins a line that ends in a backslash with the next before it looks for the end line: the
+        // join is not read here, so the reading is broken (Codex on 92695d2).
+        if (!heredoc.quoted && /(^|[^\\])(\\\\)*\\$/.test(line)) broken = true;
         lines.push(heredoc.tabs ? line.replace(/^\t+/, '') : line);
       }
       if (!found) broken = true;
@@ -88,6 +91,8 @@ export function readShell(source, { body = false } = {}) {
     } else if (s[i + 1] === '{') {
       // A parameter expansion: to its matching `}`, its quotes and substitutions read.
       i += 2;
+      // Bash 5.3 runs `${ cmd; }` and `${| cmd; }` in the current shell: not read here, so broken (Codex on 92695d2).
+      if (/[ \t\n|]/.test(s[i] ?? '')) broken = true;
       let depth = 1;
       const inner = { text: '', raw: '', expands: false };
       while (i < s.length && depth > 0) {
@@ -103,6 +108,9 @@ export function readShell(source, { body = false } = {}) {
         } else if (c === '$' || c === '`') {
           readDollar(inner, inDouble);
         } else {
+          // A literal `{` does not hide the `}` that ends the expansion, and a `<(…)` or `>(…)` in an operand runs:
+          // neither is read here, so the reading is broken (Codex on 92695d2).
+          if (c === '{' || ((c === '<' || c === '>') && s[i + 1] === '(')) broken = true;
           if (c === '{') depth++;
           else if (c === '}') depth--;
           i++;
@@ -118,8 +126,12 @@ export function readShell(source, { body = false } = {}) {
       // ANSI-C quoting, its escapes decoded as bash decodes them: the text is the word bash runs.
       i += 2;
       while (i < s.length && s[i] !== "'") {
-        if (s[i] === '\\') word.text += ansiEscape();
-        else word.text += s[i++];
+        if (s[i] === '\\') {
+          const decoded = ansiEscape();
+          // Bash cuts the word at a decoded NUL; that cut is not read here, so the reading is broken (Codex on 92695d2).
+          if (decoded.includes('\0')) broken = true;
+          word.text += decoded;
+        } else word.text += s[i++];
       }
       if (i >= s.length) broken = true;
       word.raw += s.slice(start, i + 1);

@@ -5,14 +5,21 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readShell } from './shell-read.mjs';
 
-const words = (source) => readShell(source).commands.map((c) => c.words.map((w) => w.text));
+// The words of a source read whole: a fixture that reads broken fails here, so no expectation rests on a partial read.
+const words = (source) => {
+  const read = readShell(source);
+  assert.equal(read.broken, false, `read whole: ${JSON.stringify(source)}`);
+  return read.commands.map((c) => c.words.map((w) => w.text));
+};
 
 test('a command is split into its commands and words, quotes taken off', () => {
   assert.deepEqual(words(`a 'b c' "d $x" e\\ f && g | h; i\nj`), [['a', 'b c', 'd $x', 'e f'], ['g'], ['h'], ['i'], ['j']]);
   assert.deepEqual(words("echo $'it\\'s' x"), [['echo', "it's", 'x']]);
   assert.deepEqual(words('a # b c\nd'), [['a'], ['d']], 'a comment ends at its line');
   assert.deepEqual(words('a#b'), [['a#b']], 'a # inside a word is a character');
-  assert.equal(readShell('cat <<EOF | bash').commands[1].stdin, 'pipe');
+  const piped = readShell('cat <<EOF | bash\nx\nEOF');
+  assert.equal(piped.broken, false);
+  assert.deepEqual(piped.commands.map((c) => [c.words.map((w) => w.text), c.stdin]), [[['cat'], null], [['bash'], 'pipe']]);
   assert.equal(readShell('bash < s.sh').commands[0].stdin, 'file');
   assert.deepEqual(words('cmd 2>&1 >out <in'), [['cmd']], 'redirections and their targets are no words');
 });
@@ -33,6 +40,7 @@ test('bash\'s blanks are a space and a tab alone, and a named descriptor is no w
   assert.deepEqual(words('true\f#; x'), [['true\f#'], ['x']]);
   assert.deepEqual(words('true #; x'), [['true #'], ['x']]);
   assert.deepEqual(words('cat <<EOF\r\r\nEOF\r\r\nx\nEOF\n').slice(1), [['x'], ['EOF']], 'the end line is compared whole, its carriage returns too');
+  assert.deepEqual(words('cat <<EOF\r\nx\nEOF\r\r\ny\nEOF\r\n'), [['cat']], 'a line with one carriage return more stays in the body');
   assert.deepEqual(words('cat <<E\fOF\nE\fOF\nx\n'), [['cat'], ['x']]);
   assert.deepEqual(words('cat <<EOF\r\nx\r\nEOF\r\ny\r\n'), [['cat'], ['y']], 'a line ends at \\r\\n, as Git for Windows\' bash reads it');
   assert.deepEqual(words('cmd {x}>&2 a 2>/dev/null b'), [['cmd', 'a', 'b']]);
@@ -67,7 +75,17 @@ test('what cannot be read whole is broken', () => {
   assert.deepEqual(words('$"a b" c'), [['a b', 'c']], 'locale quoting is double quoting');
   // The verifier, round 2.
   assert.equal(readShell('x=$(cat <<EOF\nhi\nEOF)\ny\nEOF\n)').broken, true, 'a delimiter line with a ) after it, inside a substitution');
-  const globs = readShell('x "--lan"? \\--la? \'a\'[n] ~ "~" b').commands[0].words.map((v) => Boolean(v.globs));
-  assert.deepEqual(globs, [false, true, true, true, true, false, false], 'a glob, brace or tilde character outside quotes');
+  const globs = readShell('x "--lan"? \\--la? \'a\'[n] ~ "~" b {c,d} "{c,d}"').commands[0].words.map((v) => Boolean(v.globs));
+  assert.deepEqual(globs, [false, true, true, true, true, false, false, true, false], 'a glob, brace or tilde character outside quotes');
   assert.equal(readShell('a "b" \'c\' $(d) `e`').broken, false);
+  // Codex on 7bb1753..92695d2: forms whose commands this reading would lose are said broken, never read.
+  for (const source of [
+    'cat <<EOF\nx\nE\\\nOF\ny\nEOF', // a continued line of an unquoted body may join into its end line
+    'x=${ a; }', 'x=${\ta; }', 'x=${\na; }', 'x=${| a; }', // bash 5.3's substitutions in the current shell
+    'echo ${x:-{}; a }', // a literal brace in an operand
+    'cat ${p:-<(a)}', 'cat ${p:->(a)}', // a process substitution in an operand
+    "x $'a\\0b'", "x $'a\\x00b'", "x $'a\\u0000b'", // a decoded NUL, where bash cuts the word
+  ]) assert.equal(readShell(source).broken, true, source);
+  assert.deepEqual(words("cat <<'EOF'\nE\\\nOF\nEOF"), [['cat']], 'a quoted body joins no lines');
+  assert.deepEqual(words('echo ${x:-y} ${#a[@]} ${x/a/b} "${y:-${z}}" ${x:-$(a)}'), [['a'], ['echo', '${x:-y}', '${#a[@]}', '${x/a/b}', '${y:-${z}}', '${x:-$(a)}']]);
 });
