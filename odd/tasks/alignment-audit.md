@@ -9,8 +9,10 @@ pull request, landed by the lead (JH ORQ) · Brief: miniplan 3 of JH PLAN, 2026-
 PR 921 is a draft (the lead's order), so no land takes it; it is un-drafted once his D-block decisions are in. The
 cards go to him one at a time: this session records each as a question, the lead sends its number to JH PLAN, which
 asks him, and the next is recorded only once the last is answered. Decided: D-b1 (question 364, L16), D-b2 (question
-365, L18), D-c2 (question 367, L21; 366 withdrawn). Asked: D-c1, which decides D-a4 too (question 370, L21). Still to ask, in the lead's
-order (L17): D-a7, D-a1 (worded after `rules-data.mjs:665-667` is read). No double review has run.
+365, L18), D-c2 (question 367, L21; 366 withdrawn), D-c1 and with it D-a4 (question 370, L23). Asked: D-a7 (question 371, L23). Still
+to ask: D-a1 (worded after `rules-data.mjs:665-667` is read). No double review has run. Next: when the lead says 371 is answered, write it in and record D-a1, worded
+after `rules-data.mjs:665-667` and D-a7's answer (if A, its subject drops "which the lead opens"); its edit is in
+`rules-data.mjs`, so slice C waits for JH 234.
 The audit and the build plan are written; nothing is built.
 
 ## Goal
@@ -281,13 +283,16 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
   cover this subject. Subject, word for word: "the model a senior session runs on, titled <code> SR · <purpose>, which the
   lead opens with start_session and sends the judgment a task needs: a design, a depth pass, a decision". The title
   stays as the rule in force has it (L13). Options: A, yes (recommended: Fable on judgment); B, as today.
-- **D-a7, who starts a senior session a miniplan orders.** Question 354 says the Plan starts what a miniplan orders;
+- **D-a7, who starts a senior session a miniplan orders: asked as question 371** (L23). Question 354 says the Plan starts what a miniplan orders;
   the guard says "a senior is started by the lead" (`bin/lib/session-title-guard.mjs:94`) and refused the Plan's
   start of one. No typed line settles it. Subject, word for word: "a senior session a miniplan orders is started by
   the Plan on his go, like every other session the miniplan orders". Options: A, yes: the guard admits the Plan's
   start of a senior named in the miniplan it hands over (slice E); B, seniors stay the lead's to start, and each one
-  costs him one typed line in the lead's chat (the app's typed-turn lock); his words in "Other".
-- **D-a4, review spend inside a miniplan: asked with D-c1, question 370.** Subject, word for word: "a review inside the Codex spend its miniplan's
+  costs him one typed line in the lead's chat (the app's typed-turn lock, the lead's report, L12); his words in
+  "Other". Recommended A (this session's call, told to the lead): it follows question 354. A's cost to him is not
+  measured: nothing when his go is a typed line in the Plan's chat, otherwise a tap on the start card.
+- **D-a4, review spend inside a miniplan: decided A by D-c1, question 370** ("Sí, el presupuesto cubre (Recomendada)", tapped, f5c3ee4d:6934, `2026-11-19T18:01:19Z`, recorded verified by
+  JH PLAN; L23). Subject, word for word: "a review inside the Codex spend its miniplan's
   Budget states is not asked; a piece of work that passes it is asked once". Options: A, yes, as written
   (recommended: one approval a piece of work); B, every review over the allowance is asked, as today; his words in
   "Other".
@@ -301,7 +306,8 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
 - **D-b2, C2 refuses or warns: decided A, question 365** ("Rechaza (Recomendada)", tapped, f5c3ee4d:6616,
   `2026-11-19T16:26:00Z`, recorded verified by JH PLAN; L18). Subject: "a start the lead makes for a new request that names no miniplan is
   refused". Options: A, refuses (recommended: his "el arranca sin plan", line 3509); B, warns.
-- **D-c1, the policy of review spend.** The same choice as D-a4 put as the harness's policy, asked as one card that
+- **D-c1, the policy of review spend: decided A, question 370** ("Sí, el presupuesto cubre (Recomendada)", tapped, f5c3ee4d:6934, `2026-11-19T18:01:19Z`, recorded verified by
+  JH PLAN; L23). The same choice as D-a4 put as the harness's policy, asked as one card that
   decides both (L17): A, a miniplan's Budget states its Codex spend and his go covers its reviews, with the floor and
   rate measured again as slice F does (recommended; this was C, "both", which F already is); B, a question per
   review, with only the floor and rate raised to today's measure.
@@ -420,3 +426,8 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
   367, not a typed answer of his; written as the Plan's order, told to him, not answered. This session's search of
   JH PLAN's replies in f5c3ee4d from line 6440 to 6765 did not find the message (a script matching S8 with 233), so
   the source is the lead's report. The lead asked JH PLAN to settle it with him. 370 is with him.
+- L23 (question 370, D-c1 and D-a4): he answered "Sí, el presupuesto cubre (Recomendada)", tapped in JH PLAN's chat,
+  f5c3ee4d:6934 (`2026-11-19T18:01:19Z`, read with `sessions --quote`); JH PLAN recorded it, verified. A miniplan's
+  Budget covers its reviews and one question comes only when the work passes it; a review with no miniplan Budget
+  stays on the allowance, re-measured (slice F, after JH 234 and C). D-a4 is decided by the same answer. D-a7 is
+  asked as question 371, recommended A as this session's call, its cost to him written as not measured; then D-a1.
