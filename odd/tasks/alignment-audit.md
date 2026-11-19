@@ -143,6 +143,7 @@ The change column names the slice of the build plan.
 | D2, D3 | the host's next-step box (`wrap_up` ask); no text or check of the harness names it (`git grep -n -e wrap_up -e wrap-up -- bin CLAUDE.md`: no hit) | the lead's ask "¿Abro ya las 8 sesiones de la primera tanda?" (about 12:3x local) stayed drawn under its latest reply after JH 219 to 226 opened at 14:15, because later wrap_ups carried no ask; he read it at 21:21 as a new question (the lead's report of his screen, not checked in code) | contradicts in effect (a stale approval question per piece of work stays in front of him) | none | A closing whose earlier ask is overtaken says so: the next wrap_up carries the recap that withdraws it, or the skill says to close with a fresh ask or none; written in the skill with the closing rules (C) |
 | D4 | `bin/lib/rules-data.mjs:665-667` (`senior-model`) | the senior gets "tasks needing more intelligence or complexity" | half-says (tasks, not judgment) | none | Reword to judgment (C, his words) |
 | D3 | `bin/lib/merge-queue-refresh.mjs:1-5,22`, `bin/merge-queue.mjs:82-90` | the refresh waits by itself for sessions between runs (30 minutes, exit 75) and tells each one | aligned | none | none |
+| D2, D4 | `bin/sessions-background.mjs:533-560`, `bin/lib/background-close.mjs:268-273` | `sessions stop --finished` closes "every finished session of the project that loses nothing"; it reads only the record of background sessions (`readRecord(home)`), so it sees only sessions `sessions start` began | gap: the sessions the app starts (`start_session`) are never closed by anything; on 2026-11-19 he typed "recuerda cerrar la sesiones cuando estas terminen ya que tenemos casi 16 abiertas" (f5c3ee4d:5712, 05:43Z), and the lead archived nine by hand (merged PR, clean worktree, head in main) after `stop --finished` closed none (the lead, L14) | none | Card D-c3; not decided, no slice yet |
 
 ## Miniplan 3, step 3: each claim checked
 1. **`stretch` is built for the big plan; nothing says what becomes of it or how a miniplan is bound and
@@ -293,6 +294,12 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
   (JH 227's read 8d32c0e7: 2.17M Claude, 6.17M Codex each); about 8.7M Claude for those reads and the verifiers
   besides. Options: A, approve it as the ceiling for the whole build, each slice told what it used (recommended); B,
   slice by slice.
+- **D-c3, who closes a finished session the app started.** A gap, not decided (L14). Nothing archives a session
+  started with `start_session` once its work is done: `sessions stop --finished` sees only the sessions `sessions
+  start` began. Subject, word for word: "a session whose pull request merged, whose worktree is clean and whose head
+  is in main is archived by the lead, without asking him". Options: A, yes, and a check that names such sessions
+  (a slice to plan); B, as today, by hand when he asks; his words in "Other". No recommendation until a slice is
+  costed.
 - Pending elsewhere, not repeated here: C1's tenth heading and 227's own Codex spend.
 
 ## Tasks
@@ -354,3 +361,8 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
 - L13 (the lead, by direct message, correcting its own note of L11): `rule:senior-model` titles a senior "<code> SR ·
   <purpose>", the rule in force, so D-a1 keeps that title, not a number; the senior session question 357 sent the
   rewording to is "JH SR · plan-pre-prompt words", not JH 231. D-a7 stands.
+- L14 (the lead, by direct message): his order typed in the Plan's chat (f5c3ee4d:5712), "recuerda cerrar la sesiones
+  cuando estas terminen ya que tenemos casi 16 abiertas". Nothing archives a finished session the app started; the
+  lead archived nine by hand. Checked in code: `stopFinished` calls `closeFinishedIn`, which reads only the record of
+  background sessions (`bin/lib/background-close.mjs:271-273`), so `stop --finished` closes only what `sessions
+  start` began. Recorded as a gap, row and card D-c3, not decided.
