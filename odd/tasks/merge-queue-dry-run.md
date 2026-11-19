@@ -125,5 +125,9 @@ sites in the queue's test make temporary folders and never remove them: 9,601 we
   The mutation run left one `jhmq-*` folder in TEMP, removed by hand. `D:js-harness-mq-relief.log`, a log this
   session wrote by mistake outside the repository, is left for him to delete: the safety check refused its removal.
 - L6 2026-11-18: the first commit of the fix was refused by its check: `bin/js-harness.test.mjs:705` pins the help
-  line word for word, and the search of L2 had read the help but not its test. The test now pins the new line
+  line word for word, and the depth pass searched the help but not its test. The test now pins the new line
   (6 pass), and the fix landed as `a7d8803f`.
+- L7 2026-11-18, the reviews of `a2ef43c5..49a708fb`. The lenses (reliability, readability): one finding, the same
+  in both: the child test reads the spec reporter's summary line, which a Node that gives a pipe TAP would not print.
+  Fixed: the child is run with `--test-reporter=spec` (1 pass). Codex did not run: its usage limit, until 22:16
+  local; no record was written, and it runs again after that.
