@@ -6,9 +6,8 @@ temporary folder. Item `mq-dryrun` of the plan of 2026-11-18 (version 4), sessio
 request; the lead (JH ORQ) reviews and lands it.
 
 ## State
-T1 is this document. Next: wait for `codexspend`'s T3 on main (`js-harness wait --main-file bin/merge-queue.test.mjs
---contains "conflict with main names"`), bring the branch onto that main, then T2 and T3, tests first. Open: the tick
-of `docs/ROADMAP.md`'s "Later" line, which JH 222 holds this stretch; it is owed in the ready notice.
+T1 to T3 are done (L3, L4). Next: T4, the reviews and the verifier, then the pull request. Open: the tick of
+`docs/ROADMAP.md`'s "Later" line, which JH 222 holds this stretch; it is owed in the ready notice.
 
 ## Goal
 A dry run from a copy whose `bin/` is not origin/main's stops as a land from it does, and running
@@ -29,6 +28,7 @@ sites in the queue's test make temporary folders and never remove them: 9,601 we
 
 ## In scope / Out of scope
 - In: `bin/merge-queue.mjs` (the guard's condition, its message tail for a dry run, `USAGE`, the header comment),
+  `README.md`'s one sentence on `--dry-run` in the merge-queue section,
   `bin/merge-queue.test.mjs` (the new tests, one scratch root for every folder it makes), this document.
 - Out: `docs/ROADMAP.md` and `docs/FAILURES.md`, held by JH 222 this stretch; other test files that may leak too
   (reported, not fixed); the folders already in his temporary folder (his, in the plan's `waits`);
@@ -85,10 +85,10 @@ sites in the queue's test make temporary folders and never remove them: 9,601 we
    The item makes the tests clean up after themselves" (the plan's version 3, (d)).
 
 ## Tasks
-- [ ] T1 (kind: docs) this document, before any source write.
-- [ ] T2 (kind: build) spec 2: the scratch root and its test, seen red; route: tests first, `node --test
+- [x] T1 (kind: docs) this document, before any source write: commit `acb3d9a5`.
+- [x] T2 (kind: build) spec 2: the scratch root and its test, seen red; route: tests first, `node --test
   bin/merge-queue.test.mjs`.
-- [ ] T3 (kind: build) spec 1: the dry-run tests seen red, then the guard, `USAGE` and the header; route: tests first,
+- [x] T3 (kind: build) spec 1: the dry-run tests seen red, then the guard, `USAGE` and the header; route: tests first,
   `npm run check`.
 - [ ] T4 (kind: verify) Codex and the lenses on the slice, and an independent verifier.
 
@@ -98,3 +98,14 @@ sites in the queue's test make temporary folders and never remove them: 9,601 we
   origin/main; and the tests stop filling Temp with folders (`makeQueueRepo`, `bin/merge-queue.test.mjs:41`)."
 - L2 2026-11-18: JH 222 holds `docs/ROADMAP.md` and `docs/FAILURES.md` (its notes in the shared folder), so the
   ROADMAP tick is left to the lead, named in the ready notice.
+- L3 2026-11-18 18:48Z: T3 of `codexspend` on main (`0c28d083`) and the copy refreshed to it; main merged in
+  (`5b273c00`). T2: the test that every `mkdtempSync` of the file is made under `scratchRoot` was red (ten made in
+  the temporary folder itself), then green with `scratch(prefix)` and one `after` that removes the root with
+  retries. A first whole run with TEMP at the long scratchpad path left the folder empty but failed seven relief
+  tests; the same seven pass with the usual TEMP (`js-harness gate -- node --test --test-name-pattern=...`, 8 pass),
+  so the cause is that path's length, not the change. The root adds about 20 characters to every fixture path.
+- L4 2026-11-18: T3: the dry-run test of a stale copy was red (exit 0 where 1 was wanted) and the one of a matching
+  copy with CRLF green; then `if (args.land || args.dryRun)` with a dry run's own tail, the land's words unchanged.
+  The whole file with TEMP, TMP and TMPDIR at an empty `%TEMP%jh226`: 136 tests, 136 pass, the folder empty after.
+  Not changed: `bin/lib/manifest.mjs:158`, the text written into projects, which says what a dry run shows and stays
+  true.
