@@ -6,7 +6,7 @@ pull request, landed by the lead (JH ORQ) · Brief: miniplan 3 of JH PLAN, 2026-
 `miniplan-003-alignment-audit.md`), amended the same evening after his "Listo quiero que lo alineemos todo" (L2).
 
 ## State
-PR 921 open at 0e194243, held by the lead. Waiting on the lead's go: no double review and no card to him until then; on the go, `codex-meter` first (weekly under 50%, five-hour under 80%), one `double-review read` of this file, every finding answered, then the read id, its cost and the cards (D-a1, D-a4, D-a7, D-b1, D-b2, D-c1, D-c2) to the lead by direct message.
+PR 921 open, held by the lead (head: the commit that adds L13). Waiting on the lead's go: no double review and no card to him until then; on the go, `codex-meter` first (weekly under 50%, five-hour under 80%), one `double-review read` of this file, every finding answered, then the read id, its cost and the cards (D-a1, D-a4, D-a7, D-b1, D-b2, D-c1, D-c2) to the lead by direct message.
 The audit and the build plan are written; nothing is built. Next: the lead reads it, sends the in-flight
 amendments to JH 227 and JH 229 (slices A and B), and records the one block of his decisions and sends it to JH PLAN, which asks him in one sitting (question 355).
 
@@ -122,7 +122,7 @@ The change column names the slice of the build plan.
 | D1 | 227 `rules-data.mjs` (`questions-one-place` subject, 13ef86a1) | "every other question, in the orchestrator's chat" | contradicts question 355 | 227 | Leaves 227's branch (the lead's order): the change, quoting his typed line 1362 with the tap of 4488 accepted, goes to slice H with `manifest.mjs:134,140` |
 | D1 | `bin/lib/manifest.mjs:134,140` | the questions reach him "in one place: the orchestrator's chat"; the lead asks them | contradicts question 355 | none | Stays out of 227's branch; written as a limit of today until slice H (the lead records a question for the orchestrator, then sends it to the Plan by direct message), and reworded with slice H |
 | D1 | `bin/lib/channel.mjs:136` | "a question goes to the orchestrator, who asks the user: --to orchestrator" | contradicts question 355 | none | A question is recorded for the Plan, and the lead's direct message delivers it (H) |
-| D1 | 227 `plan-opening.md:25` | the Plan starts the sessions a miniplan orders, on his go, and hands them over | open: question 354 is a tap, and his typed lines 3064 and 3459 point to the lead opening (read 8d32c0e7 on 227, Claude 2) | 227 | Decided by question 354 (tapped, line 4422), among the rule's accepted answers; no typed line settles it (L10); the rewording is JH 231's (question 357) |
+| D1 | 227 `plan-opening.md:25` | the Plan starts the sessions a miniplan orders, on his go, and hands them over | open: question 354 is a tap, and his typed lines 3064 and 3459 point to the lead opening (read 8d32c0e7 on 227, Claude 2) | 227 | Decided by question 354 (tapped, line 4422), among the rule's accepted answers; no typed line settles it (L10); the rewording is the senior session "JH SR · plan-pre-prompt words"'s (question 357) |
 | D1 | 227 `plan-opening.md:29` and the `plan-pre-prompt` subject | the Plan "is sent no notices"; the lead sends it "once, 'miniplan N done'" | half-says after question 355: the lead now sends it every question of the execution | 227 | Say the questions come by direct message, never as a notice to follow (A) |
 | D1 | `bin/lib/manifest.mjs:120` | "Two kinds of session. A work session ... The orchestrator" | half-says (no Plan role in the installed skill) | none (227 writes the role in `odd/` only) | One line naming the Plan, pointing to the rule `plan-pre-prompt` (JH 227's, not yet on main) (C) |
 | D1 | `docs/ROADMAP.md` | no line names the Plan, a miniplan or the pre-prompt (searched `Plan\b`, `miniplan`, `pre-prompt`, `JH PLAN`) | half-says | none | One roadmap row (C) |
@@ -245,7 +245,7 @@ Each line was read against the message it answered (L10):
   "El Plan, con mi visto bueno (Recomendada)" (line 4422, 2026-11-19T01:12Z, tapped), which came after 343 and 3064
   and answers exactly this. A tap is a valid decision; it goes among the rule's accepted answers, not as its quote.
   No typed line settles it (L10), so it is not asked again; question 357 (line 5187) sent the rule's rewording to the
-  senior session JH 231, which takes L10 as input.
+  senior session "JH SR · plan-pre-prompt words", which takes L10 as input.
 - One approval covers the sessions of a piece of work (`owner-decisions`, one clause in protocol 1): "a session that
   a miniplan or a charter he approved names is started without asking him again". Line 2642, "No quiero que me pidas
   permiso para iniciar cada linea", typed while the Plan was opening the seven sessions of a wave he approved; line
@@ -264,11 +264,9 @@ Each line was read against the message it answered (L10):
 Cards (no typed line covers them, or they are his by kind: removing what he uses, spend):
 - **D-a1, `senior-model` to judgment only.** Line 3459 ("ser mucho mas eficientes con el poder de fable pero sin
   tener que utilizarlo todo") was typed about the Plan's use of Fable, not about a senior session, so it does not
-  cover this subject. Subject, word for word: "the model a senior session runs on, titled, like every work session, with
-  its number from `js-harness sessions --next-number`, which the lead opens with start_session and sends the
-  judgment a task needs: a design, a depth pass, a decision". The title changes too: today's subject says "<code> SR ·
-  <purpose>", and a notice to a title with no number reaches nobody (the lead, L11). Options: A, yes (recommended:
-  Fable on judgment, and a title notices reach); B, as today.
+  cover this subject. Subject, word for word: "the model a senior session runs on, titled <code> SR · <purpose>, which the
+  lead opens with start_session and sends the judgment a task needs: a design, a depth pass, a decision". The title
+  stays as the rule in force has it (L13). Options: A, yes (recommended: Fable on judgment); B, as today.
 - **D-a7, who starts a senior session a miniplan orders.** Question 354 says the Plan starts what a miniplan orders;
   the guard says "a senior is started by the lead" (`bin/lib/session-title-guard.mjs:94`) and refused the Plan's
   start of one. No typed line settles it. Subject, word for word: "a senior session a miniplan orders is started by
@@ -353,3 +351,6 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
   the lead" (`bin/lib/session-title-guard.mjs:94`, `bin/guard.mjs:198`), against question 354; with the app's
   typed-turn lock that costs him one message in the lead's chat for every senior. Recorded as a contradiction for his
   one sitting, card D-a7, not decided by a typed line.
+- L13 (the lead, by direct message, correcting its own note of L11): `rule:senior-model` titles a senior "<code> SR ·
+  <purpose>", the rule in force, so D-a1 keeps that title, not a number; the senior session question 357 sent the
+  rewording to is "JH SR · plan-pre-prompt words", not JH 231. D-a7 stands.
