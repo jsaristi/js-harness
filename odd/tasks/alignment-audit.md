@@ -9,10 +9,11 @@ pull request, landed by the lead (JH ORQ) · Brief: miniplan 3 of JH PLAN, 2026-
 PR 921 is a draft (the lead's order), so no land takes it; it is un-drafted once his D-block decisions are in. The
 cards go to him one at a time: this session records each as a question, the lead sends its number to JH PLAN, which
 asks him, and the next is recorded only once the last is answered. Decided: D-b1 (question 364, L16), D-b2 (question
-365, L18), D-c2 (question 367, L21; 366 withdrawn), D-c1 and with it D-a4 (question 370, L23), D-a7 (question 371, L24). Asked: D-a1, the last card (question 372, L24).
-No double review has run. Next: when D-a1 is answered, write it in and push; PR 921 stays a draft and the double
+365, L18), D-c2 (question 367, L21; 366 withdrawn), D-c1 and with it D-a4 (question 370, L23), D-a7 (question 371, L24), D-a1 (question 372, L26; tapped, so the rule change waits for his typed line, which JH PLAN is asking for). Every card is answered.
+No double review has run. Next: PR 921 stays a draft and the double
 review does not run until the lead says so after the Codex weekly reset of 2026-11-23 23:45 local (Codex runs only
-under 50% weekly until then, miniplan-009 Budget lines 31-33; the meter read 51%); then the read, then un-draft (L25).
+under 50% weekly until then, miniplan-009 Budget lines 31-33; the meter read 51%); then the read, then un-draft (L25). When the lead sends his typed line for senior-model, write it into
+D-a1 and L26 as the quote slice C's `rules change` takes.
 The audit and the build plan are written; nothing is built.
 
 ## Goal
@@ -278,7 +279,8 @@ Each line was read against the message it answered (L10):
   tienes comunicacion".
 
 Cards (no typed line covers them, or they are his by kind: removing what he uses, spend):
-- **D-a1, `senior-model` to judgment only: asked as question 372** (L24). Line 3459 ("ser mucho mas eficientes con el poder de fable pero sin
+- **D-a1, `senior-model` to judgment only: decided A, question 372** ("Sí, solo juicio (Recomendada)", tapped,
+  f5c3ee4d:7060, `2026-11-19T18:15:45Z`, recorded verified by JH PLAN; L26). The rule change waits for his typed line. Line 3459 ("ser mucho mas eficientes con el poder de fable pero sin
   tener que utilizarlo todo") was typed about the Plan's use of Fable, not about a senior session, so it does not
   cover this subject. Subject, word for word: "the model a senior session runs on, titled <code> SR · <purpose>, sent the
   judgment a task needs: a design, a depth pass, a decision". The title stays as the rule in force has it (L13).
@@ -445,3 +447,8 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
   50% weekly, and Codex runs only under 50% until the reset of 2026-11-23 23:45 local (miniplan-009 Budget lines
   31-33). After 372 is answered: write it in, push, keep the notice wait; after the reset the lead says to run the
   read, then the PR leaves draft.
+- L26 (question 372, D-a1): he answered "Sí, solo juicio (Recomendada)", tapped in JH PLAN's chat, f5c3ee4d:7060
+  (`2026-11-19T18:15:45Z`, read with `sessions --quote`); JH PLAN recorded it, verified. Decided; the tap goes among
+  senior-model's accepted answers, and its `rules change` in slice C waits for his typed line, which JH PLAN is asking
+  him for (the lead sends it here). Every card of the D block is answered. PR 921 stays a draft; the read runs after
+  the reset, on the lead's word.
