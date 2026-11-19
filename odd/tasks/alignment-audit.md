@@ -8,8 +8,8 @@ pull request, landed by the lead (JH ORQ) · Brief: miniplan 3 of JH PLAN, 2026-
 ## State
 PR 921 is a draft (the lead's order), so no land takes it; it is un-drafted once his D-block decisions are in. The
 cards go to him one at a time: this session records each as a question, the lead sends its number to JH PLAN, which
-asks him, and the next is recorded only once the last is answered. Decided: D-b1 (question 364, L16). Asked: D-b2
-(question 365). Still to ask, in the lead's order (L17): D-c2, D-c1 (its card covers D-a4, which its answer
+asks him, and the next is recorded only once the last is answered. Decided: D-b1 (question 364, L16), D-b2 (question
+365, L18). Asked: D-c2 (question 366, L18). Still to ask, in the lead's order (L17): D-c1 (its card covers D-a4, which its answer
 decides), D-a7, D-a1 (worded after `rules-data.mjs:665-667` is read). No double review has run.
 The audit and the build plan are written; nothing is built.
 
@@ -292,16 +292,20 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
   stretch's plan, and on today's record only JH 217 would have been refused); B, keep it and build `stretch amend`,
   and C2 counts a miniplan or the open stretch's plan; C, keep it for multi-day absences only, and C2 counts a
   miniplan, or the stretch's plan while one is open.
-- **D-b2, C2 refuses or warns.** Subject: "a start the lead makes for a new request that names no miniplan is
+- **D-b2, C2 refuses or warns: decided A, question 365** ("Rechaza (Recomendada)", tapped, f5c3ee4d:6616,
+  `2026-11-19T16:26:00Z`, recorded verified by JH PLAN; L18). Subject: "a start the lead makes for a new request that names no miniplan is
   refused". Options: A, refuses (recommended: his "el arranca sin plan", line 3509); B, warns.
 - **D-c1, the policy of review spend.** The same choice as D-a4 put as the harness's policy: A, a miniplan's Budget
   states its Codex spend and his go covers its reviews (recommended); B, a question per review, with only the floor
   and rate raised to today's measure; C, both.
 - **D-c2, this plan's spend, as one figure.** About 5.5M Codex input for one round of C to H (11M at the high
   figure), about 16M with up to three rounds, and about 25M more for four design reads at the last read's measured cost
-  (JH 227's read 8d32c0e7: 2.17M Claude, 6.17M Codex each); about 8.7M Claude for those reads and the verifiers
-  besides. Options: A, approve it as the ceiling for the whole build, each slice told what it used (recommended); B,
-  slice by slice.
+  (JH 227's read 8d32c0e7: 2.17M Claude, 6.17M Codex each), and 6.17M for this document's own double review: about
+  47M Codex central, about 64M at the high figure (three rounds at 11M a round), which the card puts as the ceiling;
+  about 11M Claude for the five reads, the verifiers of D, E and G not costed. A yes is his answer, given once, to
+  each review of C to H inside the ceiling; the rule that asks each review over its allowance
+  (`bin/lib/codex-review-allowance.mjs:104`) changes only with D-c1 and slice F. Options: A, approve it as the ceiling
+  for the whole build, each slice told what it used (recommended); B, slice by slice, at least one question a slice.
 - Pending elsewhere, not repeated here: C1's tenth heading and 227's own Codex spend.
 
 ## Tasks
@@ -381,3 +385,7 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
 - L17 (the lead, by direct message): after 365 the order is D-c2, D-c1, D-a7, D-a1. D-c1's card says it covers D-a4,
   and D-a4 is marked decided by its answer (one choice, one tap); D-a1 is worded after `rules-data.mjs:665-667` is
   read, since D-a7 decides who starts a senior. Each card is recorded only once the lead says the last is answered.
+- L18 (question 365, D-b2): he answered "Rechaza (Recomendada)", tapped in JH PLAN's chat, f5c3ee4d:6616
+  (`2026-11-19T16:26:00Z`, read with `sessions --quote`); JH PLAN recorded it, verified. C2 refuses a start the lead
+  makes for a new request that names no miniplan (slice E). PR 923 (`feat/codex-spend-t5`), which slice D waits on, is
+  landing (the lead). D-c2 is asked as question 366, its ceiling put at the high figure.
