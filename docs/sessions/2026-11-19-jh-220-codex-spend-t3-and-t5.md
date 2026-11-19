@@ -6,7 +6,7 @@ File: docs/sessions/2026-11-19-jh-220-codex-spend-t3-and-t5.md.
 Tasks T3 (spec 3) and T5 (spec 6) of `odd/tasks/codex-spend.md`, each written test first, with an independent verifier, Codex and the Claude lenses. The task was item `codexspend` of the lead's plan v4 of 2026-11-18, which the owner approved in question 340 ("Sí, las 8"). T3 had to land first, because JH 226 waited for the test name "conflict with main names" to be on main.
 
 ## The user's words
-The task came from the lead session JH ORQ, not typed by the owner: "Report only through `js-harness notify --to orchestrator` (ready with `--pr`, then closed); the lead (JH ORQ) reviews and lands, you do not. Ask the owner nothing in your chat: what is his goes to the lead as a notify note, and JH PLAN puts it to him."
+The task came from the lead session JH ORQ, not typed by the owner; it is this session's first message, stored as its opening (js-harness sessions --opening 'JH 220 · codex-spend T3 and T5'): "Report only through `js-harness notify --to orchestrator` (ready with `--pr`, then closed); the lead (JH ORQ) reviews and lands, you do not. Ask the owner nothing in your chat: what is his goes to the lead as a notify note, and JH PLAN puts it to him."
 
 ## Delivered
 - **T3:** PR 918 (https://github.com/jsaristi/js-harness/pull/918), merged by the lead as 0c28d083.
@@ -66,7 +66,7 @@ The task came from the lead session JH ORQ, not typed by the owner: "Report only
 - **Codex:**
   - T3: 1,407,523 input tokens over 3 reviews.
   - T5: 9,264,890 input tokens over 3 reviews (7,475,215 + 1,489,161 + 300,514).
-  - Weekly meter: 34% before T5's first review, 48% before its last.
+  - Weekly meter: 39% before T5's first review (22:18 local), 48% before its last.
 - **Claude lenses:** each T3 round. T5 rounds 1-2 and 3-5, plus each fix: six runs in all, each at 7k-26k input tokens a lens.
 - **Verifiers (opus, read-only):** four on T5 and one on T3. The last, on e709d8f4..27cb11f9, found no High or Medium, three Lows reported to the lead with the ready (no code: the range has no review left).
 - **Context:** the host compacted this session once, at about 19:09 local on 2026-11-18. It was at 134% of its window when this summary was written.

@@ -184,7 +184,7 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
 - [x] T2 (kind: build) spec 2 — PR 883, main c7afe0be — `bin/lib/codex-review-turns.mjs`, `bin/codex-review.mjs` + tests — commit `fix(codex-review): review the gap below a merge of main alone`
 - [x] T3 (kind: build) spec 3 — branch fix/codex-spend-t3 (L34-L37) — `bin/merge-queue.mjs`, `bin/lib/pull-request.mjs`, `bin/lib/merge-queue-reviews.mjs:97` (cleared L36) + tests — commit `fix(merge-queue): a conflict with main names its fix`
 - [ ] T4 (kind: build) specs 4, 5 — `rules change double-review` on `rule/double-review-sequence`, `bin/double-review.mjs`, `bin/js-harness.mjs` usage + tests — commits `chore(rules): a question's double review reads Claude first` and `feat(double-review): Codex reads what Claude passed`
-- [x] T5 (kind: build) spec 6 — branch feat/codex-spend-t5 (L38-L46) — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
+- [x] T5 (kind: build) spec 6 — branch feat/codex-spend-t5 (L38-L47) — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
 - [ ] T6 (kind: verify) — the measure after the slices land, against the baseline, by Done-when's T6 line; result in the Log
 
 ## Log
@@ -590,3 +590,9 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   `origin`'s URL is no such identity either (a rename or a mirror would drop the baseline). The command only
   reads and prints. A change would need a fourth review, which the rules do not give a range, so it goes to the lead
   with the ready.
+- L47 2026-11-19, a read-only verifier (opus) on e709d8f4..27cb11f9, the commits after round 3 that none had read:
+  clean, no High or Medium; its mutants for findings 5 and 6 and for the old baseline rule fail tests; the real
+  report gives the baseline unchanged (304 s, another gate held the lock). Lows left open, since the range has no
+  Codex review left: with no default branch the text lists every run of `onABranch` (1,648 lines against 929);
+  the JSON keeps the baseline's notes at 0 runs; a second merge of a baseline PR's number is left out of the
+  baseline by design; a gh timeout costs 20 s and says nothing. PR 923 handed to the lead.
