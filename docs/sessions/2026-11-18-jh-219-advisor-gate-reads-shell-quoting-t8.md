@@ -10,9 +10,9 @@ T8 of `odd/tasks/advisor-use.md`, item `tokenizer` of the plan of 2026-11-18: th
 - Question 356 (same transcript, line 4851, 2026-11-19T02:52:58Z, tapped): "B: reconstruir el lector".
 
 ## Delivered
-- Slice 1, branch `claude/advisor-gate-shell-read`, head 72d1a497 on origin/main 7bb1753d: `bin/lib/shell-read.mjs`, a one-pass bash reader, and its test (ffe98caa to 72d1a497). Pushed with this file; no pull request (it lands with the rebuild, L48).
-- Slice 2, branch `claude/advisor-gate-reads-shell`, head 10af66dc on slice 1, local only: the depth pass (7c66b2a0), `bin/advisor-gate.mjs` reading through the reader, 22 commands pinned as Unguaranteed (`UNGUARANTEED` in `bin/advisor-gate.test.mjs`), the git rules of L45 to L50. Not pushed: it lands with the rebuild in one batch.
-- The feature document's Log L36 to L50, the Unguaranteed section and T10.
+- Slice 1, branch `claude/advisor-gate-shell-read`, code head 72d1a497 on origin/main 7bb1753d, pushed head 661a0bdb (this summary): `bin/lib/shell-read.mjs`, a one-pass bash reader, and its test (ffe98caa to 72d1a497). Pushed; no pull request (it lands with the rebuild, L48).
+- Slice 2, branch `claude/advisor-gate-reads-shell`, head 10af66dc on slice 1's 72d1a497 (one docs commit below slice 1's pushed head), local only: the depth pass (7c66b2a0), `bin/advisor-gate.mjs` reading through the reader, 22 commands pinned as Unguaranteed (`UNGUARANTEED` in `bin/advisor-gate.test.mjs`), the git rules of L45 to L50. Not pushed: it lands with the rebuild in one batch.
+- The feature document's Log L36 to L50, the Unguaranteed section and T10: only on slice 2's local branch, which the push hook refuses until slice 2 is reviewed (T8's task line there is ticked with hashes from before the rebases).
 - Checks at 10af66dc: `node --test bin/advisor-gate.test.mjs` 46 pass; `bin/lib/shell-read.test.mjs` 6 pass. Against main's gate (origin/main, byte-identical copy) on the four probe sets under Git bash 5.3.9: no miss main's reading lacks but the 22 pinned. Corpus of 59,299 commands: 58,974 the same, 140 main refused and this lets through, 172 newly gated.
 
 ## Decisions
@@ -31,8 +31,9 @@ T8 of `odd/tasks/advisor-use.md`, item `tokenizer` of the plan of 2026-11-18: th
 - T10, the reader's rebuild, and slice 2's review with it: the senior session JH PLAN starts from `claude/advisor-gate-reads-shell` at 10af66dc (JH PLAN's miniplan-004-rebuild-shell-reader.md).
 - The lenses' correction on 888a359b (`>&word`, fixed in 10af66dc) is not rechecked; `check` lists it. Two lens findings marked blocking are refusals (L49, L50), left to the rebuild.
 - Slice 2 has no Codex review record: the `--again` run (5de5d59..89e78f3) was cut by Codex's usage limit (L47).
-- Follow-ups for the lead: `shellWords` reads `$((1<<X))` as a heredoc in `bin/guard.mjs`; F9 closes with T8.
+- Follow-ups for the lead: `shellWords` reads `$((1<<X))` as a heredoc in `bin/guard.mjs`; the reconcile side effect noted earlier to the lead; F9 closes when the rebuild lands, not with this session.
+- The measurement kit (main's gate, the differential, the corpus compare, the probe sets, the baselines) is in the shared notes folder, jh219-kit/; vp2.json's git probes `cd` into an absolute scratch path, now jh219-kit/r2v/repo, which a rerun edits in first.
 
 ## Cost
 - First notice 2026-11-18 (opening), last 2026-11-19 ~03:30Z; the host compacted the session twice; context near its window at the end.
-- Codex: slice 1 7bb1753..92695d2 about 2.05M input tokens; recheck 92695d2..e215519 0.56M; second recheck e215519..72d1a49 0.21M; the cut `--again` run about 4.10M. Lenses (risk, reliability): slice 1 three runs, slice 2 eight runs. Two verifier rounds (sub-agents). No gate run.
+- Codex: slice 1 7bb1753..92695d2 about 2.05M input tokens; recheck 92695d2..e215519 0.56M; second recheck e215519..72d1a49 0.21M; the cut `--again` run about 4.10M. Lenses (risk, reliability), complete runs recorded in lens-reviews.jsonl: slice 1 four (9bc45aae..e215519c, e215519c..72d1a497, and two before), slice 2 seven since its rebase (7c66b2a0..fb52abc9 to 85b4a24a..888a359b), with earlier runs on its pre-rebase hashes. Two verifier rounds (sub-agents). No gate run.
