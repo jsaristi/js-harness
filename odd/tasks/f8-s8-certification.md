@@ -11,7 +11,8 @@ pass refutes running S8 now: of the 17 measures, 4 miss their line on their late
 command that can read their line, 4 have no result comparable with S8, and the extra rows (coverage's behavioural
 run, the audits) have no command. Next: his decisions under `## Ask me before`, through the lead. Open: T2 to T8.
 2026-11-19, JH 228: T8's runs done on `0c28d083` ($45.38): S8 does not pass (`## Result`). Open in T8: the
-long-session grading (needs his yes), C5.1 by hand, R3.
+long-session grading (needs his yes; priced by a dry run with fake judges: 18 Codex calls, about 0.3 to 0.6M
+Codex tokens, and 4 Sonnet calls, under $0.50 [i]), C5.1 by hand, R3. PR 924 holds T8's record.
 
 ## Goal
 S8 reads each of section 7's 17 S0 and S8 measures against its own frozen line on one candidate commit, one row per
