@@ -87,5 +87,6 @@ test('what cannot be read whole is broken', () => {
     "x $'a\\0b'", "x $'a\\x00b'", "x $'a\\u0000b'", // a decoded NUL, where bash cuts the word
   ]) assert.equal(readShell(source).broken, true, source);
   assert.deepEqual(words("cat <<'EOF'\nE\\\nOF\nEOF"), [['cat']], 'a quoted body joins no lines');
+  assert.deepEqual(words('echo "${p:-<(a)}"'), [['echo', '${p:-<(a)}']], 'inside double quotes a <(…) is text');
   assert.deepEqual(words('echo ${x:-y} ${#a[@]} ${x/a/b} "${y:-${z}}" ${x:-$(a)}'), [['a'], ['echo', '${x:-y}', '${#a[@]}', '${x/a/b}', '${y:-${z}}', '${x:-$(a)}']]);
 });

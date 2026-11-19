@@ -108,9 +108,9 @@ export function readShell(source, { body = false } = {}) {
         } else if (c === '$' || c === '`') {
           readDollar(inner, inDouble);
         } else {
-          // A literal `{` does not hide the `}` that ends the expansion, and a `<(…)` or `>(…)` in an operand runs:
-          // neither is read here, so the reading is broken (Codex on 92695d2).
-          if (c === '{' || ((c === '<' || c === '>') && s[i + 1] === '(')) broken = true;
+          // A literal `{` does not hide the `}` that ends the expansion, and a `<(…)` or `>(…)` in an unquoted operand
+          // runs (inside double quotes it is text): neither is read here, so the reading is broken (Codex on 92695d2).
+          if (c === '{' || (!inDouble && (c === '<' || c === '>') && s[i + 1] === '(')) broken = true;
           if (c === '{') depth++;
           else if (c === '}') depth--;
           i++;
