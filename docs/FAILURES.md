@@ -1964,6 +1964,10 @@ after it was made: nothing measured the spend against the figure while the work 
   a senior session already 68 % full, with no forecast before it started
 - Seen: 2026-11-17 — relief file, line 3154 — JH 214 passed its cap: its own spend 2.28M, 1.28M of it after it stopped, against a cap of
   1.2M, 4.30M in all against 3.4M
+- Seen: 2026-11-19 — the lead's message to JH 235 (claimed; the lead's own) — the lead (JH ORQ) started JH 233's two
+  Codex review rounds (1.25M, then 1M-1.5M) with no answer of his covering them, while it had held JH 234's review
+  and slice 2 as a spend question; fix: no third round, and each Codex round the lead starts cites the answer that
+  covers it
 
 ### stack-update-moved-hooks
 A tool of the stack was updated on purpose without the hook count read after it, so a hook entry the update added was

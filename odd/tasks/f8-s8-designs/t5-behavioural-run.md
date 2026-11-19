@@ -72,6 +72,7 @@ away-autonomy record, $4.43 over 4 trials):
 ## Out of scope
 S5c-b's filling and proofs; any grader or `evals/` code; the incident fixture faults (Ask 5 of the S8 document).
 
-## For his decision
-That R1 at S8 is the current-arm run of the existing cases (about $13 to $16), with proofs left to S5c-b; and R1's
-line in item 5.
+## His decision
+Question 368, his answer "Sí, R1 solo mide (Recomendada)" (2026-11-19, JH PLAN's transcript `f5c3ee4d`, line 6815,
+verified by the lead): R1 at S8 is the current-arm run of the existing cases, with proofs left to S5c-b. It approves
+this design only, not the run or its spend, which are asked apart. Still his: R1's line in item 5.
