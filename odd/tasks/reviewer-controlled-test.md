@@ -209,3 +209,11 @@ three days.
   The lenses on f5994b6..a47f50f (reliability, risk, with this document): reliability 1 SUGGESTION, an arm
   table's heading read "undefined changed lines" for a range that names none; fixed with a test in the next
   commit. Risk 0.
+- L14 2026-11-19, on the lead's word, question 378 to him: until this test reports, does the review effort on
+  6.2 stay at max, go to medium (arm B) or go to high (arm D)? No option is marked recommended. Its figures come from
+  .git/js-harness/codex-review-runs.jsonl since b475339b; a first review there is the sum of a run's parts, with no
+  recheck and input above 0. On 6.2 max: 20 first reviews, 302k to 3.08M input (median 1.29M), 12,323 a changed
+  line (median), against 824 on 6.1 medium (1,443 first reviews). Findings: 4.55 a first review and 2.21 a recheck.
+  Incorrect: 19 of 19 first reviews, 34 of 43 in all. The lead's 104k to 1.46M, 0.51 to 5.06 findings and 17 of 17
+  were not reproduced under any definition tried, and the question says so. No Codex ran; the double review was not
+  run because the lead barred Codex.
