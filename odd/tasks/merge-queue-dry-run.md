@@ -141,3 +141,8 @@ sites in the queue's test make temporary folders and never remove them: 9,601 we
   settle it and to raise it; this session is on claude-opus-5-5, the model it names, and the lead is told in the ready
   notice. Fixed: the scan lists every `mkdtemp` or `mkdtempSync` call of the file to the end of its line and wants
   exactly the two known ones; Codex's example planted is red, removed green (2 pass). The lens on the same range: 0.
+- L10 2026-11-18, Codex on `3045d8c4..930685ae` (`--again`, as the tool named after the third round; the lead
+  told at 22:54): two P3. (1) A call with a space before its parenthesis slipped past: fixed, planted red, removed
+  green. (2) The allowlist refuses a reformatted call (a comment or a line break inside it): answered, not changed:
+  it fails safe, so whoever reformats it sees the test red and updates the list in the same edit; a parser that
+  forgives formatting is what let the earlier forms through.
