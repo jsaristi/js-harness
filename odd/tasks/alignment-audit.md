@@ -143,7 +143,7 @@ The change column names the slice of the build plan.
 | D2, D3 | the host's next-step box (`wrap_up` ask); no text or check of the harness names it (`git grep -n -e wrap_up -e wrap-up -- bin CLAUDE.md`: no hit) | the lead's ask "¿Abro ya las 8 sesiones de la primera tanda?" (about 12:3x local) stayed drawn under its latest reply after JH 219 to 226 opened at 14:15, because later wrap_ups carried no ask; he read it at 21:21 as a new question (the lead's report of his screen, not checked in code) | contradicts in effect (a stale approval question per piece of work stays in front of him) | none | A closing whose earlier ask is overtaken says so: the next wrap_up carries the recap that withdraws it, or the skill says to close with a fresh ask or none; written in the skill with the closing rules (C) |
 | D4 | `bin/lib/rules-data.mjs:665-667` (`senior-model`) | the senior gets "tasks needing more intelligence or complexity" | half-says (tasks, not judgment) | none | Reword to judgment (C, his words) |
 | D3 | `bin/lib/merge-queue-refresh.mjs:1-5,22`, `bin/merge-queue.mjs:82-90` | the refresh waits by itself for sessions between runs (30 minutes, exit 75) and tells each one | aligned | none | none |
-| D2, D4 | `bin/sessions-background.mjs:533-560`, `bin/lib/background-close.mjs:268-273` | `sessions stop --finished` closes "every finished session of the project that loses nothing"; it reads only the record of background sessions (`readRecord(home)`), so it sees only sessions `sessions start` began | gap: the sessions the app starts (`start_session`) are never closed by anything; on 2026-11-19 he typed "recuerda cerrar la sesiones cuando estas terminen ya que tenemos casi 16 abiertas" (f5c3ee4d:5712, 05:43Z), and the lead archived nine by hand (merged PR, clean worktree, head in main) after `stop --finished` closed none (the lead, L14) | none | Card D-c3; not decided, no slice yet |
+| D2, D4 | `bin/sessions-background.mjs:533-560`, `bin/lib/background-close.mjs:268-273` | `sessions stop --finished` closes "every finished session of the project that loses nothing"; it reads only the record of background sessions (`readRecord(home)`), so it sees only sessions `sessions start` began | gap: the sessions the app starts (`start_session`) are never closed by anything; on 2026-11-19 he typed "recuerda cerrar la sesiones cuando estas terminen ya que tenemos casi 16 abiertas" (f5c3ee4d:5712, 05:43Z), and the lead archived nine by hand (merged PR, clean worktree, head in main) after `stop --finished` closed none (the lead, L14) | JH 234 ("finished sessions are always archived") | Decided by his line f5c3ee4d:5748 (`2026-11-19T05:50Z`), "ok por favor SIEMPRE CIERRALAS Y CEMENTA Y CORRIJE ESE ERROR POR QUE SIEMPRE FALLA A LA HORA DE CERRAR LAS SESIONES QUE YA TERMINARON"; built by JH 234, so no slice here (L15) |
 
 ## Miniplan 3, step 3: each claim checked
 1. **`stretch` is built for the big plan; nothing says what becomes of it or how a miniplan is bound and
@@ -224,6 +224,10 @@ allowance question of slice F is answered. Every code slice also gets the Claude
 | G | A blocked session's question reaches him without an awake lead: build JH 221's T2 as designed (`odd/tasks/consistent-orders.md:179`), and a `waiting` note whose question stays unanswered shows on the heartbeat; after question 355 the question goes on to the Plan's chat; and the absence detector reads the Plan's chat, the lead's as the fallback, since he types only there (read 8d32c0e7, Codex 6), tested with Plan activity, an explicit leave and return, a relief and an unreadable transcript | `bin/lib/stall.mjs`, the AWAY detector (`js-harness loop heartbeat`, `bin/loop.mjs`), the one file JH 221's T2 design names (`odd/tasks/consistent-orders.md`, L13), and its test; disjoint from H's `channel.mjs`, `notify.mjs`, `sessions.mjs` | its tests first; high risk 4 (async ordering), an independent verifier | merges into JH 221's existing design | about 120 lines; Codex about 850,000 | C, D, E, H |
 | H | The lead's tools and the questions' route: `questions-one-place` changed through `rules change`, quoting line 1362 with 4488 accepted, and `manifest.mjs:134,140,249` with it (the lead's order); from read 8d32c0e7: one durable id and one asking role a question, the Plan records the verified answer (`notify --kind answer --question <n> --transcript <the Plan's session> --line <n>`) before its direct message, so the board closes it (Claude 5, Codex 2); a proposal that needs `rule:double-review` reaches the Plan with its read id or its recorded exemption, or it is not shown (Codex 7); the rules fingerprint and the rule-change notice read a rule's subject too, so a change of destination reaches the installed copies (Codex 9, `bin/lib/rules.mjs:480-481,522-540`); the Plan's opening is one versioned source loaded by `sync` and the resume path, a local opening kept through sync and uninstall (Codex 10); a question is recorded for the Plan, not only `--to orchestrator` (`bin/lib/channel.mjs:136`, question 355; questions 349 to 352 reached him in the Plan's chat by a record and a direct message, so this only stops the Plan's questions landing on the lead's board, L22 Claude 5); `sessions --next-number` also reads the app's session records; the bare board answers inside its budget (profile first, one run) | `bin/lib/channel.mjs`, `bin/notify.mjs`, `bin/sessions.mjs`, `bin/lib/rules.mjs`, the registry files, `bin/lib/manifest.mjs:134,140,249`, the opening's home, their tests | a test with a question to the Plan and one with a started session that sent no notice; one timed run under 30 s | none | about 250 lines; Codex about 1.18M (2.4M high); high risk 3 (a skill and the rules fingerprint others consume), an independent verifier | C, D, E, G |
 
+JH 234 builds the closing of finished sessions now on `bin/check.mjs`, `bin/doctor.mjs`,
+`bin/lib/lens-review-rows.mjs`, `bin/lib/codex-review-rows.mjs` and `bin/lib/rules-data.mjs`; no slice here edits
+those files while JH 234 is open, so C's and F's lines in `rules-data.mjs` start only after JH 234 lands (L15).
+
 Total, estimated: about 550 changed lines of code and text, at least 2,168 removed in D, and about 5.5M Codex input
 tokens across C to H (about 11M at the tool's high figure, 2.05 times) at today's fit, for one Codex round a slice
 only (A and B ride the reviews 227 and 229 already owe). Not in that figure: recheck rounds (JH 224 needed three
@@ -294,12 +298,6 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
   (JH 227's read 8d32c0e7: 2.17M Claude, 6.17M Codex each); about 8.7M Claude for those reads and the verifiers
   besides. Options: A, approve it as the ceiling for the whole build, each slice told what it used (recommended); B,
   slice by slice.
-- **D-c3, who closes a finished session the app started.** A gap, not decided (L14). Nothing archives a session
-  started with `start_session` once its work is done: `sessions stop --finished` sees only the sessions `sessions
-  start` began. Subject, word for word: "a session whose pull request merged, whose worktree is clean and whose head
-  is in main is archived by the lead, without asking him". Options: A, yes, and a check that names such sessions
-  (a slice to plan); B, as today, by hand when he asks; his words in "Other". No recommendation until a slice is
-  costed.
 - Pending elsewhere, not repeated here: C1's tenth heading and 227's own Codex spend.
 
 ## Tasks
@@ -366,3 +364,8 @@ Cards (no typed line covers them, or they are his by kind: removing what he uses
   lead archived nine by hand. Checked in code: `stopFinished` calls `closeFinishedIn`, which reads only the record of
   background sessions (`bin/lib/background-close.mjs:271-273`), so `stop --finished` closes only what `sessions
   start` began. Recorded as a gap, row and card D-c3, not decided.
+- L15 (the lead, by direct message): D-c3 is decided by his line typed in the Plan's chat, f5c3ee4d:5748
+  (`2026-11-19T05:50:21Z`, checked in the transcript), "ok por favor SIEMPRE CIERRALAS Y CEMENTA Y CORRIJE ESE ERROR
+  POR QUE SIEMPRE FALLA A LA HORA DE CERRAR LAS SESIONES QUE YA TERMINARON". JH 234 ("finished sessions are always
+  archived") builds it. The card leaves; the row says decided and built by JH 234; no slice edits its files while it
+  is open. Documents only, no read.
