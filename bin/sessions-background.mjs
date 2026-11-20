@@ -394,13 +394,19 @@ export function sessionsStartMain(argv, given = {}) {
     stderr(`js-harness sessions start: claude printed no id for the session, and claude agents lists no new session titled ${JSON.stringify(parsed.title)} in this project, so nothing is recorded: if claude agents lists it later, claude stop <id> and claude rm <id> remove it; its brief stays at ${copy}${cut === null ? '' : `, and the worktree ${cut.place} cut from ${cut.sha.slice(0, 7)} stays, since the session may run in it`}\n${saidBy(result)}`);
     return 1;
   }
-  // claude -w takes the worktree cut only while its folder and branch are claude's own (`baseCut`): a worktree that
-  // appears beside it means claude cut one from HEAD, and the base is said not taken and not recorded.
-  const strays = worktreesBefore === null ? [] : (worktreePaths(run, root) ?? []).filter((folder) => !worktreesBefore.some((was) => within(folder, was) && within(was, folder)));
+  // claude -w takes the worktree cut only while its folder and branch are claude's own (`baseCut`): a worktree named
+  // as --worktree that appears beside it means claude cut one from HEAD, and the base is said not taken and not
+  // recorded. A worktree of another name is another session's, added at the same moment (the lenses on
+  // edd772a..90bb5ae). Only what claude made before it returned is seen; a listing that fails checks nothing, said so.
+  const worktreesAfter = cut === null ? null : worktreePaths(run, root);
+  const unchecked = cut !== null && (worktreesBefore === null || worktreesAfter === null);
+  const strays = cut === null || unchecked ? [] : worktreesAfter.filter((folder) => path.basename(folder) === parsed.worktree && !worktreesBefore.some((was) => within(folder, was) && within(was, folder)));
+  if (unchecked) stderr(`js-harness sessions start: git worktree list could not be read, so whether claude took the worktree ${cut.place} cut from ${cut.sha.slice(0, 7)} is not checked, and no base is recorded`);
   if (strays.length > 0) stderr(`js-harness sessions start: --base did not take: claude made the worktree ${strays.join(', ')} of its own beside ${cut.place}, cut from ${cut.sha.slice(0, 7)}, which stays; the session runs from claude's`);
+  const baseTaken = cut !== null && !unchecked && strays.length === 0;
   const entry = {
     event: 'started', at: new Date(now()).toISOString(), id, sessionId: agent?.sessionId ?? null, title: parsed.title, root, cwd,
-    worktree: parsed.worktree ?? null, base: strays.length > 0 ? null : cut?.sha ?? null, worktreePath: worktreeOf({ root, worktree: parsed.worktree, worktreePath: agent?.cwd }), model: model ?? null, effort: effort ?? null, advisor: advisor ?? null, remoteControl: parsed.remoteControl, brief: copy,
+    worktree: parsed.worktree ?? null, base: baseTaken ? cut.sha : null, worktreePath: worktreeOf({ root, worktree: parsed.worktree, worktreePath: strays.length === 1 ? strays[0] : agent?.cwd }), model: model ?? null, effort: effort ?? null, advisor: advisor ?? null, remoteControl: parsed.remoteControl, brief: copy,
   };
   try {
     appendRecord(home, entry);
