@@ -467,3 +467,54 @@ test('a branch whose merges are not the queue\'s is one pull request, and code m
   candidate(mixed, ['code', 'doc'], (number, branch) => (branch === 'code' ? byQueue(number, branch) : byButton(number, branch)));
   assert.deepEqual(errorsOf(mixed), ['code was committed before the pass\'s verdict: bin/b.mjs']);
 });
+
+/** A branch `stacked` cut from another session's branch `base`, which holds its own document with its pass and then its
+ * code; `stacked` is made from `base` by `git checkout -b`, so its reflog says where it was created, and then opens the
+ * feature document, its code after its pass or before it with `early`. With `drop`, `base` is deleted after, so no other branch holds that commit. */
+function stackedBranch(root, { early = false, drop = false } = {}) {
+  git(root, 'checkout', '-q', '-b', 'base', 'origin/main');
+  // A log of its own longer than the rest, so that `git log --follow`, which `trail` reads, does not take the feature
+  // document for a copy of this one.
+  const log = Array.from({ length: 40 }, (_, n) => `- L${n + 1}: the base's entry ${n + 1}, in words of its own.`).join('\n');
+  write(root, 'odd/tasks/base.md', `${document()}\n## Log\n${log}\n`);
+  commit(root, 'docs: the base\'s pass', 'odd/tasks/base.md');
+  write(root, 'bin/b.mjs', 'b\n');
+  commit(root, 'feat: the base\'s code', 'bin/b.mjs');
+  git(root, 'checkout', '-q', '-b', 'stacked', 'base');
+  if (drop) git(root, 'branch', '-q', '-D', 'base');
+  const itsCode = () => {
+    write(root, 'bin/c.mjs', 'c\n');
+    commit(root, 'feat: its own code', 'bin/c.mjs');
+  };
+  if (early) itsCode();
+  write(root, FILE, document());
+  commit(root, 'docs: the pass', FILE);
+  if (!early) itsCode();
+}
+
+// JH 207's S1, 2026-11-15 (docs/ROADMAP.md, the contracts row): a branch cut from PR 883's head could commit no depth
+// pass, since `trunk..HEAD` read that pull request's code as its own. A branch stacked on another branch reads its own
+// commits, from where its reflog says it was created; the base's documents were judged on the base's branch.
+test('a branch stacked on another branch is judged by its own commits, and the base\'s documents by the base', (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  stackedBranch(root);
+  assert.deepEqual(errorsOf(root), []);
+  assert.deepEqual(errorsOf(root, undefined, 'odd/tasks/base.md'), []);
+});
+
+test('a stacked branch with its own code before its verdict is refused, by its own files alone', (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  stackedBranch(root, { early: true });
+  assert.deepEqual(errorsOf(root), ['code was committed before the pass\'s verdict: bin/c.mjs']);
+});
+
+// A branch cut from a commit no other branch holds is read whole: where it started is no evidence the code below is
+// another's, so committing code and then cutting a branch from it does not hide that code.
+test('a branch cut from a commit no other branch holds is read whole', (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  stackedBranch(root, { drop: true });
+  assert.deepEqual(errorsOf(root), ['code was committed before the pass\'s verdict: bin/b.mjs']);
+});

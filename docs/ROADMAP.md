@@ -937,7 +937,7 @@ of the first version.
   (`git worktree add -b feat/review-gate ... 08653f93`) because start has no base option; and a brief template, since
   the review-gate brief was patched four times and three briefs carried a stale gate step. Owner: the next
   sessions-tool session (2026-11-15, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
-- [ ] The contracts row reads `trunk..HEAD` whole (`bin/contract.mjs` `branchOf`), so a branch stacked on another
+- [x] The contracts row reads `trunk..HEAD` whole (`bin/contract.mjs` `branchOf`), so a branch stacked on another
   session's code can commit no depth pass: JH 207's S1 was refused on 2026-11-15 and waited until PR 883 landed.
   Owner: the next contract-row session (2026-11-15, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
 - [ ] A stretch's lost time counts only failed gates: the 2026-11-15 return showed 0.16 h lost while JH 199 and

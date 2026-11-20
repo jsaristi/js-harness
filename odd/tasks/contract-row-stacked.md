@@ -1,5 +1,5 @@
 ## State
-T1 next: `branchOf` reads a stacked branch from its base; the tests are written and fail as the bar says.
+T1 done; T2 next: the lenses, Codex held for the weekly reset, the draft PR.
 
 ## Goal
 The contracts row judges a branch stacked on another session's branch by its own commits, so it can commit its depth
@@ -53,7 +53,7 @@ Nothing: landing it is the owner's, through the lead.
    a stacked-branch fixture beside its test."
 
 ## Tasks
-- [ ] T1 (kind: build) The stacked-branch tests, then `stackBaseOf` in `branchOf` and `readJudge` — spec 1
+- [x] T1 (kind: build) The stacked-branch tests, then `stackBaseOf` in `branchOf` and `readJudge` — spec 1 (this commit)
 - [ ] T2 (kind: verify) The lenses, Codex held, the item ticked, the draft PR, `notify --kind ready`
 
 ## Log
