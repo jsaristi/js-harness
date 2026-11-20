@@ -12,8 +12,9 @@
 // shows as a wait ended by its task's notice: the table names that ending so the reader can tell it apart.
 //
 // Read-only and wired into nothing: run it by hand, `node workshop/lib/away-hours.mjs --since <iso> [--now <iso>]
-// [--idle <minutes>] [--root <checkout>] [--from <iso> --to <iso>] [--json]`; `--from` and `--to` measure one window a
-// record names instead of his absences. The functions above `main` take inline values; `main` reads the transcripts.
+// [--idle <minutes>] [--root <checkout>] [--from <iso> --to <iso>] [--archive <session>=<iso> ...] [--json]`; `--from` and
+// `--to` measure one window a record names instead of his absences; `--archive` ends a session at its archive time, the
+// session named by the start of its transcript's id, which must name one session only. The functions above `main` take inline values; `main` reads the transcripts.
 
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -102,7 +103,9 @@ const overlapMs = (cuts, from, to) => cuts.reduce((sum, [a, b]) => sum + Math.ma
 
 /** The session's working, waiting and launch hours inside `[from, to)` (ms), from its `entries`, with each wait of at
  * least `idleMs` as `{ from, to, hours, endedBy, lastReply }`. Time before its first entry is not its own; after its last
- * entry before `to` it waits, unless a call of its own still runs. `archivedAt` ends its window there; `lockWaits`, the
+ * entry before `to` it waits. A call whose result the transcript does not hold is never pending, so a call still running
+ * at the transcript's end reads as a wait: in an absence still open, a long gate running now is not told from idle time,
+ * which a later run, once its result is written, corrects. `archivedAt` ends its window there; `lockWaits`, the
  * spans ([start, end] in ms) its gates queued for the machine's gate lock, are waits even under a running call. */
 export function activityOf(entries, { from, to: windowTo, idleMs, archivedAt = Infinity, lockWaits = [] }) {
   const to = Math.min(windowTo, archivedAt);
@@ -138,7 +141,11 @@ export function activityOf(entries, { from, to: windowTo, idleMs, archivedAt = I
       if (queued > 0) {
         waiting += queued;
         locked += queued;
-        waits.push({ from: iso(inStart), to: iso(end), hours: hours(queued), endedBy: "the machine's gate lock", lastReply: lastReply.slice(-200) });
+        // The wait is dated by the lock's own spans inside the gap, not by the gap.
+        const inGap = lockWaits.filter(([a, b]) => b > inStart && a < end);
+        const lockFrom = Math.max(inStart, Math.min(...inGap.map(([a]) => a)));
+        const lockTo = Math.min(end, Math.max(...inGap.map(([, b]) => b)));
+        waits.push({ from: iso(lockFrom), to: iso(lockTo), hours: hours(queued), endedBy: "the machine's gate lock", lastReply: lastReply.slice(-200) });
       }
       continue;
     }
@@ -230,6 +237,10 @@ export function main(argv = process.argv.slice(2), { claudeHome = path.join(os.h
   }
   // Copied history counts once, before his messages are read from it: a copy would double his entries too.
   const sessions = dedupeByUuid(read.map((input) => input.session)).map((session) => ({ ...session, his: personTimesOf(session.entries) }));
+  for (const archive of archives) {
+    const named = sessions.filter((session) => session.id.startsWith(archive.id)).length;
+    if (named !== 1) throw new Error(`--archive ${archive.id} names ${named} sessions, not one`);
+  }
   // The machine's gate log says how long each gate queued for the lock before it ran, and for which session.
   const lockWaits = new Map();
   for (const event of readGateLog(harnessHome).events) {

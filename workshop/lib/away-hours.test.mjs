@@ -98,9 +98,11 @@ test('main reads the project and sibling worktree folders of a temp Claude home,
     main(['--since', at('00:00'), '--now', at('14:00'), '--root', root, '--archive', 'bbbbbbbb=' + at('10:31')], { claudeHome: home, harnessHome: home, print: (line) => lines.push(line) });
     assert.match(lines.join('\n'), /bbbbbbbb JH 2 · work: working 0.35 h, waiting 0.17 h/);
     assert.throws(() => main(['--since', at('00:00'), '--archive', 'bbbbbbbb'], { claudeHome: home }), /--archive is <session>=<iso>/);
+    assert.throws(() => main(['--since', at('00:00'), '--root', root, '--archive', '=' + at('10:00')], { claudeHome: home, harnessHome: home }), /--archive is <session>=<iso>/);
+    assert.throws(() => main(['--since', at('00:00'), '--root', root, '--archive', 'zz=' + at('10:00')], { claudeHome: home, harnessHome: home }), /--archive zz names 0 sessions, not one/);
     assert.match(lines.join('\n'), /no entry inside .*: 1: cccccccc JH 3 · idle/);
     lines.length = 0;
-    main(['--since', at('00:00'), '--root', root, '--from', at('10:00'), '--to', at('11:00')], { claudeHome: home, print: (line) => lines.push(line) });
+    main(['--since', at('00:00'), '--root', root, '--from', at('10:00'), '--to', at('11:00')], { claudeHome: home, harnessHome: home, print: (line) => lines.push(line) });
     assert.match(lines[1], /^window .*: 1 h/);
     assert.throws(() => main(['--since', at('00:00'), '--from', at('10:00')], { claudeHome: home }), /go together/);
     assert.throws(() => main(['--bogus'], { claudeHome: home }), /unknown argument: --bogus/);
@@ -145,7 +147,7 @@ test('an archive ends the session there, and a gate that queued for the lock wai
   // The gate started under the call at 10:00 and waited 20 minutes for the lock before its sensors ran.
   const locked = activityOf(entries, span('10:00', '10:31', { lockWaits: [[Date.parse(at('10:00')), Date.parse(at('10:20'))]] }));
   assert.deepEqual([locked.workingHours, locked.waitingHours, locked.lockHours], [0.18, 0.33, 0.33]);
-  assert.equal(locked.waits[0].endedBy, "the machine's gate lock");
+  assert.deepEqual([locked.waits[0].from, locked.waits[0].to, locked.waits[0].endedBy], [at('10:00'), at('10:20'), "the machine's gate lock"]);
   assert.ok(Math.abs(spans(locked) - 0.52) < 0.02); // 31 minutes, each part rounded
 });
 
