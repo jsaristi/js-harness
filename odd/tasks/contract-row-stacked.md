@@ -85,3 +85,10 @@ Nothing: landing it is the owner's, through the lead.
   creation commit and was taken for a copy, so the range was read whole. A copy is now a ref that holds a commit of
   HEAD's first-parent line past the base; a merge brings the base's commits off that line. Tested. Left open: a
   stacked branch rebased onto its base's later commits counts those commits as its own, as before this work.
+- L6 (2026-11-20, JH 245): recheck of d5c9768..5c3344d. Risk: 0 findings; reliability: 0 new, and L5's open case
+  rechecked as not fixed (WARNING, not blocking), answered here, not fixed: it is the case left open. After `git rebase`
+  onto the base's later commits, or a fast-forward `git merge` of them while the stacked branch has no merge commit of
+  its own, those commits sit on HEAD's first-parent line past the creation commit, so the base's branch holds some of
+  them, is taken for a copy (`another` in `stackBaseOf`, bin/contract.mjs), and with no other holder the range is read
+  whole, `trunk..HEAD`, as before this work. Where another branch still holds the base alone, those commits are read as
+  the branch's own. Either way the gate reads more than the branch's own commits, never less: stricter, not looser.
