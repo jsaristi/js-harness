@@ -4,7 +4,7 @@ Locator: `odd/tasks/closed-app-update.md` · Engram mirror: `odd/closed-app-upda
 `claude/jh258-closed-app-update-f970c8` · Delivery: `ask-on-risk` · Runner: `node --test`
 
 ## State
-T1-T4 built and tested: `stack can-close` (live on 2026-11-20 it said no and named JH PLAN's background shell);
+T1-T4 and T4b built and tested (T4b: after engram moves, prepare runs `stack engram-prompt off` and checks that the engram plugin's `UserPromptSubmit` entries count 0); `stack can-close` (live on 2026-11-20 it said no and named JH PLAN's background shell);
 `stack upgrade --round --dry-run` exits 0 here, one line a tool; `--prepare` and `--switch` run only in tests with a
 scratch home. Not built: doctor's row that reads `last.json` (the record is written; doctor does not read it yet).
 Not run on this machine: `--prepare` and `--switch` (high-risk item 5). Open: the two questions of `## Ask me before` (sent to the lead), Codex's review
@@ -118,6 +118,7 @@ Sent to the lead as questions, one at a time, after this design:
 - [x] T2 (kind: build) S4, `stack can-close` — route: inline — commit: feat(stack): can-close
 - [x] T3 (kind: build) S1, S2, the list and `--round --dry-run` — route: inline — commit: feat(stack): round plan
 - [x] T4 (kind: build) S1, S3, `--prepare` and `--switch` with undo and record — route: inline — commit: feat(stack): round switch
+- [x] T4b (kind: build) S2, after the engram update the round re-applies `stack engram-prompt off` (D8), checked by the hook-entries count — route: inline — commit: feat(stack): re-apply engram-prompt off
 - [ ] T5 (kind: verify) lenses recorded, Codex skip recorded, verifier asked of the lead, draft pull request
 
 ## Log
@@ -131,3 +132,9 @@ Sent to the lead as questions, one at a time, after this design:
 - L4 Evidence, 19:48Z: the refutation of the Depth pass, item 4.
 - L5 Decided by this session, cost said: the command is a form of `stack upgrade` (`--round`) and `stack can-close`,
   not a new top-level command, since `stack` already owns installing and upgrading the stack's tools.
+- L6 (JH 259, 2026-11-20): the lead's brief, step 1: after the round updates the engram plugin it re-applies
+  `js-harness stack engram-prompt off` (his D8, question 221), checked by the hook-entries count, because the plugin's
+  0.1.23 that day brought the hook back and the hook entries row of check refused every commit. Built as one more
+  prepare step after `stack upgrade --tool engram --tool engram-plugin`; its check counts the live entries of owner
+  `engram@engram` and event `UserPromptSubmit` in the home (`liveEntries`, ./hook-count.mjs) and passes at 0; it has no
+  undo (putting the hook back is `stack engram-prompt on`, named as its way back). A failed count stops the phase.

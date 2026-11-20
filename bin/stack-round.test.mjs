@@ -104,6 +104,54 @@ test('an elevated step not elevated starts the switch elevated once, and runs no
   assert.match(d.lines.join('\n'), /left no record/);
 });
 
+/** A scratch home where the engram plugin is enabled and its hooks file holds `events`, as Claude Code reads them. */
+function engramHooks(home, events) {
+  const plugin = path.join(home, 'plugins', 'engram');
+  fs.mkdirSync(path.join(plugin, 'hooks'), { recursive: true });
+  fs.mkdirSync(path.join(home, '.claude', 'plugins'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'engram@engram': true } }));
+  fs.writeFileSync(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ plugins: { 'engram@engram': [{ scope: 'user', installPath: plugin }] } }));
+  const hooks = Object.fromEntries(events.map((event) => [event, [{ hooks: [{ type: 'command', command: `engram hook ${event}` }] }]]));
+  fs.writeFileSync(path.join(plugin, 'hooks', 'hooks.json'), JSON.stringify({ hooks }));
+}
+
+/** READ with engram behind, so prepare updates it and re-applies D8. */
+const ENGRAM_BEHIND = async () => {
+  const read = await READ();
+  return { ...read, tools: read.tools.map((t) => (t.id === 'engram' ? { ...t, installed: '3.7.2', newest: '3.8.0' } : t)) };
+};
+
+/** deps whose fake commands say engram is at 3.8.0 once updated. */
+function engramDeps() {
+  const d = deps({ read: ENGRAM_BEHIND });
+  d.deps.run = (command, args) => {
+    d.ran.push([command, ...args].join(' '));
+    return { status: 0, stdout: command === 'engram' ? 'engram 3.8.0' : '' };
+  };
+  return d;
+}
+
+test('prepare re-applies engram-prompt off after the engram update, and stops while the hook entries still count one', async (t) => {
+  const home = scratch(t);
+  engramHooks(home, ['SessionStart', 'UserPromptSubmit']);
+  const d = engramDeps();
+  assert.equal(await stackRoundMain(['--round', '--prepare', '--yes', '--home', home], {}, d.deps), 1, 'the fake off left the hook there');
+  const upgrade = d.ran.findIndex((line) => line.includes('stack upgrade --tool engram'));
+  const off = d.ran.indexOf(`node js-harness.mjs stack engram-prompt off --home ${home}`);
+  assert.ok(upgrade !== -1 && off > upgrade, d.ran.join('\n'));
+  const last = JSON.parse(fs.readFileSync(path.join(roundDirOf(home), 'last.json'), 'utf8'));
+  assert.deepEqual(last.steps.slice(0, 2).map((s) => [s.outcome, s.saw]), [['done', '3.8.0'], ['failed', '1 entry']]);
+});
+
+test('prepare passes the hook-entries check once the hook is out', async (t) => {
+  const home = scratch(t);
+  engramHooks(home, ['SessionStart']);
+  const d = engramDeps();
+  assert.equal(await stackRoundMain(['--round', '--prepare', '--yes', '--home', home], {}, d.deps), 0);
+  const last = JSON.parse(fs.readFileSync(path.join(roundDirOf(home), 'last.json'), 'utf8'));
+  assert.deepEqual(last.steps.map((s) => s.outcome), ['done', 'done']);
+});
+
 test('without --yes and with no terminal nothing runs', async (t) => {
   const home = scratch(t);
   const d = deps();

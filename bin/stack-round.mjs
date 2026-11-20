@@ -16,6 +16,7 @@ import { unknownArgument } from './lib/args.mjs';
 import { quoteWindowsArg, windowsCommandLine } from './lib/windows-args.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { QUIESCE } from './lib/stack-backup.mjs';
+import { liveEntries, ownerOf } from './lib/hook-count.mjs';
 import { planRound, readRound, renderRound, roundDir, runPhase } from './lib/update-round.mjs';
 
 export const ROUND_USAGE = 'Usage: js-harness stack upgrade --round --dry-run|--prepare|--switch [--yes] [--home <path>] [--json]';
@@ -70,6 +71,7 @@ function seams(deps) {
     relaunch: deps.relaunch ?? relaunchElevated,
     ask: deps.ask ?? (process.stdin.isTTY ? askOnce : null),
     fs: deps.fs ?? fs,
+    hookEntries: deps.hookEntries ?? null,
     now: deps.now ?? (() => new Date()),
     log: deps.log ?? ((line) => console.log(line)),
     error: deps.error ?? ((line) => console.error(line)),
@@ -77,7 +79,7 @@ function seams(deps) {
 }
 
 /** Runs one phase and writes its log and `last.json`; returns the exit code. */
-function runAndRecord(phase, steps, dir, io) {
+function runAndRecord(phase, steps, dir, home, io) {
   const stamp = io.now().toISOString();
   const logFile = path.join(dir, `round-${stamp.replace(/[:.]/g, '-')}.log`);
   const lines = [];
@@ -91,6 +93,8 @@ function runAndRecord(phase, steps, dir, io) {
     exists: (file) => io.fs.existsSync(file),
     copy: (from, to) => io.fs.copyFileSync(from, to),
     list: (folder) => (io.fs.existsSync(folder) ? io.fs.readdirSync(folder) : []),
+    // Counted in the home alone: the plugin's hook is user-level, and a project's settings say nothing of its file.
+    hookEntries: io.hookEntries ?? ((owner, event) => liveEntries(home, home).filter((entry) => entry.event === event && ownerOf(entry) === owner).length),
     log,
   });
   io.fs.mkdirSync(dir, { recursive: true });
@@ -156,11 +160,11 @@ export async function stackRoundMain(argv, env = process.env, deps = {}) {
       for (const step of record.steps) io.log(`  ${step.outcome}: ${step.what}`);
       return record.ok ? 0 : 1;
     }
-    return runAndRecord('switch', plan.switch, dir, io);
+    return runAndRecord('switch', plan.switch, dir, home, io);
   }
 
   const read = await (deps.read ?? readRound)({ run: io.run, fetchJson: io.fetchJson, readFile: (file) => io.fs.readFileSync(file, 'utf8') });
-  const plan = { at: io.now().toISOString(), ...planRound(read, { harness: deps.harness ?? HARNESS }) };
+  const plan = { at: io.now().toISOString(), ...planRound(read, { harness: deps.harness ?? HARNESS, home: given ?? null }) };
   if (argv.includes('--json')) io.log(JSON.stringify(plan, null, 2));
   else for (const line of renderRound(plan)) io.log(line);
   if (phases[0] === '--dry-run') return 0;
@@ -172,7 +176,7 @@ export async function stackRoundMain(argv, env = process.env, deps = {}) {
   // The plan, with every undo the switch needs, is written before the first step runs.
   io.fs.mkdirSync(dir, { recursive: true });
   io.fs.writeFileSync(planFile, `${JSON.stringify(plan, null, 2)}\n`);
-  const code = runAndRecord('prepare', plan.prepare, dir, io);
+  const code = runAndRecord('prepare', plan.prepare, dir, home, io);
   if (code === 0 && plan.switch.length > 0) io.log('next, with Claude Desktop closed, in a plain PowerShell window: js-harness stack upgrade --round --switch');
   return code;
 }

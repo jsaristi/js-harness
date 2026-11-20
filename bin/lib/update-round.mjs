@@ -7,6 +7,7 @@
 // Pure where it can be: `readRound` and `runPhase` take every spawn, fetch and file call as a seam, and `planRound`
 // and `renderRound` spawn nothing. The command is bin/stack-round.mjs.
 import path from 'node:path';
+import { ENGRAM_PLUGIN, PROMPT_EVENT } from './engram-prompt-hook.mjs';
 
 const SEMVER = /(\d+)\.(\d+)\.(\d+)/;
 /** The first `x.y.z` of a version text, or `null`. */
@@ -136,8 +137,9 @@ export function nodeSteps({ from, to, nvmRoot, nodeDir, packages }) {
 /** The round's plan for what `readRound` read: `{ rows, prepare, switch }`. Each row is `{ tool, from, to, move, why }`,
  * `move` one of `current`, `prepare`, `switch`, `self`, `report`, `unknown`; `prepare` and `switch` are the steps of
  * each phase, in order, each `{ tool, what, kind, words, check, undo, wayBack?, elevate? }`. `folderPackages`, the
- * node folder's packages with their newest versions, go into a new node folder when node moves. */
-export function planRound(read, { harness }) {
+ * node folder's packages with their newest versions, go into a new node folder when node moves. `home`, when the
+ * round was given one, is passed to the steps that act on a home. */
+export function planRound(read, { harness, home = null }) {
   const rows = [];
   const prepare = [];
   const swap = [];
@@ -170,6 +172,9 @@ export function planRound(read, { harness }) {
     if (tool.how === 'harness') {
       const words = [...harness, 'stack', 'upgrade', ...tool.tools.flatMap((t) => ['--tool', t]), '--yes'];
       prepare.push({ tool: tool.id, what: `update ${tool.tools.join(' and ')} through stack upgrade`, kind: 'run', words, check, undo: null, wayBack: 'js-harness uninstall machine takes it back: stack upgrade records it' });
+      // A plugin update writes a new hooks file with the prompt hook D8 took out (his answer to question 221): on
+      // 2026-11-20 the plugin's 0.1.23 brought it back and the hook entries row of check refused every commit.
+      prepare.push({ tool: tool.id, what: 'take the engram plugin\'s prompt hook out again (stack engram-prompt off, D8)', kind: 'run', words: [...harness, 'stack', 'engram-prompt', 'off', ...(home ? ['--home', home] : [])], check: { hookEntries: { owner: ENGRAM_PLUGIN, event: PROMPT_EVENT }, expect: 0 }, undo: null, wayBack: 'js-harness stack engram-prompt on puts the hook back' });
       row('prepare');
       continue;
     }
@@ -230,7 +235,7 @@ export function renderRound(plan) {
 }
 
 /** Whether a step's check holds now, and what it saw. */
-function checked(step, { run, readFile, exists }) {
+function checked(step, { run, readFile, exists, hookEntries }) {
   const c = step.check;
   if (!c) return { ok: true, saw: 'no check' };
   if (c.words) {
@@ -239,6 +244,11 @@ function checked(step, { run, readFile, exists }) {
     return { ok: saw === c.expect, saw: saw ?? `exit ${said.status}` };
   }
   if (c.exists) return { ok: exists(c.exists), saw: exists(c.exists) ? 'there' : 'missing' };
+  if (c.hookEntries) {
+    if (!hookEntries) return { ok: false, saw: 'the hook entries could not be counted' };
+    const n = hookEntries(c.hookEntries.owner, c.hookEntries.event);
+    return { ok: n === c.expect, saw: `${n} ${n === 1 ? 'entry' : 'entries'}` };
+  }
   if (c.packageVersion) {
     let saw = null;
     try {
@@ -258,7 +268,8 @@ function checked(step, { run, readFile, exists }) {
 /** Runs `steps` in order: each one, then its check; a check that fails runs that step's undo, checks nothing more and
  * stops, so what ran before it stays and is reported. Returns `{ ok, steps: [{ tool, what, outcome, saw }] }`,
  * `outcome` one of `done`, `undone`, `failed` (no undo, or the undo failed), `not run`. `io` holds the seams: `run`,
- * `readFile`, `exists`, `copy(from, to)`, `list(dir)`, `log(line)`. A `compare` step fails on a name the old folder
+ * `readFile`, `exists`, `copy(from, to)`, `list(dir)`, `log(line)` and `hookEntries(owner, event)`, the count of the
+ * hook entries Claude Code runs for that owner and event (./hook-count.mjs). A `compare` step fails on a name the old folder
  * has and the new one lacks, at its root or in `node_modules`. */
 export function runPhase(steps, io) {
   const out = [];

@@ -82,6 +82,26 @@ test('engram moves through stack upgrade, so uninstall machine keeps its record'
   assert.deepEqual(step.check, { words: ['engram', 'version'], expect: '3.8.0' });
 });
 
+test('after engram moves, the round takes its plugin\'s prompt hook out again (D8), checked by the hook-entries count', () => {
+  const [upgrade, off] = plan({ engram: ['3.7.2', '3.8.0'] }).prepare;
+  assert.ok(upgrade.words.includes('upgrade'), 'the update comes first');
+  assert.deepEqual(off.words, [...HARNESS, 'stack', 'engram-prompt', 'off']);
+  assert.deepEqual(off.check, { hookEntries: { owner: 'engram@engram', event: 'UserPromptSubmit' }, expect: 0 });
+  assert.equal(off.undo, null, 'putting the hook back is no undo of a round');
+  assert.match(off.wayBack, /stack engram-prompt on/);
+  const other = planRound(machine({ engram: ['3.7.2', '3.8.0'] }), { harness: HARNESS, home: 'D:\\scratch' }).prepare[1];
+  assert.deepEqual(other.words.slice(-2), ['--home', 'D:\\scratch'], 'a round run on another home takes it out there');
+  assert.equal(plan().prepare.some((s) => s.words?.includes('engram-prompt')), false, 'no engram update, no step');
+});
+
+test('the hook-entries check passes at no entry, fails while the hook is back, and fails when it cannot count', () => {
+  const [, off] = plan({ engram: ['3.7.2', '3.8.0'] }).prepare;
+  assert.deepEqual(runPhase([off], { ...io(), hookEntries: () => 0 }).steps.map((s) => [s.outcome, s.saw]), [['done', '0 entries']]);
+  const back = runPhase([off], { ...io(), hookEntries: (owner, event) => (owner === 'engram@engram' && event === 'UserPromptSubmit' ? 1 : 0) });
+  assert.deepEqual([back.ok, back.steps[0].outcome, back.steps[0].saw], [false, 'failed', '1 entry']);
+  assert.equal(runPhase([off], io()).steps[0].outcome, 'failed', 'no count is no pass');
+});
+
 test('a tool whose version or newest could not be read is unknown, never moved', () => {
   const p = plan({ gh: [null, '2.106.0'], ctx7: ['0.12.2', null] });
   assert.deepEqual(p.rows.filter((r) => r.move === 'unknown').map((r) => r.tool), ['ctx7', 'gh']);
