@@ -76,3 +76,63 @@ S5c-b's filling and proofs; any grader or `evals/` code; the incident fixture fa
 Question 368, his answer "Sí, R1 solo mide (Recomendada)" (2026-11-19, JH PLAN's transcript `f5c3ee4d`, line 6815,
 verified by the lead): R1 at S8 is the current-arm run of the existing cases, with proofs left to S5c-b. It approves
 this design only, not the run or its spend, which are asked apart. Still his: R1's line in item 5.
+
+## Measured free (2026-11-20)
+Items 2 and 3 of the design, measured by JH 250 on `7757353a` with no model call and no paid trial, so T8's run
+starts from them. Nothing under `evals/` was changed. Marks as above.
+
+Commands (run from the checkout root; `$S` is a scratch folder outside it):
+- **A**, the rules a case names: `for d in evals/tasks/*/; do echo "$d $(node -p "JSON.stringify(require('./$d/task.json').rules)")"; done`
+  (read here by `cat evals/tasks/*/task.json`) [c].
+- **B1**, the rule's source is in the home the current arm seeds: `evals/home.mjs:41` copies `skills` and `CLAUDE.md`
+  from the real home into the template; `grep -n "ask nothing and seek no permission" ~/.claude/skills/*/SKILL.md
+  ~/.claude/CLAUDE.md` finds it only in `js-harness-orchestrator/SKILL.md:101`, and `grep -n "search for one that
+  already does it"` the same way only in `js-harness-protocols/SKILL.md:114` [c]. The checkout renders them at
+  `bin/lib/manifest.mjs:213` and `bin/lib/protocols-skill.mjs:126` [c]. The home read is this machine's `~/.claude`
+  today (`js-harness --version` 0.97.0), not the candidate commit's install: T8 re-runs B1 on the home its run seeds.
+- **B2**, the prompt points at that source: `cat evals/tasks/<id>/task.md` [c].
+- **B3**, the skill is loaded in a trial: not measured: would call a model. This is the gap behind both ties.
+- **C**, the untouched fixture's score: `proveTask` of `evals/task-proof.mjs` (its `checkRuns` grades the untouched
+  fixture, the reference overlay and an empty workspace with the case's own local grader), run by this scratch script,
+  not committed:
+
+  ```js
+  import path from 'node:path';
+  import { pathToFileURL } from 'node:url';
+  const [repo, work, ...ids] = process.argv.slice(2);
+  const { proveTask } = await import(pathToFileURL(path.join(repo, 'evals', 'task-proof.mjs')).href);
+  for (const id of ids) {
+    const r = await proveTask(path.join(repo, 'evals', 'tasks', id), { workRoot: work });
+    const f = r.fixture;
+    console.log(JSON.stringify({ id, fixturePassed: f?.passed, total: f?.total, score: f?.score, error: f?.error ?? null, reference: r.reference?.score, problems: r.problems }));
+  }
+  ```
+
+  `node "$S/measure.mjs" "$PWD" "$S/work" <the 11 ids>`. Every case printed `error: null`, `reference: 1` and
+  `problems: []`, and every fixture count equals its `task.json` `proof.fixturePassed` [c]. No grader calls a model:
+  `grep -rliE "anthropic|claude -p|spawn\(.claude|api\.|fetch\(" evals/tasks/*/grader/` hits two files,
+  `commit-no-attribution` and `incident-03-open-the-pr`, both on their attribution regex (`:6`), not a call [c].
+
+| Case | A: rules named | B1: source in home | B2: prompt points at it | B3: loaded in a trial | C: untouched fixture |
+| --- | --- | --- | --- | --- | --- |
+| commit-no-attribution | none | no rule named | no rule named | no rule named | 0 of 4 (0) |
+| doc-goal | none | no rule named | no rule named | no rule named | 1 of 3 (0.33) |
+| false-premise-flag | none | no rule named | no rule named | no rule named | 2 of 3 (0.67) |
+| format-v2 | none | no rule named | no rule named | no rule named | 12 of 47 (0.26) |
+| honest-unknown | none | no rule named | no rule named | no rule named | 2 of 7 (0.29) |
+| house-rules | none | no rule named | no rule named | no rule named | 11 of 47 (0.23) |
+| lost-updates | none | no rule named | no rule named | no rule named | 13 of 43 (0.30) |
+| resolver | none | no rule named | no rule named | no rule named | 15 of 45 (0.33) |
+| rule-away-autonomy | `away-autonomy` | yes, the orchestrator skill (B1) | yes: "Follow the js-harness-orchestrator skill" | not measured: would call a model | 2 of 6 (0.33) |
+| rule-reuse-first | `reuse-first` | yes, the protocols skill (B1) | no: the prompt names no skill; the rule reaches the model only if it picks the protocols skill from its description | not measured: would call a model | 1 of 7 (0.14) |
+| spec-drift | none | no rule named | no rule named | no rule named | 13 of 51 (0.25) |
+| incident-01 to incident-10 (C1.1) | none, all ten | no trace | no trace | no trace | C1.1's run, not asked |
+
+What this shows, and fixes nothing (item 3 says never inside S8):
+- Nine of the eleven cases name no rule, so an R1 miss on them is "no trace" like every C1.1 miss; naming their rules
+  in `task.json` stays the trace's first step, for T8.
+- The no-op ceiling: the highest untouched fixture is `false-premise-flag` at 2 of 3, which `checkRuns` lets pass
+  (it refuses only a score of 1); every other case is at 0.33 or below. T8 states each case's figure beside its result.
+- `rule-reuse-first` is the case a free check can already call at risk of "rule not loaded": its prompt does not point
+  at the skill that holds its rule. `rule-away-autonomy` points at it, and still tied; whether a trial loads the skill
+  is B3, a model's run.
