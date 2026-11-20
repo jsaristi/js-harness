@@ -184,4 +184,8 @@ work's own review (held to the reset).
   transcript as waiting; both fixed before the table, with the main test covering each.
 - L4 The lenses (reliability, readability) found 7 points in the reader, all fixed with tests; one moved figures:
   an idle gap cut by the window's end had counted as work. Only the open period's 30-minute figures changed.
-- L5 Codex review of the reader held to the reset of 2026-11-23 23:45 (miniplan 10, "Budget").
+- L5 The lenses' follow-up on c6961b66, answered, not fixed: a session started in a plain subdirectory of the
+  checkout (folder `<slug>-workshop`) is no longer read, since its folder name cannot be told from a sibling project's
+  (`<slug>-site`); sessions here start in the checkout or a worktree, so the table loses none of tonight's rows (the
+  figures above did not change but the open period's 30-minute ones).
+- L6 Codex review of the reader held to the reset of 2026-11-23 23:45 (miniplan 10, "Budget").
