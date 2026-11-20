@@ -57,7 +57,9 @@ if (argv.includes('--bg')) {
     if (!state.rootCwd) cwd = worktree;
   }
   // A claude whose -w makes a worktree of its own, from HEAD, instead of taking the one start cut.
-  if (state.strayWorktree) spawnSync('git', ['worktree', 'add', '-q', '-b', 'stray', path.join(process.cwd(), '.claude', 'worktrees', state.strayWorktree, argv[argv.indexOf('-w') + 1])], { cwd: process.cwd() });
+  if (state.strayWorktree) spawnSync('git', ['worktree', 'add', '-q', '-b', 'stray', path.join(process.cwd(), '.claude', 'worktrees', 'stray')], { cwd: process.cwd() });
+  // Real claude locks the worktree it takes (claude 2.1.327, checked by hand): the fake does so with a cut one it takes.
+  else if (worktree && fs.existsSync(path.join(worktree, '.git'))) spawnSync('git', ['worktree', 'lock', worktree], { cwd: process.cwd() });
   // Another session of the repository adding a worktree of its own while this claude runs.
   if (state.otherWorktree) spawnSync('git', ['worktree', 'add', '-q', '-b', 'other-session', path.join(process.cwd(), '.claude', 'worktrees', 'other-session')], { cwd: process.cwd() });
   if (state.sibling) state.agents.push({ ...state.sibling, kind: 'background', startedAt: state.now, name, status: 'busy' });
@@ -519,18 +521,16 @@ test('sessions start --base says so, and records no base, when claude makes a wo
   patchState(world, { otherWorktree: true });
   const beside = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing', '--base', first]);
   assert.equal(beside.code, 0, beside.stderr);
-  assert.doesNotMatch(beside.stderr, /--base did not take/);
+  assert.doesNotMatch(beside.stderr, /--base is not confirmed/);
   assert.equal(startedLines(world)[0].base, first);
-  // One claude makes of its own under the name given, elsewhere, is: the base is said not taken, and none is recorded.
-  patchState(world, { otherWorktree: false, strayWorktree: 'elsewhere', nextId: 'c779ed44' });
+  // One claude makes of its own, whatever its name, leaves the cut unlocked: the base is said not taken, and none is recorded.
+  patchState(world, { otherWorktree: false, strayWorktree: true, nextId: 'c779ed44' });
   const result = js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief, '--worktree', 'again', '--base', first]);
   assert.equal(result.code, 0, result.stderr);
-  assert.match(result.stderr, /--base did not take/);
-  const stray = path.join(world.project, '.claude', 'worktrees', 'elsewhere', 'again');
-  assert.ok(result.stderr.includes(stray), result.stderr);
+  assert.match(result.stderr, /--base is not confirmed/);
+  assert.ok(result.stderr.includes(worktreeAt(world, 'stray')), result.stderr);
   const [, record] = startedLines(world);
   assert.equal(record.base, null);
-  assert.equal(path.resolve(record.worktreePath), stray);
 }));
 
 test('sessions start --base removes the worktree it cut when claude refuses, and keeps it when a session may run in it', withWorld((world) => {

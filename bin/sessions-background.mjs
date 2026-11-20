@@ -141,11 +141,13 @@ function uncut(run, root, { sha, place, branch }) {
   return unbranched.error || unbranched.status !== 0 ? `the branch ${branch} stays (${saidBy(unbranched)})` : null;
 }
 
-/** The folders `git worktree list` names for the checkout at `root`, or null when it cannot be read. */
+/** The worktrees `git worktree list` names for the checkout at `root`, each `{ folder, locked }`, or null when it cannot
+ * be read. */
 function worktreePaths(run, root) {
   const listed = run('git', ['worktree', 'list', '--porcelain'], { cwd: root });
   if (listed.error || listed.status !== 0) return null;
-  return String(listed.stdout).split(/\r?\n/).filter((line) => line.startsWith('worktree ')).map((line) => path.resolve(line.slice('worktree '.length)));
+  return String(listed.stdout).split(/\r?\n\r?\n/).map((block) => block.split(/\r?\n/)).filter((lines) => lines[0].startsWith('worktree '))
+    .map((lines) => ({ folder: path.resolve(lines[0].slice('worktree '.length)), locked: lines.some((line) => line === 'locked' || line.startsWith('locked ')) }));
 }
 
 /** The line a start or a resume prints for its Remote Control. */
@@ -394,19 +396,21 @@ export function sessionsStartMain(argv, given = {}) {
     stderr(`js-harness sessions start: claude printed no id for the session, and claude agents lists no new session titled ${JSON.stringify(parsed.title)} in this project, so nothing is recorded: if claude agents lists it later, claude stop <id> and claude rm <id> remove it; its brief stays at ${copy}${cut === null ? '' : `, and the worktree ${cut.place} cut from ${cut.sha.slice(0, 7)} stays, since the session may run in it`}\n${saidBy(result)}`);
     return 1;
   }
-  // claude -w takes the worktree cut only while its folder and branch are claude's own (`baseCut`): a worktree named
-  // as --worktree that appears beside it means claude cut one from HEAD, and the base is said not taken and not
-  // recorded. A worktree of another name is another session's, added at the same moment (the lenses on
-  // edd772a..90bb5ae). Only what claude made before it returned is seen; a listing that fails checks nothing, said so.
+  // claude -w takes the worktree cut only while its folder and branch are claude's own (`baseCut`), and locks the one it
+  // takes (claude 2.1.327, checked by hand). The base is taken when the cut is locked after claude ran, or when no
+  // worktree appeared beside it; otherwise a new one may be claude's own, cut from HEAD, whatever its name, or another
+  // session's added at the same moment (the lenses on edd772a..90bb5ae and 90bb5ae..5350d2d), and the base is said
+  // not confirmed and not recorded. A listing that fails confirms nothing, said so.
   const worktreesAfter = cut === null ? null : worktreePaths(run, root);
   const unchecked = cut !== null && (worktreesBefore === null || worktreesAfter === null);
-  const strays = cut === null || unchecked ? [] : worktreesAfter.filter((folder) => path.basename(folder) === parsed.worktree && !worktreesBefore.some((was) => within(folder, was) && within(was, folder)));
+  const fresh = cut === null || unchecked ? [] : worktreesAfter.filter(({ folder }) => !worktreesBefore.some((was) => within(folder, was.folder) && within(was.folder, folder))).map(({ folder }) => folder);
+  const cutLocked = !unchecked && cut !== null && worktreesAfter.some(({ folder, locked }) => locked && within(folder, cut.place) && within(cut.place, folder));
+  const baseTaken = cut !== null && !unchecked && (cutLocked || fresh.length === 0);
   if (unchecked) stderr(`js-harness sessions start: git worktree list could not be read, so whether claude took the worktree ${cut.place} cut from ${cut.sha.slice(0, 7)} is not checked, and no base is recorded`);
-  if (strays.length > 0) stderr(`js-harness sessions start: --base did not take: claude made the worktree ${strays.join(', ')} of its own beside ${cut.place}, cut from ${cut.sha.slice(0, 7)}, which stays; the session runs from claude's`);
-  const baseTaken = cut !== null && !unchecked && strays.length === 0;
+  else if (cut !== null && !baseTaken) stderr(`js-harness sessions start: --base is not confirmed: claude holds no lock on ${cut.place}, cut from ${cut.sha.slice(0, 7)}, which stays, and ${fresh.join(', ')} appeared while it ran, which may be a worktree of its own cut from HEAD; no base is recorded: look at both before the session works`);
   const entry = {
     event: 'started', at: new Date(now()).toISOString(), id, sessionId: agent?.sessionId ?? null, title: parsed.title, root, cwd,
-    worktree: parsed.worktree ?? null, base: baseTaken ? cut.sha : null, worktreePath: worktreeOf({ root, worktree: parsed.worktree, worktreePath: strays.length === 1 ? strays[0] : agent?.cwd }), model: model ?? null, effort: effort ?? null, advisor: advisor ?? null, remoteControl: parsed.remoteControl, brief: copy,
+    worktree: parsed.worktree ?? null, base: baseTaken ? cut.sha : null, worktreePath: worktreeOf({ root, worktree: parsed.worktree, worktreePath: agent?.cwd }), model: model ?? null, effort: effort ?? null, advisor: advisor ?? null, remoteControl: parsed.remoteControl, brief: copy,
   };
   try {
     appendRecord(home, entry);
