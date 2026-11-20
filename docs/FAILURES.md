@@ -106,6 +106,17 @@ commits of `main` and answer with a range many times too large.
 - Control: check — bin/check-codex-reviews.test.mjs — "after main is merged in, the push row hints
   the base the plain row sizes" — since 2026-10-14
 
+### away-hours-no-work
+He left the sessions alone for hours and the work did not move: `rule:away-autonomy` asks the work to go on while he
+is away, and nothing made the sessions take more work once the briefs they held ended or waited.
+- Class: rule-not-acting
+- Seen: 2026-11-19 — JH PLAN's transcript f5c3ee4d, line 7527 (checked with `js-harness sessions --quote`); the
+  lead's notes, plan-2026-11-18-away.state.md, the entries of 11:25 and 15:30, and
+  miniplan-010-away-hours-produce-work.md, "What is known" (not measured) — the night of 2026-11-18 to 19, about 8
+  hours away, he read "el avance de fue nulo": the map moved 0 points, about 3.5 h worked of 10; the work waited on
+  a start only his typed turn allows, his typed words, the held Codex gate, and no next brief for a session that
+  finished
+
 ### block-read-as-task
 A block meant to hold his answer was worded as an instruction and he read it as a task for him to
 run.
@@ -1992,6 +2003,16 @@ after it was made: nothing measured the spend against the figure while the work 
 - Seen: 2026-11-19 — relief file, line 3463 (the lead's own); the lead's notes, return-block-2.md, "Question 378" —
   JH 236 (S8 T6) spent 12.74M cache-read against the lead's estimate of 3M to 6M and passed its 9M stop line before
   it stopped, its two open items not started; the estimate rested on no measured session of that kind
+- Seen: 2026-11-19 — relief file, line 3471; the lead's notes, jh237-state.md — JH 237, sent to finish JH 236's two
+  items with a 6M stop line, stopped at 8.03M cache-read, past the line
+- Seen: 2026-11-19 — relief file, lines 3435 and 3446; the channel record, line 3744 (the senior's message to him) —
+  the senior (JH SR) closed T10 at 14.56M cache-read against about 5M for its fourth round (question 362) and 1M to
+  2M to close (question 374); the fourth round alone read 8.07M against 5.2M estimated, past its 7.8M line
+- Seen: 2026-11-19 — this session's transcript e4f84f70, its `cache_read_input_tokens` summed (JH 238's own) — JH 238,
+  a documents-only brief with a 6M stop line, first read its spend at 8.54M, when the lead's second brief asked for
+  it. The fourth session in one day, after JH SR, JH 236 and JH 237, that read its spend after its line and not
+  before it: no command prints a session's cumulative cache-read against its line (the spend check in the roadmap's
+  Later list)
 
 ### stack-update-moved-hooks
 A tool of the stack was updated on purpose without the hook count read after it, so a hook entry the update added was
