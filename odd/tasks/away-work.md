@@ -269,7 +269,7 @@ From the tables, in the sitting at his return (miniplan 10), one decision a ques
    with its commits or goal check, and at least one hand-over and its work are checked against the approved plan.
 
 ## What the double read changed
-Read `9ebe3e0d` (Claude on claude-opus-5-5, Codex on gpt-6.2-sol, blind, one frozen copy at cb9cdc77): 26 findings,
+Read `9ebe3e0d` (Claude on claude-opus-5-5, Codex on the model of `rule:review-model`, blind, one frozen copy at cb9cdc77): 26 findings,
 7 high; all taken, recorded with `js-harness double-review take`.
 - Both readers: progress measured by output, not hours, and his whole sentence with tier 2's result (claude 1, 2;
   codex 1); the per-gate causes and question times (claude 5, 10; codex 3); gate 3 split (claude 4; codex 8); the
