@@ -113,13 +113,13 @@ No session was started: `away-starts.md` reads `none` (miniplan 7 step 3, "If no
 
 | Session | Working h | Waiting h | Longest wait, ended by | Wait on |
 |---|---|---|---|---|
-| JH PLAN | 1.93 / 2.40 | 0.46 / 0 | 0.27 h, nothing | none: its turn opened by his 21:36Z message ran to 23:43Z |
+| JH PLAN | 1.93 / 2.12 | 0.46 / 0.27 | 0.27 h, nothing | none: its turn opened by his 21:36Z message ran to 23:43Z |
 | JH ORQ (d6383aea) | 0.72 / 0.72 | 1.68 / 1.68 | 1.68 h from 21:48Z, a session's message | not known |
 | JH 238, 239, 240, 241 | 0.29 to 0.56 / 0.29 to 0.56 | 0 to 0.17 | | none; started 23:26Z, 1.83 h after his last entry, by the Plan's turn |
 | JH 237 · PR 930 items | 0.19 / 0.19 | 2.21 / 2.21 | 2.21 h from 21:47Z, nothing | something else: stopped past its Claude stop line, 8.03M of 6M (`return-block-2.md:53`) |
-| JH 236 · S8 T6 | 0.08 / 0.50 | 2.32 / 1.89 | 1.89 h from 21:36Z, a session's message | something else: stopped past its stop line, 12.74M of 9M (`return-block-2.md:47`) |
-| JH 230 · alignment audit | 0.01 / 0.41 | 2.39 / 1.98 | 1.98 h, a task event | a decision of his and the Codex gate (`return-block-2.md`, "After the reset") |
-| Total, 9 sessions | 4.71 / 6.16 | 9.23 / 7.76 | | 28 more sessions have no entry inside |
+| JH 236 · S8 T6 | 0.08 / 0.08 | 2.32 / 2.32 | 1.89 h from 21:36Z, a session's message | something else: stopped past its stop line, 12.74M of 9M (`return-block-2.md:47`) |
+| JH 230 · alignment audit | 0.01 / 0.01 | 2.39 / 2.39 | 1.98 h, a task event | a decision of his and the Codex gate (`return-block-2.md`, "After the reset") |
+| Total, 9 sessions | 4.71 / 5.06 | 9.23 / 8.87 | | 28 more sessions have no entry inside |
 
 What the table cannot say: whether a session with no entry inside was open; whether a wait ended by a task event was
 its own background work (work) or a watch (waiting); a running gate is counted as work even while it queued for the lock.
@@ -182,4 +182,6 @@ work's own review (held to the reset).
   does not name (2026-11-17 day, 2026-11-17/18 night). His last entry is 16:36 local, not 18:10.
 - L3 Evidence: the reader first missed sibling worktrees (`D--js-harness-worktrees-…`) and counted every old
   transcript as waiting; both fixed before the table, with the main test covering each.
-- L4 Codex review of the reader held to the reset of 2026-11-23 23:45 (miniplan 10, "Budget").
+- L4 The lenses (reliability, readability) found 7 points in the reader, all fixed with tests; one moved figures:
+  an idle gap cut by the window's end had counted as work. Only the open period's 30-minute figures changed.
+- L5 Codex review of the reader held to the reset of 2026-11-23 23:45 (miniplan 10, "Budget").

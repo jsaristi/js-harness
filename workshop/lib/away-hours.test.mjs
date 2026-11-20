@@ -50,6 +50,9 @@ test('the span is cut to the window, a session idle all of it waits all of it, a
   assert.deepEqual([idle.workingHours, idle.waitingHours, idle.waits.length], [0, 0.33, 1]);
   const none = activityOf([reply('15:00')], { from: Date.parse(at('09:20')), to: Date.parse(at('09:40')), idleMs: 10 * 60_000 });
   assert.deepEqual([none.workingHours, none.waitingHours, none.waits.length], [0, 0, 0]);
+  // A gap of 30 minutes cut by the window's end after 5 is still a wait: it is judged whole.
+  const cut = activityOf([reply('09:00'), typed('09:30')], { from: Date.parse(at('09:00')), to: Date.parse(at('09:05')), idleMs: 10 * 60_000 });
+  assert.deepEqual([cut.workingHours, cut.waitingHours], [0, 0.08]);
 });
 
 test('what ended a wait is read from the entry that ended it', () => {
@@ -75,6 +78,7 @@ test('main reads the project and sibling worktree folders of a temp Claude home,
   write(`${slug}-worktrees-x`, 'bbbbbbbb-2', [{ type: 'custom-title', customTitle: 'JH 2 · work' }, reply('10:00', 'go', [{ name: 'Bash' }]), result('10:30'), reply('10:31')]);
   write(`${slug}--claude-worktrees-y`, 'cccccccc-3', [{ type: 'custom-title', customTitle: 'JH 3 · idle' }, reply('08:00')]);
   write('other-project', 'dddddddd-4', [typed('11:00')]);
+  write(`${slug}-site`, 'eeeeeeee-5', [typed('11:00')]); // a sibling project, not a worktree: its message is not his absence's
   const lines = [];
   try {
     assert.equal(main(['--since', at('00:00'), '--now', at('14:00'), '--root', root], { claudeHome: home, print: (line) => lines.push(line) }), 0);
@@ -86,6 +90,8 @@ test('main reads the project and sibling worktree folders of a temp Claude home,
     assert.match(lines[0], /^window .*: 1 h/);
     assert.throws(() => main(['--since', at('00:00'), '--from', at('10:00')], { claudeHome: home }), /go together/);
     assert.throws(() => main(['--bogus'], { claudeHome: home }), /unknown argument: --bogus/);
+    assert.throws(() => main(['--since', 'yesterday'], { claudeHome: home }), /--since is a time/);
+    assert.throws(() => main(['--since', at('00:00'), '--idle', 'ten'], { claudeHome: home }), /--idle is a number/);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

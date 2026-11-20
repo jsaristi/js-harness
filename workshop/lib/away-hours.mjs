@@ -5,12 +5,15 @@
 // What it reads, each by the rule that already says it: his messages by `quoteOf`'s (`personTimesOf`, a tapped answer
 // is his too), and an absence as a gap between two of them longer than `ABSENCE_MS`, the return check's; the sessions
 // as the transcripts of the project's folders under the Claude home. A gap between two entries of a session is work
-// when it is short (`idleMs`) or when the session's own tool call runs under it, and a wait when the session had
-// closed its turn or its pending call is itself a wait (a question, `js-harness wait`, a watch). A background run
+// when it is short (`idleMs`, measured to the next entry even past the window's end) or when the session's own tool
+// call runs under it; any other gap is a wait, and so is one under a call that itself waits (a question, `js-harness
+// wait`, a watch, a `sleep`). The rule does not read whether the turn had closed: a model thinking longer than
+// `idleMs` with no call pending reads as waiting, which is why the totals are printed at two limits. A background run
 // shows as a wait ended by its task's notice: the table names that ending so the reader can tell it apart.
 //
 // Read-only and wired into nothing: run it by hand, `node workshop/lib/away-hours.mjs --since <iso> [--now <iso>]
-// [--idle <minutes>] [--json]`. The functions above `main` take inline values; `main` reads the transcripts.
+// [--idle <minutes>] [--root <checkout>] [--from <iso> --to <iso>] [--json]`; `--from` and `--to` measure one window a
+// record names instead of his absences. The functions above `main` take inline values; `main` reads the transcripts.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -65,7 +68,7 @@ function waitCallOf(entry) {
 
 const callsTools = (entry) => entry?.type === 'assistant' && blocksOf(entry).some((block) => block?.type === 'tool_use');
 
-/** What `entry`, the one that ended a wait, is, in words; `undefined` when nothing came before the window's end. */
+/** What `entry`, the one that ended a wait, is, in words; 'nothing before the end' when `entry` is `undefined`. */
 export function endedBy(entry) {
   if (entry === undefined) return 'nothing before the end';
   const text = textOf(entry);
@@ -99,7 +102,9 @@ export function activityOf(entries, { from, to, idleMs }) {
     if (end <= inStart) continue;
     const span = end - inStart;
     const waitCall = callsTools(a) ? waitCallOf(a) : null;
-    const isWork = waitCall === null && (callsTools(a) || end - start <= idleMs);
+    // The gap is judged whole, to the next entry even past `to`: a window cut short does not turn idle time into work.
+    const gap = next === undefined ? Infinity : Date.parse(next.timestamp) - start;
+    const isWork = waitCall === null && (callsTools(a) || gap <= idleMs);
     if (isWork) {
       working += span;
       continue;
@@ -111,11 +116,13 @@ export function activityOf(entries, { from, to, idleMs }) {
   return { workingHours: hours(working), waitingHours: hours(waiting), inside, waits };
 }
 
-/** The project folders under `projectsDir` for the checkout at `root`: its own, its worktrees' under it, and the
- * sibling worktrees `CLAUDE.md` asks for (`<repo>-worktrees/<name>`), whose folder name only starts with the slug. */
+/** The project folders under `projectsDir` for the checkout at `root`: its own, its worktrees' under it
+ * (`<slug>--…`), and the sibling worktrees `CLAUDE.md` asks for (`<repo>-worktrees/<name>`); a sibling project whose
+ * path only starts with the checkout's (`<repo>-site`) is not one of them. */
 export function projectFolders(projectsDir, root) {
   const slug = path.resolve(root).replace(/[^A-Za-z0-9]/g, '-');
-  return fs.readdirSync(projectsDir).filter((name) => name === slug || name.startsWith(`${slug}-`)).map((name) => path.join(projectsDir, name));
+  const ours = (name) => name === slug || name.startsWith(`${slug}--`) || name.startsWith(`${slug}-worktrees-`);
+  return fs.readdirSync(projectsDir).filter(ours).map((name) => path.join(projectsDir, name));
 }
 
 const titleOf = (entries) => entries.filter((entry) => entry?.type === 'custom-title').at(-1)?.customTitle ?? '(no title)';
@@ -131,6 +138,10 @@ export function main(argv = process.argv.slice(2), { claudeHome = path.join(os.h
   }
   if (!flags.since) throw new Error('--since <iso> is required');
   if ((flags.from === undefined) !== (flags.to === undefined)) throw new Error('--from and --to go together');
+  for (const name of ['since', 'now', 'from', 'to']) {
+    if (flags[name] !== undefined && !Number.isFinite(Date.parse(flags[name]))) throw new Error(`--${name} is a time, not ${flags[name]}`);
+  }
+  if (!(Number(flags.idle) > 0)) throw new Error(`--idle is a number of minutes above 0, not ${flags.idle}`);
   const since = Date.parse(flags.since);
   const now = flags.now ? Date.parse(flags.now) : Date.now();
   const idleMs = Number(flags.idle) * 60_000;
