@@ -181,11 +181,11 @@ export function planRound(read, { harness, home = null }) {
     if (tool.how === 'nvm') {
       const packages = read.tools.filter((t) => ROUND.find((r) => r.id === t.id)?.spec && inNodeFolder({ ...t, how: ROUND.find((r) => r.id === t.id).how }))
         .map((t) => ({ spec: ROUND.find((r) => r.id === t.id).spec, version: t.newest ?? t.installed })).filter((p) => p.version);
-      const steps = nodeSteps({ from, to, nvmRoot: read.nvmRoot, nodeDir: read.nodeDir, packages });
       if (!nodeMoves) {
         row('unknown', 'nvm root not read');
         continue;
       }
+      const steps = nodeSteps({ from, to, nvmRoot: read.nvmRoot, nodeDir: read.nodeDir, packages });
       prepare.push(...steps.prepare);
       swap.push(...steps.switch);
       row('switch', `prepared beside ${from}, switched by nvm use`);
@@ -277,7 +277,7 @@ export function runPhase(steps, io) {
     io.log(`step ${i + 1}/${steps.length}: ${step.what}`);
     let failed = null;
     if (step.kind === 'run') {
-      const result = io.run(step.words[0], step.words.slice(1));
+      const result = io.run(step.words[0], step.words.slice(1), { step: true });
       if (result.error || result.status !== 0) failed = `${step.words.join(' ')} exited ${result.error ? result.error.message : result.status}`;
     } else if (step.kind === 'copy') {
       try {
@@ -300,7 +300,7 @@ export function runPhase(steps, io) {
     io.log(`  check failed: ${check.saw}`);
     let outcome = 'failed';
     if (step.undo) {
-      const undo = io.run(step.undo[0], step.undo.slice(1));
+      const undo = io.run(step.undo[0], step.undo.slice(1), { step: true });
       outcome = !undo.error && undo.status === 0 ? 'undone' : 'failed';
       io.log(`  undo ${step.undo.join(' ')}: ${outcome === 'undone' ? 'ran' : 'failed too'}`);
     } else if (step.wayBack) {

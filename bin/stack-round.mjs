@@ -19,14 +19,15 @@ import { QUIESCE } from './lib/stack-backup.mjs';
 import { liveEntries, ownerOf } from './lib/hook-count.mjs';
 import { planRound, readRound, renderRound, roundDir, runPhase } from './lib/update-round.mjs';
 
-export const ROUND_USAGE = 'Usage: js-harness stack upgrade --round --dry-run|--prepare|--switch [--yes] [--home <path>] [--json]';
+export const ROUND_USAGE = 'Usage: js-harness stack upgrade --round --dry-run [--json] | --prepare | --switch [--yes] [--home <path>]';
 const KNOWN = { valued: ['--home'], bare: ['--round', '--dry-run', '--prepare', '--switch', '--yes', '--json', '--elevated'] };
 const HARNESS = [process.execPath, fileURLToPath(new URL('./js-harness.mjs', import.meta.url))];
 
 /** A command run for its text. On Windows a bare name (`claude`, `codex`, `nvm`) may be a .cmd, which only a shell runs,
- * so it goes as one quoted command line; an absolute path or an .exe runs directly. */
-const text = (command, args) => {
-  const options = { encoding: 'utf8', windowsHide: true, timeout: 120000 };
+ * so it goes as one quoted command line; an absolute path or an .exe runs directly. A read is cut at two minutes; a
+ * step (`{ step: true }`) is never cut: a timeout kills only the shell, so an install would go on beside its undo. */
+const text = (command, args, { step = false } = {}) => {
+  const options = { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024, ...(step ? {} : { timeout: 120000 }) };
   if (process.platform !== 'win32' || /\.exe$/i.test(command) || path.isAbsolute(command)) return spawnSync(command, args, options);
   return spawnSync(windowsCommandLine(quoteWindowsArg(command), args), [], { ...options, shell: true });
 };
@@ -47,10 +48,18 @@ function processNames() {
 /** Whether this process runs elevated: `net session` answers only an administrator. */
 const elevated = () => spawnSync('net', ['session'], { windowsHide: true, stdio: 'ignore' }).status === 0;
 
+/** The PowerShell command that starts this same switch elevated and waits for it. `-ArgumentList` gets one command
+ * line, each argument quoted as node's C runtime reads it: Windows PowerShell joins an array of arguments with spaces
+ * and no quotes, so a path with a space would arrive split. */
+export function elevatedCommand(node, args) {
+  const single = (word) => `'${word.replace(/'/g, "''")}'`;
+  return `Start-Process -FilePath ${single(node)} -ArgumentList ${single(args.map(quoteWindowsArg).join(' '))} -Verb RunAs -Wait`;
+}
+
 /** Starts this same switch elevated, once, and waits for it: the one permission prompt of the round. */
 function relaunchElevated(home) {
-  const args = [...HARNESS.slice(1), 'stack', 'upgrade', '--round', '--switch', '--yes', '--elevated', '--home', home].map((a) => `'${a.replace(/'/g, "''")}'`).join(',');
-  return spawnSync('powershell', ['-NoProfile', '-Command', `Start-Process -FilePath '${HARNESS[0]}' -ArgumentList ${args} -Verb RunAs -Wait`], { stdio: 'inherit' });
+  const args = [...HARNESS.slice(1), 'stack', 'upgrade', '--round', '--switch', '--yes', '--elevated', '--home', home];
+  return spawnSync('powershell', ['-NoProfile', '-Command', elevatedCommand(HARNESS[0], args)], { stdio: 'inherit' });
 }
 
 function askOnce(question) {
@@ -108,8 +117,10 @@ export async function stackRoundMain(argv, env = process.env, deps = {}) {
   const io = seams(deps);
   const unknown = unknownArgument(argv, KNOWN);
   const phases = ['--dry-run', '--prepare', '--switch'].filter((flag) => argv.includes(flag));
-  if (unknown !== null || phases.length !== 1) {
-    io.error(`${unknown !== null ? `unknown argument: ${unknown}` : 'name one of --dry-run, --prepare and --switch'}\n\n${ROUND_USAGE}`);
+  const wrong = unknown !== null ? `unknown argument: ${unknown}` : phases.length !== 1 ? 'name one of --dry-run, --prepare and --switch'
+    : argv.includes('--json') && phases[0] !== '--dry-run' ? '--json goes with --dry-run only: a phase that runs steps prints its log' : null;
+  if (wrong !== null) {
+    io.error(`${wrong}\n\n${ROUND_USAGE}`);
     return 2;
   }
   const given = argv.includes('--home') ? argv[argv.indexOf('--home') + 1] : undefined;
@@ -136,6 +147,11 @@ export async function stackRoundMain(argv, env = process.env, deps = {}) {
     }
     const plan = JSON.parse(io.fs.readFileSync(planFile, 'utf8'));
     for (const line of renderRound(plan)) io.log(line);
+    // A prepare that stopped can leave a new node without its globals or shims, and `nvm use` checks only the version.
+    if (plan.prepared !== true) {
+      io.error('switch: the prepare of this plan did not check every step, so nothing switches; read its record, then run js-harness stack upgrade --round --prepare again');
+      return 1;
+    }
     if (plan.switch.length === 0) {
       io.log('switch: nothing to switch');
       return 0;
@@ -150,9 +166,13 @@ export async function stackRoundMain(argv, env = process.env, deps = {}) {
         return 1;
       }
       io.log('switch: one permission prompt follows, for the steps that need an administrator');
-      io.relaunch(home);
       const last = path.join(dir, 'last.json');
-      const record = io.fs.existsSync(last) ? JSON.parse(io.fs.readFileSync(last, 'utf8')) : null;
+      const recordNow = () => (io.fs.existsSync(last) ? io.fs.readFileSync(last, 'utf8') : null);
+      // A record left by an earlier run is not this run's: only a record the elevated run wrote counts.
+      const before = recordNow();
+      io.relaunch(home);
+      const after = recordNow();
+      const record = after !== null && after !== before ? JSON.parse(after) : null;
       if (!record || record.phase !== 'switch' || record.at < plan.at) {
         io.error('switch: the elevated run left no record; nothing is known to have run');
         return 1;
@@ -177,6 +197,8 @@ export async function stackRoundMain(argv, env = process.env, deps = {}) {
   io.fs.mkdirSync(dir, { recursive: true });
   io.fs.writeFileSync(planFile, `${JSON.stringify(plan, null, 2)}\n`);
   const code = runAndRecord('prepare', plan.prepare, dir, home, io);
+  // Only a prepare that checked every step lets the switch run.
+  io.fs.writeFileSync(planFile, `${JSON.stringify({ ...plan, prepared: code === 0 }, null, 2)}\n`);
   if (code === 0 && plan.switch.length > 0) io.log('next, with Claude Desktop closed, in a plain PowerShell window: js-harness stack upgrade --round --switch');
   return code;
 }

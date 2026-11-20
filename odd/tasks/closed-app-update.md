@@ -138,3 +138,14 @@ Sent to the lead as questions, one at a time, after this design:
   prepare step after `stack upgrade --tool engram --tool engram-plugin`; its check counts the live entries of owner
   `engram@engram` and event `UserPromptSubmit` in the home (`liveEntries`, ./hook-count.mjs) and passes at 0; it has no
   undo (putting the hook back is `stack engram-prompt on`, named as its way back). A failed count stops the phase.
+- L7 (JH 259, 2026-11-20): the Claude lenses over e2c29f8..a1a0f71 (risk 0 findings, resilience 3, reliability 6).
+  Fixed, each with its test: the switch now refuses a plan whose prepare did not check every step (`prepared` in
+  plan.json, written true only after a prepare that checked all; a new node without its globals would otherwise be
+  switched to, since `nvm use` checks only the version); a step and its undo run uncut (a timeout kills only the shell,
+  so an install went on beside its undo), reads keep the two-minute cut; after the elevated relaunch only a record the
+  elevated run wrote counts (the file's text before and after is compared), so a declined prompt is not read as an
+  earlier switch; `-ArgumentList` gets one quoted command line (`elevatedCommand`), so a path with a space arrives
+  whole; `--json` goes with `--dry-run` only, a usage error elsewhere; node behind with no nvm root is `unknown`
+  instead of a TypeError. Answered, not changed: `stack can-close` run outside a git folder says "cannot tell" (exit
+  2), never yes. That is the rule of this feature ("could not look" is never "you can close"); it is meant to be run
+  from a session of the project before the app closes, and `--cwd` names the project from anywhere else.

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { stackRoundMain } from './stack-round.mjs';
+import { elevatedCommand, stackRoundMain } from './stack-round.mjs';
 import { ROUND } from './lib/update-round.mjs';
 
 /** A scratch harness home outside the worktree, removed after the test. */
@@ -102,6 +102,41 @@ test('an elevated step not elevated starts the switch elevated once, and runs no
   assert.equal(relaunched, 1);
   assert.equal(d.ran.length, before, 'no step ran outside the elevated run');
   assert.match(d.lines.join('\n'), /left no record/);
+});
+
+test('the switch refuses a plan whose prepare stopped at a failed check, and runs nothing', async (t) => {
+  const home = scratch(t);
+  const d = deps({ read: ENGRAM_BEHIND });
+  d.deps.run = (command, args) => {
+    d.ran.push([command, ...args].join(' '));
+    return { status: 0, stdout: '' }; // engram never reaches 3.8.0, so prepare stops
+  };
+  assert.equal(await stackRoundMain(['--round', '--prepare', '--yes', '--home', home], {}, d.deps), 1);
+  const before = d.ran.length;
+  assert.equal(await stackRoundMain(['--round', '--switch', '--yes', '--home', home], {}, d.deps), 1);
+  assert.match(d.lines.join('\n'), /prepare of this plan did not check every step/);
+  assert.equal(d.ran.length, before, 'no switch step ran');
+});
+
+test('a relaunch that writes no new record is not read as the earlier record', async (t) => {
+  const home = scratch(t);
+  const d = deps();
+  await stackRoundMain(['--round', '--prepare', '--yes', '--home', home], {}, d.deps);
+  assert.equal(await stackRoundMain(['--round', '--switch', '--yes', '--home', home], {}, d.deps), 0, 'an earlier switch left its record');
+  Object.assign(d.deps, { elevated: () => false, relaunch: () => {} });
+  assert.equal(await stackRoundMain(['--round', '--switch', '--yes', '--home', home], {}, d.deps), 1);
+  assert.match(d.lines.join('\n'), /left no record/);
+});
+
+test('--json goes with the dry run only', async () => {
+  const d = deps();
+  assert.equal(await stackRoundMain(['--round', '--prepare', '--json'], {}, d.deps), 2);
+  assert.equal(await stackRoundMain(['--round', '--switch', '--json'], {}, d.deps), 2);
+});
+
+test('the elevated relaunch passes a path with a space as one argument', () => {
+  const command = elevatedCommand('C:\\Program Files\\nodejs\\node.exe', ['C:\\My Tools\\js-harness.mjs', '--home', "C:\\Users\\O'Brien"]);
+  assert.equal(command, "Start-Process -FilePath 'C:\\Program Files\\nodejs\\node.exe' -ArgumentList '\"C:\\My Tools\\js-harness.mjs\" --home \"C:\\Users\\O''Brien\"' -Verb RunAs -Wait");
 });
 
 /** A scratch home where the engram plugin is enabled and its hooks file holds `events`, as Claude Code reads them. */

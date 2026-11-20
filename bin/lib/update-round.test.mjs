@@ -149,6 +149,22 @@ test('the compare step fails on a name the old node folder has and the new one l
   assert.match(result.steps[0].saw, /lacks codegraph\.cmd/);
 });
 
+test('node behind with no nvm root read is unknown, and the plan does not throw', () => {
+  const p = planRound({ ...machine({ node: ['26.13.1', '26.14.0'] }), nvmRoot: null }, { harness: HARNESS });
+  assert.deepEqual(p.rows.find((r) => r.tool === 'node').move, 'unknown');
+  assert.equal(p.prepare.some((s) => s.tool === 'node'), false);
+});
+
+test('steps and undos run as steps, which the runner does not cut; checks run as reads', () => {
+  const calls = [];
+  const p = plan({ codex: ['0.171.0', '0.172.0'] });
+  runPhase(p.switch, { ...io(), run: (command, args, options) => {
+    calls.push([command, options?.step === true]);
+    return { status: 0, stdout: command === 'codex' ? 'codex-cli 0.171.0' : '' };
+  } });
+  assert.deepEqual(calls, [['pnpm', true], ['codex', false], ['pnpm', true]]);
+});
+
 test('readRound reads only: version commands, where, nvm root and the registries', async () => {
   const ran = [];
   const run = (command, args) => {
