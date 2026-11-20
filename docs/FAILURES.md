@@ -71,7 +71,7 @@ then refused every `cd` back into it as another session's, so the steps that run
   old folder that worktree was, between 05:50Z and 06:00Z: a possible cause, not checked
 - Seen: 2026-11-19 — JH 241's transcript 2b3fbe54, lines 308 and 314; the cost of JH 234's case is gate 7 of
   odd/tasks/away-work.md on PR 933's branch (57546452) — at 23:53Z the app moved JH 241's folder from
-  `loving-pascal-568299` to `D:js-harness`, and the guard refused its `cd` back as "another session's worktree";
+  `loving-pascal-568299` to `D:\js-harness`, and the guard refused its `cd` back as "another session's worktree";
   JH 236 (transcript 37723703) had used that folder until 23:34Z, eight minutes before JH 241 started in it. A
   worktree an ended session used is taken as that session's; JH 241 went on from where it stood
 
@@ -2444,6 +2444,13 @@ was not so.
   (measured that night, about 1.6M: 6.47M moved it from 53 % to 57 %); he tapped it (f5c3ee4d:8485). The read
   cfb6f373 found it, so the tap does not apply; the corrected card failed its read too (e5c77c69, five highs), and the
   next one holds only what was measured
+- Seen: 2026-11-20 — the channel record, line 3777 (question 382) and line 3787 (its withdrawal); the lead's relief
+  file, lines 3531-3532 (02:50 and 02:52 local) — question 382's recorded text closed with "you get it because you
+  typed 'no quiero la revisión' for it", which he had not typed, and listed PR 930's recheck among the reviews ready
+  for Codex while its 6 P2 and its P3 were open. Fix the same night: 382 withdrawn, replaced by 383, which claims no
+  skip phrase and gives PR 930 as not ready; checked in the record (line 3786). Stop: the condition for asking (his
+  typed phrase) goes in the lead's message to JH PLAN, never in the card's text, from the next card on; proof, `grep -c
+  'porque escribiste' ~/.js-harness/channel/D--js-harness.jsonl` stays 1
 - Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### turn-ended-waiting
