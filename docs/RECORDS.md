@@ -1180,6 +1180,7 @@ The plan and the record of `js-harness stack upgrade --round` (odd/tasks/closed-
 
 - `at`: ISO time of the read; `rows`: `{ tool, from, to, move, why }` a tool, `move` one of current, prepare, switch, self, report, unknown.
 - `prepare`, `switch`: the steps in order, each `{ tool, what, kind, words, check, undo, wayBack?, elevate? }`.
+- `prepared`: `true` once a prepare checked every step, `false` after one that stopped, absent while it runs; the switch runs only on `true`. A `check` is `{ words, expect }`, `{ exists }`, `{ packageVersion, expect }`, `{ sameFiles }` or `{ hookEntries: { owner, event }, expect }`.
 
 ### `last.json`
 

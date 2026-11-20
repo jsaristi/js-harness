@@ -1,10 +1,10 @@
 # The harness updates the whole stack with Claude closed
 
-Locator: `odd/tasks/closed-app-update.md` · Engram mirror: `odd/closed-app-update/tasks` · Branch:
-`claude/jh258-closed-app-update-f970c8` · Delivery: `ask-on-risk` · Runner: `node --test`
+Locator: `odd/tasks/closed-app-update.md` · Engram mirror: `odd/closed-app-update/tasks` · Branch: `claude/jh259-closed-app-update-2-5b0767` (part 2, draft PR 940; part 1 was
+`claude/jh258-closed-app-update-f970c8`) · Delivery: `ask-on-risk` · Runner: `node --test`
 
 ## State
-T1-T4 and T4b built and tested (T4b: after engram moves, prepare runs `stack engram-prompt off` and checks that the engram plugin's `UserPromptSubmit` entries count 0); `stack can-close` (live on 2026-11-20 it said no and named JH PLAN's background shell);
+Part 2 (JH 259): draft PR 940; lenses recorded and their fix rechecked (8 fixed, 1 answered, 0 blocking); Codex skips for 3cb68cd..a1a0f71 and a1a0f71..6279939. T1-T4 and T4b built and tested (T4b: after engram moves, prepare runs `stack engram-prompt off` and checks that the engram plugin's `UserPromptSubmit` entries count 0); `stack can-close` (live on 2026-11-20 it said no and named JH PLAN's background shell);
 `stack upgrade --round --dry-run` exits 0 here, one line a tool; `--prepare` and `--switch` run only in tests with a
 scratch home. Not built: doctor's row that reads `last.json` (the record is written; doctor does not read it yet).
 Not run on this machine: `--prepare` and `--switch` (high-risk item 5). Open: the two questions of `## Ask me before` (sent to the lead), Codex's review
@@ -119,7 +119,7 @@ Sent to the lead as questions, one at a time, after this design:
 - [x] T3 (kind: build) S1, S2, the list and `--round --dry-run` — route: inline — commit: feat(stack): round plan
 - [x] T4 (kind: build) S1, S3, `--prepare` and `--switch` with undo and record — route: inline — commit: feat(stack): round switch
 - [x] T4b (kind: build) S2, after the engram update the round re-applies `stack engram-prompt off` (D8), checked by the hook-entries count — route: inline — commit: feat(stack): re-apply engram-prompt off
-- [ ] T5 (kind: verify) lenses recorded, Codex skip recorded, verifier asked of the lead, draft pull request
+- [x] T5 (kind: verify) lenses recorded, Codex skips recorded, draft pull request 940; the independent verifier is the lead's
 
 ## Log
 - L1 (his request as written, 2026-11-20T19:39:39Z, transcript 0cdab702 line 2886): "ok entonces arma un script
@@ -149,3 +149,11 @@ Sent to the lead as questions, one at a time, after this design:
   instead of a TypeError. Answered, not changed: `stack can-close` run outside a git folder says "cannot tell" (exit
   2), never yes. That is the rule of this feature ("could not look" is never "you can close"); it is meant to be run
   from a session of the project before the app closes, and `--cwd` names the project from anywhere else.
+- L8 (JH 259, 2026-11-20): the recheck of the fix (resilience and reliability over a1a0f71..6279939): 8 of 9 fixed, the
+  can-close finding answered (L7), 0 blocking. The branch's dry run on this machine exited 0, one line a tool, nothing
+  to prepare or switch. Known and not built, for the lead: (1) the round plans engram's step, and with it the D8
+  re-apply, only when the engram binary is behind (its row reads `engram version`); a release of the plugin alone, as
+  0.1.23 that day, is not seen by the round, though `stack upgrade` plans it (`bin/lib/stack-upgrade.mjs:84`);
+  (2) `stack engram-prompt off` exits 1 on a home with no user-level engram plugin, so on such a home prepare stops at
+  that step and the switch is refused; (3) `elevatedCommand` throws on a home path holding `& | < > ^ %`, after the
+  switch says a permission prompt follows.
