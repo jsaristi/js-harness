@@ -171,8 +171,8 @@ may carry a default that runs at a time (gate 4); the cap of open sessions (gate
 work's own review (held to the reset).
 
 ## Tasks
-- [ ] T1 (kind: build) The reader `workshop/lib/away-hours.mjs`, test first: spec 1. Commit: this branch.
-- [ ] T2 (kind: docs) The periods, the table and the gates in this document. Commit: this branch.
+- [x] T1 (kind: build) The reader `workshop/lib/away-hours.mjs`, test first: spec 1. Commit: this branch.
+- [x] T2 (kind: docs) The periods, the table and the gates in this document. Commit: this branch.
 
 ## Log
 - L1 His request, typed in JH PLAN (`f5c3ee4d`:7927, 2026-11-19T21:36:13Z): "Si pero quiero que corrijas eso de que no
