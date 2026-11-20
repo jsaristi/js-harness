@@ -74,3 +74,9 @@ Nothing: landing it is the owner's, through the lead.
   remote-tracking ref (`git checkout -b stacked origin/pr-883`) takes it as its upstream, and the upstream was left
   out of the base's holders, so that branch was read whole. Only the branch's own pushed copy,
   `refs/remotes/<remote>/<its name>`, is left out now; tested with a tracked remote ref.
+- L4 (2026-11-19): recheck of 30f8904..b276786. Risk: 0 findings; reliability: its first finding fixed, and three
+  new, all fixed here: the branch's own copy pushed under another name counted as another holder (blocking); the
+  name suffix also left out another pull request's `origin/team/<name>`; no test proved the own-copy exclusion. A
+  holder now counts only where its history meets HEAD's at the base itself, so a copy holding any of the branch's
+  commits is left out under any name, and the copy with no commit yet by its exact name; both tested. Left open:
+  a copy pushed under another name before any commit of its own still counts as a holder.

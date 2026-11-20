@@ -521,6 +521,20 @@ test('a branch stacked on another pull request\'s remote-tracking ref, its upstr
   assert.deepEqual(errorsOf(root), []);
 });
 
+// The reliability lens on 30f8904..b276786: the branch's own pushed copy holds the base too, under whatever name it was
+// pushed; a ref that holds the branch's own commits is a copy of it, not another branch. And a remote ref that only
+// ends in the branch's name, `origin/team/stacked`, belongs to another pull request.
+test('the stacked branch\'s own pushed copy, under any name, is no other branch holding its base', (t) => {
+  const [copy, team] = [repo(), repo()];
+  t.after(() => [copy, team].forEach((root) => fs.rmSync(root, { recursive: true, force: true })));
+  stackedBranch(copy, { drop: true });
+  git(copy, 'update-ref', 'refs/remotes/origin/feature-x', 'HEAD');
+  assert.deepEqual(errorsOf(copy), ['code was committed before the pass\'s verdict: bin/b.mjs']);
+  stackedBranch(team, { drop: true });
+  git(team, 'update-ref', 'refs/remotes/origin/team/stacked', 'HEAD~2');
+  assert.deepEqual(errorsOf(team), []);
+});
+
 test('a stacked branch with its own code before its verdict is refused, by its own files alone', (t) => {
   const root = repo();
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
