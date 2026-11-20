@@ -535,6 +535,20 @@ test('the stacked branch\'s own pushed copy, under any name, is no other branch 
   assert.deepEqual(errorsOf(team), []);
 });
 
+// The reliability lens on b276786..d5c9768: once the stacked branch merges its base's later commits, the base's branch
+// meets HEAD past the creation commit and still is another branch, not a copy of this one.
+test('a stacked branch that merges its base\'s later commits still reads from its base', (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  stackedBranch(root);
+  git(root, 'checkout', '-q', 'base');
+  write(root, 'bin/d.mjs', 'd\n');
+  commit(root, 'feat: the base\'s later code', 'bin/d.mjs');
+  git(root, 'checkout', '-q', 'stacked');
+  git(root, 'merge', '-q', '--no-ff', '-m', 'Merge branch \'base\' into stacked', 'base');
+  assert.deepEqual(errorsOf(root), []);
+});
+
 test('a stacked branch with its own code before its verdict is refused, by its own files alone', (t) => {
   const root = repo();
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

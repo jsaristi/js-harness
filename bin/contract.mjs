@@ -475,13 +475,16 @@ function stackBaseOf(git, trunk) {
   if (!base || !created.slice(created.indexOf(' ') + 1).startsWith('branch: Created from ')) return null;
   const isAncestor = (of) => git(['merge-base', '--is-ancestor', base, of]) !== null;
   if (isAncestor(trunk) || !isAncestor('HEAD')) return null;
-  // Another branch holds the base and none of this branch's own commits: a ref whose history meets HEAD's past the base
-  // is a copy of this branch, pushed under any name. Its pushed copy with no commit yet is told by its name. Its upstream
+  // Another branch holds the base and none of this branch's own commits, those of HEAD's first-parent line past the base:
+  // a ref that holds one is a copy of this branch, pushed under any name, while the base's branch whose later commits
+  // HEAD merged in holds only commits off that line. The pushed copy with no commit yet is told by its name. The upstream
   // may be another's: a branch cut from another pull request's remote-tracking ref takes that ref (the reliability lens).
   const name = branch.slice('refs/heads/'.length);
   const copies = new Set((git(['remote']) ?? []).map((remote) => `refs/remotes/${remote}/${name}`));
+  const ownLine = (...not) => git(['rev-list', '--first-parent', 'HEAD', `^${base}`, ...not.map((ref) => `^${ref}`)])?.length;
+  const own = ownLine();
   const holders = git(['for-each-ref', '--contains', base, '--format=%(refname)', 'refs/heads', 'refs/remotes']) ?? [];
-  const another = (ref) => ref !== branch && !copies.has(ref) && !ref.endsWith('/HEAD') && git(['merge-base', ref, 'HEAD'])?.[0] === base;
+  const another = (ref) => ref !== branch && !copies.has(ref) && !ref.endsWith('/HEAD') && ownLine(ref) === own;
   return holders.some(another) ? base : null;
 }
 

@@ -80,3 +80,8 @@ Nothing: landing it is the owner's, through the lead.
   holder now counts only where its history meets HEAD's at the base itself, so a copy holding any of the branch's
   commits is left out under any name, and the copy with no commit yet by its exact name; both tested. Left open:
   a copy pushed under another name before any commit of its own still counts as a holder.
+- L5 (2026-11-19): recheck of b276786..d5c9768. Risk: 0 findings; reliability: its three findings fixed, one new and
+  fixed here (blocking): once the stacked branch merged its base's later commits, the base's branch met HEAD past the
+  creation commit and was taken for a copy, so the range was read whole. A copy is now a ref that holds a commit of
+  HEAD's first-parent line past the base; a merge brings the base's commits off that line. Tested. Left open: a
+  stacked branch rebased onto its base's later commits counts those commits as its own, as before this work.
