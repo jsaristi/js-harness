@@ -143,7 +143,7 @@ Approved work: questions 359 to 362 held four sessions (Gates, 4); no session wa
 | JH 233 · Codex controlled test | 0.03 / 0.03 | 9.47 / 9.47 | 9.47 h from 05:57Z, nothing | the Codex weekly hold and his decision: question 359, recorded 05:52Z (`return-block.md:5`) |
 | JH 220 · codex-spend | 0.02 / 0.02 | 9.47 / 9.47 | 7.62 h from 07:48Z, nothing | a decision of his: question 360, recorded 05:54Z (`return-block.md:6`) |
 | JH 227 · Plan pre-prompt (stopped) | 0.01 / 0.01 | 9.49 / 9.49 | 6.03 h, a task event | the review-round cap: its rule missed three reads (`return-block.md:29`) |
-| JH 225 · pre-commit gap (stopped) | 0.01 / 0.01 | 9.48 / 9.48 | 6.59 h, a task event | the review-round cap: three Codex reviews rejected; compacted at 07:31 local and stopped (`return-block.md:29,43`) |
+| JH 225 · pre-commit gap (stopped) | 0.01 / 0.01 | 9.48 / 9.48 | 6.59 h, a task event | the review-round cap: its last Codex round rejected; compacted at 07:31 local and stopped (`return-block.md:29,43`) |
 | Total, 11 sessions | 7.26 / 10.52 | 97.19 / 93.92 | | 19 more sessions have no entry inside |
 | Without the 2 stopped | 7.24 / 10.50 | 78.22 / 74.95 | | |
 
