@@ -357,22 +357,25 @@ export function sessionsStartMain(argv, given = {}) {
   }
   // The worktrees before claude runs: one it makes of its own, rather than taking the one cut, is a base not taken.
   const worktreesBefore = cut === null ? null : listWorktrees(run, root);
-  // What a start that ran no session says of the worktree it cut: removed, or why it stays.
-  const uncutWords = () => (cut === null ? '' : `; ${uncut(run, root, cut) ?? `the worktree ${cut.place} it cut is removed`}`);
+  // A start that ran no session removes the worktree it cut and returns what became of it: removed, or why it stays.
+  // Each caller runs it before it writes its message, so no edit of a message can skip the removal.
+  const removeCut = () => (cut === null ? '' : `; ${uncut(run, root, cut) ?? `the worktree ${cut.place} it cut is removed`}`);
   let result;
   try {
     result = claude(startArgs({ ...parsed, model, effort, advisor, briefs, prompt: startPrompt(copy) }), { cwd });
   } catch (err) {
     // A character cmd.exe would act on, in the title or a path: nothing ran.
     fs.rmSync(copy, { force: true });
-    stderr(`js-harness sessions start: claude was not started: ${err.message}${uncutWords()}`);
+    const removed = removeCut();
+    stderr(`js-harness sessions start: claude was not started: ${err.message}${removed}`);
     return 1;
   }
   // A run that began and did not finish (a timeout) may have started the session all the same: it is looked for.
   const began = result.error !== undefined && result.error !== null && result.error.code !== 'ENOENT';
   if (!began && (result.error || result.status !== 0)) {
     fs.rmSync(copy, { force: true });
-    stderr(`js-harness sessions start: claude did not start the session (${result.error ? 'it could not run' : `exit ${result.status}`}), and nothing was recorded${uncutWords()}:\n${saidBy(result)}`);
+    const removed = removeCut();
+    stderr(`js-harness sessions start: claude did not start the session (${result.error ? 'it could not run' : `exit ${result.status}`}), and nothing was recorded${removed}:\n${saidBy(result)}`);
     return 1;
   }
   if (began) stderr(`js-harness sessions start: claude did not finish (${result.error.message}); looking for the session in claude agents`);
@@ -399,7 +402,7 @@ export function sessionsStartMain(argv, given = {}) {
   // claude -w takes the worktree cut only while its folder and branch are claude's own (`baseCut`), and locks the one it
   // takes (claude 2.1.327, checked by hand). The base is taken when the cut is locked after claude ran, or when no
   // worktree appeared beside it; otherwise a new one may be claude's own, cut from HEAD, whatever its name, or another
-  // session's added at the same moment (the lenses on edd772a..90bb5ae and 90bb5ae..5350d2d), and the base is said
+  // session's added at the same moment (the Claude lenses on PR 934, before its rebase), and the base is said
   // not confirmed and not recorded. A listing that fails confirms nothing, said so. The record keeps the folder claude
   // reports, never one that only appeared: it may be another session's, and stop --remove-worktree acts on it.
   const worktreesAfter = cut === null ? null : listWorktrees(run, root);
