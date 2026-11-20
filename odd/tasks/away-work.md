@@ -177,7 +177,7 @@ Command: the base command, absence 4 of its output (`--idle 10` digest `a5eb033c
 |---|---|---|---|---|---|
 | JH 239 · sessions start takes a base | 1.18 / 1.18 | 0.14 / 0.14 | 0 | 0.14 h from 00:37Z, nothing before the end | stopped for spend: 25.13M of 9M, the lead's one-off sum, unverified (`return-block-2.md:55`) (archived 00:46Z) |
 | JH 240 · the contracts row reads a stacked branc | 1.12 / 1.12 | 0.29 / 0.29 | 0 | 0.17 h from 00:41Z, nothing before the end | stopped for spend: 9.49M of 9M at the stop (`away-tier-2.md`, 19:46) (gate lock 0.13 h in waiting; archived 00:52Z) |
-| JH ORQ (d6383aea) | 1 / 1.19 | 2.97 / 2.78 | 0 | 1.68 h from 21:48Z, a message of another session | runnable; the cause of its 1.68 h wait from 21:48Z not known (gate lock 0.26 h in waiting; 825 copied entries left out) |
+| JH ORQ (d6383aea) | 1 / 1.19 | 2.97 / 2.78 | 0 | 1.68 h from 21:48Z, a message of another session | runnable; the cause of its 1.68 h wait from 21:48Z not known (0.26 h of its waiting on the gate lock, `rule:gate-wait`; 825 copied entries left out) |
 | JH 238 · owed records: Seen lines and ticks | 0.85 / 0.85 | 0.38 / 0.38 | 0 | 0.38 h from 00:17Z, nothing before the end | done, archived after PR 932 landed (archived 00:40Z) |
 | JH 241 · away hours produce work | 0.78 / 0.78 | 0.06 / 0.06 | 0 | 0.05 h from 00:29Z, nothing before the end | done, past its 9M line by 0.05M; start call 23:31Z, first entry 23:42Z (`2b3fbe54`:3) (archived 00:33Z) |
 | JH 237 · S8 T6, finish PR 930's two open items | 0.19 / 0.19 | 3.79 / 3.79 | 0 | 3.79 h from 21:47Z, nothing before the end | stopped for spend: 8.03M of 6M (`return-block-2.md:53`) |
