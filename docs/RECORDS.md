@@ -1171,3 +1171,17 @@ Parsed by `bin/lib/memory-hygiene.mjs` `readMemory`, `<slug>` being the main che
 
 - `MEMORY.md`: the index; each non-empty line is read with its number, text, length in code points and the `.md` file its first Markdown link `](<file>.md)` names.
 - `<note>.md`: one note each; its `type` is the `type:` key of a front matter opened and closed by `---` lines (`bin/lib/memory-index-guard.mjs` `memoryNoteType`), and its bytes, modification time and text are read.
+
+## The update round
+
+The plan and the record of `js-harness stack upgrade --round` (odd/tasks/closed-app-update.md). `bin/stack-round.mjs` `stackRoundMain` writes `plan.json` before the prepare runs its first step, and `runAndRecord` writes `last.json` and the log of each phase; the switch reads `plan.json`, so everything its undo needs is on disk before it starts.
+
+### `plan.json`
+
+- `at`: ISO time of the read; `rows`: `{ tool, from, to, move, why }` a tool, `move` one of current, prepare, switch, self, report, unknown.
+- `prepare`, `switch`: the steps in order, each `{ tool, what, kind, words, check, undo, wayBack?, elevate? }`.
+
+### `last.json`
+
+- `schema`: `js-harness.update-round/v1`; `phase`: prepare or switch; `at`: ISO time; `ok`: every step checked.
+- `steps`: `{ tool, what, outcome, saw }`, `outcome` one of done, undone, failed, not run; `log`: the path of the phase's log.

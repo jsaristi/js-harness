@@ -4,8 +4,10 @@ Locator: `odd/tasks/closed-app-update.md` · Engram mirror: `odd/closed-app-upda
 `claude/jh258-closed-app-update-f970c8` · Delivery: `ask-on-risk` · Runner: `node --test`
 
 ## State
-Design written (T1). Next: T2 `stack can-close`, then T3 the list with its dry run, then T4 the prepare and the
-switch. Open: the two questions of `## Ask me before` (sent to the lead), Codex's review
+T1-T4 built and tested: `stack can-close` (live on 2026-11-20 it said no and named JH PLAN's background shell);
+`stack upgrade --round --dry-run` exits 0 here, one line a tool; `--prepare` and `--switch` run only in tests with a
+scratch home. Not built: doctor's row that reads `last.json` (the record is written; doctor does not read it yet).
+Not run on this machine: `--prepare` and `--switch` (high-risk item 5). Open: the two questions of `## Ask me before` (sent to the lead), Codex's review
 (held: meter 59%, his stop 60%), the independent verifier of the switch and its undo.
 
 ## Goal
@@ -113,9 +115,9 @@ Sent to the lead as questions, one at a time, after this design:
 
 ## Tasks
 - [x] T1 (kind: design) this document, S1-S4 — route: inline — commit: docs(closed-app-update)
-- [ ] T2 (kind: build) S4, `stack can-close` — route: inline — commit: feat(stack): can-close
-- [ ] T3 (kind: build) S1, S2, the list and `--round --dry-run` — route: inline — commit: feat(stack): round plan
-- [ ] T4 (kind: build) S1, S3, `--prepare` and `--switch` with undo and record — route: inline — commit: feat(stack): round switch
+- [x] T2 (kind: build) S4, `stack can-close` — route: inline — commit: feat(stack): can-close
+- [x] T3 (kind: build) S1, S2, the list and `--round --dry-run` — route: inline — commit: feat(stack): round plan
+- [x] T4 (kind: build) S1, S3, `--prepare` and `--switch` with undo and record — route: inline — commit: feat(stack): round switch
 - [ ] T5 (kind: verify) lenses recorded, Codex skip recorded, verifier asked of the lead, draft pull request
 
 ## Log
