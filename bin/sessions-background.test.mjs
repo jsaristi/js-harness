@@ -531,6 +531,25 @@ test('sessions start --base says so, and records no base, when claude makes a wo
   assert.ok(result.stderr.includes(worktreeAt(world, 'stray')), result.stderr);
   const [, record] = startedLines(world);
   assert.equal(record.base, null);
+  // The record keeps the worktree claude reports, never one that only appeared: it may be another session's, and stop
+  // --remove-worktree acts on the recorded folder (the lenses on 5350d2d..2c60423, answered).
+  assert.notEqual(path.resolve(record.worktreePath), worktreeAt(world, 'stray'));
+}));
+
+test('sessions start --base records no base, and says so, when git worktree list cannot be read after claude ran', withWorld((world) => {
+  const first = firstOfTwo(world);
+  const text = runText();
+  let listings = 0;
+  const run = (command, args, options) => {
+    if (command === 'git' && args[0] === 'worktree' && args[1] === 'list' && ++listings === 2) return { status: 128, stdout: '', stderr: 'fatal: made up' };
+    return text(command, args, options);
+  };
+  const claude = (args) => (args[0] === 'agents' ? { status: 0, stdout: '[]', stderr: '' } : { status: 0, stdout: 'backgrounded · f0f0f0f0 · Build the thing\n', stderr: '' });
+  const err = [];
+  const code = sessionsStartMain(['--title', 'Build the thing', '--brief', world.brief, '--worktree', 'thing', '--base', first], { cwd: world.project, env: envOf(world), run, claude, stdout: () => {}, stderr: (line) => err.push(line) });
+  assert.equal(code, 0, err.join('\n'));
+  assert.match(err.join('\n'), /git worktree list could not be read/);
+  assert.equal(startedLines(world)[0].base, null);
 }));
 
 test('sessions start --base removes the worktree it cut when claude refuses, and keeps it when a session may run in it', withWorld((world) => {

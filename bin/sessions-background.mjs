@@ -143,7 +143,7 @@ function uncut(run, root, { sha, place, branch }) {
 
 /** The worktrees `git worktree list` names for the checkout at `root`, each `{ folder, locked }`, or null when it cannot
  * be read. */
-function worktreePaths(run, root) {
+function listWorktrees(run, root) {
   const listed = run('git', ['worktree', 'list', '--porcelain'], { cwd: root });
   if (listed.error || listed.status !== 0) return null;
   return String(listed.stdout).split(/\r?\n\r?\n/).map((block) => block.split(/\r?\n/)).filter((lines) => lines[0].startsWith('worktree '))
@@ -356,7 +356,7 @@ export function sessionsStartMain(argv, given = {}) {
     }
   }
   // The worktrees before claude runs: one it makes of its own, rather than taking the one cut, is a base not taken.
-  const worktreesBefore = cut === null ? null : worktreePaths(run, root);
+  const worktreesBefore = cut === null ? null : listWorktrees(run, root);
   // What a start that ran no session says of the worktree it cut: removed, or why it stays.
   const uncutWords = () => (cut === null ? '' : `; ${uncut(run, root, cut) ?? `the worktree ${cut.place} it cut is removed`}`);
   let result;
@@ -400,8 +400,9 @@ export function sessionsStartMain(argv, given = {}) {
   // takes (claude 2.1.327, checked by hand). The base is taken when the cut is locked after claude ran, or when no
   // worktree appeared beside it; otherwise a new one may be claude's own, cut from HEAD, whatever its name, or another
   // session's added at the same moment (the lenses on edd772a..90bb5ae and 90bb5ae..5350d2d), and the base is said
-  // not confirmed and not recorded. A listing that fails confirms nothing, said so.
-  const worktreesAfter = cut === null ? null : worktreePaths(run, root);
+  // not confirmed and not recorded. A listing that fails confirms nothing, said so. The record keeps the folder claude
+  // reports, never one that only appeared: it may be another session's, and stop --remove-worktree acts on it.
+  const worktreesAfter = cut === null ? null : listWorktrees(run, root);
   const unchecked = cut !== null && (worktreesBefore === null || worktreesAfter === null);
   const fresh = cut === null || unchecked ? [] : worktreesAfter.filter(({ folder }) => !worktreesBefore.some((was) => within(folder, was.folder) && within(was.folder, folder))).map(({ folder }) => folder);
   const cutLocked = !unchecked && cut !== null && worktreesAfter.some(({ folder, locked }) => locked && within(folder, cut.place) && within(cut.place, folder));
