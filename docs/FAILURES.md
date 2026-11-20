@@ -69,6 +69,11 @@ then refused every `cd` back into it as another session's, so the steps that run
   move it back; the guard refused `cd` into both of its worktrees, so `rules change session-housekeeping` and
   `npm run check` waited for his return while the commits went through `git -C`. The lead had archived JH 212, whose
   old folder that worktree was, between 05:50Z and 06:00Z: a possible cause, not checked
+- Seen: 2026-11-19 — JH 241's transcript 2b3fbe54, lines 308 and 314; the cost of JH 234's case is gate 7 of
+  odd/tasks/away-work.md on PR 933's branch (57546452) — at 23:53Z the app moved JH 241's folder from
+  `loving-pascal-568299` to `D:js-harness`, and the guard refused its `cd` back as "another session's worktree";
+  JH 236 (transcript 37723703) had used that folder until 23:34Z, eight minutes before JH 241 started in it. A
+  worktree an ended session used is taken as that session's; JH 241 went on from where it stood
 
 ### asked-yes-not-his
 A session stopped and asked him for a yes on a step that was not one of the things that are his.
@@ -2013,6 +2018,10 @@ after it was made: nothing measured the spend against the figure while the work 
   it. The fourth session in one day, after JH SR, JH 236 and JH 237, that read its spend after its line and not
   before it: no command prints a session's cumulative cache-read against its line (the spend check in the roadmap's
   Later list)
+- Seen: 2026-11-19 — the lead's notes, away-tier-2.md, lines 20-22 and 71 (the lead's own) — the lead handed JH 238
+  a second brief of 4M more while JH 238 stood at 8.54M of its 6M first line, with no read of its spend before the
+  send; it ended near 12.2M. Fix the same evening: before a second brief the lead reads the session's cumulative
+  cache-read from its transcript, and a session past its first line is archived, not briefed again
 
 ### stack-update-moved-hooks
 A tool of the stack was updated on purpose without the hook count read after it, so a hook entry the update added was
@@ -2429,6 +2438,12 @@ was not so.
   checkout `D:\js-harness`, which sat 81 commits behind origin/main at PR 919's merge `04b7ac53` (`git rev-list --count
   04b7ac53..3d89c373` gives 81); fast-forwarded at about 16:00 local, it read 1461/1570. Owed: the lead fast-forwards
   that checkout after every land, to be built into `merge-queue --land`
+- Seen: 2026-11-20 — the lead's notes, plan-2026-11-18-away.state.md, the entries of 00:20 and 01:10 local, and
+  card-381-v3.md, lines 4-5 (the lead's own) — question 381's card put JH 233's Codex arms in this week, where his
+  answer to question 359 says after the reset, and priced the meter at 0.75M a point, a rate nobody had measured
+  (measured that night, about 1.6M: 6.47M moved it from 53 % to 57 %); he tapped it (f5c3ee4d:8485). The read
+  cfb6f373 found it, so the tap does not apply; the corrected card failed its read too (e5c77c69, five highs), and the
+  next one holds only what was measured
 - Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### turn-ended-waiting

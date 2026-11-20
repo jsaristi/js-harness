@@ -984,7 +984,7 @@ of the first version.
   Sources: https://github.com/GoogleChrome/modern-web-guidance and
   https://developer.chrome.com/blog/mwg-with-internal-component.
 - [ ] A spend check: a session reads its cache-read sum against its stop line before each step
-  (`spend-past-approved`). Owner: JH 239 (2026-11-19, the lead's `away-tier-2.md`).
+  (`spend-past-approved`). Owner: the next sessions-tool session (2026-11-20, `away-starts-4.md`).
 - [ ] `merge-queue --land` fast-forwards the lead's checkout (`told-him-unverified`, 81 behind). Owner: the next
   merge-queue session, after JH 234 (2026-11-19, the lead's `away-tier-2.md`).
 
