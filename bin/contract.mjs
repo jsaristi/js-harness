@@ -475,9 +475,12 @@ function stackBaseOf(git, trunk) {
   if (!base || !created.slice(created.indexOf(' ') + 1).startsWith('branch: Created from ')) return null;
   const isAncestor = (of) => git(['merge-base', '--is-ancestor', base, of]) !== null;
   if (isAncestor(trunk) || !isAncestor('HEAD')) return null;
-  const upstream = git(['rev-parse', '--symbolic-full-name', '@{upstream}'])?.[0];
+  // The branch's own pushed copy, `refs/remotes/<remote>/<its name>`, is no other branch; its upstream may well be: a
+  // branch cut from another pull request's remote-tracking ref takes that ref as its upstream (the reliability lens).
+  const own = `/${branch.slice('refs/heads/'.length)}`;
   const holders = git(['for-each-ref', '--contains', base, '--format=%(refname)', 'refs/heads', 'refs/remotes']) ?? [];
-  return holders.some((ref) => ref !== branch && ref !== upstream && !ref.endsWith('/HEAD')) ? base : null;
+  const another = (ref) => ref !== branch && !ref.endsWith('/HEAD') && !(ref.startsWith('refs/remotes/') && ref.endsWith(own));
+  return holders.some(another) ? base : null;
 }
 
 /** The pull request each commit past `trunk` belongs to, hash to a number, where `HEAD` is a candidate of the merge

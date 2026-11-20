@@ -471,7 +471,7 @@ test('a branch whose merges are not the queue\'s is one pull request, and code m
 /** A branch `stacked` cut from another session's branch `base`, which holds its own document with its pass and then its
  * code; `stacked` is made from `base` by `git checkout -b`, so its reflog says where it was created, and then opens the
  * feature document, its code after its pass or before it with `early`. With `drop`, `base` is deleted after, so no other branch holds that commit. */
-function stackedBranch(root, { early = false, drop = false } = {}) {
+function stackedBranch(root, { early = false, drop = false, remote = false } = {}) {
   git(root, 'checkout', '-q', '-b', 'base', 'origin/main');
   // A log of its own longer than the rest, so that `git log --follow`, which `trail` reads, does not take the feature
   // document for a copy of this one.
@@ -480,7 +480,15 @@ function stackedBranch(root, { early = false, drop = false } = {}) {
   commit(root, 'docs: the base\'s pass', 'odd/tasks/base.md');
   write(root, 'bin/b.mjs', 'b\n');
   commit(root, 'feat: the base\'s code', 'bin/b.mjs');
-  git(root, 'checkout', '-q', '-b', 'stacked', 'base');
+  if (remote) {
+    // Cut from the pull request's remote-tracking ref, which git then sets as the branch's upstream; no local `base`.
+    git(root, 'config', 'remote.origin.url', 'https://example.invalid/repo.git');
+    git(root, 'config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*');
+    git(root, 'update-ref', 'refs/remotes/origin/base', 'base');
+    git(root, 'checkout', '-q', '--detach');
+    git(root, 'branch', '-q', '-D', 'base');
+    git(root, 'checkout', '-q', '--track', '-b', 'stacked', 'origin/base');
+  } else git(root, 'checkout', '-q', '-b', 'stacked', 'base');
   if (drop) git(root, 'branch', '-q', '-D', 'base');
   const itsCode = () => {
     write(root, 'bin/c.mjs', 'c\n');
@@ -501,6 +509,16 @@ test('a branch stacked on another branch is judged by its own commits, and the b
   stackedBranch(root);
   assert.deepEqual(errorsOf(root), []);
   assert.deepEqual(errorsOf(root, undefined, 'odd/tasks/base.md'), []);
+});
+
+// The reliability lens on 3d89c37..30f8904: a branch cut from another pull request's remote-tracking ref takes it as its
+// upstream, and that ref is the one that holds the base; only the branch's own pushed copy is left out of the holders.
+test('a branch stacked on another pull request\'s remote-tracking ref, its upstream, is judged by its own commits', (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  stackedBranch(root, { remote: true });
+  assert.equal(git(root, 'rev-parse', '--abbrev-ref', '@{upstream}'), 'origin/base');
+  assert.deepEqual(errorsOf(root), []);
 });
 
 test('a stacked branch with its own code before its verdict is refused, by its own files alone', (t) => {

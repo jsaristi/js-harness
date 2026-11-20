@@ -69,3 +69,8 @@ Nothing: landing it is the owner's, through the lead.
   as before: a stacked pull request can still be refused on CI until its base lands. Seen while writing the fixture:
   `git log --follow` takes a new document for a copy of a similar one, so the base's document in the test carries a
   log of its own.
+- L3 (2026-11-19): reviews of 3d89c37..30f8904. Codex held for the weekly reset (2026-11-23 23:45), recorded with
+  `--unavailable`. Lenses risk: 0 findings; reliability: 1 WARNING, fixed: a branch cut from another pull request's
+  remote-tracking ref (`git checkout -b stacked origin/pr-883`) takes it as its upstream, and the upstream was left
+  out of the base's holders, so that branch was read whole. Only the branch's own pushed copy,
+  `refs/remotes/<remote>/<its name>`, is left out now; tested with a tracked remote ref.
