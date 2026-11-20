@@ -67,7 +67,9 @@ Nothing here is his but the hook's timeout: if the fix needs it changed, a recor
 - [x] T4 (kind: verify) spec 1: the measure after, on the fixture and the lead's real files
 - [x] T5 (kind: docs) spec 5: the recorded question on the timeout, if the measure says the fix needs it — question
   138, answered "Sí, 15 s" and built by JH 119 (`odd/tasks/reply-hook-timeout.md`, `bin/lib/hook-entries.mjs:129`); L12
-- [ ] T6 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice
+- [x] T6 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice — L7, L8, L9;
+  PR 732, ready notices of 2026-10-31T05:10:45Z and 05:19:39Z in the channel record, merged 05:27:15Z (ticked by
+  JH 238, 2026-11-19)
 - [x] T6a (kind: verify) spec 6: Codex reads again the fix of its partly fixed finding (`c76d97d1`) and whatever the
   verifier changes, from `8dd55c84` with `--again` (it runs no second recheck of the review that ended at `3543c9f`)
 - [x] T8 (kind: build) out of scope, for the lead: the command-block check's PowerShell parser costs 1.4–2.3 s a stop

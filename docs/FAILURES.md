@@ -60,6 +60,16 @@ kept, with no word to the harness.
   the app's `archive_session` stays outside it, and whether auto-archive stays on is his decision
 - Control: check — bin/lib/manifest.test.mjs — "asks for the closing steps before the last ready" — since 2026-11-14
 
+### app-moved-session-folder
+The Claude app moved a work session's folder out of its worktree with no word to the harness, and the worktree guard
+then refused every `cd` back into it as another session's, so the steps that run only from that worktree stopped.
+- Class: unseen-state
+- Seen: 2026-11-19 — relief file, line 3360; the lead's notes, jh234-blocked-cwd.md (claimed) — at about 06:20Z the
+  app moved JH 234's folder from `lead-detaches-sessions-be095b` to `D:\js-harness`, and `change_directory` refused to
+  move it back; the guard refused `cd` into both of its worktrees, so `rules change session-housekeeping` and
+  `npm run check` waited for his return while the commits went through `git -C`. The lead had archived JH 212, whose
+  old folder that worktree was, between 05:50Z and 06:00Z: a possible cause, not checked
+
 ### asked-yes-not-his
 A session stopped and asked him for a yes on a step that was not one of the things that are his.
 - Class: asked-of-him
@@ -95,6 +105,17 @@ commits of `main` and answer with a range many times too large.
   branch's; the branch point as the base gave the real range
 - Control: check — bin/check-codex-reviews.test.mjs — "after main is merged in, the push row hints
   the base the plain row sizes" — since 2026-10-14
+
+### away-hours-no-work
+He left the sessions alone for hours and the work did not move: `rule:away-autonomy` asks the work to go on while he
+is away, and nothing made the sessions take more work once the briefs they held ended or waited.
+- Class: rule-not-acting
+- Seen: 2026-11-19 — JH PLAN's transcript f5c3ee4d, line 7527 (checked with `js-harness sessions --quote`); the
+  lead's notes, plan-2026-11-18-away.state.md, the entries of 11:25 and 15:30, and
+  miniplan-010-away-hours-produce-work.md, "What is known" (not measured) — the night of 2026-11-18 to 19, about 8
+  hours away, he read "el avance de fue nulo": the map moved 0 points, about 3.5 h worked of 10; the work waited on
+  a start only his typed turn allows, his typed words, the held Codex gate, and no next brief for a session that
+  finished
 
 ### block-read-as-task
 A block meant to hold his answer was worded as an instruction and he read it as a task for him to
@@ -1767,6 +1788,17 @@ without that review, and the choice went to him.
 - Proof: `js-harness guard --hook` denies a gentle-ai review whose `--base-ref` is off its head's first-parent line; the
   timeout itself is `js-harness-protocols` section 3 (one more run, then on, unreviewed, with Codex)
 
+### rule-branch-held-unpushed
+An unpushed `rule/` branch held the one open rule change while its session sat idle, and nothing showed it until
+another session's `rules change` was refused.
+- Class: unseen-state
+- Seen: 2026-11-19 — relief file, line 3447; the lead's notes, return-block-2.md, "Failed or past its line" — JH 234's
+  `rules change session-housekeeping` was refused at 14:52 local: `rule/plan-pre-prompt` (JH 227, unpushed) held the
+  open rule change, so it waits for that branch to land or be dropped
+- Seen: 2026-11-19 — relief file, line 3466; plan-2026-11-18-away.state.md, the entry of 17:40 — JH 233's dry run of
+  the review-effort rule change was refused at 16:45 local by the same branch (18 commits unpushed, `500afaa7`), which
+  became question 379: park it as `parked/plan-pre-prompt` or wait for the senior's task 3 after the reset
+
 ### rule-only-in-memory
 A rule lived only in an agent's memory note, so he repeated it and sessions already open did not get
 it or did not follow it.
@@ -1968,6 +2000,19 @@ after it was made: nothing measured the spend against the figure while the work 
   Codex review rounds (1.25M, then 1M-1.5M) with no answer of his covering them, while it had held JH 234's review
   and slice 2 as a spend question; fix: no third round, and each Codex round the lead starts cites the answer that
   covers it
+- Seen: 2026-11-19 — relief file, line 3463 (the lead's own); the lead's notes, return-block-2.md, "Question 378" —
+  JH 236 (S8 T6) spent 12.74M cache-read against the lead's estimate of 3M to 6M and passed its 9M stop line before
+  it stopped, its two open items not started; the estimate rested on no measured session of that kind
+- Seen: 2026-11-19 — relief file, line 3471; the lead's notes, jh237-state.md — JH 237, sent to finish JH 236's two
+  items with a 6M stop line, stopped at 8.03M cache-read, past the line
+- Seen: 2026-11-19 — relief file, lines 3435 and 3446; the channel record, line 3744 (the senior's message to him) —
+  the senior (JH SR) closed T10 at 14.56M cache-read against about 5M for its fourth round (question 362) and 1M to
+  2M to close (question 374); the fourth round alone read 8.07M against 5.2M estimated, past its 7.8M line
+- Seen: 2026-11-19 — this session's transcript e4f84f70, its `cache_read_input_tokens` summed (JH 238's own) — JH 238,
+  a documents-only brief with a 6M stop line, first read its spend at 8.54M, when the lead's second brief asked for
+  it. The fourth session in one day, after JH SR, JH 236 and JH 237, that read its spend after its line and not
+  before it: no command prints a session's cumulative cache-read against its line (the spend check in the roadmap's
+  Later list)
 
 ### stack-update-moved-hooks
 A tool of the stack was updated on purpose without the hook count read after it, so a hook entry the update added was
@@ -2378,6 +2423,12 @@ was not so.
 - Seen: 2026-11-17 — relief file, the block at line 3162 and its correction at line 3172 (the lead's own) — the
   block written for a start from zero said PR 903 had landed, without a read of its state; `gh` gave it OPEN, its
   head 9a9d448d not in main
+- Seen: 2026-11-19 — relief file, lines 3458 and 3459 (the lead's own); the lead's notes, return-block-2.md, "The map
+  did not move", and progress-owed-boxes.md; plan-2026-11-18-away.state.md, the entries of 11:25 and 15:30 — he was
+  told twice that the map had not moved overnight (1454/1566), read by `js-harness progress` in the lead's main
+  checkout `D:\js-harness`, which sat 81 commits behind origin/main at PR 919's merge `04b7ac53` (`git rev-list --count
+  04b7ac53..3d89c373` gives 81); fast-forwarded at about 16:00 local, it read 1461/1570. Owed: the lead fast-forwards
+  that checkout after every land, to be built into `merge-queue --land`
 - Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### turn-ended-waiting
