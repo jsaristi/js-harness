@@ -6,9 +6,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-/** A folder holding a typescript-language-server shim and package, beside a TypeScript that ships
- * `lib/tsserver.js`. The caller removes it. */
-export function makeLanguageServerPrefix() {
+/** A folder holding a typescript-language-server shim and package, beside a TypeScript at `version` that ships
+ * `lib/tsserver.js` where `tsserver` is set (TypeScript 7 ships none). The caller removes it. */
+export function makeLanguageServerPrefix({ version = '5.9.3', tsserver = true } = {}) {
   const prefix = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-lsp-'));
   const write = (relative, text) => {
     const file = path.join(prefix, relative);
@@ -17,8 +17,8 @@ export function makeLanguageServerPrefix() {
   };
   write('node_modules/typescript-language-server/package.json', JSON.stringify({ name: 'typescript-language-server' }));
   for (const name of ['typescript-language-server', 'typescript-language-server.cmd']) write(name, '');
-  write('node_modules/typescript/package.json', JSON.stringify({ name: 'typescript', version: '5.9.3', main: './lib/typescript.js' }));
-  for (const name of ['typescript.js', 'tsserver.js']) write(`node_modules/typescript/lib/${name}`, '');
+  write('node_modules/typescript/package.json', JSON.stringify({ name: 'typescript', version, main: './lib/typescript.js' }));
+  for (const name of tsserver ? ['typescript.js', 'tsserver.js'] : ['typescript.js']) write(`node_modules/typescript/lib/${name}`, '');
   return prefix;
 }
 

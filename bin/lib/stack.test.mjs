@@ -508,6 +508,27 @@ test("typescript-lsp project reads this machine's PATH with this machine's delim
   }
 });
 
+test('typescript-lsp project is down where the server is not on the path, even beside a project TypeScript that would serve', () => {
+  const machine = lspMachine({ server: false });
+  try {
+    writeTypeScript(path.join(machine.project, 'node_modules', 'typescript'), { version: '5.9.3', tsserver: true });
+    assert.equal(findTool('typescript-lsp').project(machine), 'down');
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+test('typescript-lsp project is unknown where the project TypeScript does not serve and the server package cannot be found from its shim', () => {
+  const machine = lspMachine({ server: false });
+  try {
+    for (const name of ['typescript-language-server', 'typescript-language-server.cmd']) fs.writeFileSync(path.join(machine.env.PATH, name), '');
+    writeTypeScript(path.join(machine.project, 'node_modules', 'typescript'), { version: '7.0.2', tsserver: false });
+    assert.equal(findTool('typescript-lsp').project(machine), 'unknown');
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
 test('typescript-lsp project is n/a while the plugin is not installed: the installed gap covers it', () => {
   const machine = lspMachine({ version: '7.0.2', tsserver: false });
   try {

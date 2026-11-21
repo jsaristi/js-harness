@@ -219,9 +219,14 @@ export const ENGRAM_SETUP_CLAUDE = 'engram setup claude-code';
  * so a pnpm machine is told `pnpm add -g` and never `npm` (the stack rule). npm keeps `i -g`, the line doctor always
  * printed. `env` is the environment doctor was given, without one the process's; each word is quoted for `platform`,
  * the one the line is run on. */
-function installLine(spec, { env, platform = process.platform }) {
+function installLine(spec, deps) {
+  return packageLine('-g', spec, deps);
+}
+
+/** The package manager's add of `spec` with `flag` (`-g` global, `-D` the project's development dependency). */
+function packageLine(flag, spec, { env, platform = process.platform }) {
   const pm = resolveStackPm(undefined, env ?? process.env);
-  return [...pm.words, pm.kind === 'pnpm' ? 'add' : 'i', '-g', spec].map((word) => shownWord(word, platform)).join(' ');
+  return [...pm.words, pm.kind === 'pnpm' ? 'add' : 'i', flag, spec].map((word) => shownWord(word, platform)).join(' ');
 }
 
 const TYPESCRIPT_LSP = 'typescript-lsp@claude-plugins-official';
@@ -271,33 +276,34 @@ function languageServerPackage(env, platform) {
 /** Whether the plugin's server can start for `project`, read from files only and never started: it needs a TypeScript
  * that ships `lib/tsserver.js`, which TypeScript 7 does not (the plugin, typescript-lsp 1.0.0, runs
  * `typescript-language-server --stdio`). The server takes the project's own TypeScript first, then the one its own
- * package resolves, as `require('typescript')` from it does. `{ state, reason }`: `ok`; `down` with why; `unknown`
- * where the server's package cannot be found from its shim; `n/a` with no project or while the plugin is not
- * installed, which the `installed` gap already shows. */
+ * package resolves, as `require('typescript')` from it does. `{ state, reason }`: `ok`; `down` with why, a server
+ * not on the path first; `unknown` where the project's TypeScript does not serve and the server's package cannot be
+ * found from its shim, so the TypeScript it would take next cannot be read; `n/a` with no project or while the plugin
+ * is not installed, which the `installed` gap already shows. */
 function languageServerStart({ home, project, env = process.env, platform = process.platform }) {
   if (!home || !project || pluginInstalledVersion(home, TYPESCRIPT_LSP).state !== 'ok') return { state: 'n/a' };
-  const workspace = workspaceTypeScript(project);
-  if (workspace && fs.existsSync(path.join(workspace, 'tsserver.js'))) return { state: 'ok' };
   const server = languageServerPackage(env, platform);
   if (!server.found) return { state: 'down', missing: true, reason: `${TYPESCRIPT_LSP_SERVER}, the server the plugin starts, is not on the path` };
+  const workspace = workspaceTypeScript(project);
+  if (workspace && fs.existsSync(path.join(workspace, 'tsserver.js'))) return { state: 'ok' };
+  if (!server.packageDir) return { state: 'unknown' };
   let bundled = null;
-  if (server.packageDir) {
-    try {
-      bundled = path.dirname(createRequire(path.join(server.packageDir, 'package.json')).resolve('typescript'));
-    } catch {
-      // No TypeScript the server can require.
-    }
-  } else if (!workspace) return { state: 'unknown' };
+  try {
+    bundled = path.dirname(createRequire(path.join(server.packageDir, 'package.json')).resolve('typescript'));
+  } catch {
+    // No TypeScript the server can require.
+  }
   if (bundled && fs.existsSync(path.join(bundled, 'tsserver.js'))) return { state: 'ok' };
   const found = [workspace && `the project's TypeScript ${typeScriptVersion(workspace)} (${workspace})`, bundled && `TypeScript ${typeScriptVersion(bundled)} beside the server (${bundled})`].filter(Boolean);
-  const what = found.length > 0 ? `${found.join(' and ')} ships no tsserver.js` : 'no TypeScript is there for it';
-  return { state: 'down', reason: `the plugin cannot start: ${what}, which ${TYPESCRIPT_LSP_SERVER} needs and TypeScript 7 no longer ships. Either fix is yours to choose:` };
+  const what = found.length > 0
+    ? `${found.join(' and ')} ships no tsserver.js, which ${TYPESCRIPT_LSP_SERVER} needs and TypeScript 7 no longer ships`
+    : `${TYPESCRIPT_LSP_SERVER} finds no TypeScript to start on`;
+  return { state: 'down', reason: `the plugin cannot start: ${what}. Either fix is yours to choose:` };
 }
 
 /** The project's development install of `spec`, in the machine's package manager, quoted for `platform`. */
-function devInstallLine(spec, { env, platform = process.platform }) {
-  const pm = resolveStackPm(undefined, env ?? process.env);
-  return [...pm.words, pm.kind === 'pnpm' ? 'add' : 'i', '-D', spec].map((word) => shownWord(word, platform)).join(' ');
+function devInstallLine(spec, deps) {
+  return packageLine('-D', spec, deps);
 }
 
 /** The `project` fix of a server that cannot start: the reason, then the fixes, none applied here. */
