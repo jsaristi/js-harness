@@ -116,11 +116,13 @@ export function failureLine(outcome) {
   }
 }
 
-/** What the weekly limit says of a review about to launch, from an outcome of `readRateLimits` and `floor`, the percent
- * of the weekly limit that must be left (rule:codex-weekly-floor): `{ stop: true, left }` at or under it, `{ stop:
- * false, left }` above it, and `{ stop: false, unread }` with why when the read failed or its answer held no weekly
- * limit, since a reading that is not there stops nothing (odd/tasks/double-review-alignment.md, T2). A read the person
- * interrupted is `{ stop: true, interrupted: true }`: the Ctrl-C was meant for the command, not for the read alone. */
+/** What the weekly limit says of a review about to launch, from an outcome of `readRateLimits`, `floor`, the percent
+ * of the weekly limit that must be left (rule:codex-weekly-floor), and `stopAt`, the percent used at or past which
+ * nothing starts until the reset (rule:codex-weekly-stop): `{ stop: true, left }` at or under the floor, `{ stop: true,
+ * left, used, by: 'stop' }` above it at or past the stop, `{ stop: false, left }` otherwise, and `{ stop: false, unread }`
+ * with why when the read failed or its answer held no weekly limit, since a reading that is not there stops nothing
+ * (odd/tasks/double-review-alignment.md, T2). A read the person interrupted is `{ stop: true, interrupted: true }`: the
+ * Ctrl-C was meant for the command, not for the read alone. The name keeps the floor, the check it was written for. */
 export function weeklyFloor(outcome, floor, stopAt) {
   if (!outcome.ok && outcome.reason === 'interrupted') return { stop: true, interrupted: true };
   if (!outcome.ok) return { stop: false, unread: failureLine(outcome) };
@@ -181,10 +183,11 @@ export function launchWord(outcome, { floor, stopAt, base, at, part = null, read
   if (weekly.stop && weekly.by === 'stop') {
     return { note: null, stop: weeklyStopped({ used: weekly.used, stopAt, base, at, part, read }), by: 'stop' };
   }
-  if (weekly.stop && !weekly.interrupted) return { note: null, stop: floorStopped({ ...weekly, floor, base, at, part, read }), by: 'floor' };
+  // At the floor, or a read the person interrupted: floorStopped words both, and only the floor is a `by`.
+  if (weekly.stop) return { note: null, stop: floorStopped({ ...weekly, floor, base, at, part, read }), ...(weekly.interrupted ? {} : { by: 'floor' }) };
   return {
     note: weekly.unread === undefined ? null : `Codex's weekly limit could not be read before the launch: ${weekly.unread} The ${read ? 'read' : 'review'} runs without it.`,
-    stop: weekly.stop ? floorStopped({ ...weekly, floor, base, at, part, read }) : null,
+    stop: null,
   };
 }
 

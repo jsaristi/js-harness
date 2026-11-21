@@ -433,7 +433,8 @@ async function readCommand(args, root, env, deps, { log, error }) {
   const model = READER_MODEL;
   for (const line of announceLines({ files: sources.map((one) => one.rel), diff: args.diff, model })) log(line);
   if (args.plan) return 0;
-  // The weekly limit, read before both readers start (rule:codex-weekly-floor): at or under its floor neither starts.
+  // The weekly limit, read before both readers start: at its floor (rule:codex-weekly-floor) or its stop
+  // (rule:codex-weekly-stop) neither starts.
   const readMeter = deps.readMeter ?? (() => readRateLimits({ platform: deps.platform ?? process.platform }));
   const weekly = launchWord(await readMeter(), { floor: CODEX_WEEKLY_FLOOR, stopAt: CODEX_WEEKLY_STOP, read: true });
   if (weekly.note !== null) log(weekly.note);

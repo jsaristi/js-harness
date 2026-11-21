@@ -1795,8 +1795,8 @@ async function reviewRun(argv, env, deps, snapshot) {
         if (headNow !== head) return `HEAD moved from ${head.slice(0, 7)} to ${headNow.slice(0, 7)}`;
         return tree === '' ? null : 'tracked files differ from HEAD';
       };
-      // The weekly limit, read before each session: at or under its floor nothing more is started and the user decides
-      // on the reset, so a part that spent down to it stops the next; a reading that is not there says so and runs.
+      // The weekly limit, read before each session: at its floor (the user decides on the reset) or its stop (no reset
+      // asked) nothing more is started, so a part that spent down to it stops the next; a reading not there runs.
       const weekly = launchWord(await readMeter(), { floor: CODEX_WEEKLY_FLOOR, stopAt: CODEX_WEEKLY_STOP, base: requested, at: head, part });
       if (weekly.note !== null) log(weekly.note);
       if (weekly.stop !== null) {
