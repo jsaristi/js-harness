@@ -25,9 +25,9 @@ export function checkClaudeBudget(cwd) {
 // file in its folder, so each holds only what is bound to that place and names the rules it rests on, never their text.
 export const FOLDER_INSTRUCTIONS = ['odd/tasks/CLAUDE.md', 'bin/CLAUDE.md', 'docs/CLAUDE.md', 'evals/CLAUDE.md'];
 
-/** The lines a folder instruction file may hold (the layout of odd/tasks/activity-folders-trial.md: under 50 each). A
+/** The most lines a folder instruction file may hold: 49, since the layout of odd/tasks/activity-folders-trial.md says under 50. A
  * constant until a `rules change` declares it, which only a rule/ branch can do. */
-export const FOLDER_INSTRUCTIONS_LINES = 50;
+export const FOLDER_INSTRUCTIONS_LINES = 49;
 
 const NAMED = /`rule:([a-z][a-z0-9-]*)`/g;
 const squash = (text) => text.replace(/\s+/g, ' ');

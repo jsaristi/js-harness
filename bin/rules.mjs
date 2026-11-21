@@ -35,6 +35,7 @@ import { readRecords } from './lib/rules-applied-read.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
+import { FOLDER_INSTRUCTIONS } from './lib/claude-md-budget.mjs';
 import { changeRule, changeRules } from './lib/rules-change-run.mjs';
 import { ADVISOR_QUESTION, PROBE_PROMPT, PROBE_QUESTION, SWITCH_USAGE, claudeProbeArgs, codexFeaturesOf, codexProbeArgs, parseSwitch, switchRules } from './lib/rules-switch.mjs';
 import { proofSaid, proveBreaks, readCoverage, REGISTER_PATH } from './lib/rules-coverage-read.mjs';
@@ -163,7 +164,8 @@ function codeFilesUnder(root) {
  * feature document under `odd/tasks/`, cut at its `## Progress` or `## Log` line, sorted by path. */
 function textFilesUnder(root) {
   const files = [];
-  for (const file of ['docs/ROADMAP.md', 'docs/SPEC.md', 'bin/CLAUDE.md', 'docs/CLAUDE.md', 'evals/CLAUDE.md']) {
+  // odd/tasks/CLAUDE.md is read below with the feature documents; it holds no Log line, so it is read whole.
+  for (const file of ['docs/ROADMAP.md', 'docs/SPEC.md', ...FOLDER_INSTRUCTIONS.filter((name) => !name.startsWith('odd/tasks/'))]) {
     const text = readOptional(root, file);
     if (text !== null) files.push({ path: file, text });
   }
