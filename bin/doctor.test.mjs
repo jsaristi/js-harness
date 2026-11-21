@@ -1,9 +1,10 @@
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { doctorMain, resolveLatestVersions } from './doctor.mjs';
+import { makeLanguageServerPrefix, withLanguageServer } from './lib/language-server.testkit.mjs';
 import { readCache, readReviewed, writeCache } from './lib/cache.mjs';
 import { recordOptionalFile } from './lib/manifest.mjs';
 import { launcherFileName, loginLauncher, remoteFiles, remoteId } from './lib/remote.mjs';
@@ -92,6 +93,10 @@ function fakeSpawn({ versions = {}, gitToplevel, lsFiles, codexLogin, loginEnvs 
 }
 
 /** Runs `doctorMain`, capturing everything it printed via console.log and the exit code. */
+/** The language server every test gives doctor (./lib/language-server.testkit.mjs). */
+const LSP_PREFIX = makeLanguageServerPrefix();
+after(() => fs.rmSync(LSP_PREFIX, { recursive: true, force: true }));
+
 async function runDoctor(argv, env, deps) {
   let output = '';
   const original = console.log;
@@ -99,7 +104,7 @@ async function runDoctor(argv, env, deps) {
     output += `${line}\n`;
   };
   try {
-    const code = await doctorMain(argv, env, deps);
+    const code = await doctorMain(argv, withLanguageServer(LSP_PREFIX, env), deps);
     return { code, output };
   } finally {
     console.log = original;

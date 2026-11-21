@@ -403,6 +403,122 @@ test('typescript-lsp reads its version from installed_plugins.json', () => {
   }
 });
 
+// --- project: typescript-lsp can start (the TypeScript its server resolves ships lib/tsserver.js) ---
+
+/** A machine with the plugin installed and typescript-language-server on PATH at `<root>/prefix`, its own
+ * TypeScript at `version`, with `lib/tsserver.js` where `tsserver` is set (TypeScript 7 ships none). */
+function lspMachine({ version = '5.9.3', tsserver = true, server = true } = {}) {
+  const root = makeTmpHome('js-harness-stack-lsp-');
+  writeJson(path.join(root, '.claude', 'plugins', 'installed_plugins.json'), {
+    version: 2,
+    plugins: { 'typescript-lsp@claude-plugins-official': [{ version: '1.0.0' }] },
+  });
+  const prefix = path.join(root, 'prefix');
+  fs.mkdirSync(prefix, { recursive: true });
+  if (server) {
+    writeJson(path.join(prefix, 'node_modules', 'typescript-language-server', 'package.json'), { name: 'typescript-language-server' });
+    for (const name of ['typescript-language-server', 'typescript-language-server.cmd']) fs.writeFileSync(path.join(prefix, name), '');
+    writeTypeScript(path.join(prefix, 'node_modules', 'typescript'), { version, tsserver });
+  }
+  const project = path.join(root, 'project');
+  fs.mkdirSync(project, { recursive: true });
+  return { root, home: root, project, env: { PATH: prefix, JS_HARNESS_PM: 'npm' } };
+}
+
+function writeTypeScript(dir, { version, tsserver }) {
+  writeJson(path.join(dir, 'package.json'), { name: 'typescript', version, exports: { '.': './lib/version.cjs' } });
+  fs.mkdirSync(path.join(dir, 'lib'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'lib', 'version.cjs'), '');
+  if (tsserver) fs.writeFileSync(path.join(dir, 'lib', 'tsserver.js'), '');
+}
+
+test('typescript-lsp project is ok where the TypeScript its server resolves ships lib/tsserver.js', () => {
+  const machine = lspMachine();
+  try {
+    const tool = findTool('typescript-lsp');
+    assert.equal(tool.project(machine), 'ok');
+    assert.equal(tool.fix(machine).project, undefined);
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+test('typescript-lsp project is down where its server would resolve TypeScript 7, and names both fixes without applying either', () => {
+  const machine = lspMachine({ version: '7.0.2', tsserver: false });
+  try {
+    const tool = findTool('typescript-lsp');
+    assert.equal(tool.project(machine), 'down');
+    const [reason, ...fixes] = tool.fix(machine).project;
+    assert.match(reason, /TypeScript 7\.0\.2/);
+    assert.match(reason, /tsserver\.js/);
+    assert.equal(fixes.length, 2);
+    assert.match(fixes[0], /^npm i -D .*typescript@<7/);
+    assert.match(fixes[1], /TypeScript 7/);
+    assert.match(fixes[1], /enabledPlugins/);
+    const settings = path.join(machine.project, '.claude', 'settings.local.json');
+    assert.equal(fs.existsSync(settings), false, 'the check writes nothing');
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+test('typescript-lsp project is ok where the project has its own TypeScript with lib/tsserver.js, whatever the server holds', () => {
+  const machine = lspMachine({ version: '7.0.2', tsserver: false });
+  try {
+    writeTypeScript(path.join(machine.project, 'node_modules', 'typescript'), { version: '5.9.3', tsserver: true });
+    assert.equal(findTool('typescript-lsp').project(machine), 'ok');
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+test('typescript-lsp project is down naming the project\'s TypeScript 7 where neither it nor the server\'s ships lib/tsserver.js', () => {
+  const machine = lspMachine({ version: '7.0.2', tsserver: false });
+  try {
+    writeTypeScript(path.join(machine.project, 'node_modules', 'typescript'), { version: '7.0.1', tsserver: false });
+    const tool = findTool('typescript-lsp');
+    assert.equal(tool.project(machine), 'down');
+    assert.match(tool.fix(machine).project[0], /7\.0\.1/);
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+test('typescript-lsp project is down where typescript-language-server is not on the path, with its install line', () => {
+  const machine = lspMachine({ server: false });
+  try {
+    const tool = findTool('typescript-lsp');
+    assert.equal(tool.project(machine), 'down');
+    const fix = tool.fix(machine).project;
+    assert.match(fix[0], /not on the path/);
+    assert.equal(fix[1], 'npm i -g typescript-language-server');
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+test("typescript-lsp project reads this machine's PATH with this machine's delimiter, whatever platform its lines are shown for", () => {
+  const machine = lspMachine();
+  try {
+    const other = process.platform === 'win32' ? 'linux' : 'win32';
+    const env = { ...machine.env, PATH: [path.join(machine.root, 'elsewhere'), machine.env.PATH].join(path.delimiter) };
+    assert.equal(findTool('typescript-lsp').project({ ...machine, env, platform: other }), 'ok');
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+test('typescript-lsp project is n/a while the plugin is not installed: the installed gap covers it', () => {
+  const machine = lspMachine({ version: '7.0.2', tsserver: false });
+  try {
+    fs.rmSync(path.join(machine.home, '.claude', 'plugins'), { recursive: true, force: true });
+    assert.equal(findTool('typescript-lsp').project(machine), 'n/a');
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+
 test('typescript-lsp is missing when installed_plugins.json does not exist', () => {
   const home = makeTmpHome();
   try {
