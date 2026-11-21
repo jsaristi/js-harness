@@ -300,6 +300,23 @@
       "by": "command"
     }
   },
+  "codex-weekly-stop": {
+    "kind": "words",
+    "quotes": [
+      {
+        "quote": "Ok te apruebo y autorizo todos los cambios que me dices y hazlos todos sin cuestion alguna listo?",
+        "date": "2026-11-21",
+        "session": "0cdab702-72bd-48e7-8a8e-0c38d4aca9c9",
+        "line": 6508
+      }
+    ],
+    "reading": "Line 6503 (JH PLAN, 2026-11-21T08:48:58Z) offered him three changes; the first was \"Subir el tope de Codex por esta semana, o bajar el revisor de esfuerzo máximo a alto\". The cap half is taken and the reviewer's effort stays at max. The 70 is 6503's own example sentence, \"sube el tope de Codex a 70% hasta el reinicio\". No declared rule held the earlier 60% stop (it lived in the lead's notes from question 346), so this declares it as a new rule. His typed answer at 6508 approves \"todos los cambios\". Going back to 60 after the reset is a later change of this rule.",
+    "accepted": "0cdab702-72bd-48e7-8a8e-0c38d4aca9c9 line 6508, 2026-11-21T08:54:13Z: \"Ok te apruebo y autorizo todos los cambios que  me dices y hazlos todos sin cuestion alguna listo?\"",
+    "checked": {
+      "date": "2026-11-21",
+      "by": "command"
+    }
+  },
   "context-pause": {
     "kind": "words",
     "quotes": [

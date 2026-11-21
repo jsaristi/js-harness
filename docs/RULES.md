@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `41acc56f64de`. In force: 73 (45 of Sebastián, 28 of the project). Retired: 9.
+Hash `aed624301c2f`. In force: 74 (46 of Sebastián, 28 of the project). Retired: 9.
 
 ## Sebastián's
 
@@ -50,6 +50,11 @@ The most input tokens a Codex review may cost for each changed line of its slice
 The share of Codex's weekly limit left at or under which a Codex review starts nothing and the user decides on the reset: 2 percent of the weekly limit left.
 - Read by: `bin/codex-review.mjs`.
 - Since 2026-11-02. Row: reports. Source: his words of 2026-11-01, 2026-11-01, 2026-11-01, checked by the command on 2026-11-02.
+
+### codex-weekly-stop
+The share of Codex's weekly limit used at or past which a Codex review or a double review's read starts nothing until the weekly reset: 70 percent of the weekly limit used.
+- Read by: `bin/codex-review.mjs`.
+- Since 2026-11-21. Row: reports. Source: his words of 2026-11-21, checked by the command on 2026-11-21.
 
 ### context-pause
 The share of its context window at which a session pauses, writes its state and judges whether what is left fits before the host compacts: 88 percent of the context window. The flag `--context-pause` overrides it for one run.

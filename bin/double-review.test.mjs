@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { doubleReviewMain, parseArgs, READER_MODEL, SKIP_PHRASE } from './double-review.mjs';
+import { CODEX_WEEKLY_STOP } from './codex-review.mjs';
 import { readDoubleReviews } from './lib/double-review-records.mjs';
 import { readCodexReviews } from './lib/codex-reviews.mjs';
 import { appendCodexReviewRun } from './lib/codex-review-runs.mjs';
@@ -207,6 +208,15 @@ test('at or under the floor of the weekly limit neither reader starts and nothin
   assert.equal(await doubleReviewMain(['read', 'plan.md'], {}, unread.deps), 0);
   assert.match(unread.lines.log.join('\n'), /could not be read before the launch: .+ The read runs without it\./);
   assert.equal(calls.length, 2, 'both readers start');
+});
+
+test('at the stop of the week neither reader starts and nothing is recorded (rule:codex-weekly-stop)', async (t) => {
+  const root = makeRepo(t);
+  const { spawn, calls } = fakeSpawn((command, args, prompt) => (command === 'codex' ? codexAnswer(args, prompt, []) : { stdout: claudeOut(prompt, []) }));
+  const stopped = deps(t, root, spawn, { readMeter: async () => ({ ok: true, result: { rateLimits: { secondary: { usedPercent: CODEX_WEEKLY_STOP } } } }) });
+  assert.equal(await doubleReviewMain(['read', 'plan.md'], {}, stopped.deps), 1);
+  assert.equal(calls.length, 0, 'no reader is started');
+  assert.match(stopped.lines.error.join('\n'), /at or past its stop of .+ so neither reader was started and nothing was recorded/);
 });
 
 test('a reader that does not echo the read token of every copy did not open them: the read is recorded as failed for it, exit 1', async (t) => {

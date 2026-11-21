@@ -155,6 +155,14 @@ export const RULES = [
     "unit": "percent of the weekly limit left"
   },
   {
+    "id": "codex-weekly-stop",
+    "subject": "the share of Codex's weekly limit used at or past which a Codex review or a double review's read starts nothing until the weekly reset",
+    "owner": "sebastian",
+    "since": "2026-11-21",
+    "value": 70,
+    "unit": "percent of the weekly limit used"
+  },
+  {
     "id": "context-pause",
     "subject": "the share of its context window at which a session pauses, writes its state and judges whether what is left fits before the host compacts",
     "owner": "sebastian",

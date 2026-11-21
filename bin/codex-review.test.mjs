@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import {
-  childEnv, CODEX_WEEKLY_FLOOR, codexArgs, codexReviewMain, EXCUSED_LINE, mergeReviewSaid, OWN_OUT_OF_TURN, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, REVIEW_TIMEOUT_MS, turnSaid, turnStopped,
+  childEnv, CODEX_WEEKLY_FLOOR, CODEX_WEEKLY_STOP, codexArgs, codexReviewMain, EXCUSED_LINE, mergeReviewSaid, OWN_OUT_OF_TURN, parseEvents, patchKeys, quoteWindowsArg, REVIEW_EFFORT, REVIEW_MODEL, REVIEW_TIMEOUT_MS, turnSaid, turnStopped,
   reviewEvidence, windowsCommandLine,
 } from './codex-review.mjs';
 import { afterTurn } from './lib/codex-review-turns.mjs';
@@ -932,6 +932,20 @@ test('the `codex --version` probe goes through the same launch path and environm
   assert.deepEqual(win.probes[0].args, []);
   assert.equal(win.probes[0].opts.shell, true);
   assert.deepEqual(win.probes[0].opts.env, { Path: 'C:\\Windows' });
+});
+
+test('at or past the stop of the week nothing is started or recorded, no reset is asked, and the skip is named', async () => {
+  const { root, base } = makeRepo();
+  for (const usedPercent of [CODEX_WEEKLY_STOP, 100 - CODEX_WEEKLY_FLOOR - 1]) {
+    const fake = fakeCodex(reviewed(root, base));
+    const result = await run(['--base', 'HEAD~1', '--cwd', root], { ...fake, readMeter: async () => ({ ok: true, result: { rateLimits: { secondary: { usedPercent } } } }) });
+    assert.equal(result.code, 1, result.out);
+    assert.match(result.err, /at or past its stop of \d+(\.\d+)?% \(rule:codex-weekly-stop\)/);
+    assert.doesNotMatch(result.err, /whether to reset the weekly limit/);
+    assert.match(result.err, /--unavailable "weekly limit at its stop/);
+    assert.equal(wrote(root), false);
+    assert.equal(fake.calls.length, 0, 'the review is not spawned');
+  }
 });
 
 test('at or under the floor of the weekly limit nothing is started or recorded, and the user is asked about the reset', async () => {
