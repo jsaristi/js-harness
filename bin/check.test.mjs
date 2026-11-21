@@ -115,6 +115,14 @@ test('checkFolderInstructions gives no row outside the harness repository, whate
   }
 });
 
+// The lens review of PR 943's fixes: the gate's default must hold in this repository, or the four rows of spec 2 vanish.
+test('checkFolderInstructions gives this repository a passing row for each of the four folder files, by default', () => {
+  const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const rows = checkFolderInstructions(repo);
+  assert.deepEqual(rows.map((row) => row.name), FOLDER_INSTRUCTIONS.map((file) => `folder instructions ${file}`));
+  assert.ok(rows.every((row) => row.pass), JSON.stringify(rows));
+});
+
 test('checkFolderInstructions counts no rule mark that sits inside a fenced block', () => {
   const dir = makeTmpDir();
   try {
