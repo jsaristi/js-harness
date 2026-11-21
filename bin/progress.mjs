@@ -8,6 +8,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseRoadmap, parseFeature } from './lib/progress.mjs';
+import { FOLDER_INSTRUCTIONS } from './lib/claude-md-budget.mjs';
 import { baselineCommitArgs, baselineLines, baselineOf, EMPTY_TREE_ARGS, PACE_DAYS, PACE_REF_ARGS, paceLines, paceLogArgs, paceOf, paceRef, parsePaceLog, parseTree, treeArgs, WEEK_DAYS, windowStart } from './lib/progress-pace.mjs';
 
 export const USAGE = [
@@ -221,7 +222,7 @@ function readFeatures(root, readFile, readdir, stat, stderr) {
   }
 
   const mdEntries = entries
-    .filter((entry) => entry.name.endsWith('.md'))
+    .filter((entry) => entry.name.endsWith('.md') && !FOLDER_INSTRUCTIONS.includes(`odd/tasks/${entry.name}`))
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 
   const features = [];

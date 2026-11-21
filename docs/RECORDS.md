@@ -64,7 +64,7 @@ where an auditor checks them, since no schema holds the fields and nothing check
 
 - `# <folder>: <what lives there>`, a line that says when the host loads the file, then bullets bound to that folder.
 - Each bullet names the rule it rests on as `rule:<id>` and repeats no rule's text.
-- `bin/lib/claude-md-budget.mjs` `checkFolderInstructions` holds each file to `FOLDER_INSTRUCTIONS_LINES` lines in `check`; `bin/rules.mjs` reads the three outside `odd/` for `rules check`.
+- `bin/lib/claude-md-budget.mjs` `checkFolderInstructions` holds each file to `FOLDER_INSTRUCTIONS_LINES` lines in `check`; `bin/rules.mjs` reads all four whole for `rules check`, and `progress` and the depth-pass judge leave them out of the features.
 
 ## The project's own rules
 

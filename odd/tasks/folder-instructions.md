@@ -7,8 +7,8 @@ Delivery: one draft pull request to main · Test runner: `node --test`
 Done and committed by JH 271 (JH 268 built it and committed nothing): the four folder files, their `check` rows,
 their place in `rules check`, the SPEC row and its RECORDS section, the load probe and its measured run (L6), the
 depth-pass judge skipping the folder files, the lens rounds (L7). Open: Codex's review, queued (L5); the moves of
-lines out of `CLAUDE.md` and `AGENTS.md`, each a `rules change` on a rule/ branch (L4). Not checked: whether `resume`
-lists `odd/tasks/CLAUDE.md` as a feature.
+lines out of `CLAUDE.md` and `AGENTS.md`, each a `rules change` on a rule/ branch (L4). `progress` no longer lists
+`odd/tasks/CLAUDE.md` as a feature (L8); `resume` lists folders, not documents, so it gets no row there.
 
 ## Goal
 Four folder instruction files that load when a session works in their folder, held by the gate to their size and to
@@ -97,3 +97,7 @@ Nothing: his words L1 and L2 approve the layout; a doubt goes to the lead as a n
   three places (now `FOLDER_INSTRUCTIONS`, `8088289e`) and `odd/tasks/CLAUDE.md` cut at a Log heading by `rules check`
   (read whole, `ce2c0511`, its test red before); the last two runs closed with 0 findings. Codex recorded unavailable
   over `63ba29f8..ce2c0511` ("JH 267 holds the meter's room for 384's five reviews"), a debt until a review pays it.
+- L8 JH 271: `node bin/js-harness.mjs progress` printed a row `[ ] odd/tasks: feature documents  0/0` for
+  `odd/tasks/CLAUDE.md`; `bin/progress.mjs` now leaves `FOLDER_INSTRUCTIONS` out, its test red before. `resume`'s
+  `documentFolders` (`bin/resume.mjs:337`) lists folders by last write, so it shows no row for the file.
+  `docs/RECORDS.md` said `rules check` reads three folder files; it reads all four whole since `ce2c0511`.

@@ -424,6 +424,21 @@ test('progressMain reports a dangling symlinked feature doc on stderr (path + co
   }
 });
 
+// odd/tasks/folder-instructions.md: the folder's instruction file is no feature, so it gets no row.
+test('progressMain lists no row for odd/tasks/CLAUDE.md', async () => {
+  const project = makeTmpProject();
+  try {
+    writeFile(path.join(project, 'docs', 'ROADMAP.md'), ROADMAP);
+    writeFile(path.join(project, 'odd', 'tasks', 'a.md'), FEATURE_A);
+    writeFile(path.join(project, 'odd', 'tasks', 'CLAUDE.md'), '# odd/tasks: feature documents\n\n- See `rule:depth-pass`.\n');
+    const { code, stdout } = await runProgress(['--cwd', project, '--json']);
+    assert.equal(code, 0);
+    assert.deepEqual(JSON.parse(stdout).features.map((f) => f.id), ['a']);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // The two tests above need real symlinks, which Windows refuses without developer mode. These
 // inject a symlink-typed entry instead, so the symlink branch of readFeatures runs on every machine.
 
