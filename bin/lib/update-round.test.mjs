@@ -220,20 +220,29 @@ test('after nvm use the switch checks node, codegraph, js-harness and that pnpm 
   assert.ok(words.includes('node --version') && words.includes('codegraph --version') && words.includes('js-harness --version') && words.includes('where pnpm'), words.join('; '));
   assert.equal(swap.check.all.find((c) => c.words[0] === 'codegraph').expect, '1.7.0');
   assert.equal(swap.check.all.find((c) => c.words[0] === 'js-harness').expect, '0.97.0');
-  for (const broken of ['codegraph', 'js-harness', 'where']) {
+  // Every other check answers what it expects, so each case fails on the one part it breaks and the control holds.
+  const expected = new Map(swap.check.all.filter((c) => c.expect !== undefined).map((c) => [c.words[0], c.expect]));
+  for (const broken of ['none', 'codegraph', 'js-harness', 'where']) {
     let active = '26.13.1';
     const seams = { ...io(), run: (command, args) => {
       if (command === 'nvm') active = args[1];
       if (command === 'node') return { status: 0, stdout: `v${active}` };
       if (command === 'codegraph') return { status: 0, stdout: broken === 'codegraph' ? '1.6.4' : '1.7.0' };
       if (command === 'js-harness') return broken === 'js-harness' ? { status: 1, stdout: '' } : { status: 0, stdout: '0.97.0' };
-      if (command === 'where') return { status: 0, stdout: broken === 'where' ? `${NODE_DIR}\pnpm.cmd\r\n${PNPM_BIN}\pnpm.cmd` : `${PNPM_BIN}\pnpm.cmd` };
-      return { status: 0, stdout: '' };
+      if (command === 'where') return { status: 0, stdout: broken === 'where' ? `${path.join(NODE_DIR, 'pnpm.cmd')}\r\n${path.join(PNPM_BIN, 'pnpm.cmd')}` : path.join(PNPM_BIN, 'pnpm.cmd') };
+      return { status: 0, stdout: expected.get(command) ?? '' };
     } };
     const result = runPhase([swap], seams);
-    assert.deepEqual([broken, result.steps[0].outcome], [broken, 'undone']);
-    assert.equal(active, '26.13.1', 'nvm use went back');
+    assert.deepEqual([broken, result.steps[0].outcome], [broken, broken === 'none' ? 'done' : 'undone'], result.steps[0].saw);
+    assert.equal(active, broken === 'none' ? '26.14.0' : '26.13.1', 'nvm use went back on a failed check only');
   }
+});
+
+test('a js-harness that did not answer when the plan was made is not required to answer after the switch', () => {
+  const p = planRound(machine({ node: ['26.13.1', '26.14.0'] }), { harness: HARNESS, harnessVersion: null });
+  const words = p.switch.at(-1).check.all.map((c) => c.words.join(' '));
+  assert.ok(!words.includes('js-harness --version'), words.join('; '));
+  assert.ok(words.includes('node --version') && words.includes('where pnpm'), words.join('; '));
 });
 
 test('an undo that exits 0 but leaves the old node inactive is failed, not undone (S1)', () => {

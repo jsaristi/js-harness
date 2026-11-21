@@ -133,8 +133,8 @@ function installer(where, read) {
  * that folder's own npm, the old folder's shims, and compares the two folders; switch is `nvm use`, undone by `nvm use
  * <from>`, checked by node's version. `packages` are the old folder's global packages, each `{ spec, version, words? }`
  * at the version it gets, `words` the command that prints it. After `nvm use` the switch checks node, each package
- * that prints its version, js-harness (`harnessVersion`, what it answered when the plan was made, or that it answers
- * at all) and that the first pnpm on PATH is not in the node folder; any of them failing runs `nvm use <from>`.
+ * that prints its version, js-harness (`harnessVersion`, what it answered when the plan was made; not asked when it
+ * did not answer then) and that the first pnpm on PATH is not in the node folder; any of them failing runs `nvm use <from>`.
  * `pre` is what must still hold when the switch begins: the active node is `from` and the new folder is there. */
 export function nodeSteps({ from, to, nvmRoot, nodeDir, packages, harnessVersion = null }) {
   const folder = path.join(nvmRoot, `v${to}`);
@@ -153,7 +153,8 @@ export function nodeSteps({ from, to, nvmRoot, nodeDir, packages, harnessVersion
     all: [
       { words: ['node', '--version'], expect: to },
       ...packages.filter((p) => p.words).map((p) => ({ words: p.words, expect: p.version })),
-      { words: ['js-harness', '--version'], ...(harnessVersion ? { expect: harnessVersion } : {}) },
+      // Asked only of a js-harness that answered when the plan was made: one off PATH then would fail every switch.
+      ...(harnessVersion ? [{ words: ['js-harness', '--version'], expect: harnessVersion }] : []),
       { words: ['where', 'pnpm'], notIn: nodeDir },
     ],
   };
