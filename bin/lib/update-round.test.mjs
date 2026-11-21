@@ -295,3 +295,31 @@ test('the node switch carries what must still hold when the switch runs: the act
   const swap = nodeMove().switch.at(-1);
   assert.deepEqual(swap.pre, [{ words: ['node', '--version'], expect: '26.13.1' }, { exists: path.join(NVM_ROOT, 'v26.14.0', 'node.exe') }]);
 });
+
+test('npm and corepack behind while node stays are only reported, never installed into the live node folder (verify-pr940-2 B1)', () => {
+  const live = (p) => [...p.prepare, ...p.switch].filter((s) => s.words?.includes('--prefix') && s.words.includes(NODE_DIR) && s.words.some((w) => /^(npm|corepack)@/.test(w)));
+  for (const read of [
+    machine({ npm: ['11.9.0', '11.10.0'], corepack: ['0.34.0', '0.35.0'] }),
+    { ...machine({ npm: ['11.9.0', '11.10.0'], corepack: ['0.34.0', '0.35.0'], node: ['26.13.1', '26.14.0'] }), nvmRoot: null },
+  ]) {
+    const p = planRound(read, { harness: HARNESS });
+    assert.deepEqual(live(p), [], 'no step writes npm or corepack into the live folder');
+    for (const id of ['npm', 'corepack']) {
+      const row = p.rows.find((r) => r.tool === id);
+      assert.equal(row.move, 'report', id);
+      assert.match(row.why, /only in a round where node moves/);
+    }
+  }
+  assert.equal(plan().rows.find((r) => r.tool === 'npm').move, 'current', 'a current npm stays current');
+  const moving = plan({ npm: ['11.9.0', '11.10.0'], node: ['26.13.1', '26.14.0'] });
+  assert.ok(moving.prepare.some((s) => s.words?.at(-1) === 'npm@11.10.0' && s.words.includes(path.join(NVM_ROOT, 'v26.14.0'))), 'with node, npm goes into the new folder');
+  assert.deepEqual(live(moving), []);
+});
+
+test('a check the switch drops is shown in the plan, never silent; where pnpm is always checked', () => {
+  const dropped = renderRound(planRound(machine({ node: ['26.13.1', '26.14.0'] }), { harness: HARNESS, harnessVersion: null }));
+  assert.ok(dropped.some((l) => /not checked after the switch: js-harness --version/.test(l)), dropped.join('\n'));
+  const kept = planRound(machine({ node: ['26.13.1', '26.14.0'] }), { harness: HARNESS, harnessVersion: '0.97.0' });
+  assert.ok(!renderRound(kept).some((l) => /not checked/.test(l)));
+  assert.ok(kept.switch.at(-1).check.all.some((c) => c.words.join(' ') === 'where pnpm'));
+});

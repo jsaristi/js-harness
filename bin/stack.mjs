@@ -664,7 +664,7 @@ export async function stackCanCloseMain(argv, env = process.env, deps = {}) {
 
 /** The background work the session `id` started and has not ended, read from its transcript; none without an id.
  * Throws when its transcript cannot be found, so the part reads as not read. */
-function openWorkOf(id, cwd, env) {
+export function openWorkOf(id, cwd, env) {
   if (!id) return [];
   const run = (command, args, options = {}) => spawnSync(command, args, { encoding: 'utf8', windowsHide: true, ...options });
   const claudeHome = env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude');

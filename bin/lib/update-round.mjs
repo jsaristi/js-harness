@@ -39,8 +39,8 @@ export const PLAN_MAX_AGE_MS = 2 * 24 * 60 * 60_000;
 
 /** The stack, in the order a phase moves it. `how`: `self` (updates itself, said only), `harness` (`stack upgrade`
  * moves it, recorded for `uninstall machine`), `package` (a global package, by the installer that holds its binary),
- * `folder` (a package of the node folder, read from its package.json), `winget`, `nvm` (node), `report` (said, never
- * moved). `closed`: replacing it while the app is open fails or breaks a session (a native file every session loads,
+ * `folder` (a package of the node folder, read from its package.json; it moves only into a new node folder and is
+ * reported while node stays), `winget`, `nvm` (node), `report` (said, never moved). `closed`: replacing it while the app is open fails or breaks a session (a native file every session loads,
  * the shell the sessions run on, a process the app keeps alive). */
 export const ROUND = [
   { id: 'claude-desktop', how: 'self', note: 'doctor\'s host-update row says when one waits' },
@@ -160,6 +160,7 @@ export function nodeSteps({ from, to, nvmRoot, nodeDir, packages, harnessVersion
   };
   const swap = {
     tool: 'node', what: `switch the active node from ${from} to ${to}`, kind: 'run', elevate: true, words: ['nvm', 'use', to], check,
+    dropped: harnessVersion ? [] : ['js-harness --version, which did not answer when the plan was made'],
     undo: ['nvm', 'use', from], undoCheck: { words: ['node', '--version'], expect: from },
     pre: [{ words: ['node', '--version'], expect: from }, { exists: path.join(folder, 'node.exe') }],
   };
@@ -200,7 +201,14 @@ export function planRound(read, { harness, home = null, harnessVersion = read.ha
       row('report', tool.note);
       continue;
     }
-    const check = tool.version ? { words: tool.version, expect: to } : { packageVersion: path.join(read.nodeDir ?? '', 'node_modules', tool.spec, 'package.json'), expect: to };
+    // npm and corepack are never installed into the live node folder: corepack writes pnpm, pnpx, yarn and yarnpkg
+    // shims ahead of pnpm\bin, npm writes its own npm and npx over the copies that run pnpm, and with no second folder
+    // there is nothing to compare against or restore from (verify-pr940-2 B1). They move into a new folder with node.
+    if (tool.how === 'folder' && !nodeMoves) {
+      row('report', `it lives in the node folder ${read.nodeDir ?? '(not found)'}, so it updates only in a round where node moves`);
+      continue;
+    }
+    const check = { words: tool.version, expect: to };
     if (tool.how === 'harness') {
       const words = [...harness, 'stack', 'upgrade', ...tool.tools.flatMap((t) => ['--tool', t]), '--yes'];
       prepare.push({ tool: tool.id, what: `update ${tool.tools.join(' and ')} through stack upgrade`, kind: 'run', words, check, undo: null, wayBack: 'js-harness uninstall machine takes it back: stack upgrade records it' });
@@ -236,7 +244,7 @@ export function planRound(read, { harness, home = null, harnessVersion = read.ha
       row('prepare', `goes into node ${node.newest}'s folder`);
       continue;
     }
-    const install = tool.how === 'folder' ? installer(path.join(read.nodeDir ?? '', 'x'), read) : installer(got.where, read);
+    const install = installer(got.where, read);
     if (install === null) {
       row('report', `installed in ${got.where ?? 'an unknown folder'}, which the round does not know how to update`);
       continue;
@@ -264,7 +272,11 @@ export function renderRound(plan) {
   const lines = plan.rows.map((r) => `${r.tool.padEnd(27)} ${String(r.from ?? '-').padEnd(9)} -> ${String(r.to ?? '-').padEnd(9)} ${MOVE[r.move]}${r.why ? `: ${r.why}` : ''}`);
   for (const phase of ['prepare', 'switch']) {
     lines.push(`${phase}: ${plan[phase].length === 0 ? 'nothing' : `${plan[phase].length} step${plan[phase].length === 1 ? '' : 's'}`}`);
-    for (const step of plan[phase]) lines.push(`  - ${step.what}${step.undo ? `; undo: ${step.undo.join(' ')}` : step.wayBack ? `; way back: ${step.wayBack}` : ''}`);
+    for (const step of plan[phase]) {
+      lines.push(`  - ${step.what}${step.undo ? `; undo: ${step.undo.join(' ')}` : step.wayBack ? `; way back: ${step.wayBack}` : ''}`);
+      // A check the switch leaves out is said, so a drop is never silent (verify-pr940-2).
+      if (step.dropped?.length > 0) lines.push(`    not checked after the switch: ${step.dropped.join('; ')}`);
+    }
   }
   return lines;
 }

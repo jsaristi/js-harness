@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { stackMain, readStack, resolveStackPm, undoHomeWord } from './stack.mjs';
+import { openWorkOf, stackCanCloseMain, stackMain, readStack, resolveStackPm, undoHomeWord } from './stack.mjs';
+import { projectSlug } from './lib/sessions.mjs';
 import { plainCount } from './lib/stack-backup-walk.mjs';
 
 const ON = { codeMap: { value: 'auto' }, codexReview: { value: 'on' }, languageServer: { value: 'on' } };
@@ -391,4 +392,45 @@ test('stack engram-prompt off takes the prompt hook out of a scratch home, on pu
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('stack can-close exits 0 on yes, 1 on no, 2 on cannot tell or a usage error, and a usage error reads nothing (verify-pr940-2 S5)', async () => {
+  for (const [canClose, code] of [[true, 0], [false, 1], [null, 2]]) {
+    const lines = [];
+    const got = await stackCanCloseMain(['--self', 'abc12345'], {}, { log: (l) => lines.push(l), error: (l) => lines.push(l), canClose: async (given) => {
+      assert.equal(given.selfSessionId, 'abc12345');
+      return { canClose, reasons: canClose === false ? ['JH 1 is at work (busy)'] : [], unread: canClose === null ? ['the sessions'] : [] };
+    } });
+    assert.equal(got, code, lines.join('\n'));
+  }
+  for (const argv of [['--bogus'], ['--self']]) {
+    let read = false;
+    const got = await stackCanCloseMain(argv, {}, { log: () => {}, error: () => {}, canClose: async () => { read = true; return { canClose: true, reasons: [], unread: [] }; } });
+    assert.deepEqual([got, read], [2, false], argv.join(' '));
+  }
+});
+
+test('openWorkOf returns the background work the session started and has not ended, none without an id, and throws with no transcript', (t) => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-open-work-'));
+  t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
+  const cwd = path.join(scratch, 'project');
+  const claudeHome = path.join(scratch, 'claude');
+  fs.mkdirSync(cwd);
+  const dir = path.join(claudeHome, 'projects', projectSlug(cwd));
+  fs.mkdirSync(dir, { recursive: true });
+  const id = '11111111-2222-3333-4444-555555555555';
+  const base = (minute) => ({ timestamp: `2026-01-01T10:0${minute}:00.000Z`, cwd, isSidechain: false });
+  const launch = [
+    { type: 'assistant', ...base(1), message: { role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'toolu_1', name: 'Bash', input: { command: 'npm run check', description: 'Run the gate', run_in_background: true } }] } },
+    { type: 'user', ...base(1), toolUseResult: { stdout: '', stderr: '', backgroundTaskId: 'task1' }, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: 'ok' }] } },
+  ];
+  const end = { type: 'user', ...base(2), origin: { kind: 'task-notification' }, message: { role: 'user', content: '<task-notification>\n<task-id>task1</task-id>\n<tool-use-id>toolu_1</tool-use-id>\n<status>completed</status>\n<summary>made up</summary>\n</task-notification>' } };
+  const write = (entries) => fs.writeFileSync(path.join(dir, `${id}.jsonl`), `${entries.map((e) => JSON.stringify(e)).join('\n')}\n`);
+  const env = { CLAUDE_CONFIG_DIR: claudeHome };
+  write(launch);
+  assert.deepEqual(openWorkOf(id, cwd, env).map((w) => w.description), ['Run the gate']);
+  write([...launch, end]);
+  assert.deepEqual(openWorkOf(id, cwd, env), []);
+  assert.deepEqual(openWorkOf(null, cwd, env), []);
+  assert.throws(() => openWorkOf('99999999-2222-3333-4444-555555555555', cwd, env), /no single transcript/);
 });
