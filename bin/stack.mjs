@@ -27,10 +27,18 @@ import { harnessHome } from './lib/home.mjs';
 import { restoreBackup, ROOT_IDS, runBackup, verifyBackup } from './lib/stack-backup.mjs';
 import { promptHookOff, promptHookOn } from './lib/engram-prompt-hook.mjs';
 import { shellWord } from './install.mjs';
+import { readCanClose, renderVerdict, stagedWorktrees } from './lib/can-close.mjs';
+import { claudeRunner, listAgents } from './lib/background.mjs';
+import { takeSnapshot } from './lib/process-tree.mjs';
+import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
+import { transcriptOf } from './lib/channel.mjs';
+import { mainCheckout, projectDirsOf, sessionFacts } from './lib/sessions.mjs';
 
 export { resolveStackPm };
 
-const USAGE = 'Usage: js-harness stack [--home <path>] [--cwd <path>] [--pm <command>] [--json]';
+const CAN_CLOSE_USAGE = 'Usage: js-harness stack can-close [--self <session id>] [--home <path>] [--cwd <path>] [--json]';
+const CAN_CLOSE_KNOWN = { valued: ['--self', '--home', '--cwd'], bare: ['--json'] };
+const USAGE ='Usage: js-harness stack [--home <path>] [--cwd <path>] [--pm <command>] [--json]';
 const KNOWN = { valued: ['--home', '--cwd', '--pm'], bare: ['--json'] };
 const INSTALL_USAGE = 'Usage: js-harness stack install [--home <path>] [--cwd <path>] [--pm <command>] [--prefix <dir>] [--tool <id>]... [--yes]';
 const INSTALL_KNOWN = { valued: ['--home', '--cwd', '--pm', '--prefix', '--tool'], bare: ['--yes'] };
@@ -71,6 +79,10 @@ const HELP = [
   'Usage: js-harness stack engram-prompt off|on [--home <dir>]',
   '  off: takes the UserPromptSubmit hook out of the engram plugin\'s hooks file, recorded so on and uninstall put it',
   '  back byte for byte (D8); on: puts it back where the file is still as off left it. Restart Claude Code after either.',
+  CAN_CLOSE_USAGE,
+  '  Read-only: whether Claude Desktop can close now, for an update or a restart: no while a session is at work, a shell',
+  '  runs under a session (a tool call or a background task), a gate holds the lock or work is staged in a worktree;',
+  '  cannot tell when a part could not be read. Exit 0 once every part is read, yes or no; 2 when one was not.',
 ].join('\n');
 const PREREQUISITES = ['git', 'gh'];
 const ENGRAM_PROMPT_USAGE = 'Usage: js-harness stack engram-prompt off|on [--home <dir>]';
@@ -146,14 +158,16 @@ export async function stackMain(argv, env = process.env, deps = {}) {
   // `stack --help`, `stack install --help` and `stack backup [<form>] --help` print every form and read nothing
   // (user-guide S4).
   const backupForm = argv[0] === 'backup' && Object.hasOwn(BACKUP_KNOWN, argv[1] ?? '') ? 2 : 1;
-  const asked = argv[0] === 'install' || argv[0] === 'upgrade' ? argv.slice(1) : argv[0] === 'backup' ? argv.slice(backupForm) : argv;
+  const asked = argv[0] === 'install' || argv[0] === 'upgrade' || argv[0] === 'can-close' ? argv.slice(1) : argv[0] === 'backup' ? argv.slice(backupForm) : argv;
   if (asked.length === 1 && (asked[0] === '--help' || asked[0] === '-h')) {
     log(HELP);
     return 0;
   }
   if (argv[0] === 'install') return stackInstallMain(argv.slice(1), env, deps);
+  if (argv[0] === 'upgrade' && argv.includes('--round')) return (await import('./stack-round.mjs')).stackRoundMain(argv.slice(1), env, deps);
   if (argv[0] === 'upgrade') return stackUpgradeMain(argv.slice(1), env, deps);
   if (argv[0] === 'backup') return stackBackupMain(argv.slice(1), env, deps);
+  if (argv[0] === 'can-close') return stackCanCloseMain(argv.slice(1), env, deps);
   if (argv[0] === 'engram-prompt') return stackEngramPromptMain(argv.slice(1), env, deps);
   const error = deps.error ?? ((line) => console.error(line));
   let args;
@@ -615,4 +629,46 @@ function engramPromptForm(form, home, given, said, log, error) {
   for (const kept of result.kept) (kept.reason === 'failed' ? error : log)(`${said} left ${kept.path} as it is: ${why(kept)}`);
   if (result.restored.length + result.kept.length === 0) log(`${said} nothing recorded, so nothing to put back`);
   return result.failedRecords.length === 0 ? 0 : 1;
+}
+
+/** `js-harness stack can-close` (odd/tasks/closed-app-update.md, S4): yes, no or cannot tell, with each reason. Exit 0
+ * for yes, 1 for no, 2 when a part was not read or for a usage error, so a script can wait on it (verify-pr940 S5). The
+ * session that asks (`--self`, default `CLAUDE_CODE_SESSION_ID`) is left out of the list and its own call by its
+ * ancestry, but what it started and has not ended (a sub-agent, a background shell) is read from its transcript and
+ * says no. `deps.canClose` is the seam of the reads. */
+export async function stackCanCloseMain(argv, env = process.env, deps = {}) {
+  const log = deps.log ?? ((line) => console.log(line));
+  const error = deps.error ?? ((line) => console.error(line));
+  const unknown = unknownArgument(argv, CAN_CLOSE_KNOWN);
+  const value = (flag) => (argv.includes(flag) ? argv[argv.indexOf(flag) + 1] : undefined);
+  const missing = CAN_CLOSE_KNOWN.valued.find((flag) => argv.includes(flag) && (value(flag) === undefined || value(flag).startsWith('--')));
+  if (unknown !== null || missing !== undefined) {
+    error(`${unknown !== null ? `unknown argument: ${unknown}` : `${missing} requires a value`}\n\n${CAN_CLOSE_USAGE}`);
+    return 2;
+  }
+  const home = harnessHome({ given: value('--home'), env, homedir: os.homedir });
+  const read = deps.canClose ?? ((given) => readCanClose({
+    ...given,
+    listAgents: () => listAgents(claudeRunner({ env })),
+    snapshot: () => takeSnapshot(),
+    gateHolder: (at) => readGateHolder(at),
+    staged: (at) => stagedWorktrees(at),
+    gateWaiters: (at) => readGateWaiters(at),
+    selfWork: (id) => openWorkOf(id, given.cwd, env),
+  }));
+  const verdict = await read({ cwd: value('--cwd') ?? process.cwd(), home, ownPid: process.pid, selfSessionId: value('--self') ?? env.CLAUDE_CODE_SESSION_ID ?? null });
+  if (argv.includes('--json')) log(JSON.stringify(verdict, null, 2));
+  else for (const line of renderVerdict(verdict)) log(line);
+  return verdict.canClose === true ? 0 : verdict.canClose === false ? 1 : 2;
+}
+
+/** The background work the session `id` started and has not ended, read from its transcript; none without an id.
+ * Throws when its transcript cannot be found, so the part reads as not read. */
+export function openWorkOf(id, cwd, env) {
+  if (!id) return [];
+  const run = (command, args, options = {}) => spawnSync(command, args, { encoding: 'utf8', windowsHide: true, ...options });
+  const claudeHome = env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude');
+  const found = transcriptOf(id, projectDirsOf(run, mainCheckout(run, cwd), claudeHome), (dir) => fs.readdirSync(dir));
+  if (found === null) throw new Error(`no single transcript of session ${id} under ${claudeHome}`);
+  return sessionFacts(fs.readFileSync(found.file, 'utf8')).work.filter((work) => !work.ended);
 }
