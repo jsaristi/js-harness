@@ -227,7 +227,8 @@ export function sessionsStartMain(argv, given = {}) {
     stderr(background);
     return 2;
   }
-  if (parsed.resume !== undefined) return resumeStart(parsed, deps);
+  // A resume is held again by the rule of the project it was recorded in, where the lead is that project's lead.
+  if (parsed.resume !== undefined) return resumeStart(parsed, deps, (root) => isLead(env.CLAUDE_CODE_SESSION_ID, appOrNull(), codeAt(root, readFile)));
   let brief;
   try {
     brief = readFile(path.resolve(deps.cwd, parsed.brief));
@@ -384,8 +385,9 @@ export function sessionsStartMain(argv, given = {}) {
  * recorded with `resumedFrom`, and replaces the stopped one, which stays recorded: the two share a worktree and a brief,
  * so they are undone together (`undoSession`). Exit 0 once the new job runs and is recorded; 1 when the record holds no
  * such session or cannot be written, a job works its conversation or that cannot be told, its folder is gone, or claude
- * refuses or no new job can be found; 2 for a brief that cannot be read or an effort the rule refuses. */
-function resumeStart(parsed, deps) {
+ * refuses or no new job can be found; 2 for a brief that cannot be read or an effort the rule refuses. `leadOf(root)`
+ * says whether the caller is the lead of the project at `root`, whose sessions-open-in-sidebar it is not held to. */
+function resumeStart(parsed, deps, leadOf = () => false) {
   const { stdout, stderr, env, now, run, readFile } = deps;
   const refuse = (line, code = 1) => {
     stderr(`js-harness sessions start --resume: ${line}`);
@@ -400,8 +402,9 @@ function resumeStart(parsed, deps) {
     return refuse(`no session js-harness sessions start recorded with its conversation is named by ${JSON.stringify(parsed.resume)}, so nothing was resumed`);
   }
   // The resumed session's own project holds it to its rules, wherever the command runs (Codex, on 5dc8d1ab).
+  // The lead of that project resumes it while he is away (his words of 2026-11-21; Codex on PR 945).
   const own = typeof entry.root === 'string' ? backgroundStartRefusal(rulesText(entry.root, deps.readFile)) : null;
-  if (own !== null) {
+  if (own !== null && !leadOf(entry.root)) {
     deps.stderr(own);
     return 2;
   }

@@ -1521,4 +1521,13 @@ test('where the rule is declared only the lead\'s js-harness sessions start runs
   const started = startFrom(world, work, { caller: 'lead-1', records: LEAD_RECORD });
   assert.equal(started.code, 0, started.said);
   assert.equal(actions(world).length, 1);
+  // Codex P2 on PR 945 (background-launch.mjs:115-117): the lead resumes a session recorded in this project too, and
+  // the recorded project's rule still refuses any other caller's resume.
+  patchState(world, { agents: readState(world).agents.map((agent) => ({ ...agent, status: undefined, state: 'failed', pid: undefined })) });
+  const workResume = startFrom(world, ['--resume', '0db8bc5e'], { caller: 'work-1', records: new Map([['work-1', { title: 'JH 4 · thing' }]]) });
+  assert.equal(workResume.code, 2, workResume.said);
+  assert.equal(actions(world).length, 1, 'nothing ran');
+  const resumed = startFrom(world, ['--resume', '0db8bc5e'], { caller: 'lead-1', records: LEAD_RECORD });
+  assert.equal(resumed.code, 0, resumed.said);
+  assert.equal(actions(world).length, 2);
 }, { rules: 'all' }));
