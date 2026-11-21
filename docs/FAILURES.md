@@ -215,6 +215,9 @@ command could write into that session's work.
   only, moved back
 - Seen: 2026-11-14 — relief file, line 2747 (the lead's own) — a `cd` into `rule-lead-effort-split-aac740`, the third
   time, at 02:48 local, before the guard below landed at 03:46
+- Seen: 2026-11-21 — relief file, line 3626 (the lead's own) — the lead ran `git add -N .` in JH 269's worktree
+  `distracted-euler-ef9074` to diff its uncommitted change into jh269-change1.patch: a write in another session's
+  worktree, which the guard below, made for `cd`, did not refuse; no untracked files, so the index did not change
 - Control: check — bin/lib/worktrees.test.mjs — "a cd, pushd or Set-Location into another linked worktree is refused,
   naming git show and git -C" — since 2026-11-14
 
@@ -617,6 +620,14 @@ let another's code pass the door and then fail the push.
   JH 83's independent verifier reading `reviewEvidence`; no land had hit it yet
 - Control: check — bin/merge-queue.test.mjs — "a pull request that turns the Codex review on is read
   onto the candidate so far" — since 2026-10-29
+
+### double-quotes-ran-backticks
+A program passed in double quotes to a POSIX shell (`node -e "..."`) carried backticks, and the shell ran them as
+command substitution before the program saw them, so the program ran with other text than the one written.
+- Class: tool
+- Seen: 2026-11-21 — the lead's notes, lsp-starts-state.md, "Slips to place" (JH 272's own) — a bash double-quoted
+  `node -e` with backticks ran `claude plugin install`, `enable` and `update` with a literal id in place of the
+  plugin's; all three failed and nothing changed
 
 ### edit-during-review
 A tracked file was edited in the worktree while Codex reviewed it, so the run read a tree that was
@@ -1692,6 +1703,18 @@ stood.
 - Control: check — bin/merge-queue.test.mjs — "lands, then refreshes nothing, exit 77, while an open question asks to
   apply a pull request main now holds" — since 2026-10-31
 
+### refresh-kills-wait
+`merge-queue --refresh-copy` replaced the installed copy under running `js-harness wait` processes, which exited 127
+and stopped watching, with nothing that said the wait was gone. The follow-up: JH 284 builds the fix in `bin/` (the
+lead's notes, brief-refresh-waits.md); its test becomes this entry's control when it lands.
+- Class: tool
+- Seen: 2026-11-21 — relief file, lines 3659-3660 — the refresh to 301974c at 07:15 local ended the lead's notice wait
+  with exit 127 right after its start line; the lead restarted it by hand
+- Seen: 2026-11-21 — relief file, line 3667 — the refresh to 85e45a1 at 08:22 local ended the lead's wait with exit 127
+  the same way
+- Seen: 2026-11-21 — relief file, line 3668 (claimed) — JH 267 reported its own `js-harness wait` killed with exit 127
+  by the refreshes, twice
+
 ### refresh-wait-false-way-out
 `merge-queue --land --refresh-copy`, when sessions were still at work after its wait, said that the
 next land with `--refresh-copy` brings the installed copy up; a land run from that copy is refused
@@ -2046,6 +2069,15 @@ after it was made: nothing measured the spend against the figure while the work 
   a second brief of 4M more while JH 238 stood at 8.54M of its 6M first line, with no read of its spend before the
   send; it ended near 12.2M. Fix the same evening: before a second brief the lead reads the session's cumulative
   cache-read from its transcript, and a session past its first line is archived, not briefed again
+- Seen: 2026-11-21 — relief file, line 3627 — JH 268 stopped at 6.38M cache-read against its 6M line, nothing
+  committed; the lead's cause for it and JH 266 and JH 269: caps counted in cache-read, each call re-reading 200K-500K
+  of context, so 5M-6M buys 15-25 calls
+- Seen: 2026-11-21 — relief file, line 3660; the lead's notes, rules-unblock-3-state.md, line 58 (JH 270's own) —
+  JH 270 stopped at 18.01M cache-read, summed from its transcript ded096a6, against its 12M stop line; it read its
+  spend only when the advisor flagged it, missed its 9M state line, and change 3 was not started
+- Seen: 2026-11-21 — relief file, line 3665; the lead's notes, 934-fixes-2-state.md, line 19 (JH 277's own) — JH 277
+  closed at about 15M cache-read (an estimate: about 130 calls, not measured) against its 8M stop line, which it did
+  not track; its branch was left unpushed
 
 ### stack-update-moved-hooks
 A tool of the stack was updated on purpose without the hook count read after it, so a hook entry the update added was
@@ -2088,6 +2120,14 @@ it: `sessions start` passed the claude CLI a model only when the call named one.
   1bef0243, reached main 61 minutes after the first start (pull request 837, 22:55Z)
 - Control: check — bin/sessions-background.test.mjs — "a start that names no model or effort takes the home" — since
   2026-11-11
+
+### stash-path-reverted-file
+`git stash push -- <file>`, run to set one file's change aside, took that change out of the working tree, so the file
+was back at its committed bytes while the session went on as if it held the change.
+- Class: tool
+- Seen: 2026-11-21 — the lead's notes, lsp-starts-state.md, "Slips to place" (JH 272's own) — a
+  `git stash push -- stack.mjs` reverted `stack.mjs` in JH 272's worktree (claude/jh272-lsp-starts); recovered with
+  `git stash apply` by the entry's SHA, nothing lost
 
 ### status-report-without-facts
 The status report reached him without the migration's share or whether the last stretch met its goals, and with
