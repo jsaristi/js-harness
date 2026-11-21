@@ -208,3 +208,17 @@ test('the folders read are the checkout, the worktrees git lists wherever they a
     assert.doesNotMatch(out, /dddddddd/);
   });
 });
+
+test('a shell call waits when one of its steps runs the wait, not when its text only names it', () => {
+  const under = (command) => activityOf([reply('10:00', 'go', [{ name: 'Bash', input: { command } }]), result('11:00', 't10:00'), reply('11:01')], span('10:00', '11:01'));
+  assert.deepEqual([under("echo 'js-harness wait'").workingHours, under("echo 'js-harness wait'").waitingHours], [1.02, 0]);
+  assert.equal(under('node bin/js-harness.mjs wait --pr 930').waitingHours, 1);
+  assert.equal(under('cd D:/x && js-harness wait --notice-to 3').waitingHours, 1);
+  assert.equal(under('sleep 600').waitingHours, 1);
+});
+
+test('a queued message timed only on its attachment ends a wait like any entry', () => {
+  const queued = { type: 'attachment', attachment: { type: 'queued_command', origin: { kind: 'human' }, humanTurn: true, prompt: 'hola', timestamp: at('11:00') } };
+  const a = activityOf([reply('10:00'), queued, reply('11:01')], span('10:00', '11:01'));
+  assert.deepEqual(a.waits.map((w) => [w.from, w.to, w.endedBy]), [[at('10:00'), at('11:00'), 'his words']]);
+});

@@ -24,6 +24,7 @@ import { pathToFileURL } from 'node:url';
 import { ABSENCE_MS } from '../../bin/lib/return-report.mjs';
 import { gateLogDir, readGateLog } from '../../bin/lib/gate-log.mjs';
 import { personTimesOf } from '../../bin/lib/person-times.mjs';
+import { waitPartsOf } from '../../bin/lib/wake.mjs';
 import { spawnSync } from 'node:child_process';
 import { mainCheckout, parseTranscript, projectDirsOf, projectSlug, QUESTION_TOOLS, quoteEntry } from '../../bin/lib/sessions.mjs';
 
@@ -39,7 +40,12 @@ const iso = (ms) => new Date(ms).toISOString();
 const ACTIVITY = new Set(['user', 'assistant', 'attachment', 'system']);
 /** Tool calls that wait rather than work while they are pending. */
 const WAIT_TOOLS = new Set([...QUESTION_TOOLS, 'Monitor', 'ScheduleWakeup']);
-const WAIT_COMMAND = /js-harness\s+(?:wait\b|quiet\s+--wait|sessions\s+--watch)|(?:^|[;&|]\s*)sleep\s/;
+/** The shell waits besides `js-harness wait`, which `waitPartsOf` recognizes by its steps (a command that only names
+ * it, `echo 'js-harness wait'`, is no wait; `node bin/js-harness.mjs wait` is one). */
+const OTHER_WAIT_COMMAND = /js-harness(?:\.mjs)?["']?\s+(?:quiet\s+--wait|sessions\s+--watch)|(?:^|[;&|]\s*)sleep\s/;
+const isWaitShell = (command) => waitPartsOf(command).length > 0 || OTHER_WAIT_COMMAND.test(command);
+/** When `entry` happened: a queued message may carry its time only on its attachment. */
+const timeOf = (entry) => Date.parse(entry?.timestamp ?? entry?.attachment?.timestamp ?? '');
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
 /** The app's call that starts a session (`mcp__ccd_session__start_session`). */
 const START_TOOL = /(?:^|__)start_session$/;
@@ -79,7 +85,7 @@ export function endedBy(entry) {
 function callKind(block) {
   if (WAIT_TOOLS.has(block.name)) return { kind: 'wait', label: block.name };
   const command = String(block.input?.command ?? '');
-  if (SHELL_TOOLS.has(block.name) && WAIT_COMMAND.test(command)) return { kind: 'wait', label: `${block.name} ${command.trim().slice(0, 60)}` };
+  if (SHELL_TOOLS.has(block.name) && isWaitShell(command)) return { kind: 'wait', label: `${block.name} ${command.trim().slice(0, 60)}` };
   if (START_TOOL.test(String(block.name))) return { kind: 'start', label: block.name };
   return { kind: 'work', label: block.name };
 }
@@ -114,8 +120,8 @@ const overlapMs = (cuts, from, to) => cuts.reduce((sum, [a, b]) => sum + Math.ma
 export function activityOf(entries, { from, to: windowTo, idleMs, archivedAt = Infinity, lockWaits = [] }) {
   const to = Math.min(windowTo, archivedAt);
   const timed = entries
-    .filter((entry) => ACTIVITY.has(entry?.type) && Number.isFinite(Date.parse(entry?.timestamp ?? '')))
-    .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+    .filter((entry) => ACTIVITY.has(entry?.type) && Number.isFinite(timeOf(entry)))
+    .sort((a, b) => timeOf(a) - timeOf(b));
   const pending = pendingAfter(timed);
   let working = 0;
   let waiting = 0;
@@ -126,19 +132,19 @@ export function activityOf(entries, { from, to: windowTo, idleMs, archivedAt = I
   let lastReply = '';
   for (let i = 0; i < timed.length; i += 1) {
     const a = timed[i];
-    const start = Date.parse(a.timestamp);
+    const start = timeOf(a);
     if (start >= to) break;
     if (start >= from) inside += 1;
     if (a.type === 'assistant' && textOf(a).trim() !== '') lastReply = textOf(a).trim();
     const next = timed[i + 1];
-    const end = next === undefined ? to : Math.min(Date.parse(next.timestamp), to);
+    const end = next === undefined ? to : Math.min(timeOf(next), to);
     const inStart = Math.max(start, from);
     if (end <= inStart) continue;
     const span = end - inStart;
     const calls = pending[i];
     const waitCall = calls.find((call) => call.kind === 'wait');
     // The gap is judged whole, to the next entry even past `to`: a window cut short does not turn idle time into work.
-    const gap = next === undefined ? Infinity : Date.parse(next.timestamp) - start;
+    const gap = next === undefined ? Infinity : timeOf(next) - start;
     if (calls.some((call) => call.kind === 'work') || (calls.length === 0 && gap <= idleMs)) {
       const queued = Math.min(span, overlapMs(lockWaits, inStart, end));
       working += span - queued;
@@ -158,7 +164,7 @@ export function activityOf(entries, { from, to: windowTo, idleMs, archivedAt = I
       continue;
     }
     waiting += span;
-    const ending = next !== undefined && Date.parse(next.timestamp) <= to ? next : undefined;
+    const ending = next !== undefined && timeOf(next) <= to ? next : undefined;
     waits.push({ from: iso(inStart), to: iso(end), hours: hours(span), endedBy: waitCall ? `its own wait call: ${waitCall.label}` : endedBy(ending), lastReply: lastReply.slice(-200) });
   }
   return { workingHours: hours(working), waitingHours: hours(waiting), launchHours: hours(launch), lockHours: hours(locked), inside, waits };
