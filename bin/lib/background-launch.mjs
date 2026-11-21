@@ -5,6 +5,11 @@
 // is at a module's size limit (bin/conventions-structure.test.mjs).
 import { COMMAND_KEYWORDS, shellWords, sidebarRule } from './guard.mjs';
 import { programOf } from './chained-step-guard.mjs';
+import { leadTitle } from './session-title-guard.mjs';
+
+/** Whether the session `id` is the lead, told by the title of its record in `app` (the app's records, a Map, or
+ * null where they could not be read) as `leadTitle` reads it: no id, no record or another title is no lead. */
+export const isLead = (id, app) => typeof id === 'string' && id !== '' && app instanceof Map && leadTitle(app.get(id)?.title ?? '');
 
 // The keywords that open a condition: the command after one is a step of its own.
 const CONDITIONS = new Set(['if', 'elif', 'while', 'until']);
@@ -90,10 +95,13 @@ export function backgroundLaunch(command) {
 }
 
 /** Why a Bash step that launches a session out of his sidebar, `launch` (from `backgroundLaunch` above), is refused
- * in the project whose rules file has the text `projectData`, or null where the rule `sessions-open-in-sidebar` gives no value (T7, as below). */
-export function backgroundLaunchRefusal(launch, projectData) {
+ * in the project whose rules file has the text `projectData`, or null where the rule `sessions-open-in-sidebar` gives no value (T7, as below).
+ * `lead`, the caller is the orchestrator: its `js-harness sessions start` runs, so it opens sessions while he is away
+ * (his words of 2026-11-21); `claude --bg`, `--cloud` and `respawn` stay refused for every session. */
+export function backgroundLaunchRefusal(launch, projectData, { lead = false } = {}) {
   const rule = sidebarRule(projectData);
   if (rule === null) return null;
+  if (lead && launch === 'js-harness sessions start') return null;
   const where = launch === 'claude --cloud' ? 'in the cloud' : 'in the background';
   return `js-harness guard: ${launch} opens a session ${where}, where he does not see it (rule sessions-open-in-sidebar). `
     + `Open it with ${rule.value} on a turn he typed, then detach_session to top level; on any other turn start_session `
@@ -102,10 +110,11 @@ export function backgroundLaunchRefusal(launch, projectData) {
 
 /** Why `js-harness sessions start` (a start or a `--resume`) is refused in the project whose rules file has the text
  * `projectData`, or null: where the rule `sessions-open-in-sidebar` gives a value, no session runs in the background,
- * out of his sidebar (odd/tasks/senior-orchestrator.md, T7: his words of 2026-11-15). */
-export function backgroundStartRefusal(projectData) {
+ * out of his sidebar (odd/tasks/senior-orchestrator.md, T7: his words of 2026-11-15), except for the lead's (`lead`,
+ * his words of 2026-11-21: the orchestrator opens sessions while he is away). */
+export function backgroundStartRefusal(projectData, { lead = false } = {}) {
   const rule = sidebarRule(projectData);
-  if (rule === null) return null;
+  if (rule === null || lead) return null;
   return 'js-harness sessions start: a session started or resumed here runs in the background, where he does not see it '
     + `(rule sessions-open-in-sidebar), so nothing ran. Open it with ${rule.value} on a turn he typed, then detach_session `
     + 'to top level; on any other turn start_session leaves a card he taps. A background session already on the machine '
