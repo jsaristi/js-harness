@@ -155,14 +155,14 @@ test('node behind with no nvm root read is unknown, and the plan does not throw'
   assert.equal(p.prepare.some((s) => s.tool === 'node'), false);
 });
 
-test('steps and undos run as steps, which the runner does not cut; checks run as reads', () => {
+test('steps and undos run as steps; checks, the undo\'s check included, run as reads', () => {
   const calls = [];
   const p = plan({ codex: ['0.171.0', '0.172.0'] });
   runPhase(p.switch, { ...io(), run: (command, args, options) => {
     calls.push([command, options?.step === true]);
     return { status: 0, stdout: command === 'codex' ? 'codex-cli 0.171.0' : '' };
   } });
-  assert.deepEqual(calls, [['pnpm', true], ['codex', false], ['pnpm', true]]);
+  assert.deepEqual(calls, [['pnpm', true], ['codex', false], ['pnpm', true], ['codex', false]]);
 });
 
 test('readRound reads only: version commands, where, nvm root and the registries', async () => {
@@ -185,4 +185,104 @@ test('semverOf reads the versions each tool prints', () => {
   assert.equal(semverOf('git version 2.56.1.windows.1'), '2.56.1');
   assert.equal(semverOf('codex-cli 0.171.0'), '0.171.0');
   assert.equal(semverOf('nothing'), null);
+});
+
+test('the compare removes corepack\'s pnpm, pnpx, yarn and yarnpkg shims the new folder has and the old one lacks (B1)', () => {
+  const step = { tool: 'node', what: 'compare', kind: 'compare', from: 'A', to: 'B', check: null, undo: null };
+  const removed = [];
+  const extra = ['pnpm', 'pnpm.cmd', 'pnpm.ps1', 'pnpx', 'pnpx.CMD', 'yarn', 'yarn.cmd', 'yarnpkg.ps1'];
+  const seams = {
+    ...io(), list: (dir) => (dir === 'A' ? ['Node.exe', 'npm.cmd'] : dir === 'B' ? ['node.exe', 'npm.cmd', ...extra] : []),
+    remove: (file) => removed.push(file), exists: (file) => !removed.includes(file),
+  };
+  const result = runPhase([step], seams);
+  assert.equal(result.steps[0].outcome, 'done');
+  assert.deepEqual(removed, extra.map((name) => path.join('B', name)));
+  assert.match(result.steps[0].saw, /removed .*pnpm\.cmd.*which would shadow pnpm/);
+});
+
+test('the compare refuses any other name the new folder has and the old one lacks, and removes nothing else', () => {
+  const step = { tool: 'node', what: 'compare', kind: 'compare', from: 'A', to: 'B', check: null, undo: null };
+  const removed = [];
+  const seams = { ...io(), list: (dir) => (dir === 'A' ? ['node.exe'] : dir === 'B' ? ['node.exe', 'evil.cmd'] : []), remove: (file) => removed.push(file) };
+  const result = runPhase([step], seams);
+  assert.equal(result.steps[0].outcome, 'failed');
+  assert.match(result.steps[0].saw, /has evil\.cmd, which the old folder lacks/);
+  assert.deepEqual(removed, []);
+});
+
+const nodeMove = () => plan({ node: ['26.13.1', '26.14.0'], codegraph: ['1.6.4', '1.7.0'] });
+
+test('after nvm use the switch checks node, codegraph, js-harness and that pnpm is not shadowed, and undoes on any of them (B2)', () => {
+  const p = planRound(machine({ node: ['26.13.1', '26.14.0'], codegraph: ['1.6.4', '1.7.0'] }), { harness: HARNESS, harnessVersion: '0.97.0' });
+  const swap = p.switch.at(-1);
+  const words = swap.check.all.map((c) => c.words.join(' '));
+  assert.ok(words.includes('node --version') && words.includes('codegraph --version') && words.includes('js-harness --version') && words.includes('where pnpm'), words.join('; '));
+  assert.equal(swap.check.all.find((c) => c.words[0] === 'codegraph').expect, '1.7.0');
+  assert.equal(swap.check.all.find((c) => c.words[0] === 'js-harness').expect, '0.97.0');
+  for (const broken of ['codegraph', 'js-harness', 'where']) {
+    let active = '26.13.1';
+    const seams = { ...io(), run: (command, args) => {
+      if (command === 'nvm') active = args[1];
+      if (command === 'node') return { status: 0, stdout: `v${active}` };
+      if (command === 'codegraph') return { status: 0, stdout: broken === 'codegraph' ? '1.6.4' : '1.7.0' };
+      if (command === 'js-harness') return broken === 'js-harness' ? { status: 1, stdout: '' } : { status: 0, stdout: '0.97.0' };
+      if (command === 'where') return { status: 0, stdout: broken === 'where' ? `${NODE_DIR}\pnpm.cmd\r\n${PNPM_BIN}\pnpm.cmd` : `${PNPM_BIN}\pnpm.cmd` };
+      return { status: 0, stdout: '' };
+    } };
+    const result = runPhase([swap], seams);
+    assert.deepEqual([broken, result.steps[0].outcome], [broken, 'undone']);
+    assert.equal(active, '26.13.1', 'nvm use went back');
+  }
+});
+
+test('an undo that exits 0 but leaves the old node inactive is failed, not undone (S1)', () => {
+  const swap = nodeMove().switch.at(-1);
+  assert.deepEqual(swap.undoCheck, { words: ['node', '--version'], expect: '26.13.1' });
+  const seams = { ...io(), run: (command) => (command === 'node' ? { status: 0, stdout: 'v26.14.0' } : { status: 0, stdout: '' }) };
+  const result = runPhase([swap], seams);
+  assert.equal(result.steps[0].outcome, 'failed');
+  const logged = [];
+  runPhase([swap], { ...seams, log: (line) => logged.push(line) });
+  assert.match(logged.join('\n'), /undo .* ran, but node --version says 26\.14\.0/);
+});
+
+test('a package step\'s undo is checked by its version too', () => {
+  const step = plan({ codex: ['0.171.0', '0.172.0'] }).switch[0];
+  assert.deepEqual(step.undoCheck, { words: ['codex', '--version'], expect: '0.171.0' });
+});
+
+test('a step that times out runs no undo beside it, and says it may still run (S2)', () => {
+  const step = plan({ codex: ['0.171.0', '0.172.0'] }).switch[0];
+  const seams = io();
+  seams.run = (command, args) => {
+    seams.ran.push([command, ...args].join(' '));
+    return { status: null, error: Object.assign(new Error('spawnSync cmd.exe ETIMEDOUT'), { code: 'ETIMEDOUT' }) };
+  };
+  const result = runPhase([step], seams);
+  assert.equal(result.steps[0].outcome, 'timed out');
+  assert.match(result.steps[0].saw, /may still run/);
+  assert.equal(seams.ran.length, 1, 'no undo ran');
+});
+
+test('an exception in a step or its check is a failed step in the result, never thrown (S3)', () => {
+  const compare = { tool: 'node', what: 'compare', kind: 'compare', from: 'A', to: 'B', check: null, undo: null };
+  const result = runPhase([compare, compare], { ...io(), list: () => { throw new Error('EPERM: operation not permitted'); } });
+  assert.deepEqual(result.steps.map((s) => s.outcome), ['failed', 'not run']);
+  assert.match(result.steps[0].saw, /threw: EPERM/);
+  const [, off] = plan({ engram: ['3.7.2', '3.8.0'] }).prepare;
+  const hooks = runPhase([off], { ...io(), hookEntries: () => { throw new Error('bad settings'); } });
+  assert.match(hooks.steps[0].saw, /threw: bad settings/);
+});
+
+test('each step tells its progress before it runs and the phase tells its end', () => {
+  const p = plan({ codex: ['0.171.0', '0.172.0'], git: ['2.56.1', '2.57.0'] });
+  const told = [];
+  runPhase(p.switch, { ...io({ versions: { codex: '0.172.0', git: '2.57.0' } }), onStep: (done, running) => told.push([done.length, running]) });
+  assert.deepEqual(told, [[0, p.switch[0].what], [1, p.switch[1].what], [2, null]]);
+});
+
+test('the node switch carries what must still hold when the switch runs: the active node and the new folder (S4)', () => {
+  const swap = nodeMove().switch.at(-1);
+  assert.deepEqual(swap.pre, [{ words: ['node', '--version'], expect: '26.13.1' }, { exists: path.join(NVM_ROOT, 'v26.14.0', 'node.exe') }]);
 });

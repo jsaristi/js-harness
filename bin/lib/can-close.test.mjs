@@ -103,3 +103,35 @@ test('readCanClose turns each failed read into an unread part', async () => {
   assert.equal(verdict.canClose, null);
   assert.equal(verdict.unread.length, 2);
 });
+
+test('the caller\'s own open sub-agents and background shells say no, though its session is left out (S5)', () => {
+  const verdict = closeVerdict({ agents: AGENTS, shells: [], gate: null, staged: [], selfSessionId: 'self', selfWork: [{ tool: 'Agent', description: 'verify the switch' }] });
+  assert.equal(verdict.canClose, false);
+  assert.match(verdict.reasons[0], /this session's Agent "verify the switch" still runs/);
+  const unread = closeVerdict({ agents: [], shells: [], gate: null, staged: [], selfWork: new Error('no transcript of self') });
+  assert.equal(unread.canClose, null);
+});
+
+test('a gate that waits for the lock and a blocked job say no (S5)', () => {
+  const verdict = closeVerdict({
+    agents: [{ state: 'blocked', name: 'JH 300', kind: 'background' }], shells: [], gate: null, staged: [],
+    waiters: [{ pid: 77, cwd: 'D:\\b' }],
+  });
+  assert.equal(verdict.canClose, false);
+  assert.match(verdict.reasons.join('\n'), /JH 300 is blocked/);
+  assert.match(verdict.reasons.join('\n'), /a gate waits for the machine's lock \(pid 77, D:\\b\)/);
+});
+
+test('a worktree whose staged diff cannot be read is no clean worktree (S5)', () => {
+  const run = (command, args) => (args.includes('list') ? { status: 0, stdout: 'worktree D:/a\nHEAD 1\n' } : { status: 128, stdout: '', stderr: 'fatal: index locked' });
+  assert.throws(() => stagedWorktrees('D:/a', run), /D:\/a.*128/);
+});
+
+test('readCanClose reads the caller\'s open work and the gate waiters through their seams', async () => {
+  const verdict = await readCanClose({
+    cwd: 'D:/a', home: 'H', listAgents: () => [], snapshot: () => [], gateHolder: () => null, staged: () => [],
+    gateWaiters: () => [], selfWork: () => [{ tool: 'Bash', description: 'watch CI' }], ownPid: 1, selfSessionId: 's',
+  });
+  assert.equal(verdict.canClose, false);
+  assert.match(verdict.reasons[0], /Bash "watch CI"/);
+});

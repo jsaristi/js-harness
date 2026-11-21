@@ -1186,3 +1186,5 @@ The plan and the record of `js-harness stack upgrade --round` (odd/tasks/closed-
 
 - `schema`: `js-harness.update-round/v1`; `phase`: prepare or switch; `at`: ISO time; `ok`: every step checked.
 - `steps`: `{ tool, what, outcome, saw }`, `outcome` one of done, undone, failed, not run; `log`: the path of the phase's log.
+- `running`: the step under way, `null` once the phase ends, while `ok` is `null`; `error`: an error that escaped the engine.
+- Written before the first step and again after each one; the same body is kept per phase as `round-<stamp>-<phase>.json`, beside its log `round-<stamp>-<phase>.log`, so a run killed half-way leaves what it did.

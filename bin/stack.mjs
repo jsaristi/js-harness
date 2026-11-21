@@ -30,7 +30,9 @@ import { shellWord } from './install.mjs';
 import { readCanClose, renderVerdict, stagedWorktrees } from './lib/can-close.mjs';
 import { claudeRunner, listAgents } from './lib/background.mjs';
 import { takeSnapshot } from './lib/process-tree.mjs';
-import { readGateHolder } from './lib/gate-lock.mjs';
+import { readGateHolder, readGateWaiters } from './lib/gate-lock.mjs';
+import { transcriptOf } from './lib/channel.mjs';
+import { mainCheckout, projectDirsOf, sessionFacts } from './lib/sessions.mjs';
 
 export { resolveStackPm };
 
@@ -630,8 +632,10 @@ function engramPromptForm(form, home, given, said, log, error) {
 }
 
 /** `js-harness stack can-close` (odd/tasks/closed-app-update.md, S4): yes, no or cannot tell, with each reason. Exit 0
- * once every part was read, 2 when one was not or for a usage error. The session that asks is left out by `--self`
- * (default `CLAUDE_CODE_SESSION_ID`) and its own call by its ancestry. `deps.canClose` is the seam of the reads. */
+ * for yes, 1 for no, 2 when a part was not read or for a usage error, so a script can wait on it (verify-pr940 S5). The
+ * session that asks (`--self`, default `CLAUDE_CODE_SESSION_ID`) is left out of the list and its own call by its
+ * ancestry, but what it started and has not ended (a sub-agent, a background shell) is read from its transcript and
+ * says no. `deps.canClose` is the seam of the reads. */
 export async function stackCanCloseMain(argv, env = process.env, deps = {}) {
   const log = deps.log ?? ((line) => console.log(line));
   const error = deps.error ?? ((line) => console.error(line));
@@ -649,9 +653,22 @@ export async function stackCanCloseMain(argv, env = process.env, deps = {}) {
     snapshot: () => takeSnapshot(),
     gateHolder: (at) => readGateHolder(at),
     staged: (at) => stagedWorktrees(at),
+    gateWaiters: (at) => readGateWaiters(at),
+    selfWork: (id) => openWorkOf(id, given.cwd, env),
   }));
   const verdict = await read({ cwd: value('--cwd') ?? process.cwd(), home, ownPid: process.pid, selfSessionId: value('--self') ?? env.CLAUDE_CODE_SESSION_ID ?? null });
   if (argv.includes('--json')) log(JSON.stringify(verdict, null, 2));
   else for (const line of renderVerdict(verdict)) log(line);
-  return verdict.unread.length > 0 ? 2 : 0;
+  return verdict.canClose === true ? 0 : verdict.canClose === false ? 1 : 2;
+}
+
+/** The background work the session `id` started and has not ended, read from its transcript; none without an id.
+ * Throws when its transcript cannot be found, so the part reads as not read. */
+function openWorkOf(id, cwd, env) {
+  if (!id) return [];
+  const run = (command, args, options = {}) => spawnSync(command, args, { encoding: 'utf8', windowsHide: true, ...options });
+  const claudeHome = env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude');
+  const found = transcriptOf(id, projectDirsOf(run, mainCheckout(run, cwd), claudeHome), (dir) => fs.readdirSync(dir));
+  if (found === null) throw new Error(`no single transcript of session ${id} under ${claudeHome}`);
+  return sessionFacts(fs.readFileSync(found.file, 'utf8')).work.filter((work) => !work.ended);
 }

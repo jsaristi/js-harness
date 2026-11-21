@@ -23,6 +23,20 @@ const newer = (a, b) => {
  * node folder gets the old folder's copies, never node's own. */
 export const SHIMS = ['npm', 'npm.cmd', 'npm.ps1', 'npx', 'npx.cmd', 'npx.ps1', 'corepack', 'corepack.cmd', 'corepack.ps1'];
 
+/** The commands corepack's package.json links (`bin`). `npm i -g corepack` writes a shim of each into the node folder,
+ * and C:\nvm4w\nodejs comes before pnpm\bin in PATH, so they would run corepack's pnpm instead of the real one: the
+ * verifier of PR 940 found the round recreating that trap (B1, 2026-11-20). The compare removes the ones the old
+ * folder lacks. */
+export const SHADOWS = ['pnpm', 'pnpx', 'yarn', 'yarnpkg'];
+const shimBase = (name) => name.replace(/\.(cmd|ps1)$/i, '').toLowerCase();
+
+/** How long one step may run before the round stops waiting for it. A timeout kills only the shell, so the step is
+ * recorded `timed out`, no undo runs beside a process that may still run, and its way back is named. */
+export const STEP_TIMEOUT_MS = 30 * 60_000;
+
+/** How old a prepared plan may be when the switch runs it: the versions it names move, and so does the machine. */
+export const PLAN_MAX_AGE_MS = 2 * 24 * 60 * 60_000;
+
 /** The stack, in the order a phase moves it. `how`: `self` (updates itself, said only), `harness` (`stack upgrade`
  * moves it, recorded for `uninstall machine`), `package` (a global package, by the installer that holds its binary),
  * `folder` (a package of the node folder, read from its package.json), `winget`, `nvm` (node), `report` (said, never
@@ -99,7 +113,8 @@ export async function readRound({ run, fetchJson, readFile, platform = 'win32' }
     const where = tool.bin ? whereOf(tool.bin) : tool.how === 'folder' ? nodeDir : null;
     tools.push({ id: tool.id, installed, newest, newerMajor, where, why });
   }
-  return { nodeDir, nvmRoot, npmCli: nodeDir ? path.join(nodeDir, 'node_modules', 'npm', 'bin', 'npm-cli.js') : null, tools };
+  const harnessVersion = semverOf(say(['js-harness', '--version']));
+  return { nodeDir, nvmRoot, npmCli: nodeDir ? path.join(nodeDir, 'node_modules', 'npm', 'bin', 'npm-cli.js') : null, harnessVersion, tools };
 }
 
 const same = (a, b) => typeof a === 'string' && typeof b === 'string' && path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
@@ -116,8 +131,12 @@ function installer(where, read) {
 
 /** The steps of node's move from `from` to `to` in its line: prepare installs it beside the live one, its globals with
  * that folder's own npm, the old folder's shims, and compares the two folders; switch is `nvm use`, undone by `nvm use
- * <from>`. `packages` are the old folder's global packages, each `{ spec, version }` at the version it gets. */
-export function nodeSteps({ from, to, nvmRoot, nodeDir, packages }) {
+ * <from>`, checked by node's version. `packages` are the old folder's global packages, each `{ spec, version, words? }`
+ * at the version it gets, `words` the command that prints it. After `nvm use` the switch checks node, each package
+ * that prints its version, js-harness (`harnessVersion`, what it answered when the plan was made, or that it answers
+ * at all) and that the first pnpm on PATH is not in the node folder; any of them failing runs `nvm use <from>`.
+ * `pre` is what must still hold when the switch begins: the active node is `from` and the new folder is there. */
+export function nodeSteps({ from, to, nvmRoot, nodeDir, packages, harnessVersion = null }) {
   const folder = path.join(nvmRoot, `v${to}`);
   const npmCli = path.join(folder, 'node_modules', 'npm', 'bin', 'npm-cli.js');
   const prepare = [
@@ -130,7 +149,19 @@ export function nodeSteps({ from, to, nvmRoot, nodeDir, packages }) {
     { tool: 'node', what: `copy the ${SHIMS.length} npm, npx and corepack shims of ${nodeDir}`, kind: 'copy', from: nvmRoot && path.join(nvmRoot, `v${from}`), to: folder, files: SHIMS, check: { sameFiles: SHIMS }, undo: null, wayBack: `nvm uninstall ${to} removes the whole new folder` },
     { tool: 'node', what: `compare the folders of node ${from} and ${to}`, kind: 'compare', from: path.join(nvmRoot, `v${from}`), to: folder, check: null, undo: null },
   ];
-  const swap = { tool: 'node', what: `switch the active node from ${from} to ${to}`, kind: 'run', elevate: true, words: ['nvm', 'use', to], check: { words: ['node', '--version'], expect: to }, undo: ['nvm', 'use', from] };
+  const check = {
+    all: [
+      { words: ['node', '--version'], expect: to },
+      ...packages.filter((p) => p.words).map((p) => ({ words: p.words, expect: p.version })),
+      { words: ['js-harness', '--version'], ...(harnessVersion ? { expect: harnessVersion } : {}) },
+      { words: ['where', 'pnpm'], notIn: nodeDir },
+    ],
+  };
+  const swap = {
+    tool: 'node', what: `switch the active node from ${from} to ${to}`, kind: 'run', elevate: true, words: ['nvm', 'use', to], check,
+    undo: ['nvm', 'use', from], undoCheck: { words: ['node', '--version'], expect: from },
+    pre: [{ words: ['node', '--version'], expect: from }, { exists: path.join(folder, 'node.exe') }],
+  };
   return { prepare, switch: [swap] };
 }
 
@@ -139,7 +170,7 @@ export function nodeSteps({ from, to, nvmRoot, nodeDir, packages }) {
  * each phase, in order, each `{ tool, what, kind, words, check, undo, wayBack?, elevate? }`. `folderPackages`, the
  * node folder's packages with their newest versions, go into a new node folder when node moves. `home`, when the
  * round was given one, is passed to the steps that act on a home. */
-export function planRound(read, { harness, home = null }) {
+export function planRound(read, { harness, home = null, harnessVersion = read.harnessVersion ?? null }) {
   const rows = [];
   const prepare = [];
   const swap = [];
@@ -180,12 +211,15 @@ export function planRound(read, { harness, home = null }) {
     }
     if (tool.how === 'nvm') {
       const packages = read.tools.filter((t) => ROUND.find((r) => r.id === t.id)?.spec && inNodeFolder({ ...t, how: ROUND.find((r) => r.id === t.id).how }))
-        .map((t) => ({ spec: ROUND.find((r) => r.id === t.id).spec, version: t.newest ?? t.installed })).filter((p) => p.version);
+        .map((t) => {
+          const entry = ROUND.find((r) => r.id === t.id);
+          return { spec: entry.spec, version: t.newest ?? t.installed, ...(entry.version ? { words: entry.version } : {}) };
+        }).filter((p) => p.version);
       if (!nodeMoves) {
         row('unknown', 'nvm root not read');
         continue;
       }
-      const steps = nodeSteps({ from, to, nvmRoot: read.nvmRoot, nodeDir: read.nodeDir, packages });
+      const steps = nodeSteps({ from, to, nvmRoot: read.nvmRoot, nodeDir: read.nodeDir, packages, harnessVersion });
       prepare.push(...steps.prepare);
       swap.push(...steps.switch);
       row('switch', `prepared beside ${from}, switched by nvm use`);
@@ -206,7 +240,7 @@ export function planRound(read, { harness, home = null }) {
       row('report', `installed in ${got.where ?? 'an unknown folder'}, which the round does not know how to update`);
       continue;
     }
-    const step = { tool: tool.id, what: `update ${tool.spec} to ${to}`, kind: 'run', words: install(tool.spec, to), check, undo: install(tool.spec, from) };
+    const step = { tool: tool.id, what: `update ${tool.spec} to ${to}`, kind: 'run', words: install(tool.spec, to), check, undo: install(tool.spec, from), undoCheck: { ...check, expect: from } };
     (tool.closed ? swap : prepare).push(step);
     row(tool.closed ? 'switch' : 'prepare');
   }
@@ -234,82 +268,149 @@ export function renderRound(plan) {
   return lines;
 }
 
-/** Whether a step's check holds now, and what it saw. */
-function checked(step, { run, readFile, exists, hookEntries }) {
-  const c = step.check;
+/** Whether the check `c` holds now, and what it saw: `words` with `expect` (the version it prints), without
+ * `expect` (it answers, exit 0), or with `notIn` (the first path it prints is not in that folder); `exists`;
+ * `hookEntries`; `packageVersion`; `sameFiles` (in `step.to`); `all`, each of a list, the first that fails named. */
+export function checkHolds(c, io, step = {}) {
   if (!c) return { ok: true, saw: 'no check' };
+  if (c.all) {
+    for (const part of c.all) {
+      const got = checkHolds(part, io, step);
+      if (!got.ok) return { ok: false, saw: `${part.words?.join(' ') ?? 'a check'} says ${got.saw}` };
+    }
+    return { ok: true, saw: `${c.all.length} checks hold` };
+  }
   if (c.words) {
-    const said = run(c.words[0], c.words.slice(1));
+    const said = io.run(c.words[0], c.words.slice(1));
+    if (c.notIn) {
+      const first = said.status === 0 && !said.error ? String(said.stdout ?? '').split(/\r?\n/).map((l) => l.trim()).find(Boolean) : undefined;
+      return { ok: first !== undefined && !same(path.dirname(first), c.notIn), saw: first ?? 'nothing found' };
+    }
+    if (c.expect === undefined) return { ok: !said.error && said.status === 0, saw: `exit ${said.error ? said.error.message : said.status}` };
     const saw = semverOf(said.stdout);
     return { ok: saw === c.expect, saw: saw ?? `exit ${said.status}` };
   }
-  if (c.exists) return { ok: exists(c.exists), saw: exists(c.exists) ? 'there' : 'missing' };
+  if (c.exists) return { ok: io.exists(c.exists), saw: io.exists(c.exists) ? 'there' : 'missing' };
   if (c.hookEntries) {
-    if (!hookEntries) return { ok: false, saw: 'the hook entries could not be counted' };
-    const n = hookEntries(c.hookEntries.owner, c.hookEntries.event);
+    if (!io.hookEntries) return { ok: false, saw: 'the hook entries could not be counted' };
+    const n = io.hookEntries(c.hookEntries.owner, c.hookEntries.event);
     return { ok: n === c.expect, saw: `${n} ${n === 1 ? 'entry' : 'entries'}` };
   }
   if (c.packageVersion) {
     let saw = null;
     try {
-      saw = semverOf(JSON.parse(readFile(c.packageVersion)).version);
+      saw = semverOf(JSON.parse(io.readFile(c.packageVersion)).version);
     } catch {
       saw = 'missing';
     }
     return { ok: saw === c.expect, saw };
   }
   if (c.sameFiles) {
-    const missing = c.sameFiles.filter((file) => !exists(path.join(step.to, file)));
+    const missing = c.sameFiles.filter((file) => !io.exists(path.join(step.to, file)));
     return { ok: missing.length === 0, saw: missing.length === 0 ? 'all there' : `missing ${missing.join(', ')}` };
   }
   return { ok: false, saw: 'a check this engine does not know' };
 }
 
-/** Runs `steps` in order: each one, then its check; a check that fails runs that step's undo, checks nothing more and
- * stops, so what ran before it stays and is reported. Returns `{ ok, steps: [{ tool, what, outcome, saw }] }`,
- * `outcome` one of `done`, `undone`, `failed` (no undo, or the undo failed), `not run`. `io` holds the seams: `run`,
- * `readFile`, `exists`, `copy(from, to)`, `list(dir)`, `log(line)` and `hookEntries(owner, event)`, the count of the
- * hook entries Claude Code runs for that owner and event (./hook-count.mjs). A `compare` step fails on a name the old folder
- * has and the new one lacks, at its root or in `node_modules`. */
+/** The compare of node's two folders, both ways and whatever the case, at their root and in `node_modules`: a name
+ * the old folder has and the new one lacks fails it; a name the new one has and the old one lacks is removed when it
+ * is a corepack shim (`SHADOWS`, at the root) and fails it otherwise, since the round does not know what it runs. */
+function compareFolders(step, io) {
+  const key = (name) => name.toLowerCase();
+  const missing = [];
+  const extra = [];
+  const removed = [];
+  for (const sub of ['', 'node_modules']) {
+    const before = io.list(path.join(step.from, sub));
+    const after = io.list(path.join(step.to, sub));
+    const had = new Set(before.map(key));
+    const has = new Set(after.map(key));
+    missing.push(...before.filter((name) => !has.has(key(name))).map((name) => path.join(sub, name)));
+    for (const name of after.filter((n) => !had.has(key(n)))) {
+      const file = path.join(step.to, sub, name);
+      if (sub === '' && SHADOWS.includes(shimBase(name))) {
+        io.remove(file);
+        if (!io.exists(file)) {
+          removed.push(name);
+          continue;
+        }
+      }
+      extra.push(path.join(sub, name));
+    }
+  }
+  const wrong = [
+    ...(missing.length > 0 ? [`the new folder lacks ${missing.join(', ')}`] : []),
+    ...(extra.length > 0 ? [`the new folder has ${extra.join(', ')}, which the old folder lacks`] : []),
+  ];
+  if (wrong.length > 0) return { ok: false, saw: wrong.join('; ') };
+  return { ok: true, saw: removed.length > 0 ? `removed corepack's ${removed.join(', ')}, which would shadow pnpm` : 'the same names' };
+}
+
+/** Runs `steps` in order: each one, then its check; a check that fails runs that step's undo, then the undo's own
+ * check (`undoCheck`), checks nothing more and stops, so what ran before it stays and is reported. Returns `{ ok,
+ * steps: [{ tool, what, outcome, saw }] }`, `outcome` one of `done`, `undone` (the undo ran and its check holds),
+ * `failed` (no undo, or the undo or its check failed), `timed out` (no undo runs beside it), `not run`. An exception
+ * in a step, its check or its undo is that step failing, never thrown. `io` holds the seams: `run`, `readFile`,
+ * `exists`, `copy(from, to)`, `list(dir)`, `remove(file)`, `log(line)`, `hookEntries(owner, event)`, the count of the
+ * hook entries Claude Code runs for that owner and event (./hook-count.mjs), and `onStep(done, running)`, told before
+ * each step with the outcomes so far and the step about to run, and once at the end with `running` null. */
 export function runPhase(steps, io) {
   const out = [];
+  const tell = (running) => io.onStep?.(out.slice(), running);
+  const stop = (i) => {
+    for (const rest of steps.slice(i + 1)) out.push({ tool: rest.tool, what: rest.what, outcome: 'not run', saw: null });
+    tell(null);
+    return { ok: false, steps: out };
+  };
   for (const [i, step] of steps.entries()) {
     io.log(`step ${i + 1}/${steps.length}: ${step.what}`);
-    let failed = null;
-    if (step.kind === 'run') {
-      const result = io.run(step.words[0], step.words.slice(1), { step: true });
-      if (result.error || result.status !== 0) failed = `${step.words.join(' ')} exited ${result.error ? result.error.message : result.status}`;
-    } else if (step.kind === 'copy') {
-      try {
+    tell(step.what);
+    let check;
+    let timedOut = false;
+    try {
+      if (step.kind === 'run') {
+        const result = io.run(step.words[0], step.words.slice(1), { step: true });
+        timedOut = result.error?.code === 'ETIMEDOUT';
+        if (timedOut) check = { ok: false, saw: `${step.words.join(' ')} timed out; its process may still run` };
+        else if (result.error || result.status !== 0) check = { ok: false, saw: `${step.words.join(' ')} exited ${result.error ? result.error.message : result.status}` };
+      } else if (step.kind === 'copy') {
         for (const file of step.files) io.copy(path.join(step.from, file), path.join(step.to, file));
-      } catch (err) {
-        failed = `copy: ${err.message}`;
+      } else if (step.kind === 'compare') {
+        check = compareFolders(step, io);
       }
-    } else if (step.kind === 'compare') {
-      const missing = ['', 'node_modules'].flatMap((sub) => {
-        const have = new Set(io.list(path.join(step.to, sub)));
-        return io.list(path.join(step.from, sub)).filter((name) => !have.has(name)).map((name) => path.join(sub, name));
-      });
-      if (missing.length > 0) failed = `the new folder lacks ${missing.join(', ')}`;
+      check = check ?? checkHolds(step.check, io, step);
+    } catch (err) {
+      check = { ok: false, saw: `threw: ${err.message}` };
     }
-    const check = failed === null ? checked(step, io) : { ok: false, saw: failed };
     if (check.ok) {
+      io.log(`  checked: ${check.saw}`);
       out.push({ tool: step.tool, what: step.what, outcome: 'done', saw: check.saw });
       continue;
     }
     io.log(`  check failed: ${check.saw}`);
     let outcome = 'failed';
-    if (step.undo) {
-      const undo = io.run(step.undo[0], step.undo.slice(1), { step: true });
-      outcome = !undo.error && undo.status === 0 ? 'undone' : 'failed';
-      io.log(`  undo ${step.undo.join(' ')}: ${outcome === 'undone' ? 'ran' : 'failed too'}`);
+    if (timedOut) {
+      outcome = 'timed out';
+      io.log(`  no undo runs beside a process that may still run${step.wayBack ? `; way back: ${step.wayBack}` : step.undo ? `; once it ends: ${step.undo.join(' ')}` : ''}`);
+    } else if (step.undo) {
+      try {
+        const undo = io.run(step.undo[0], step.undo.slice(1), { step: true });
+        if (undo.error || undo.status !== 0) io.log(`  undo ${step.undo.join(' ')}: failed too`);
+        else {
+          const again = checkHolds(step.undoCheck, io, step);
+          outcome = again.ok ? 'undone' : 'failed';
+          io.log(`  undo ${step.undo.join(' ')}: ${again.ok ? 'ran and checked' : `ran, but ${step.undoCheck.words?.join(' ') ?? 'its check'} says ${again.saw}`}`);
+        }
+      } catch (err) {
+        io.log(`  undo ${step.undo.join(' ')}: threw: ${err.message}`);
+      }
     } else if (step.wayBack) {
       io.log(`  no undo can run; way back: ${step.wayBack}`);
     }
     out.push({ tool: step.tool, what: step.what, outcome, saw: check.saw });
-    for (const rest of steps.slice(i + 1)) out.push({ tool: rest.tool, what: rest.what, outcome: 'not run', saw: null });
-    return { ok: false, steps: out };
+    return stop(i);
   }
+  tell(null);
   return { ok: true, steps: out };
 }
 

@@ -28,7 +28,7 @@ idle (Depth pass, item 4).
 - `npm run check` exits 0
 - `js-harness stack upgrade --round --dry-run` (the branch's `node bin/js-harness.mjs`) exits 0 on this machine and
   prints one line a tool with its move
-- `js-harness stack can-close` exits 0 and names what runs, checked once against a session with a background task
+- `js-harness stack can-close` exits 0 on yes and 1 on no (part 3, verify-pr940 S5), and names what runs, checked once against a session with a background task
 
 ## In scope / Out of scope
 - In: `bin/stack.mjs` (the `--round` forms of `stack upgrade`, the `can-close` form), `bin/lib/update-round.mjs` (the
@@ -120,6 +120,9 @@ Sent to the lead as questions, one at a time, after this design:
 - [x] T4 (kind: build) S1, S3, `--prepare` and `--switch` with undo and record — route: inline — commit: feat(stack): round switch
 - [x] T4b (kind: build) S2, after the engram update the round re-applies `stack engram-prompt off` (D8), checked by the hook-entries count — route: inline — commit: feat(stack): re-apply engram-prompt off
 - [x] T5 (kind: verify) lenses recorded, Codex skips recorded, draft pull request 940; the independent verifier is the lead's
+- [x] T6 (kind: build) part 3 (JH 262): B1, B2, S1-S4 of verify-pr940 in the round — route: inline — commit: fix(stack): the round's compare, switch check, undo and record
+- [x] T7 (kind: build) part 3: S5, can-close reads the caller's open work, gate waiters, blocked jobs, unreadable diffs; exit 1 on no — route: inline — commit: fix(stack): can-close
+- [ ] T8 (kind: verify) part 3: Claude lenses and Codex skip over 33b4cb28..HEAD, push to PR 940 — not done: JH 262 stopped at its 8M spend limit
 
 ## Log
 - L1 (his request as written, 2026-11-20T19:39:39Z, transcript 0cdab702 line 2886): "ok entonces arma un script
@@ -157,3 +160,4 @@ Sent to the lead as questions, one at a time, after this design:
   (2) `stack engram-prompt off` exits 1 on a home with no user-level engram plugin, so on such a home prepare stops at
   that step and the switch is refused; (3) `elevatedCommand` throws on a home path holding `& | < > ^ %`, after the
   switch says a permission prompt follows.
+- L9 (JH 262, 2026-11-20): verify-pr940 B1, B2, S1-S5 built test first (update-round 25, stack-round 22, can-close 12, stack 21 pass). Live: `stack can-close` from the branch said no, exit 1, and named this session's own background commit. Written open, not built (spend): L8's three gaps, and question 385's majors ("También moverlas": node major line and nvm 2.x inside the round, shown before a major). Not done: lenses, Codex skip record, push.

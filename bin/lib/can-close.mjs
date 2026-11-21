@@ -42,7 +42,7 @@ const clock = (ms) => (Number.isFinite(ms) ? `${new Date(ms).toISOString().slice
 
 /** The verdict from the four reads, each a value or the `Error` its read threw: `{ canClose, reasons, unread }`,
  * `canClose` `true`, `false`, or `null` when a part could not be read and nothing else said no. */
-export function closeVerdict({ agents, shells, gate, staged, selfSessionId = null }) {
+export function closeVerdict({ agents, shells, gate, staged, selfSessionId = null, selfWork = [], waiters = [] }) {
   const reasons = [];
   const unread = [];
   const part = (value, what) => {
@@ -53,8 +53,17 @@ export function closeVerdict({ agents, shells, gate, staged, selfSessionId = nul
     return value;
   };
   for (const agent of part(agents, 'the sessions (claude agents)') ?? []) {
-    if (!atWork(agent) || (selfSessionId && agent.sessionId === selfSessionId)) continue;
-    reasons.push(`${agent.name ?? agent.id ?? 'a session'} is at work (${agent.status ?? agent.state})`);
+    if (selfSessionId && agent.sessionId === selfSessionId) continue;
+    if (agent.state === 'blocked') reasons.push(`${agent.name ?? agent.id ?? 'a job'} is blocked: it waits on something and has not ended`);
+    else if (atWork(agent)) reasons.push(`${agent.name ?? agent.id ?? 'a session'} is at work (${agent.status ?? agent.state})`);
+  }
+  // The caller's session is left out of the list because it is the one asking; what it started and has not ended
+  // (a sub-agent, a background shell) is read from its transcript, since a sub-agent leaves no process to see.
+  for (const work of part(selfWork, "this session's background work (its transcript)") ?? []) {
+    reasons.push(`this session's ${work.tool ?? 'work'} ${JSON.stringify(work.description ?? '')} still runs`);
+  }
+  for (const waiter of part(waiters, 'the gates that wait') ?? []) {
+    reasons.push(`a gate waits for the machine's lock (pid ${waiter.pid ?? 'unknown'}, ${waiter.cwd ?? 'folder unknown'})`);
   }
   for (const shell of part(shells, 'the processes (snapshot)') ?? []) {
     reasons.push(`${shell.session} runs a shell (${shell.name}, pid ${shell.pid}) since ${clock(shell.since)}: a tool call or a background task`);
@@ -85,11 +94,20 @@ export function stagedWorktrees(cwd, run = spawnSync) {
     path: /^worktree (.+)$/m.exec(block)?.[1],
     prunable: /^prunable/m.test(block),
   })).filter((t) => t.path && !t.prunable);
-  return trees.filter((t) => run('git', ['-C', t.path, 'diff', '--cached', '--quiet'], { encoding: 'utf8', windowsHide: true }).status === 1).map((t) => t.path);
+  const staged = [];
+  const unreadable = [];
+  for (const tree of trees) {
+    const diff = run('git', ['-C', tree.path, 'diff', '--cached', '--quiet'], { encoding: 'utf8', windowsHide: true });
+    if (diff.status === 1) staged.push(tree.path);
+    else if (diff.status !== 0) unreadable.push(`${tree.path} (exit ${diff.error?.message ?? diff.status})`);
+  }
+  // A diff git could not give is no clean worktree: it reads as a part not read, never as nothing staged.
+  if (unreadable.length > 0) throw new Error(`git diff --cached could not read ${unreadable.join(', ')}`);
+  return staged;
 }
 
 /** Runs the four reads through their seams and returns the verdict; a read that throws is an unread part. */
-export async function readCanClose({ cwd, home, listAgents, snapshot, gateHolder, staged, ownPid = process.pid, selfSessionId = null }) {
+export async function readCanClose({ cwd, home, listAgents, snapshot, gateHolder, staged, gateWaiters = () => [], selfWork = () => [], ownPid = process.pid, selfSessionId = null }) {
   const attempt = async (read) => {
     try {
       return await read();
@@ -101,6 +119,8 @@ export async function readCanClose({ cwd, home, listAgents, snapshot, gateHolder
   const processes = await attempt(snapshot);
   const shells = processes instanceof Error ? processes : shellsUnderSessions(processes, { agents: agents instanceof Error ? [] : agents, ownPid });
   const gate = await attempt(() => gateHolder(home));
+  const waiters = await attempt(() => gateWaiters(home));
   const worktrees = await attempt(() => staged(cwd));
-  return closeVerdict({ agents, shells, gate, staged: worktrees, selfSessionId });
+  const work = await attempt(() => selfWork(selfSessionId));
+  return closeVerdict({ agents, shells, gate, staged: worktrees, selfSessionId, selfWork: work, waiters });
 }
