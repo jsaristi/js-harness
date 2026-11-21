@@ -8,14 +8,13 @@
 //
 // `merge-queue --refresh-copy` run alone (`refreshNow`, S4 and S5 of odd/tasks/lead-manual-steps.md) refreshes the copy
 // to origin's main at once, as the lead did by hand when that wait gave up: it refuses while anything but a wait runs
-// from the copy, stops the waits under the gate lock, and tells their sessions to run them again (merge-queue-waits.mjs).
+// from the copy (merge-queue-waits.mjs), and leaves the waits running, since a wait outlives its folder's swap (JH 284).
 
 import path from 'node:path';
 import { atWork, within } from './background.mjs';
 import { GATE_NOT_RUN } from './gate-turn.mjs';
-import { reArmNote, sessionOf, waitAgain } from './merge-queue-waits.mjs';
 import { REFRESH_FAILED, REFRESH_UNANSWERED } from './refresh-copy.mjs';
-import { mainCheckout, parseWorktreeList, roleOfTitle } from './sessions.mjs';
+import { mainCheckout, parseWorktreeList } from './sessions.mjs';
 
 // How long the refresh waits for the sessions to be between runs, and how often it looks: a run of a work session
 // lasts minutes, and the gate lock the refresh takes after it is waited for an hour.
@@ -134,40 +133,14 @@ const COPY_LOOK_PAUSE_MS = 10_000;
 const sinceOf = (ms) => (Number.isFinite(ms) ? `, since ${new Date(ms).toISOString()}` : '');
 const blockersWhy = (blockers) => `${blockers.length === 1 ? 'a process other than a wait runs' : `${blockers.length} processes other than a wait run`} from the installed copy: ${blockers.map((one) => `${one.pid} (${one.verb ?? 'no command named'}${sinceOf(one.createdAt)})`).join(', ')}`;
 
-/** Tells each work session whose waits `stopped` holds to run them again, by one note of `reArmNote` through `tell`, in
- * the channel of its project (`session.slug`; this one's when it names none), and prints every other stopped wait with
- * the command that runs it again, as it does one whose project's channel is not known (`slug` null). A note that cannot
- * be written is said. */
-function tellStopped({ stopped, sha, code, tell, stdout }) {
-  const bySession = new Map();
-  for (const wait of stopped) {
-    const role = roleOfTitle(wait.session?.title);
-    const key = `${wait.session?.slug ?? ''}\0${role?.number}`;
-    if (role?.role === 'work' && wait.session.slug === null) stdout(`refresh: run again the wait of ${wait.whose} (its project's channel is not known): ${wait.again}`);
-    else if (role?.role === 'work') bySession.set(key, [...(bySession.get(key) ?? []), wait]);
-    else stdout(`refresh: run again the wait of ${wait.whose}: ${wait.again}`);
-  }
-  for (const waits of bySession.values()) {
-    const { number } = roleOfTitle(waits[0].session.title);
-    try {
-      tell(number, reArmNote({ sha, code, again: waits.map((wait) => wait.again), maybe: waits.some((wait) => wait.maybe) }), waits[0].session.slug);
-      stdout(`refresh: told ${waits[0].whose} to run its ${waits.length === 1 ? 'wait' : `${waits.length} waits`} again`);
-    } catch (err) {
-      stdout(`refresh: could not tell ${waits[0].whose} to run its waits again (${err.message}): ${waits.map((wait) => wait.again).join('; ')}`);
-    }
-  }
-}
-
 /** `merge-queue --refresh-copy` run alone: brings the installed copy up to `main.sha` (origin's main, or `main.why`
  * when it could not be read: exit 1) unless the copy already names it (`copySha`: exit 0). `look()` gives the copy's
  * processes (`{ waits, blockers, snapshot }`, readCopy); while a blocker is there after `COPY_LOOKS` looks, nothing is
  * refreshed (GATE_NOT_RUN). Then `refresh` (refreshCopy) runs for main, and under its gate lock `stillQuiet` looks once
- * more, refuses on a blocker, and stops every wait with `stop` (killProcesses), refusing when one outlives it. After
- * the refresh, whatever its exit, the sessions of the stopped waits are told (`tell(number, text, slug)`), each found in
- * `sessions()` (wakePlan now, read just before the stop). Before the first look, and again under the lock before any
- * wait is stopped, `unanswered(sha)` gives the line of a refusal while an open question asks to apply what main holds,
- * or null: then nothing is stopped or refreshed (REFRESH_UNANSWERED). Returns the refresh's exit. */
-export async function refreshNow({ main, copySha, look, stop, sessions, refresh, versionOf, tell, home, cwd, env, sleep, stdout, stderr, unanswered = () => null }) {
+ * more and refuses on a blocker. The waits are left running through the swap: none is stopped or told. Before the first
+ * look, and again under the lock, `unanswered(sha)` gives the line of a refusal while an open question asks to apply
+ * what main holds, or null: then nothing is refreshed (REFRESH_UNANSWERED). Returns the refresh's exit. */
+export async function refreshNow({ main, copySha, look, refresh, versionOf, home, cwd, env, sleep, stdout, stderr, unanswered = () => null }) {
   if (!main.sha) {
     stderr(`refresh: ${main.why}: nothing was refreshed`);
     return 1;
@@ -207,38 +180,13 @@ export async function refreshNow({ main, copySha, look, stop, sessions, refresh,
     }
     await sleep(COPY_LOOK_PAUSE_MS);
   }
-  const stopped = [];
-  // Under the gate lock, right before the install: no wait is stopped for a refresh that then waits for the lock.
+  // Under the gate lock, right before the install: one more look, refused on a blocker. A wait is left running: its
+  // code is in memory and outlives its folder's swap, where a wait stopped here woke its session before it could be told
+  // to run it again (JH 284).
   const stillQuiet = () => {
-    // Read before the stop, since a stopped wait reads as ended in its transcript once its session hears of it, and
-    // before the last look, since reading every transcript takes long enough for work to start meanwhile.
-    let plan = [];
-    try {
-      plan = sessions();
-    } catch (err) {
-      stdout(`refresh: the sessions' transcripts could not be read (${err.message}): the waits are stopped without their sessions`);
-    }
     const seen = looked();
     if (seen.failed) return { quiet: false, why: seen.failed };
     if (seen.blockers.length > 0) return { quiet: false, why: blockersWhy(seen.blockers) };
-    // Each wait is taken for stopped before the stop, which can fail after it stopped some: its session is told either way.
-    for (const wait of seen.waits) {
-      const { session, why } = sessionOf({ commandLine: wait.commandLine, plan });
-      const whose = session ? session.title ?? `the session ${session.id} (no title)` : `no one session (${why})`;
-      stopped.push({ ...wait, session, whose, again: waitAgain(wait.commandLine) });
-    }
-    let outcome;
-    try {
-      outcome = stop(seen.waits.flatMap((wait) => wait.targets));
-    } catch (err) {
-      for (const wait of stopped) {
-        wait.maybe = true;
-        stdout(`refresh: may have stopped the wait ${wait.pid} of ${wait.whose}: ${wait.again}`);
-      }
-      return { quiet: false, why: `the waits could not be stopped (${err.message})` };
-    }
-    for (const wait of stopped) stdout(`refresh: stopped the wait ${wait.pid} of ${wait.whose}: ${wait.again}`);
-    if (outcome.running.length > 0) return { quiet: false, why: `${outcome.running.length === 1 ? '1 process of the stopped waits still runs' : `${outcome.running.length} processes of the stopped waits still run`}: ${outcome.running.join(', ')}` };
     return { quiet: true };
   };
   let code;
@@ -248,6 +196,5 @@ export async function refreshNow({ main, copySha, look, stop, sessions, refresh,
     stderr(`refresh failed: ${err.message}`);
     code = REFRESH_FAILED;
   }
-  tellStopped({ stopped, sha, code, tell, stdout });
   return code;
 }
