@@ -40,7 +40,7 @@ test('a short gap is work, a long one is a wait, and a pending tool call is work
   assert.equal(a.waitingHours, 3.08); // 60 + 60 + 65 minutes (12:55 to the end)
   assert.deepEqual(a.waits.map((w) => [w.from, w.to, w.endedBy]), [
     [at('10:45'), at('11:45'), 'a message of another session'],
-    [at('11:50'), at('12:50'), 'its own wait call: Bash js-harness wait --pr 930'],
+    [at('11:50'), at('12:50'), 'the result of its call'],
     [at('12:55'), at('14:00'), 'nothing before the end'],
   ]);
   assert.equal(a.waits[0].lastReply, 'done');
@@ -221,4 +221,19 @@ test('a queued message timed only on its attachment ends a wait like any entry',
   const queued = { type: 'attachment', attachment: { type: 'queued_command', origin: { kind: 'human' }, humanTurn: true, prompt: 'hola', timestamp: at('11:00') } };
   const a = activityOf([reply('10:00'), queued, reply('11:01')], span('10:00', '11:01'));
   assert.deepEqual(a.waits.map((w) => [w.from, w.to, w.endedBy]), [[at('10:00'), at('11:00'), 'his words']]);
+});
+
+test('a wait call is the reason, its result the ending only when it came by the cutoff', () => {
+  const entries = [reply('10:00', 'waiting', [{ name: 'Bash', input: { command: 'js-harness wait --pr 930' } }]), result('11:00', 't10:00'), reply('11:01')];
+  const done = activityOf(entries, span('10:00', '11:01'));
+  assert.deepEqual([done.waits[0].endedBy, done.waits[0].reason], ['the result of its call', 'its own wait call: Bash js-harness wait --pr 930']);
+  const cut = activityOf(entries, span('10:00', '10:30'));
+  assert.deepEqual([cut.waits[0].endedBy, cut.waits[0].reason], ['nothing before the end', 'its own wait call: Bash js-harness wait --pr 930']);
+  assert.equal(activityOf([reply('10:00'), typed('11:00')], span('10:00', '11:00')).waits[0].reason, null);
+});
+
+test('what ended a wait is read from its provenance, not from tags in its text', () => {
+  assert.equal(endedBy(typed('10:00', 'I pasted <task-notification>x</task-notification> here')), 'his words');
+  assert.equal(endedBy({ type: 'user', origin: { kind: 'peer', name: 'JH 1' }, timestamp: at('10:00'), message: { role: 'user', content: 'go' } }), 'a message of another session');
+  assert.equal(endedBy({ type: 'attachment', attachment: { type: 'queued_command', origin: { kind: 'task-notification' }, prompt: 'done', timestamp: at('10:00') } }), 'an event of the app or a task');
 });

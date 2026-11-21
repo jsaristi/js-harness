@@ -26,7 +26,7 @@ import { gateLogDir, readGateLog } from '../../bin/lib/gate-log.mjs';
 import { personTimesOf } from '../../bin/lib/person-times.mjs';
 import { waitPartsOf } from '../../bin/lib/wake.mjs';
 import { spawnSync } from 'node:child_process';
-import { mainCheckout, parseTranscript, projectDirsOf, projectSlug, QUESTION_TOOLS, quoteEntry } from '../../bin/lib/sessions.mjs';
+import { mainCheckout, parseTranscript, projectDirsOf, projectSlug, QUESTION_TOOLS, questionCallsOf, quoteEntry } from '../../bin/lib/sessions.mjs';
 
 /** The process runner `mainCheckout` and `projectDirsOf` take: git, read whole as text. */
 const gitRun = (command, args, options = {}) => spawnSync(command, args, { encoding: 'utf8', windowsHide: true, ...options });
@@ -70,13 +70,20 @@ export function absencesOf(times, { minMs = ABSENCE_MS, now }) {
   return out;
 }
 
-/** What `entry`, the one that ended a wait, is, in words; 'nothing before the end' when `entry` is `undefined`. */
-export function endedBy(entry) {
+/** What `entry`, the one that ended a wait, is, in words; 'nothing before the end' when `entry` is `undefined`. Read
+ * by `quoteEntry`'s provenance first (`calls`, the session's question calls, make a tapped answer his): his words, a
+ * peer message with or without its wrapper, a queued task notice. Only an entry that is not his is read by its tags,
+ * for the app's events that record no origin. */
+export function endedBy(entry, calls) {
   if (entry === undefined) return 'nothing before the end';
+  const quote = quoteEntry(entry, calls);
+  if (quote.person) return 'his words';
+  if (/from another session/.test(quote.what)) return 'a message of another session';
+  if (/task notification/.test(quote.what)) return 'an event of the app or a task';
+  if (blocksOf(entry).some((block) => block?.type === 'tool_result')) return 'the result of its call';
   const text = textOf(entry);
   if (text.includes('<cross-session-message')) return 'a message of another session';
   if (/<(?:task-notification|side-sessions-event|ci-monitor-event)/.test(text)) return 'an event of the app or a task';
-  if (quoteEntry(entry).person) return 'his words';
   return `an entry of type ${entry.type}${entry.attachment?.type ? ` (${entry.attachment.type})` : ''}`;
 }
 
@@ -112,7 +119,7 @@ function pendingAfter(timed) {
 const overlapMs = (cuts, from, to) => cuts.reduce((sum, [a, b]) => sum + Math.max(0, Math.min(b, to) - Math.max(a, from)), 0);
 
 /** The session's working, waiting and launch hours inside `[from, to)` (ms), from its `entries`, with each wait of at
- * least `idleMs` as `{ from, to, hours, endedBy, lastReply }`. Time before its first entry is not its own; after its last
+ * least `idleMs` as `{ from, to, hours, endedBy, reason, lastReply }`. Time before its first entry is not its own; after its last
  * entry before `to` it waits. A call whose result the transcript does not hold is never pending, so a call still running
  * at the transcript's end reads as a wait: in an absence still open, a long gate running now is not told from idle time,
  * which a later run, once its result is written, corrects. `archivedAt` ends its window there; `lockWaits`, the
@@ -123,6 +130,7 @@ export function activityOf(entries, { from, to: windowTo, idleMs, archivedAt = I
     .filter((entry) => ACTIVITY.has(entry?.type) && Number.isFinite(timeOf(entry)))
     .sort((a, b) => timeOf(a) - timeOf(b));
   const pending = pendingAfter(timed);
+  const questionCalls = questionCallsOf(timed);
   let working = 0;
   let waiting = 0;
   let launch = 0;
@@ -155,7 +163,7 @@ export function activityOf(entries, { from, to: windowTo, idleMs, archivedAt = I
         const inGap = lockWaits.filter(([a, b]) => b > inStart && a < end);
         const lockFrom = Math.max(inStart, Math.min(...inGap.map(([a]) => a)));
         const lockTo = Math.min(end, Math.max(...inGap.map(([, b]) => b)));
-        waits.push({ from: iso(lockFrom), to: iso(lockTo), hours: hours(queued), endedBy: "the machine's gate lock", lastReply: lastReply.slice(-200) });
+        waits.push({ from: iso(lockFrom), to: iso(lockTo), hours: hours(queued), endedBy: "the machine's gate lock", reason: null, lastReply: lastReply.slice(-200) });
       }
       continue;
     }
@@ -165,7 +173,10 @@ export function activityOf(entries, { from, to: windowTo, idleMs, archivedAt = I
     }
     waiting += span;
     const ending = next !== undefined && timeOf(next) <= to ? next : undefined;
-    waits.push({ from: iso(inStart), to: iso(end), hours: hours(span), endedBy: waitCall ? `its own wait call: ${waitCall.label}` : endedBy(ending), lastReply: lastReply.slice(-200) });
+    // Under a wait call, the call is the reason and its own result the ending, when that came by the cutoff.
+    const result = waitCall ? timed[waitCall.until] : undefined;
+    const ended = waitCall ? (result !== undefined && timeOf(result) <= to ? result : undefined) : ending;
+    waits.push({ from: iso(inStart), to: iso(end), hours: hours(span), endedBy: endedBy(ended, questionCalls), reason: waitCall ? `its own wait call: ${waitCall.label}` : null, lastReply: lastReply.slice(-200) });
   }
   return { workingHours: hours(working), waitingHours: hours(waiting), launchHours: hours(launch), lockHours: hours(locked), inside, waits };
 }
@@ -294,7 +305,7 @@ export function main(argv = process.argv.slice(2), { claudeHome = path.join(os.h
     for (const row of absence.rows) {
       const longest = [...row.waits].sort((a, b) => b.hours - a.hours)[0];
       const extra = [row.launchHours > 0 && `launch ${row.launchHours} h`, row.lockHours > 0 && `gate lock ${row.lockHours} h`, row.copied > 0 && `${row.copied} copied entries left out`, row.archivedAt && `archived ${row.archivedAt}`].filter(Boolean);
-      print(`  ${row.id} ${row.title}: working ${row.workingHours} h, waiting ${row.waitingHours} h${extra.length ? ` (${extra.join('; ')})` : ''}${longest ? `; longest wait ${longest.hours} h from ${longest.from}, ended by ${longest.endedBy}` : ''}`);
+      print(`  ${row.id} ${row.title}: working ${row.workingHours} h, waiting ${row.waitingHours} h${extra.length ? ` (${extra.join('; ')})` : ''}${longest ? `; longest wait ${longest.hours} h from ${longest.from}, ended by ${longest.endedBy}${longest.reason ? ` (${longest.reason})` : ''}` : ''}`);
     }
     const total = (key) => round(absence.rows.reduce((sum, row) => sum + row[key], 0));
     print(`  total of the ${absence.rows.length} sessions with an entry or a running call inside: working ${total('workingHours')} h, waiting ${total('waitingHours')} h, launch ${total('launchHours')} h`);
