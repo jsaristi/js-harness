@@ -349,3 +349,17 @@ test('a damaged record, or one whose debt cannot be told, hides no other floor d
   assert.ok(lines[0].startsWith('unavailable aaaaaaa..ddddddd'), 'a debt that cannot be told is listed, not hidden');
   assert.ok(lines[1].startsWith('unavailable aaaaaaa..bbbbbbb'));
 });
+
+// Codex P2 on PR 945 (codex-meter.mjs:147-151): a skip made at the stop of the week stays a Codex debt on every branch
+// once its PR lands, as a floor skip does, and its line asks no reset.
+test('a skip made at the stop of the week is listed across branches until a Codex review pays it', () => {
+  const lineOf = (rec) => `unavailable ${rec.base.slice(0, 7)}..${rec.head.slice(0, 7)}: ${rec.reason}`;
+  const records = [
+    { outcome: 'unavailable', base: 'a'.repeat(40), head: 'b'.repeat(40), reason: `${STOP_SKIP}: 72% used` },
+    { outcome: 'unavailable', base: 'c'.repeat(40), head: 'd'.repeat(40), reason: 'codex is not installed' },
+  ];
+  const lines = floorDebtLines(records, () => true, lineOf);
+  assert.equal(lines.length, 1, lines.join('\n'));
+  assert.ok(lines[0].startsWith(`unavailable aaaaaaa..bbbbbbb: ${STOP_SKIP}`), lines[0]);
+  assert.doesNotMatch(lines[0], /reset/);
+});

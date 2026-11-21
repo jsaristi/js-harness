@@ -4,7 +4,7 @@
 // Why a command of its own and not `codex-review --plan`. `codex-review` runs a model over a range of commits and
 // records the answer; this command reads an account's limits and runs no model, writes nothing, and answers a
 // person's question about how much of the window is left. It also lists the Codex debts of the branch, the skips no
-// Codex review has paid yet, and every skip made at the floor of the weekly limit (rule:codex-weekly-floor) that no Codex
+// Codex review has paid yet, and every skip made at the floor (rule:codex-weekly-floor) or the stop (rule:codex-weekly-stop) of the weekly limit that no Codex
 // review has paid, on any branch, a merged one among them, so the reading that tells a reset came also tells what is
 // owed after it. Putting the read inside the review would make one
 // command do two unrelated things, and the review's plan is about what a review will cost, not what the account
@@ -44,7 +44,7 @@ function orElse(fn, fallback) {
 }
 
 /** The Codex debts of the working directory, each as its line: the skips of the branch at HEAD that still owe a review,
- * and the skips made at the floor of the weekly limit that no Codex review has paid, on any branch, with the command
+ * and the skips made at the floor or the stop of the weekly limit that no Codex review has paid, on any branch, with the command
  * that pays each. `null` when neither can be told. */
 function workingDebts(cwd = process.cwd()) {
   const branch = orElse(() => branchCodexSkips(cwd), null);
