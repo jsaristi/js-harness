@@ -149,17 +149,18 @@ export function weeklyLaunch(outcome, floor, stopAt) {
 
 /** Why a review was not started at the stop of the week (rule:codex-weekly-stop): no reset is asked; the skip is
  * recorded, a second Claude review runs in Codex's place, and the skip stays a debt until a Codex review pays it.
- * `read` is the double review's read of a plan. */
-export function weeklyStopped({ used, stopAt, base, at, part = null, read = false }) {
+ * `read` is the double review's read of a plan. `flags` are the rerun flags the printed commands keep, `--cwd <dir>`
+ * where the review was run on another checkout (Codex on PR 945), so a command run from the same shell finds the range. */
+export function weeklyStopped({ used, stopAt, base, at, part = null, read = false, flags = [] }) {
   const what = read ? 'neither reader was started'
     : part === null || part.index === 1 ? 'the review was not started' : `part ${part.index} of ${part.of} was not started, the parts before it kept for the next run,`;
   const share = Math.round(used * 10) / 10;
   const head = `Codex's weekly limit has ${share}% used, at or past its stop of ${stopAt}% (rule:codex-weekly-stop), so ${what} and nothing was recorded.`;
   if (read) return `${head}\n${nextLine(noStep('the read waits for the reset of the weekly limit'))}`;
-  const skip = reviewCommand('codex-review', { base, at, flags: [`--unavailable "${STOP_SKIP}: ${share}% used"`] });
+  const skip = reviewCommand('codex-review', { base, at, flags: [`--unavailable "${STOP_SKIP}: ${share}% used"`, ...flags] });
   return (
     `${head}\nRecord the skip with \`${skip}\`, and run a second Claude review in Codex's place, ` +
-    `\`${reviewCommand('lens-review', { base, at, lenses: '<the lenses not run yet>' })}\`. ` +
+    `\`${reviewCommand('lens-review', { base, at, lenses: '<the lenses not run yet>', flags })}\`. ` +
     'The skip is a Codex debt that check and the merge door list until a Codex review of its range pays it.\n' +
     nextLine({ kind: 'command', text: skip })
   );
@@ -189,11 +190,12 @@ export function floorStopped({ left, floor, base, at, part = null, interrupted =
 }
 
 /** What a launch of `codex-review` does by the weekly limit, from an outcome of `readRateLimits`: `note`, the line
- * that says a reading is not there and the review runs, or `null`; `stop`, why nothing is launched, or `null`. */
-export function launchWord(outcome, { floor, stopAt, base, at, part = null, read = false }) {
+ * that says a reading is not there and the review runs, or `null`; `stop`, why nothing is launched, or `null`.
+ * `flags` go to the commands the stop of the week prints (`weeklyStopped`). */
+export function launchWord(outcome, { floor, stopAt, base, at, part = null, read = false, flags = [] }) {
   const weekly = weeklyLaunch(outcome, floor, stopAt);
   if (weekly.stop && weekly.by === 'stop') {
-    return { note: null, stop: weeklyStopped({ used: weekly.used, stopAt, base, at, part, read }), by: 'stop' };
+    return { note: null, stop: weeklyStopped({ used: weekly.used, stopAt, base, at, part, read, flags }), by: 'stop' };
   }
   // At the floor, or a read the person interrupted: floorStopped words both, and only the floor is a `by`.
   if (weekly.stop) return { note: null, stop: floorStopped({ ...weekly, floor, base, at, part, read }), ...(weekly.interrupted ? {} : { by: 'floor' }) };

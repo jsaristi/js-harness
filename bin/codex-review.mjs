@@ -1797,7 +1797,9 @@ async function reviewRun(argv, env, deps, snapshot) {
       };
       // The weekly limit, read before each session: at its floor (the user decides on the reset) or its stop (no reset
       // asked) nothing more is started, so a part that spent down to it stops the next; a reading not there runs.
-      const weekly = launchWord(await readMeter(), { floor: CODEX_WEEKLY_FLOOR, stopAt: CODEX_WEEKLY_STOP, base: requested, at: head, part });
+      // Its printed commands keep --cwd, as reviewNext's rerun does (Codex on PR 945).
+      const cwdFlags = rerunFlags(argv, { valued: KNOWN.valued, dropped: [] }).filter((flag) => flag.startsWith('--cwd '));
+      const weekly = launchWord(await readMeter(), { floor: CODEX_WEEKLY_FLOOR, stopAt: CODEX_WEEKLY_STOP, base: requested, at: head, part, flags: cwdFlags });
       if (weekly.note !== null) log(weekly.note);
       if (weekly.stop !== null) {
         error(weekly.stop);

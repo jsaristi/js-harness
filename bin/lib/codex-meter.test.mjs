@@ -363,3 +363,13 @@ test('a skip made at the stop of the week is listed across branches until a Code
   assert.ok(lines[0].startsWith(`unavailable aaaaaaa..bbbbbbb: ${STOP_SKIP}`), lines[0]);
   assert.doesNotMatch(lines[0], /reset/);
 });
+
+// Codex P3 on PR 945 (codex-meter.mjs:147-150): a review run with --cwd from outside the checkout prints commands
+// that name that checkout, as a rerun does, so the advertised next: line records the skip in the right repository.
+test('the commands a weekly stop prints keep the checkout the review was run on', () => {
+  const word = launchWord(weeklyUsed(72), { floor: 2, stopAt: 70, base: 'abc1234', at: 'def5678', flags: ['--cwd D:/other'] });
+  assert.match(word.stop, /js-harness codex-review --base abc1234 --at def5678 --unavailable "[^"]+" --cwd D:\/other`/);
+  assert.match(word.stop, /js-harness lens-review --base abc1234 --at def5678 --lenses .+ --cwd D:\/other`/);
+  assert.match(word.stop.split('\n').at(-1), /--cwd D:\/other$/);
+  assert.doesNotMatch(launchWord(weeklyUsed(72), { floor: 2, stopAt: 70, base: 'abc1234', at: 'def5678' }).stop, /--cwd/);
+});
