@@ -52,6 +52,8 @@ const WEEK_MINUTES = 10080;
 
 // How a skip made at the floor of the weekly limit starts its reason, so the meter can list it after its branch merged.
 export const FLOOR_SKIP = 'weekly limit at its floor';
+// How a skip made at the stop of the week starts its reason (rule:codex-weekly-stop): not a floor skip, no reset owed.
+export const STOP_SKIP = 'weekly limit at its stop';
 
 const finite = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 
@@ -114,18 +116,41 @@ export function failureLine(outcome) {
   }
 }
 
-/** What the weekly limit says of a review about to launch, from an outcome of `readRateLimits` and `floor`, the percent
- * of the weekly limit that must be left (rule:codex-weekly-floor): `{ stop: true, left }` at or under it, `{ stop:
- * false, left }` above it, and `{ stop: false, unread }` with why when the read failed or its answer held no weekly
- * limit, since a reading that is not there stops nothing (odd/tasks/double-review-alignment.md, T2). A read the person
- * interrupted is `{ stop: true, interrupted: true }`: the Ctrl-C was meant for the command, not for the read alone. */
-export function weeklyFloor(outcome, floor) {
+/** What the weekly limit says of a review about to launch, from an outcome of `readRateLimits`, `floor`, the percent
+ * of the weekly limit that must be left (rule:codex-weekly-floor), and `stopAt`, the percent used at or past which
+ * nothing starts until the reset (rule:codex-weekly-stop): `{ stop: true, left }` at or under the floor, `{ stop: true,
+ * left, used, by: 'stop' }` above it at or past the stop, `{ stop: false, left }` otherwise, and `{ stop: false, unread }`
+ * with why when the read failed or its answer held no weekly limit, since a reading that is not there stops nothing
+ * (odd/tasks/double-review-alignment.md, T2). A read the person interrupted is `{ stop: true, interrupted: true }`: the
+ * Ctrl-C was meant for the command, not for the read alone. The name keeps the floor, the check it was written for. */
+export function weeklyFloor(outcome, floor, stopAt) {
   if (!outcome.ok && outcome.reason === 'interrupted') return { stop: true, interrupted: true };
   if (!outcome.ok) return { stop: false, unread: failureLine(outcome) };
   const used = parseRateLimits(outcome.result).weekly.usedPercent;
   if (used === null) return { stop: false, unread: 'its answer held no weekly limit.' };
   const left = Math.max(0, 100 - used);
-  return { stop: left <= floor, left };
+  if (left <= floor) return { stop: true, left };
+  // The stop of the week (rule:codex-weekly-stop), read after the floor so the floor's question of a reset comes first.
+  if (stopAt !== undefined && used >= stopAt) return { stop: true, left, used, by: 'stop' };
+  return { stop: false, left };
+}
+
+/** Why a review was not started at the stop of the week (rule:codex-weekly-stop): no reset is asked; the skip is
+ * recorded, a second Claude review runs in Codex's place, and the skip stays a debt until a Codex review pays it.
+ * `read` is the double review's read of a plan. */
+export function weeklyStopped({ used, stopAt, base, at, part = null, read = false }) {
+  const what = read ? 'neither reader was started'
+    : part === null || part.index === 1 ? 'the review was not started' : `part ${part.index} of ${part.of} was not started, the parts before it kept for the next run,`;
+  const share = Math.round(used * 10) / 10;
+  const head = `Codex's weekly limit has ${share}% used, at or past its stop of ${stopAt}% (rule:codex-weekly-stop), so ${what} and nothing was recorded.`;
+  if (read) return `${head}\n${nextLine(noStep('the read waits for the reset of the weekly limit'))}`;
+  const skip = reviewCommand('codex-review', { base, at, flags: [`--unavailable "${STOP_SKIP}: ${share}% used"`] });
+  return (
+    `${head}\nRecord the skip with \`${skip}\`, and run a second Claude review in Codex's place, ` +
+    `\`${reviewCommand('lens-review', { base, at, lenses: '<the lenses not run yet>' })}\`. ` +
+    'The skip is a Codex debt that check and the merge door list until a Codex review of its range pays it.\n' +
+    nextLine({ kind: 'command', text: skip })
+  );
 }
 
 /** Why a review was not started at the floor of the weekly limit, and what each answer of the user's runs: a reset
@@ -153,11 +178,16 @@ export function floorStopped({ left, floor, base, at, part = null, interrupted =
 
 /** What a launch of `codex-review` does by the weekly limit, from an outcome of `readRateLimits`: `note`, the line
  * that says a reading is not there and the review runs, or `null`; `stop`, why nothing is launched, or `null`. */
-export function launchWord(outcome, { floor, base, at, part = null, read = false }) {
-  const weekly = weeklyFloor(outcome, floor);
+export function launchWord(outcome, { floor, stopAt, base, at, part = null, read = false }) {
+  const weekly = weeklyFloor(outcome, floor, stopAt);
+  if (weekly.stop && weekly.by === 'stop') {
+    return { note: null, stop: weeklyStopped({ used: weekly.used, stopAt, base, at, part, read }), by: 'stop' };
+  }
+  // At the floor, or a read the person interrupted: floorStopped words both, and only the floor is a `by`.
+  if (weekly.stop) return { note: null, stop: floorStopped({ ...weekly, floor, base, at, part, read }), ...(weekly.interrupted ? {} : { by: 'floor' }) };
   return {
     note: weekly.unread === undefined ? null : `Codex's weekly limit could not be read before the launch: ${weekly.unread} The ${read ? 'read' : 'review'} runs without it.`,
-    stop: weekly.stop ? floorStopped({ ...weekly, floor, base, at, part, read }) : null,
+    stop: null,
   };
 }
 

@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `41acc56f64de`. In force: 73 (45 of Sebastián, 28 of the project). Retired: 9.
+Hash `aed624301c2f`. In force: 74 (46 of Sebastián, 28 of the project). Retired: 9.
 
 ## Sebastián's
 
@@ -50,6 +50,11 @@ The most input tokens a Codex review may cost for each changed line of its slice
 The share of Codex's weekly limit left at or under which a Codex review starts nothing and the user decides on the reset: 2 percent of the weekly limit left.
 - Read by: `bin/codex-review.mjs`.
 - Since 2026-11-02. Row: reports. Source: his words of 2026-11-01, 2026-11-01, 2026-11-01, checked by the command on 2026-11-02.
+
+### codex-weekly-stop
+The share of Codex's weekly limit used at or past which a Codex review or a double review's read starts nothing until the weekly reset: 70 percent of the weekly limit used.
+- Read by: `bin/codex-review.mjs`.
+- Since 2026-11-21. Row: reports. Source: his words of 2026-11-21, checked by the command on 2026-11-21.
 
 ### context-pause
 The share of its context window at which a session pauses, writes its state and judges whether what is left fits before the host compacts: 88 percent of the context window. The flag `--context-pause` overrides it for one run.
@@ -223,10 +228,10 @@ The shape of the title of a session started with start_session: <code> is the pr
 - Since 2026-10-19. Row: reports. Source: his words of 2026-10-19, 2026-10-19, checked by the command on 2026-10-19.
 
 ### sessions-open-in-sidebar
-The way a session opens another in this repository, so that the user can see every session: start_session, a row in his sidebar on a turn he typed and a card he taps on any other; js-harness sessions start, claude --bg and the tools that open one in the app's Routines or in the cloud are refused: start_session.
+The way a session opens another in this repository, so that the user can see every session: start_session, a row in his sidebar on a turn he typed and a card he taps on any other; the orchestrator alone may also run js-harness sessions start, so sessions open while he is away; claude --bg and the tools that open one in the app's Routines or in the cloud are refused: start_session.
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: `bin/lib/guard.mjs`.
-- Since 2026-10-15. Row: reports, against the failure `session-opened-unseen`. Source: his words of 2026-11-15, 2026-11-15, checked by the command on 2026-11-17.
+- Since 2026-10-15. Row: reports, against the failure `session-opened-unseen`. Source: his words of 2026-11-21, checked by the command on 2026-11-21.
 
 ### status-report
 Asked how the work goes, the lead reports everything since the last report, in detail, and each step it proposes next with its why: "## The status report When the user asks how the work is going, how much is done, or what you have done, the answer is a report of everything since the last report, in detail: never a line that all goes well."

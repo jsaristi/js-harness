@@ -155,6 +155,14 @@ export const RULES = [
     "unit": "percent of the weekly limit left"
   },
   {
+    "id": "codex-weekly-stop",
+    "subject": "the share of Codex's weekly limit used at or past which a Codex review or a double review's read starts nothing until the weekly reset",
+    "owner": "sebastian",
+    "since": "2026-11-21",
+    "value": 70,
+    "unit": "percent of the weekly limit used"
+  },
+  {
     "id": "context-pause",
     "subject": "the share of its context window at which a session pauses, writes its state and judges whether what is left fits before the host compacts",
     "owner": "sebastian",
@@ -771,7 +779,7 @@ export const RULES = [
   },
   {
     "id": "sessions-open-in-sidebar",
-    "subject": "the way a session opens another in this repository, so that the user can see every session: start_session, a row in his sidebar on a turn he typed and a card he taps on any other; js-harness sessions start, claude --bg and the tools that open one in the app's Routines or in the cloud are refused",
+    "subject": "the way a session opens another in this repository, so that the user can see every session: start_session, a row in his sidebar on a turn he typed and a card he taps on any other; the orchestrator alone may also run js-harness sessions start, so sessions open while he is away; claude --bg and the tools that open one in the app's Routines or in the cloud are refused",
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-15",

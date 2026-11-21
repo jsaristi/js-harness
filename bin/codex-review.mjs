@@ -215,9 +215,9 @@ import { atRefusal, commandStep, firstStep, nextLine, noStep, rerunFlags, review
 // change of the effort is written with its date; the figures above are of the day they were first set.
 export const REVIEW_MODEL = ruleValue('review-model');
 export const REVIEW_EFFORT = ruleValue('review-effort');
-// The percent of Codex's weekly limit that must be left for a review to start (`codex-weekly-floor`), read just before
-// the launch (odd/tasks/double-review-alignment.md, T2).
+// Codex's weekly limit, read just before the launch: the share left at its floor and the share used at its stop.
 export const CODEX_WEEKLY_FLOOR = ruleValue('codex-weekly-floor', 'percent of the weekly limit left');
+export const CODEX_WEEKLY_STOP = ruleValue('codex-weekly-stop', 'percent of the weekly limit used');
 
 // `--home` is where the harness keeps its machine state (`<home>/.js-harness/`), as in the other
 // commands: `--home`, else `JS_HARNESS_HOME`, else the OS home. A review keeps one thing there, the Codex
@@ -1795,9 +1795,9 @@ async function reviewRun(argv, env, deps, snapshot) {
         if (headNow !== head) return `HEAD moved from ${head.slice(0, 7)} to ${headNow.slice(0, 7)}`;
         return tree === '' ? null : 'tracked files differ from HEAD';
       };
-      // The weekly limit, read before each session: at or under its floor nothing more is started and the user decides
-      // on the reset, so a part that spent down to it stops the next; a reading that is not there says so and runs.
-      const weekly = launchWord(await readMeter(), { floor: CODEX_WEEKLY_FLOOR, base: requested, at: head, part });
+      // The weekly limit, read before each session: at its floor (the user decides on the reset) or its stop (no reset
+      // asked) nothing more is started, so a part that spent down to it stops the next; a reading not there runs.
+      const weekly = launchWord(await readMeter(), { floor: CODEX_WEEKLY_FLOOR, stopAt: CODEX_WEEKLY_STOP, base: requested, at: head, part });
       if (weekly.note !== null) log(weekly.note);
       if (weekly.stop !== null) {
         error(weekly.stop);

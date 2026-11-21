@@ -28,7 +28,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { CODEX_WEEKLY_FLOOR, REVIEW_EFFORT, REVIEW_MODEL, childEnv, leanEnv, leanFlags } from './codex-review.mjs';
+import { CODEX_WEEKLY_FLOOR, CODEX_WEEKLY_STOP, REVIEW_EFFORT, REVIEW_MODEL, childEnv, leanEnv, leanFlags } from './codex-review.mjs';
 import { LENS_EFFORT, lensEnv } from './lens-review.mjs';
 import { runAnswerFindings } from './lib/codex-review-recheck.mjs';
 import { readCodexReviewRuns } from './lib/codex-review-runs.mjs';
@@ -433,9 +433,10 @@ async function readCommand(args, root, env, deps, { log, error }) {
   const model = READER_MODEL;
   for (const line of announceLines({ files: sources.map((one) => one.rel), diff: args.diff, model })) log(line);
   if (args.plan) return 0;
-  // The weekly limit, read before both readers start (rule:codex-weekly-floor): at or under its floor neither starts.
+  // The weekly limit, read before both readers start: at its floor (rule:codex-weekly-floor) or its stop
+  // (rule:codex-weekly-stop) neither starts.
   const readMeter = deps.readMeter ?? (() => readRateLimits({ platform: deps.platform ?? process.platform }));
-  const weekly = launchWord(await readMeter(), { floor: CODEX_WEEKLY_FLOOR, read: true });
+  const weekly = launchWord(await readMeter(), { floor: CODEX_WEEKLY_FLOOR, stopAt: CODEX_WEEKLY_STOP, read: true });
   if (weekly.note !== null) log(weekly.note);
   if (weekly.stop !== null) {
     error(weekly.stop);

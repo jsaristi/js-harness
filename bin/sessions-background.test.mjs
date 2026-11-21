@@ -1506,3 +1506,15 @@ test('sessions start --resume run from another project is refused by the resumed
   assert.match(result.stderr, /rule sessions-open-in-sidebar/);
   assert.equal(actions(world).length, before, 'no claude ran');
 }));
+
+// rule:sessions-open-in-sidebar, his words of 2026-11-21: the lead starts a session while he is away; no other does.
+test('where the rule is declared only the lead\'s js-harness sessions start runs', withWorld((world) => {
+  const work = ['--title', 'JH 9 · a thing', '--brief', world.brief];
+  const refused = startFrom(world, work, { caller: 'work-1', records: new Map([['work-1', { title: 'JH 4 · thing' }]]) });
+  assert.equal(refused.code, 2, refused.said);
+  assert.match(refused.said, /nothing ran/);
+  assert.deepEqual(actions(world), [], 'nothing ran');
+  const started = startFrom(world, work, { caller: 'lead-1', records: LEAD_RECORD });
+  assert.equal(started.code, 0, started.said);
+  assert.equal(actions(world).length, 1);
+}, { rules: 'all' }));

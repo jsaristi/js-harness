@@ -86,3 +86,14 @@ test('both refusals speak only where the rule sessions-open-in-sidebar is declar
   assert.equal(backgroundLaunchRefusal('claude --bg', without), null);
   assert.equal(backgroundStartRefusal(without), null);
 });
+
+test('the lead alone may run js-harness sessions start while he is away; claude --bg, --cloud and respawn stay refused', () => {
+  const declared = writeRules(RULES);
+  assert.equal(backgroundLaunchRefusal('js-harness sessions start', declared, { lead: true }), null);
+  assert.equal(backgroundStartRefusal(declared, { lead: true }), null);
+  assert.match(backgroundLaunchRefusal('js-harness sessions start', declared, { lead: false }), /opens a session in the background/);
+  assert.match(backgroundStartRefusal(declared), /nothing ran/);
+  for (const launch of ['claude --bg', 'claude --cloud', 'claude respawn']) {
+    assert.notEqual(backgroundLaunchRefusal(launch, declared, { lead: true }), null, launch);
+  }
+});

@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { CLOSE_FINISHED, appendRecord, atWork, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, finishedOf, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, resumedChain, resumedNote, resumePrompt, saidBy, startArgs, startPrompt, strandedWords, undoSession, within, worktreeHolding, worktreeOf } from './lib/background.mjs';
 import { KEEP_LEFT_OUT, closeFinishedIn, closedLines, keepUnkept, sharingSession } from './lib/background-close.mjs';
 import { boundedGit } from './lib/worktrees.mjs';
-import { backgroundStartRefusal } from './lib/background-launch.mjs';
+import { backgroundStartRefusal, isLead } from './lib/background-launch.mjs';
 import { sessionStartHome, sessionStartRefusal } from './lib/guard.mjs';
 import { leadTitle, seniorTitle, sessionTitleRefusal } from './lib/session-title-guard.mjs';
 import { appendNotice, newNotice, nextSessionNumber, placeOf, readNotices } from './lib/channel.mjs';
@@ -207,7 +207,21 @@ export function sessionsStartMain(argv, given = {}) {
     return 2;
   }
   // T7 of odd/tasks/senior-orchestrator.md: a start or a resume is refused before anything runs where the rule is declared.
-  const background = backgroundStartRefusal(rulesText(topLevel(run, path.resolve(deps.cwd, parsed.cwd ?? '.')), readFile));
+  const readApp = deps.readApp ?? (() => {
+    const app = appRoot(env, process.platform, deps.homedir());
+    return app === null ? new Map() : appSessions(app);
+  });
+  // The lead's start runs while he is away (his words of 2026-11-21); the app's records are read only where it is refused.
+  const appOrNull = () => {
+    try {
+      return readApp();
+    } catch {
+      return null;
+    }
+  };
+  const sidebarRules = rulesText(topLevel(run, path.resolve(deps.cwd, parsed.cwd ?? '.')), readFile);
+  let background = backgroundStartRefusal(sidebarRules);
+  if (background !== null && isLead(env.CLAUDE_CODE_SESSION_ID, appOrNull())) background = null;
   if (background !== null) {
     stderr(background);
     return 2;
@@ -247,10 +261,6 @@ export function sessionsStartMain(argv, given = {}) {
     return 2;
   }
   if (senior) {
-    const readApp = deps.readApp ?? (() => {
-      const app = appRoot(env, process.platform, deps.homedir());
-      return app === null ? new Map() : appSessions(app);
-    });
     const starter = seniorStarterRefusal(parsed.title, env, readApp);
     if (starter !== null) {
       stderr(starter);

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { FLOOR_SKIP, METER_TIMEOUT_MS, failureLine, floorDebtLines, floorStopped, launchWord, parseRateLimits, readRateLimits, weeklyFloor } from './codex-meter.mjs';
+import { FLOOR_SKIP, STOP_SKIP, METER_TIMEOUT_MS, failureLine, floorDebtLines, floorStopped, launchWord, parseRateLimits, readRateLimits, weeklyFloor } from './codex-meter.mjs';
 
 // A fake `codex app-server`: a child whose stdin answers each request line with what `answer` returns for it.
 // Nothing here starts Codex. `answer` returns the lines the server writes back, objects or already-written text.
@@ -291,6 +291,29 @@ test('the share left at the floor is said to one decimal, and a read of a plan s
   assert.match(read.stop, /js-harness double-review skip/);
   assert.match(launchWord({ ok: false, reason: 'missing' }, { floor: 2, read: true }).note, /The read runs without it\./);
   assert.match(floorStopped({ left: 1, floor: 2, base: 'abc1234', at: 'def5678' }), new RegExp(`--unavailable "${FLOOR_SKIP}: `));
+});
+
+// The stop of the week (rule:codex-weekly-stop): a share used at or past which nothing more starts until the reset.
+test('the stop of the week stops a launch at or past it, after the floor, and lets one through under it', () => {
+  assert.deepEqual(weeklyFloor(weeklyUsed(70), 2, 70), { stop: true, left: 30, used: 70, by: 'stop' });
+  assert.deepEqual(weeklyFloor(weeklyUsed(69.9), 2, 70).stop, false);
+  assert.deepEqual(weeklyFloor(weeklyUsed(99), 2, 70), { stop: true, left: 1 }, 'the floor speaks first');
+  assert.deepEqual(weeklyFloor(weeklyUsed(90), 2), { stop: false, left: 10 }, 'no stop given, none applies');
+});
+
+test('a review stopped at the stop of the week asks no reset and names the skip and the second Claude review', () => {
+  const word = launchWord(weeklyUsed(72.34), { floor: 2, stopAt: 70, base: 'abc1234', at: 'def5678' });
+  assert.equal(word.by, 'stop');
+  assert.match(word.stop, /72\.3% used, at or past its stop of 70% \(rule:codex-weekly-stop\), so the review was not started and nothing was recorded/);
+  assert.doesNotMatch(word.stop, /reset credit|whether to reset/);
+  assert.match(word.stop, new RegExp(`--base abc1234 --at def5678 --unavailable "${STOP_SKIP}: 72\\.3% used"`));
+  assert.ok(!STOP_SKIP.startsWith(FLOOR_SKIP), 'a stop skip is not a floor debt');
+  assert.match(word.stop, /js-harness lens-review --base abc1234 --at def5678/);
+  assert.match(word.stop.split('\n').at(-1), /^next: js-harness codex-review --base abc1234 --at def5678 --unavailable/);
+  assert.equal(launchWord(weeklyUsed(99), { floor: 2, stopAt: 70, base: 'abc1234', at: 'def5678' }).by, 'floor');
+  assert.deepEqual(launchWord(weeklyUsed(50), { floor: 2, stopAt: 70, base: 'abc1234', at: 'def5678' }), { note: null, stop: null });
+  const read = launchWord(weeklyUsed(70), { floor: 2, stopAt: 70, read: true });
+  assert.match(read.stop, /so neither reader was started and nothing was recorded/);
 });
 
 test('the floor debts are the skips made at the floor that no Codex review paid, each with the command that pays it', () => {
