@@ -1,7 +1,8 @@
 // `js-harness sessions start` and `js-harness sessions stop` (odd/tasks/background-sessions.md): the lead starts a work
 // session with `claude --bg` on a turn the user did not type, where the desktop app's `start_session` would only leave
 // a card, and removes it again. Every start is recorded under the harness home (bin/lib/background.mjs), so `stop` and
-// the machine uninstall undo exactly what was started, and touch no session they did not start.
+// the machine uninstall undo exactly what was started, and touch no session they did not start. `sessions brief` prints
+// the template of the brief a start, or a start_session prompt, points at (./lib/session-brief.mjs).
 // The title, the effort and a named model are held to the rules `guard` holds `start_session` to, by the same
 // functions: a lead's title holds the effort to rule:lead-effort, any other to rule:session-effort, and a model that
 // is named is rule:session-model's. What a start or a resume does not name is those rules', where they are declared.
@@ -20,20 +21,24 @@ import { leadTitle, seniorTitle, sessionTitleRefusal } from './lib/session-title
 import { appendNotice, newNotice, nextSessionNumber, placeOf, readNotices } from './lib/channel.mjs';
 import { mainCheckout, projectCode, projectSlug, sameSession } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { briefTemplate } from './lib/session-brief.mjs';
 import { appRoot, appSessions } from './lib/app-record.mjs';
 // bin/sessions.mjs is at its size ceiling, so the live verb reaches it through the import it has of this module.
 export { LIVE_USAGE, sessionsLiveMain } from './sessions-live.mjs';
 
 export const START_USAGE = [
-  'Usage: js-harness sessions start --title <title> --brief <file> [--worktree <name>] [--model <model>] [--effort <level>]',
+  'Usage: js-harness sessions start --title <title> --brief <file> [--worktree <name> [--base <ref>]] [--model <model>] [--effort <level>]',
   '                                 [--advisor <model>] [--remote-control] [--cwd <path>] [--home <path>]',
   '       js-harness sessions start --resume <id> [--brief <file>] [--model <model>] [--effort <level>] [--advisor <model>]',
   '                                 [--remote-control] [--home <path>]',
+  '       js-harness sessions brief [--title <title>]',
   '       js-harness sessions stop <id> [--remove-worktree] [--home <path>]',
   '       js-harness sessions stop --finished [--home <path>]',
   '         start runs claude --bg in the folder (a worktree of its own with --worktree), titled as start_session titles a session,',
   '         with no Remote Control unless --remote-control (claude.ai/code and the phone reach it then): the user talks only',
   '         to the lead, and an ended session with it on stays an offline row in his sidebar (his words of 2026-11-14);',
+  '         --base cuts the worktree from the commit <ref> names, on the branch worktree-<name>, before claude runs; a ref that',
+  '         names no commit, or a folder or branch of that name already there, is a usage error, and a claude that refuses removes it;',
   '         --no-remote-control is still taken, and both together are a usage error. The session reads a copy',
   '         of the brief that ends by telling it to report through js-harness notify --to orchestrator. It prints the id and records',
   '         the start under <home>/.js-harness/background/; exit 1 when claude is missing or refuses (nothing is recorded), 2 for a',
@@ -72,11 +77,13 @@ export const START_USAGE = [
   '         for it. It names each one it keeps with why and what settles it, and says when its job was already stopped;',
   '         exit 1 only when it could not look (the records, claude agents, the default branch).',
   '         js-harness uninstall machine removes every recorded session that is not at work, and fails while one is.',
+  '         brief prints the template of a brief, for start --brief or a start_session prompt to point at: its sections, and',
+  '         no step of how a session reviews, gates or reports, which CLAUDE.md and the copy start makes hold; exit 2 for a usage error.',
 ].join('\n');
 
 class StartArgError extends Error {}
 
-const VALUED = new Map([['--title', 'title'], ['--brief', 'brief'], ['--worktree', 'worktree'], ['--model', 'model'], ['--effort', 'effort'], ['--advisor', 'advisor'], ['--cwd', 'cwd'], ['--home', 'home'], ['--resume', 'resume']]);
+const VALUED = new Map([['--title', 'title'], ['--brief', 'brief'], ['--worktree', 'worktree'], ['--model', 'model'], ['--effort', 'effort'], ['--advisor', 'advisor'], ['--cwd', 'cwd'], ['--home', 'home'], ['--resume', 'resume'], ['--base', 'base']]);
 
 /** Remote Control is off unless asked for (odd/tasks/remote-control-lead-only.md, spec 1): the sessions the lead tasks
  * report by notices and messages, and one whose process ends with it on stays an offline row in his sidebar. */
@@ -99,13 +106,48 @@ function parseStart(argv) {
   }
   if (parsed.resume !== undefined) {
     // A resumed session is the one recorded: its title, worktree and folder are the record's.
-    const own = ['title', 'worktree', 'cwd'].find((name) => parsed[name] !== undefined);
+    const own = ['title', 'worktree', 'cwd', 'base'].find((name) => parsed[name] !== undefined);
     if (own !== undefined) throw new StartArgError(`--resume takes no --${own}: the session is resumed with the record's`);
     return parsed;
   }
   if (parsed.title === undefined) throw new StartArgError('--title is required: the session\'s title, as the board and notify read it');
   if (parsed.brief === undefined) throw new StartArgError('--brief is required: the file that says what the session does');
+  if (parsed.base !== undefined && parsed.worktree === undefined) throw new StartArgError('--base takes --worktree <name>: the base is what that worktree is cut from');
   return parsed;
+}
+
+/** The worktree `--base` cuts for a start, as `{ sha, place, branch }`, or `{ refusal }` and why: the folder and the branch
+ * claude -w gives the worktree `name` (`<root>/.claude/worktrees/<name>`, `worktree-<name>`), which claude -w takes
+ * when they are there, and the commit `ref` names in the checkout at `root`. A ref that names no commit, or a folder
+ * or branch already there, is refused before anything is written: one already there would be taken as it is, not cut. */
+function baseCut(run, root, ref, name) {
+  const named = ref.startsWith('-') ? null : run('git', ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], { cwd: root });
+  const [sha] = String(named?.stdout ?? '').split(/\r?\n/).filter((line) => line.trim() !== '');
+  if (named === null || named.error || named.status !== 0 || sha === undefined) return { refusal: `--base ${ref} names no commit in ${root}` };
+  const place = worktreeOf({ root, worktree: name });
+  const branch = `worktree-${name}`;
+  if (fs.existsSync(place)) return { refusal: `the worktree folder ${place} is already there, and claude -w would take it as it is` };
+  const held = run('git', ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], { cwd: root });
+  if (!held.error && held.status === 0) return { refusal: `${branch} is already a branch, and the worktree ${name} would not be cut from ${ref}` };
+  return { sha, place, branch };
+}
+
+/** Undoes a worktree `baseCut` made, once claude certainly started no session in it: the worktree goes with no --force,
+ * and the branch only while it is still at the base. Why it could not, or null. */
+function uncut(run, root, { sha, place, branch }) {
+  const gone = run('git', ['worktree', 'remove', place], { cwd: root });
+  if (gone.error || gone.status !== 0) return `the worktree ${place} stays (${saidBy(gone)})`;
+  const unbranched = run('git', ['update-ref', '-d', `refs/heads/${branch}`, sha], { cwd: root });
+  return unbranched.error || unbranched.status !== 0 ? `the branch ${branch} stays (${saidBy(unbranched)})` : null;
+}
+
+/** The worktrees `git worktree list` names for the checkout at `root`, each `{ folder, locked }`, or null when it cannot
+ * be read. */
+function listWorktrees(run, root) {
+  const listed = run('git', ['worktree', 'list', '--porcelain'], { cwd: root });
+  if (listed.error || listed.status !== 0) return null;
+  return String(listed.stdout).split(/\r?\n\r?\n/).map((block) => block.split(/\r?\n/)).filter((lines) => lines[0].startsWith('worktree '))
+    .map((lines) => ({ folder: path.resolve(lines[0].slice('worktree '.length)), locked: lines.some((line) => line === 'locked' || line.startsWith('locked ')) }));
 }
 
 /** The line a start or a resume prints for its Remote Control. */
@@ -192,6 +234,19 @@ function liveSeniorRefusal(home, root) {
   return { code: 2, line: `js-harness sessions start: the senior ${live.id} · ${live.title} is live, and a project has one at most: send it the task with a message, or close it first (js-harness sessions stop ${live.id}).` };
 }
 
+/** `sessions brief`: the brief template (./lib/session-brief.mjs) under `--title`, or under the title's shape. */
+export function sessionsBriefMain(argv, { stdout = (line) => console.log(line), stderr = (line) => console.error(line) } = {}) {
+  const [flag, title, ...rest] = argv;
+  const wrong = rest.length > 0 ? `unknown argument: ${rest[0]}` : flag !== undefined && flag !== '--title' ? `unknown argument: ${flag}`
+    : flag !== undefined && (title === undefined || title === '' || title.startsWith('--')) ? '--title requires a value' : null;
+  if (wrong !== null) {
+    stderr(`${wrong}\n\n${START_USAGE}`);
+    return 2;
+  }
+  stdout(briefTemplate(title).replace(/\n$/, ''));
+  return 0;
+}
+
 /** `sessions start`: exit 0 once the session runs and is recorded, 1 when claude is missing or refused (nothing is
  * recorded), 2 for a usage error or a rule that refuses the title or the effort (nothing runs), and for a senior that
  * the lead does not start or that a live senior of the project already holds (1 when the record cannot be read). */
@@ -262,6 +317,11 @@ export function sessionsStartMain(argv, given = {}) {
       return second.code;
     }
   }
+  const cut = parsed.base === undefined ? null : baseCut(run, root, parsed.base, parsed.worktree);
+  if (cut?.refusal !== undefined) {
+    stderr(`js-harness sessions start: ${cut.refusal}, so nothing was started`);
+    return 2;
+  }
   const claude = deps.claude === undefined ? claudeRunner({ env }) : deps.claude;
   if (claude === null) {
     stderr('js-harness sessions start: claude is not on PATH: install the Claude Code CLI, then run this again');
@@ -286,20 +346,36 @@ export function sessionsStartMain(argv, given = {}) {
   }
   // The board's first row of the session is stamped with the time it was launched, before any notice it sends itself.
   const launchedAt = new Date(now()).toISOString();
+  // The worktree is cut last, once nothing but claude itself can refuse the start.
+  if (cut !== null) {
+    const made = run('git', ['worktree', 'add', '--quiet', '-b', cut.branch, cut.place, cut.sha], { cwd: root });
+    if (made.error || made.status !== 0) {
+      fs.rmSync(copy, { force: true });
+      stderr(`js-harness sessions start: git could not cut the worktree ${cut.place} from ${parsed.base}, so nothing was started:\n${saidBy(made)}`);
+      return 1;
+    }
+  }
+  // The worktrees before claude runs: one it makes of its own, rather than taking the one cut, is a base not taken.
+  const worktreesBefore = cut === null ? null : listWorktrees(run, root);
+  // A start that ran no session removes the worktree it cut and returns what became of it: removed, or why it stays.
+  // Each caller runs it before it writes its message, so no edit of a message can skip the removal.
+  const removeCut = () => (cut === null ? '' : `; ${uncut(run, root, cut) ?? `the worktree ${cut.place} it cut is removed`}`);
   let result;
   try {
     result = claude(startArgs({ ...parsed, model, effort, advisor, briefs, prompt: startPrompt(copy) }), { cwd });
   } catch (err) {
     // A character cmd.exe would act on, in the title or a path: nothing ran.
     fs.rmSync(copy, { force: true });
-    stderr(`js-harness sessions start: claude was not started: ${err.message}`);
+    const removed = removeCut();
+    stderr(`js-harness sessions start: claude was not started: ${err.message}${removed}`);
     return 1;
   }
   // A run that began and did not finish (a timeout) may have started the session all the same: it is looked for.
   const began = result.error !== undefined && result.error !== null && result.error.code !== 'ENOENT';
   if (!began && (result.error || result.status !== 0)) {
     fs.rmSync(copy, { force: true });
-    stderr(`js-harness sessions start: claude did not start the session (${result.error ? 'it could not run' : `exit ${result.status}`}), and nothing was recorded:\n${saidBy(result)}`);
+    const removed = removeCut();
+    stderr(`js-harness sessions start: claude did not start the session (${result.error ? 'it could not run' : `exit ${result.status}`}), and nothing was recorded${removed}:\n${saidBy(result)}`);
     return 1;
   }
   if (began) stderr(`js-harness sessions start: claude did not finish (${result.error.message}); looking for the session in claude agents`);
@@ -320,12 +396,25 @@ export function sessionsStartMain(argv, given = {}) {
     // The session id and the worktree are conveniences of the record; the short id is what stop and rm take.
   }
   if (id === null) {
-    stderr(`js-harness sessions start: claude printed no id for the session, and claude agents lists no new session titled ${JSON.stringify(parsed.title)} in this project, so nothing is recorded: if claude agents lists it later, claude stop <id> and claude rm <id> remove it; its brief stays at ${copy}\n${saidBy(result)}`);
+    stderr(`js-harness sessions start: claude printed no id for the session, and claude agents lists no new session titled ${JSON.stringify(parsed.title)} in this project, so nothing is recorded: if claude agents lists it later, claude stop <id> and claude rm <id> remove it; its brief stays at ${copy}${cut === null ? '' : `, and the worktree ${cut.place} cut from ${cut.sha.slice(0, 7)} stays, since the session may run in it`}\n${saidBy(result)}`);
     return 1;
   }
+  // claude -w takes the worktree cut only while its folder and branch are claude's own (`baseCut`), and locks the one it
+  // takes (claude 2.1.327, checked by hand). The base is taken when the cut is locked after claude ran, or when no
+  // worktree appeared beside it; otherwise a new one may be claude's own, cut from HEAD, whatever its name, or another
+  // session's added at the same moment (the Claude lenses on PR 934, before its rebase), and the base is said
+  // not confirmed and not recorded. A listing that fails confirms nothing, said so. The record keeps the folder claude
+  // reports, never one that only appeared: it may be another session's, and stop --remove-worktree acts on it.
+  const worktreesAfter = cut === null ? null : listWorktrees(run, root);
+  const unchecked = cut !== null && (worktreesBefore === null || worktreesAfter === null);
+  const fresh = cut === null || unchecked ? [] : worktreesAfter.filter(({ folder }) => !worktreesBefore.some((was) => within(folder, was.folder) && within(was.folder, folder))).map(({ folder }) => folder);
+  const cutLocked = !unchecked && cut !== null && worktreesAfter.some(({ folder, locked }) => locked && within(folder, cut.place) && within(cut.place, folder));
+  const baseTaken = cut !== null && !unchecked && (cutLocked || fresh.length === 0);
+  if (unchecked) stderr(`js-harness sessions start: git worktree list could not be read, so whether claude took the worktree ${cut.place} cut from ${cut.sha.slice(0, 7)} is not checked, and no base is recorded`);
+  else if (cut !== null && !baseTaken) stderr(`js-harness sessions start: --base is not confirmed: claude holds no lock on ${cut.place}, cut from ${cut.sha.slice(0, 7)}, which stays, and ${fresh.join(', ')} appeared while it ran, which may be a worktree of its own cut from HEAD; no base is recorded: look at both before the session works`);
   const entry = {
     event: 'started', at: new Date(now()).toISOString(), id, sessionId: agent?.sessionId ?? null, title: parsed.title, root, cwd,
-    worktree: parsed.worktree ?? null, worktreePath: worktreeOf({ root, worktree: parsed.worktree, worktreePath: agent?.cwd }), model: model ?? null, effort: effort ?? null, advisor: advisor ?? null, remoteControl: parsed.remoteControl, brief: copy,
+    worktree: parsed.worktree ?? null, base: baseTaken ? cut.sha : null, worktreePath: worktreeOf({ root, worktree: parsed.worktree, worktreePath: agent?.cwd }), model: model ?? null, effort: effort ?? null, advisor: advisor ?? null, remoteControl: parsed.remoteControl, brief: copy,
   };
   try {
     appendRecord(home, entry);

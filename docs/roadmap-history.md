@@ -358,3 +358,8 @@ The Decided row as it stood until his retirement of the rule on 2026-11-15:
 
 - [x] `merge-queue --dry-run` passed on a stale installed copy while `--land` refused it (the 882 land, 2026-11-15
   06:29 local): the dry-run checks copy == origin/main's bin too. Owner: the next merge-queue session (2026-11-15, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`). Done: PR 922 (`d7b98f92`).
+- [x] Done by JH 239 on `feat/sessions-start-base` (2026-11-19): `sessions start --base <ref>` cuts the worktree
+  from the commit the ref names, and `sessions brief` prints the brief template. `sessions start` takes a base: the lead made JH 207's worktree by hand on PR 883's head
+  (`git worktree add -b feat/review-gate ... 08653f93`) because start has no base option; and a brief template, since
+  the review-gate brief was patched four times and three briefs carried a stale gate step. Owner: the next
+  sessions-tool session (2026-11-15, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).

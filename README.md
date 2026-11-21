@@ -1422,7 +1422,9 @@ sidebar: `start_session` is the one way there. Remote Control is off unless
 sessions it tasks report by notices and messages, and one that ends with Remote Control on stays an
 offline row in the user's sidebar (his words of 2026-11-14); `--no-remote-control` is still taken. The session reads a copy of the
 brief under `~/.js-harness/background/briefs/` that ends by telling it to report through
-`js-harness notify --to orchestrator`; `--worktree <name>`, `--model` and `--effort` go to `claude`,
+`js-harness notify --to orchestrator`; `--worktree <name>`, `--model` and `--effort` go to `claude`;
+`--base <ref>` cuts that worktree from the commit the ref names (refused when it names none) before `claude` takes it;
+`js-harness sessions brief [--title <title>]` prints the template of a brief, for this command or a `start_session` prompt;
 and the title and effort are held to the rules `session-title` and `session-effort` (`lead-effort` for a title of a lead) where they are
 declared. Each start is recorded in `~/.js-harness/background/sessions.jsonl`: `js-harness sessions
 stop <id>` removes a recorded session (`claude stop`, then `claude rm`; its transcript stays) and no
