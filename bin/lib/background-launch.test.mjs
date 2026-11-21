@@ -2,7 +2,7 @@
 // (odd/tasks/senior-orchestrator.md, T7). The guard's hook over these is tested in ../guard.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { backgroundLaunch, backgroundLaunchRefusal, backgroundStartRefusal } from './background-launch.mjs';
+import { backgroundLaunch, backgroundLaunchRefusal, backgroundStartRefusal, isLead } from './background-launch.mjs';
 import { RULES } from './rules-data.mjs';
 import { writeRules } from './rules.mjs';
 
@@ -96,4 +96,13 @@ test('the lead alone may run js-harness sessions start while he is away; claude 
   for (const launch of ['claude --bg', 'claude --cloud', 'claude respawn']) {
     assert.notEqual(backgroundLaunchRefusal(launch, declared, { lead: true }), null, launch);
   }
+});
+
+// Codex P2 on PR 945 (background-launch.mjs:12): another project's orchestrator is no lead here.
+test('a lead is the orchestrator of the project its code names', () => {
+  const app = new Map([['lead-1', { title: 'JH ORQ · relevo' }], ['other-1', { title: 'XY ORQ · theirs' }]]);
+  assert.equal(isLead('lead-1', app, 'JH'), true);
+  assert.equal(isLead('other-1', app, 'JH'), false);
+  assert.equal(isLead('lead-1', app, 'XY'), false);
+  for (const code of [null, undefined, '']) assert.equal(isLead('lead-1', app, code), false, String(code));
 });

@@ -6,10 +6,24 @@
 import { COMMAND_KEYWORDS, shellWords, sidebarRule } from './guard.mjs';
 import { programOf } from './chained-step-guard.mjs';
 import { leadTitle } from './session-title-guard.mjs';
+import { projectCode, roleOfTitle } from './sessions.mjs';
 
-/** Whether the session `id` is the lead, told by the title of its record in `app` (the app's records, a Map, or
- * null where they could not be read) as `leadTitle` reads it: no id, no record or another title is no lead. */
-export const isLead = (id, app) => typeof id === 'string' && id !== '' && app instanceof Map && leadTitle(app.get(id)?.title ?? '');
+/** Whether the session `id` is the lead of the project whose code is `code`, told by the title of its record in
+ * `app` (the app's records, a Map, or null where they could not be read) as `leadTitle` reads it, with that code:
+ * the records hold every project's sessions, so another project's orchestrator is no lead here (Codex on PR 945, as
+ * `seniorStartRefusal` holds a senior's starter). No id, no record, no code or another title is no lead. */
+export const isLead = (id, app, code) => typeof id === 'string' && id !== '' && app instanceof Map
+  && typeof code === 'string' && code !== '' && leadTitle(app.get(id)?.title ?? '') && roleOfTitle(app.get(id).title)?.code === code;
+
+/** The code of the project at `root` (`projectCode`, read by `readFile`), or null where it declares none or it cannot
+ * be read: a code that cannot be read makes no lead (`isLead`). */
+export function codeAt(root, readFile) {
+  try {
+    return projectCode(root, readFile).code;
+  } catch {
+    return null;
+  }
+}
 
 // The keywords that open a condition: the command after one is a step of its own.
 const CONDITIONS = new Set(['if', 'elif', 'while', 'until']);

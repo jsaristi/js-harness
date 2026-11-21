@@ -1514,6 +1514,10 @@ test('where the rule is declared only the lead\'s js-harness sessions start runs
   assert.equal(refused.code, 2, refused.said);
   assert.match(refused.said, /nothing ran/);
   assert.deepEqual(actions(world), [], 'nothing ran');
+  // Codex P2 on PR 945 (background-launch.mjs:12): another project's orchestrator is no lead in this one.
+  const other = startFrom(world, work, { caller: 'other-1', records: new Map([['other-1', { title: 'XY ORQ · theirs' }]]) });
+  assert.equal(other.code, 2, other.said);
+  assert.deepEqual(actions(world), [], 'nothing ran');
   const started = startFrom(world, work, { caller: 'lead-1', records: LEAD_RECORD });
   assert.equal(started.code, 0, started.said);
   assert.equal(actions(world).length, 1);

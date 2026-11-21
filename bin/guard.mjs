@@ -180,9 +180,9 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   const rootOf = () => projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
   if (tool === TERMINAL_TOOL) {
     // The Terminal panel launches a background session as Bash does (odd/tasks/senior-orchestrator.md, T7).
-    const { backgroundLaunch, backgroundLaunchRefusal, isLead } = await import('./lib/background-launch.mjs');
+    const { backgroundLaunch, backgroundLaunchRefusal, codeAt, isLead } = await import('./lib/background-launch.mjs');
     const launch = backgroundLaunch(input.command);
-    const launched = launch === null ? null : backgroundLaunchRefusal(launch, rulesTextOf(rootOf(), readFile), { lead: isLead(payload.session_id, await Promise.resolve().then(readApp).catch(() => null)) });
+    const launched = launch === null ? null : backgroundLaunchRefusal(launch, rulesTextOf(rootOf(), readFile), { lead: isLead(payload.session_id, await Promise.resolve().then(readApp).catch(() => null), codeAt(rootOf(), readFile)) });
     return launched ?? terminalNoteRefusal(input.command, rulesTextOf(rootOf(), readFile));
   }
   if (!OPENING_TOOLS.includes(tool) && tool !== 'Agent' && tool !== 'Bash' && tool !== SESSION_TOOL && !MESSAGE_TOOLS.has(tool)) return null;
@@ -240,9 +240,9 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   // Only a command with a chained step, or one that launches a background session, reads the project's rules file
   // (lib/chained-step-guard.mjs; odd/tasks/senior-orchestrator.md, T7).
   const { chainedStep, chainedStepRefusal } = await import('./lib/chained-step-guard.mjs');
-  const { backgroundLaunch, backgroundLaunchRefusal, isLead } = await import('./lib/background-launch.mjs');
+  const { backgroundLaunch, backgroundLaunchRefusal, codeAt, isLead } = await import('./lib/background-launch.mjs');
   const launch = backgroundLaunch(input.command);
-  const launched = launch === null ? null : backgroundLaunchRefusal(launch, rulesTextOf(rootOf(), readFile), { lead: isLead(payload.session_id, await Promise.resolve().then(readApp).catch(() => null)) });
+  const launched = launch === null ? null : backgroundLaunchRefusal(launch, rulesTextOf(rootOf(), readFile), { lead: isLead(payload.session_id, await Promise.resolve().then(readApp).catch(() => null), codeAt(rootOf(), readFile)) });
   if (launched !== null) return launched;
   const chained = chainedStep(input.command) === null ? null : chainedStepRefusal(input.command, rulesTextOf(rootOf(), readFile));
   if (chained !== null) return chained;

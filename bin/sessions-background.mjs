@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { CLOSE_FINISHED, appendRecord, atWork, backgroundDir, briefCopyOf, briefsDirOf, claudeRunner, finishedOf, idOfStart, listAgents, readRecord, recordFileOf, recordedNamed, resumedChain, resumedNote, resumePrompt, saidBy, startArgs, startPrompt, strandedWords, undoSession, within, worktreeHolding, worktreeOf } from './lib/background.mjs';
 import { KEEP_LEFT_OUT, closeFinishedIn, closedLines, keepUnkept, sharingSession } from './lib/background-close.mjs';
 import { boundedGit } from './lib/worktrees.mjs';
-import { backgroundStartRefusal, isLead } from './lib/background-launch.mjs';
+import { backgroundStartRefusal, codeAt, isLead } from './lib/background-launch.mjs';
 import { sessionStartHome, sessionStartRefusal } from './lib/guard.mjs';
 import { leadTitle, seniorTitle, sessionTitleRefusal } from './lib/session-title-guard.mjs';
 import { appendNotice, newNotice, nextSessionNumber, placeOf, readNotices } from './lib/channel.mjs';
@@ -219,9 +219,10 @@ export function sessionsStartMain(argv, given = {}) {
       return null;
     }
   };
-  const sidebarRules = rulesText(topLevel(run, path.resolve(deps.cwd, parsed.cwd ?? '.')), readFile);
-  let background = backgroundStartRefusal(sidebarRules);
-  if (background !== null && isLead(env.CLAUDE_CODE_SESSION_ID, appOrNull())) background = null;
+  const target = topLevel(run, path.resolve(deps.cwd, parsed.cwd ?? '.'));
+  let background = backgroundStartRefusal(rulesText(target, readFile));
+  // The lead of the project the rule is read in (Codex on PR 945): its code is that project's.
+  if (background !== null && isLead(env.CLAUDE_CODE_SESSION_ID, appOrNull(), codeAt(target, readFile))) background = null;
   if (background !== null) {
     stderr(background);
     return 2;
