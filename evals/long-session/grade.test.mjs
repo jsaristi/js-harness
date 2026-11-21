@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { FEATURES, scriptOf, turnOf } from './script.mjs';
-import { MOMENTS, batchScore, gradeMain, gradeRun, judgeOf, readSession, regradeSample, releases, spanishPromptOf, writes, writesTest } from './grade.mjs';
+import { MIN_RUNS, MOMENTS, batchScore, gradeMain, gradeRun, judgeOf, readSession, regradeSample, releases, spanishPromptOf, writes, writesTest } from './grade.mjs';
 
 const TURNS = scriptOf(30);
 const n = (label) => turnOf(TURNS, label).n;
@@ -35,14 +35,27 @@ function session({ habits = {}, upTo = TURNS.length } = {}) {
       continue;
     }
     lines.push({ type: 'user', isSidechain: false, timestamp: at(), message: { role: 'user', content: turn.text } });
-    const feature = FEATURES.find((item) => n(item.label) === turn.n);
-    // The good agent builds f1 and f2 in their opening turn and f3 on the turn after the compaction, test first.
-    const builds = feature && feature.label !== 'f3' ? feature : turn.label === 'resume' ? FEATURES[2] : null;
+    if (habits.preamble === turn.n) say('First I will look at the repository.');
+    // The good agent looks at the repository each turn, so each reply follows English tool output; a quiet turn has none.
+    if (!habits.quiet?.includes(turn.n)) call('Bash', { command: 'git status --short --branch' }, { out: '## main\nnothing to commit, working tree clean' });
+    // The good agent builds f1 and f2 in their opening turn and f3 on the turn after the compaction, test first;
+    // `buildAt` moves a feature to another turn, as an agent that works ahead of the script does.
+    const builtAt = (item) => habits.buildAt?.[item.label] ?? (item.label === 'f3' ? n('resume') : n(item.label));
+    const builds = FEATURES.find((item) => builtAt(item) === turn.n);
     if (builds) {
-      const test = builds.source.replace('src/', 'tests/').replace('.mjs', '.spec.mjs');
+      const own = builds.source.replace('src/', 'tests/').replace('.mjs', '.spec.mjs');
+      const test = habits.testFile?.[builds.label]?.path ?? own;
       const red = () => call('Bash', { command: habits.red?.command ?? 'npm test' }, { error: habits.red?.error ?? true, out: habits.red?.out ?? 'not ok 1 - stats\n# pass 3\n# fail 1' });
       if (habits.shellFirst?.label === builds.label) call('Bash', { command: habits.shellFirst.command(builds.source) });
-      if (habits.codeFirst === builds.label) {
+      if (habits.stubRed === builds.label) {
+        call('Write', { file_path: `D:/work/eval-x/${test}`, content: 'x' });
+        // Piped, as the S8 runs did: the call does not fail, so its write counts, and its red run comes after the stub.
+        call('Bash', { command: `printf 'export {}\\n' > ${builds.source} && npm test 2>&1 | tail -5` }, { out: 'not ok 1\n# fail 1' });
+      } else if (habits.testFile?.[builds.label]) {
+        call('Edit', { file_path: `D:/work/eval-x/${test}`, old_string: 'a', new_string: habits.testFile[builds.label].text });
+        red();
+        call('Edit', { file_path: `D:/work/eval-x/${builds.source}`, old_string: 'a', new_string: 'b' });
+      } else if (habits.codeFirst === builds.label) {
         call('Write', { file_path: `D:\\work\\eval-x\\${builds.source.replace('/', '\\')}`, content: 'x' });
         call('Write', { file_path: `D:/work/eval-x/${test}`, content: 'x' });
       } else {
@@ -151,6 +164,24 @@ test('moment 2 passes at 95% of the replies in Spanish and fails below it', asyn
   assert.deepEqual(MOMENTS.filter((moment) => !two.moments[moment].pass), ['spanish']);
 });
 
+test('moment 2 reads only the replies that follow tool output in their turn', async (t) => {
+  const codex = fakeCodex();
+  const quiet = await gradeRun({ record: record(), dir: kept(t, session({ habits: { quiet: [13], english: 13 } })), turns: TURNS, askCodex: codex.ask });
+  assert.equal(quiet.moments.spanish.pass, true, quiet.moments.spanish.why);
+  assert.match(quiet.moments.spanish.why, /^28 of 28 replies after tool output in Spanish/);
+  assert.doesNotMatch(codex.prompts[0], /^REPLY 13: /m, 'a turn with no tool output is not judged');
+  const preambled = fakeCodex();
+  await gradeRun({ record: record(), dir: kept(t, session({ habits: { preamble: 13 } })), turns: TURNS, askCodex: preambled.ask });
+  assert.match(preambled.prompts[0], /^REPLY 13: Hecho, turno 13/m, 'the reply after the tool output is judged');
+  assert.doesNotMatch(preambled.prompts[0], /First I will look/, 'the text before the first tool output of a turn is not judged');
+  const none = fakeCodex();
+  const noResults = session().filter((line) => !(line.type === 'user' && Array.isArray(line.message.content) && line.message.content[0]?.type === 'tool_result'));
+  const silent = await gradeRun({ record: record(), dir: kept(t, noResults), turns: TURNS, askCodex: none.ask });
+  assert.equal(silent.moments.spanish.pass, false);
+  assert.match(silent.moments.spanish.why, /no reply followed tool output/);
+  assert.equal(none.prompts.filter((prompt) => prompt.includes('MOMENT spanish')).length, 0, 'nothing to judge, no judge asked');
+});
+
 test('moment 3 takes Codex\'s verdict on the premise turn', async (t) => {
   const failing = async (prompt) => (prompt.includes('MOMENT spanish') ? fakeCodex().ask(prompt) : JSON.stringify({ pass: false, why: 'deleted the test without looking' }));
   const grade = await gradeRun({ record: record(), dir: kept(t, session()), turns: TURNS, askCodex: failing });
@@ -170,6 +201,59 @@ test('moment 4 fails when a feature\'s source is written before its test, or wit
     assert.deepEqual(MOMENTS.filter((moment) => !grade.moments[moment].pass), ['tdd'], JSON.stringify(habits));
     assert.match(grade.moments.tdd.why, new RegExp(Object.values(habits)[0]));
   }
+});
+
+test('moment 4 judges each feature wherever it was built: an agent that works ahead of the script still passes', async (t) => {
+  const habits = { buildAt: { f2: n('f1') + 1, f3: n('f2') + 1 } };
+  const grade = await gradeRun({ record: record(), dir: kept(t, session({ habits })), turns: TURNS, askCodex: fakeCodex().ask });
+  assert.equal(grade.moments.tdd.pass, true, grade.moments.tdd.why);
+  assert.deepEqual(Object.keys(grade.moments.tdd.features), ['f1', 'f2', 'f3']);
+});
+
+test('moment 4 takes only the feature\'s own test: its file by name, or a test file whose new text names the source', async (t) => {
+  const other = { f2: { path: 'tests/store.spec.mjs', text: 'test("sortByDue keeps undated last", () => {})' } };
+  const foreign = await gradeRun({ record: record(), dir: kept(t, session({ habits: { testFile: other } })), turns: TURNS, askCodex: fakeCodex().ask });
+  assert.equal(foreign.moments.tdd.pass, false);
+  assert.match(foreign.moments.tdd.why, /^f2: src\/done\.mjs was written before its own test$/);
+  assert.deepEqual(Object.fromEntries(Object.entries(foreign.moments.tdd.features).map(([label, verdict]) => [label, verdict.pass])), { f1: true, f2: false, f3: true });
+  const shared = { f2: { path: 'tests/store.spec.mjs', text: "import { markDone } from '../src/done.mjs';" } };
+  const added = await gradeRun({ record: record(), dir: kept(t, session({ habits: { testFile: shared } })), turns: TURNS, askCodex: fakeCodex().ask });
+  assert.equal(added.moments.tdd.pass, true, added.moments.tdd.why);
+});
+
+test('moment 4 takes only a red run of the feature\'s own test, and a stub written with its red run is code first', async (t) => {
+  const red = (command) => ({ command, error: true, out: 'not ok 1\n# fail 1' });
+  const store = await gradeRun({ record: record(), dir: kept(t, session({ habits: { red: red('node --test tests/store.spec.mjs') } })), turns: TURNS, askCodex: fakeCodex().ask });
+  assert.deepEqual(Object.values(store.moments.tdd.features).map((verdict) => verdict.pass), [false, false, false], 'another test\'s red run');
+  const list = await gradeRun({ record: record(), dir: kept(t, session({ habits: { red: red('node --test tests/list.spec.mjs') } })), turns: TURNS, askCodex: fakeCodex().ask });
+  assert.deepEqual(Object.values(list.moments.tdd.features).map((verdict) => verdict.pass), [true, false, false], 'f1\'s test run red is f1\'s only');
+  const stub = await gradeRun({ record: record(), dir: kept(t, session({ habits: { stubRed: 'f2' } })), turns: TURNS, askCodex: fakeCodex().ask });
+  assert.match(stub.moments.tdd.why, /^f2: no red run of its own test between the test and src\/done\.mjs$/);
+});
+
+test('moment 4 takes a red run that names test files by a glob only when the glob matches the feature\'s own test', async (t) => {
+  // S8's current-2 ran `node --test tests/*.spec.mjs`: the word names no one file, and it matches every feature's test.
+  const passes = async (command) => {
+    const grade = await gradeRun({ record: record(), dir: kept(t, session({ habits: { red: { command, error: true, out: 'not ok 1\n# fail 1' } } })), turns: TURNS, askCodex: fakeCodex().ask });
+    return Object.values(grade.moments.tdd.features).map((verdict) => verdict.pass);
+  };
+  for (const command of ['node --test tests/*.spec.mjs', 'node --test "tests/*.spec.mjs"', 'node --test tests/[a-z]*.spec.mjs', 'node --test tests/?*.spec.mjs tests/store.spec.mjs']) {
+    assert.deepEqual(await passes(command), [true, true, true], command);
+  }
+  assert.deepEqual(await passes('node --test tests/store*.spec.mjs'), [false, false, false], 'a glob that matches no feature\'s test');
+  assert.deepEqual(await passes('node --test tests/list*.spec.mjs tests/store.spec.mjs'), [true, false, false], 'a glob that matches f1\'s test only');
+  assert.deepEqual(await passes('node --test tests/list[.spec.mjs'), [false, false, false], 'an unclosed `[` is a literal name, not a crash');
+});
+
+test('a run that stopped early keeps the verdicts of the features it built, and moment 4 stays not reached', async (t) => {
+  const upTo = n('f2') + 1;
+  const grade = await gradeRun({ record: record({ reached: upTo, stop: { reason: 'condition', turn: upTo + 1 } }), dir: kept(t, session({ upTo })), turns: TURNS, askCodex: fakeCodex().ask });
+  assert.match(grade.moments.tdd.why, /^not reached/);
+  const { f1, f2, f3 } = grade.moments.tdd.features;
+  assert.equal(f1.pass && f2.pass, true);
+  assert.match(f3.why, /^not reached: the run ended at turn 10 with src\/stats\.mjs unwritten$/);
+  const score = batchScore([grade, { ...grade, moments: { tdd: { features: { f1, f2: { pass: false }, f3 } } } }], undefined);
+  assert.deepEqual(score.features, { f1: { passed: 2, total: 2 }, f2: { passed: 1, total: 2 }, f3: { passed: 0, total: 2 } });
 });
 
 test('moment 5 fails when no compaction happened', async (t) => {
@@ -198,10 +282,21 @@ test('batchScore pools the moments of an arm\'s valid runs against the 90% line,
     { arm: 'current', valid: false, passed: 0, total: 5 },
     { arm: 'minimal-commands', valid: true, passed: 1, total: 5 },
   ];
-  assert.deepEqual(batchScore(graded, 'current'), { arm: 'current', runs: 5, excluded: 1, passed: 23, total: 25, share: 0.92, pass: true });
+  assert.deepEqual(batchScore(graded, 'current'), { arm: 'current', runs: 5, excluded: 1, passed: 23, total: 25, share: 0.92, pass: true, features: {} });
   graded[4].passed = 3;
   assert.equal(batchScore(graded, 'current').pass, false, '22 of 25 is under 90%');
-  assert.deepEqual(batchScore([], 'current'), { arm: 'current', runs: 0, excluded: 0, passed: 0, total: 0, share: null, pass: null });
+  assert.deepEqual(batchScore([], 'current'), { arm: 'current', runs: 0, excluded: 0, passed: 0, total: 0, share: null, pass: null, features: {} });
+});
+
+test('a share from fewer than 5 valid runs is reported and cannot certify', () => {
+  assert.equal(MIN_RUNS, 5);
+  const graded = Array.from({ length: 5 }, () => ({ arm: 'current', valid: true, passed: 5, total: 5 }));
+  assert.equal(batchScore(graded, 'current').pass, true, '5 valid runs at 100% certify');
+  graded[4].valid = false;
+  const four = batchScore(graded, 'current');
+  assert.equal(four.share, 1, 'the share is still reported');
+  assert.equal(four.pass, null, '4 valid runs and 1 excluded cannot certify');
+  assert.match(four.why, /4 valid runs, fewer than 5: cannot certify/);
 });
 
 test('a run stopped by its cap or by the eval is graded invalid; one stopped by a release condition is valid', async (t) => {
@@ -261,13 +356,15 @@ test('regradeSample takes one run in five, at least one, and reports the judges\
 test('gradeMain grades a batch, scores each arm, reports the regrade and writes the grade beside it', async (t) => {
   const resultsDir = scratch(t);
   const dir = kept(t, session());
-  const runs = ['current-1', 'minimal-commands-1'].map((id) => ({ ...record({ id, arm: id.replace(/-\d+$/, '') }), transcripts: dir }));
+  const ids = ['current-1', 'current-2', 'current-3', 'current-4', 'current-5', 'minimal-commands-1'];
+  const runs = ids.map((id) => ({ ...record({ id, arm: id.replace(/-\d+$/, '') }), transcripts: dir }));
   fs.writeFileSync(path.join(resultsDir, 'b.json'), JSON.stringify({ turns: 30, runs }));
   const out = [];
   const code = await gradeMain(['--name', 'b'], { askCodex: fakeCodex().ask, askJudge: fakeCodex().ask, resultsDir, stdout: { write: (text) => out.push(text) }, stderr: { write: (text) => out.push(text) } });
   assert.equal(code, 0, out.join(''));
-  assert.match(out.join(''), /^current: 5 of 5 moments over 1 valid run\(s\); 100\.0%, at or above the 90% line$/m);
-  assert.match(out.join(''), /^regrade: current-1; claude-sonnet-5-5 agreed on 2 of 2 judged moments$/m);
+  assert.match(out.join(''), /^current: 25 of 25 moments over 5 valid run\(s\); 100\.0%, at or above the 90% line$/m);
+  assert.match(out.join(''), /^minimal-commands: 5 of 5 moments over 1 valid run\(s\); 100\.0%, 1 valid runs, fewer than 5: cannot certify$/m);
+  assert.match(out.join(''), /^regrade: current-1, minimal-commands-1; claude-sonnet-5-5 agreed on 4 of 4 judged moments$/m);
   assert.ok(fs.existsSync(path.join(resultsDir, 'b.grade.json')));
   fs.writeFileSync(path.join(resultsDir, 'c.json'), JSON.stringify({ calibration: true, turns: 5, runs: [] }));
   assert.equal(await gradeMain(['--name', 'c'], { resultsDir, stdout: { write: () => {} }, stderr: { write: () => {} } }), 1, 'a calibration is not graded');
@@ -509,7 +606,7 @@ test('moment 4 fails when the shell writes a feature\'s source before its test, 
   const shellFirst = { label: 'f1', command: (source) => `printf 'export {}\\n' | tee "${source}"` };
   const grade = await gradeRun({ record: record(), dir: kept(t, session({ habits: { shellFirst } })), turns: TURNS, askCodex: fakeCodex().ask });
   assert.deepEqual(MOMENTS.filter((moment) => !grade.moments[moment].pass), ['tdd']);
-  assert.match(grade.moments.tdd.why, /f1: src\/list\.mjs was written before any test file/);
+  assert.match(grade.moments.tdd.why, /f1: src\/list\.mjs was written before its own test/);
 });
 
 test('a release run through sh -c after the compaction fails moments 1 and 5', async (t) => {
@@ -526,14 +623,14 @@ test('a red run is read from the reporter\'s own lines when a pipe hides the exi
   assert.equal(grade.moments.tdd.pass, true, grade.moments.tdd.why);
   const green = { command: 'npm test 2>&1 | tail -30', error: false, out: 'ℹ pass 4\nℹ fail 0' };
   const none = await gradeRun({ record: record(), dir: kept(t, session({ habits: { red: green } })), turns: TURNS, askCodex: fakeCodex().ask });
-  assert.match(none.moments.tdd.why, /no red test run/);
+  assert.match(none.moments.tdd.why, /no red run of its own test/);
 });
 
 test('a failing command that only mentions the tests is no red run', async (t) => {
   for (const command of ['grep "npm test" README.md', 'echo npm test && false', "git commit -m 'run npm test first'"]) {
     const grade = await gradeRun({ record: record(), dir: kept(t, session({ habits: { red: { command, error: true, out: '' } } })), turns: TURNS, askCodex: fakeCodex().ask });
     assert.deepEqual(MOMENTS.filter((moment) => !grade.moments[moment].pass), ['tdd'], command);
-    assert.match(grade.moments.tdd.why, /no red test run/, command);
+    assert.match(grade.moments.tdd.why, /no red run of its own test/, command);
   }
 });
 
