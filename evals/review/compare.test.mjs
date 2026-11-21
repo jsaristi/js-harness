@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
+import { fileURLToPath } from 'node:url';
 import { codexArgs, REVIEW_EFFORT, REVIEW_MODEL } from '../../bin/codex-review.mjs';
 import { createLeanHome as makeLeanHome, leanHomesDir } from '../../bin/lib/codex-review-home.mjs';
 import { REVIEW_PROMPT_VERSION } from '../../bin/lib/codex-review-prompt.mjs';
@@ -15,6 +16,7 @@ import {
   buildReading, CELLS, CHECKOUT_NAME, codegraphSettings, compareMain, CONFIGS, EXCLUDED, FINDING_BODY_MAX, RANGES, READING_SCHEMA,
   readingFile, readReading,
 } from './compare.mjs';
+import { buildSeededRepo } from './seeded.mjs';
 
 // Real git and a fake `codex`, through injected spawns: no test calls a real Codex, the model, or CodeGraph.
 // The machine is a temporary folder too: an OS home with a fixture for a Codex home and its login, the
@@ -301,9 +303,10 @@ const entries = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).sort() : []);
 
 // --- the matrix ---
 
-test('the matrix is data: five configurations over two ranges, nine cells, CodeGraph on the real range alone', () => {
-  assert.deepEqual(CONFIGS.map((config) => config.name), ['current', 'lean', 'lean-own', 'lean-high', 'lean-codegraph']);
-  assert.deepEqual(CONFIGS.map(({ session, prompt, effort, doc, codegraph }) => [session, prompt, effort, doc, codegraph]), [
+test('the matrix is data: five measured configurations over two ranges, nine cells, CodeGraph on the real range alone', () => {
+  const measured = CONFIGS.filter((config) => config.arm === null);
+  assert.deepEqual(measured.map((config) => config.name), ['current', 'lean', 'lean-own', 'lean-high', 'lean-codegraph']);
+  assert.deepEqual(measured.map(({ session, prompt, effort, doc, codegraph }) => [session, prompt, effort, doc, codegraph]), [
     ['current', 'codex', null, false, false],
     ['lean', 'codex', 'medium', false, false],
     ['lean', 'own', 'medium', true, false],
@@ -311,12 +314,12 @@ test('the matrix is data: five configurations over two ranges, nine cells, CodeG
     ['lean', 'codex', 'medium', false, true],
   ]);
   // One configuration is retired, and stays in the matrix: its cells are still listed and reported.
-  assert.deepEqual(CONFIGS.map(({ name, retired }) => [name, retired]), [['current', '2026-10-08'], ['lean', null], ['lean-own', null], ['lean-high', null], ['lean-codegraph', null]]);
+  assert.deepEqual(measured.map(({ name, retired }) => [name, retired]), [['current', '2026-10-08'], ['lean', null], ['lean-own', null], ['lean-high', null], ['lean-codegraph', null]]);
   assert.deepEqual(RANGES.map(({ name, base, head, doc }) => ({ name, base, head, doc })), [
     { name: 'real', base: '338386a6de63e4a47ef0515ceb6fda5f99846df8', head: 'e3aad4802d4604fbc4976e2ad5c4a40e2f5de42e', doc: 'odd/tasks/codex-review-lean.md' },
     { name: 'seeded', base: KEY.base, head: KEY.head, doc: 'odd/tasks/stocktake.md' },
   ]);
-  assert.deepEqual(CELLS.map(({ config, range }) => `${config}:${range}`), [
+  assert.deepEqual(CELLS.filter((cell) => measured.some((one) => one.name === cell.config)).map(({ config, range }) => `${config}:${range}`), [
     'current:real', 'current:seeded', 'lean:real', 'lean:seeded', 'lean-own:real', 'lean-own:seeded', 'lean-high:real', 'lean-high:seeded', 'lean-codegraph:real',
   ]);
   assert.deepEqual(EXCLUDED.map(({ config, range }) => `${config}:${range}`), ['lean-codegraph:seeded']);
@@ -332,7 +335,7 @@ test('each lean configuration is pinned on the model and at the effort its commi
   // another configuration since, under the name of the one that was measured: so each names its own, and the
   // readings in the repository say which. Nothing here reads the rules' values: the cells hold whatever they say.
   const committed = new URL('../results/review/readings/', import.meta.url);
-  const lean = CONFIGS.filter((config) => config.session === 'lean');
+  const lean = CONFIGS.filter((config) => config.session === 'lean' && config.arm === null);
   assert.deepEqual(lean.map((config) => [config.name, config.model, config.effort]), [
     ['lean', 'gpt-6.1-sol', 'medium'], ['lean-own', 'gpt-6.1-sol', 'medium'], ['lean-high', 'gpt-6.1-sol', 'high'], ['lean-codegraph', 'gpt-6.1-sol', 'medium'],
   ]);
@@ -349,6 +352,54 @@ test('each lean configuration is pinned on the model and at the effort its commi
   assert.equal(read, 7, 'every lean cell has a committed reading to be held to');
 });
 
+test('the arms of the controlled test are two runs each, pinned on their own model and effort, on the own prompt with the document, over both ranges', () => {
+  // odd/tasks/reviewer-controlled-test.md: arm A is the baseline, A against B is the model, B against C and D the effort.
+  // Written out, and never read from the rules: the arms measure these pairs whatever rule:review-model holds later.
+  const arms = CONFIGS.filter((config) => config.arm !== null);
+  assert.deepEqual(arms.map(({ name, arm, run, model, effort }) => [name, arm, run, model, effort]), [
+    ['sol61-medium-1', 'A', 1, 'gpt-6.1-sol', 'medium'], ['sol61-medium-2', 'A', 2, 'gpt-6.1-sol', 'medium'],
+    ['sol62-medium-1', 'B', 1, 'gpt-6.2-sol', 'medium'], ['sol62-medium-2', 'B', 2, 'gpt-6.2-sol', 'medium'],
+    ['sol62-max-1', 'C', 1, 'gpt-6.2-sol', 'max'], ['sol62-max-2', 'C', 2, 'gpt-6.2-sol', 'max'],
+    ['sol62-high-1', 'D', 1, 'gpt-6.2-sol', 'high'], ['sol62-high-2', 'D', 2, 'gpt-6.2-sol', 'high'],
+  ]);
+  for (const config of arms) {
+    assert.deepEqual([config.session, config.prompt, config.doc, config.codegraph, config.only, config.retired], ['lean', 'own', true, false, null, null], config.name);
+    assert.match(config.what, new RegExp(`^arm ${config.arm}, run ${config.run}, of the controlled test `), config.name);
+  }
+  // Every arm reviews both ranges, so each arm is four runs: two a case.
+  assert.deepEqual(CELLS.filter((cell) => arms.some((one) => one.name === cell.config)).map(({ config, range }) => `${config}:${range}`),
+    arms.flatMap(({ name }) => [`${name}:real`, `${name}:seeded`]));
+});
+
+test('--dry-run of an arm: its own model and effort, the own prompt and the range\'s document, and nothing else differs from lean-own', async () => {
+  const m = machine();
+  const own = await run(['--cell', 'lean-own:seeded', '--dry-run'], m, nothingStarts(), { configToml: m.configToml, platform: 'linux' });
+  assert.equal(own.code, 0, own.err);
+  for (const [cell, model, effort] of [['sol61-medium-1:seeded', 'gpt-6.1-sol', 'medium'], ['sol62-medium-2:real', 'gpt-6.2-sol', 'medium'], ['sol62-max-1:seeded', 'gpt-6.2-sol', 'max'], ['sol62-high-2:seeded', 'gpt-6.2-sol', 'high']]) {
+    const result = await run(['--cell', cell, '--dry-run'], m, nothingStarts(), { configToml: m.configToml, platform: 'linux' });
+    assert.equal(result.code, 0, `${cell}: ${result.err}`);
+    const expected = printedArgv(own.out).map((token) => (token === 'gpt-6.1-sol' ? model : token === 'model_reasoning_effort="medium"' ? `model_reasoning_effort="${effort}"` : token));
+    assert.deepEqual(printedArgv(result.out), expected, cell);
+    const [config, range] = cell.split(':');
+    assert.match(result.out, new RegExp(`^Command: js-harness codex-review --base [0-9a-f]{40} --prompt own --doc ${RANGES.find((one) => one.name === range).doc.replaceAll('.', '\\.')} --cwd `, 'm'), cell);
+    assert.ok(result.out.includes(`Reading: ${readingFile(m.readings, config, range)} (missing)`), result.out);
+  }
+  assert.deepEqual([entries(m.readings), entries(m.parent), entries(m.tmp)], [[], [], []], 'nothing was made');
+});
+
+test('each range says how many lines it changes as git counts them, the base of the input a changed line', () => {
+  // Not the lines a review's evidence holds (`coverage`): those are deduplicated and drop blank lines, 216 and 226
+  // where git counts 255 and 292, and dividing by them made every arm look dearer a line.
+  assert.deepEqual(RANGES.map(({ name, changedLines }) => [name, changedLines]), [['real', 255], ['seeded', 292]]);
+  const numstat = (cwd, base, head) => git(cwd, 'diff', '--numstat', base, head).split('\n').filter(Boolean).reduce((sum, line) => sum + line.split('\t').slice(0, 2).reduce((both, count) => both + Number(count), 0), 0);
+  const seeded = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-seeded-lines-'));
+  made.push(seeded);
+  buildSeededRepo(path.join(seeded, 'repo'));
+  assert.equal(numstat(path.join(seeded, 'repo'), KEY.base, KEY.head), 292);
+  const root = fileURLToPath(new URL('../../', import.meta.url));
+  if (spawnSync('git', ['cat-file', '-e', `${RANGES[0].head}^{commit}`], { cwd: root }).status === 0) assert.equal(numstat(root, RANGES[0].base, RANGES[0].head), 255);
+});
+
 test('a reading is one file a cell, named after its configuration and its range', () => {
   assert.equal(readingFile(path.join('x', 'readings'), 'lean-own', 'seeded'), path.join('x', 'readings', 'lean-own__seeded.json'));
 });
@@ -360,14 +411,15 @@ test('--list names every cell and says which are recorded, and starts nothing', 
   const empty = await run(['--list'], m);
   assert.equal(empty.code, 0, empty.err);
   for (const { config, range } of CELLS) assert.match(empty.out, new RegExp(`^${config}:${range}\\s+missing$`, 'm'));
-  assert.match(empty.out, /^0 of 9 cells are recorded\.$/m);
+  assert.match(empty.out, new RegExp(`^0 of ${CELLS.length} cells are recorded\\.$`, 'm'));
+  assert.equal(CELLS.length, 25, 'nine measured cells and sixteen of the arms');
   assert.match(empty.out, /lean-codegraph:seeded/, 'and the one that is not a cell, with why');
   fs.writeFileSync(readingFile(m.readings, 'lean', 'seeded'), JSON.stringify({ schema: READING_SCHEMA, config: 'lean', range: { name: 'seeded' }, outcome: 'not-inspected', recordedAt: '2026-10-07T12:00:00.000Z', cli: '0.160.1' }), 'utf8');
   fs.writeFileSync(readingFile(m.readings, 'lean', 'real'), 'not json', 'utf8');
   const one = await run(['--list'], m);
   assert.match(one.out, /^lean:seeded\s+recorded\s+not-inspected\s+2026-10-07T12:00:00\.000Z\s+codex-cli 0\.160\.1$/m);
   assert.match(one.out, /^lean:real\s+missing \(.*not .*reading.*\)$/m, 'a file that is not a reading is not a recorded cell');
-  assert.match(one.out, /^1 of 9 cells are recorded\.$/m);
+  assert.match(one.out, new RegExp(`^1 of ${CELLS.length} cells are recorded\\.$`, 'm'));
 });
 
 test('exactly one cell an invocation: none, two, an unknown one and the one left out are usage errors, and nothing starts', async () => {
@@ -499,11 +551,13 @@ test('the current configuration is retired: its cells are refused before anythin
   const list = await run(['--list'], m);
   assert.match(list.out, /^current:seeded\s+recorded\s+reviewed\s+2026-10-08T03:15:58\.144Z\s+codex-cli 0\.161\.0$/m);
   assert.match(list.out, /^current:real\s+missing$/m);
-  assert.match(list.out, /^1 of 9 cells are recorded\.$/m);
+  assert.match(list.out, new RegExp(`^1 of ${CELLS.length} cells are recorded\\.$`, 'm'));
   // And the usage says which cells can be run, and which are kept as readings alone.
   const usage = await run([], m);
   assert.equal(usage.code, 2);
-  assert.match(usage.err, /^Cells: lean:real, lean:seeded, lean-own:real, lean-own:seeded, lean-high:real, lean-high:seeded, lean-codegraph:real\.$/m);
+  const armCells = CONFIGS.filter((config) => config.arm !== null).flatMap(({ name }) => [`${name}:real`, `${name}:seeded`]);
+  assert.equal(armCells.length, 16);
+  assert.ok(usage.err.split('\n').includes(`Cells: ${['lean:real', 'lean:seeded', 'lean-own:real', 'lean-own:seeded', 'lean-high:real', 'lean-high:seeded', 'lean-codegraph:real', ...armCells].join(', ')}.`), usage.err);
   assert.match(usage.err, /^Retired, kept as readings and not run: current:real, current:seeded\.$/m);
 });
 

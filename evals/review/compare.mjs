@@ -17,7 +17,9 @@
 // The matrix is data, below: five configurations over two ranges. `real` is a range of this repository
 // with no known defect, where a configuration shows what it costs and what it reports on ordinary work.
 // `seeded` is the repository `./seeded.mjs` builds, wrong in seven known places, where a reading is scored
-// against the key (`./score.mjs`). The CodeGraph configuration runs on the real range alone.
+// against the key (`./score.mjs`). The CodeGraph configuration runs on the real range alone. Beside the matrix
+// are the arms of the controlled test of the reviewer (`ARMS`, odd/tasks/reviewer-controlled-test.md): a model
+// at an effort each, two runs a range, each run a configuration of its own, reported apart (`./report.mjs`).
 //
 // One configuration is retired, `current`, and can no longer be run (2026-10-08,
 // odd/tasks/codex-review-cost.md). It measured the review on the model the user's own Codex configuration
@@ -91,7 +93,9 @@ const SEEDED_KEY = JSON.parse(fs.readFileSync(path.join(SEEDED_DIR, 'key.json'),
  * (`null` under `current`, which was handed neither: the user's configuration named them then); `doc` is
  * whether the review is given the range's feature document; `codegraph`, whether the CodeGraph MCP server
  * of the user's configuration is added; `only`, the ranges it runs on when not all; `retired`, the day
- * since which it is no longer run, `null` for one that still is (`compareMain` refuses a retired cell).
+ * since which it is no longer run, `null` for one that still is (`compareMain` refuses a retired cell); `arm`
+ * and `run`, for a run of the controlled test of the reviewer (`ARMS`, below), its arm's letter and which of its
+ * runs it is, `null` for a configuration of the comparison.
  *
  * The efforts are the ones the committed readings were measured with: `medium` was the command's own until
  * 2026-10-08 and `high` is since, so a `lean` that followed it would have become `lean-high` under its own
@@ -103,11 +107,41 @@ export const CONFIGS = [
   { name: 'lean-own', session: 'lean', prompt: 'own', model: 'gpt-6.1-sol', effort: 'medium', doc: true, codegraph: false, only: null, retired: null, what: 'the lean session, asked with this harness\'s own prompt and the range\'s feature document' },
   { name: 'lean-high', session: 'lean', prompt: 'codex', model: 'gpt-6.1-sol', effort: 'high', doc: false, codegraph: false, only: null, retired: null, what: 'the lean session at high effort' },
   { name: 'lean-codegraph', session: 'lean', prompt: 'codex', model: 'gpt-6.1-sol', effort: 'medium', doc: false, codegraph: true, only: ['real'], retired: null, what: 'the lean session with the CodeGraph MCP server of the user\'s configuration' },
+].map((config) => ({ ...config, arm: null, run: null }));
+
+/** The arms of the controlled test of the reviewer (odd/tasks/reviewer-controlled-test.md): the model and the
+ * effort each one reviews with. A against B changes the model alone, B against C and D the effort alone: PR 911
+ * changed both at once, and these arms tell them apart. Each pair is written out and never read from the rules
+ * (`review-model`, `review-effort`), so an arm measures its pair whatever the rules hold later, and running one
+ * changes no rule. */
+export const ARMS = [
+  { arm: 'A', model: 'gpt-6.1-sol', effort: 'medium', why: 'the baseline, the pair the reviewer ran on before PR 911' },
+  { arm: 'B', model: 'gpt-6.2-sol', effort: 'medium', why: 'the model of PR 911 at the baseline\'s effort' },
+  { arm: 'C', model: 'gpt-6.2-sol', effort: 'max', why: 'the pair PR 911 set' },
+  { arm: 'D', model: 'gpt-6.2-sol', effort: 'high', why: 'the model of PR 911 between the two efforts, run only if the spend of A to C leaves room' },
 ];
+
+// How many times each arm reviews each range: twice, so that one odd run decides nothing.
+export const ARM_RUNS = 2;
+
+/** The name of a run of an arm: `sol<major><minor>-<effort>-<run>`, `sol62-max-1` for the first run of C. */
+const armRunName = (model, effort, run) => `sol${model.match(/^gpt-(\d+)\.(\d+)-sol$/).slice(1).join('')}-${effort}-${run}`;
+
+// Each run of an arm is a configuration of its own, so that it is one reading a cell, as every other is. It runs
+// on the own prompt with the range's feature document, so that each reading records the version of the prompt it
+// was asked with (the `codex` prompt records none) and the arms are compared on one prompt that is checked, not
+// assumed.
+CONFIGS.push(...ARMS.flatMap(({ arm, model, effort, why }) => Array.from({ length: ARM_RUNS }, (_, at) => ({
+  name: armRunName(model, effort, at + 1),
+  session: 'lean', prompt: 'own', model, effort, doc: true, codegraph: false, only: null, retired: null, arm, run: at + 1,
+  what: `arm ${arm}, run ${at + 1}, of the controlled test of the reviewer: ${model} at ${effort}, ${why}; asked with this harness's own prompt and the range's feature document`,
+}))));
 
 /** The ranges. `base` and `head` are full commit ids, `doc` the feature document of the range, from the
  * root of its tree. `seeded` says how the tree is made: built by `./seeded.mjs`, else cloned from this
- * repository. */
+ * repository. `changedLines` is how many lines the range adds and deletes as `git diff --numstat` counts them,
+ * the base the report divides a run's input by: not a reading's `coverage`, which counts the deduplicated
+ * lines that are not blank, the evidence a review is held to, and is smaller (216 and 226). */
 export const RANGES = [
   {
     name: 'real',
@@ -115,9 +149,10 @@ export const RANGES = [
     head: 'e3aad4802d4604fbc4976e2ad5c4a40e2f5de42e',
     doc: 'odd/tasks/codex-review-lean.md',
     seeded: false,
+    changedLines: 255,
     what: 'this repository, 255 changed lines with no known defect',
   },
-  { name: 'seeded', base: SEEDED_KEY.base, head: SEEDED_KEY.head, doc: 'odd/tasks/stocktake.md', seeded: true, what: 'the repository of evals/review/seeded.mjs, wrong in seven known places' },
+  { name: 'seeded', base: SEEDED_KEY.base, head: SEEDED_KEY.head, doc: 'odd/tasks/stocktake.md', seeded: true, changedLines: 292, what: 'the repository of evals/review/seeded.mjs, wrong in seven known places' },
 ];
 
 /** Every cell, `{ config, range }` by name: each configuration over each range it runs on. */
