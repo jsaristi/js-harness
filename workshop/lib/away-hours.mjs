@@ -24,7 +24,11 @@ import { pathToFileURL } from 'node:url';
 import { ABSENCE_MS } from '../../bin/lib/return-report.mjs';
 import { gateLogDir, readGateLog } from '../../bin/lib/gate-log.mjs';
 import { personTimesOf } from '../../bin/lib/person-times.mjs';
-import { parseTranscript, QUESTION_TOOLS, quoteEntry } from '../../bin/lib/sessions.mjs';
+import { spawnSync } from 'node:child_process';
+import { mainCheckout, parseTranscript, projectDirsOf, projectSlug, QUESTION_TOOLS, quoteEntry } from '../../bin/lib/sessions.mjs';
+
+/** The process runner `mainCheckout` and `projectDirsOf` take: git, read whole as text. */
+const gitRun = (command, args, options = {}) => spawnSync(command, args, { encoding: 'utf8', windowsHide: true, ...options });
 
 const HOUR_MS = 3_600_000;
 const round = (n) => Math.round(n * 100) / 100;
@@ -189,19 +193,23 @@ export function manifestOf(inputs) {
   return { files, digest: sha256(files.map((f) => `${f.sha256} ${f.bytes} ${f.file}`).join('\n')) };
 }
 
-/** The project folders under `projectsDir` for the checkout at `root`: its own, its worktrees' under it
- * (`<slug>--…`), and the sibling worktrees `CLAUDE.md` asks for (`<repo>-worktrees/<name>`); a sibling project whose
- * path only starts with the checkout's (`<repo>-site`) is not one of them. */
-export function projectFolders(projectsDir, root) {
-  const slug = path.resolve(root).replace(/[^A-Za-z0-9]/g, '-');
-  const ours = (name) => name === slug || name.startsWith(`${slug}--`) || name.startsWith(`${slug}-worktrees-`);
-  return fs.readdirSync(projectsDir).filter(ours).map((name) => path.join(projectsDir, name));
+/** Which of the folder `names` under the Claude home's projects are the checkout's at `root` (its main checkout):
+ * its own, each one `listed` names (the folders `projectDirsOf` gives for the worktrees git lists, wherever they are),
+ * and, by name, the worktrees git no longer lists: the app's (`<repo>/.claude/worktrees/<name>`) and the siblings
+ * `CLAUDE.md` asks for (`<repo>-worktrees/<name>`). Of 186 such folders on 2026-11-21, git listed 42 worktrees, so
+ * git alone would drop the sessions of every removed one. A project whose path only starts with the checkout's
+ * (`<repo>-site`, `<repo>--site`) is not one of them. */
+export function projectFolders(names, root, listed = []) {
+  const slug = projectSlug(path.resolve(root));
+  const known = new Set(listed.map((dir) => path.basename(dir)));
+  const ours = (name) => name === slug || known.has(name) || name.startsWith(`${slug}--claude-worktrees-`) || name.startsWith(`${slug}-worktrees-`);
+  return names.filter(ours);
 }
 
 const titleOf = (entries) => entries.filter((entry) => entry?.type === 'custom-title').at(-1)?.customTitle ?? '(no title)';
 
 /** Reads the project's transcripts changed since `since`, and prints each absence with each session's hours. */
-export function main(argv = process.argv.slice(2), { claudeHome = path.join(os.homedir(), '.claude'), harnessHome = os.homedir(), root = process.cwd(), print = console.log } = {}) {
+export function main(argv = process.argv.slice(2), { claudeHome = path.join(os.homedir(), '.claude'), harnessHome = os.homedir(), root = process.cwd(), print = console.log, run = gitRun } = {}) {
   const flags = { idle: '10', archive: [] };
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
@@ -226,7 +234,10 @@ export function main(argv = process.argv.slice(2), { claudeHome = path.join(os.h
   const now = flags.now ? Date.parse(flags.now) : Date.now();
   const idleMs = Number(flags.idle) * 60_000;
   const read = [];
-  for (const folder of projectFolders(path.join(claudeHome, 'projects'), flags.root ?? root)) {
+  const checkout = mainCheckout(run, path.resolve(flags.root ?? root));
+  const projectsDir = path.join(claudeHome, 'projects');
+  const names = fs.existsSync(projectsDir) ? fs.readdirSync(projectsDir) : [];
+  for (const folder of projectFolders(names, checkout, projectDirsOf(run, checkout, claudeHome)).map((name) => path.join(projectsDir, name))) {
     for (const name of fs.readdirSync(folder).filter((file) => file.endsWith('.jsonl'))) {
       const file = path.join(folder, name);
       if (fs.statSync(file).mtimeMs < since) continue;

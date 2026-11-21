@@ -174,14 +174,15 @@ async function withHome(folders, body) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-away-hours-'));
   const root = path.join(home, 'repo');
   const slug = path.resolve(root).replace(/[^A-Za-z0-9]/g, '-');
-  for (const [suffix, sessions] of Object.entries(folders)) {
-    fs.mkdirSync(path.join(home, 'projects', slug + suffix), { recursive: true });
-    for (const [id, entries] of Object.entries(sessions)) fs.writeFileSync(path.join(home, 'projects', slug + suffix, `${id}.jsonl`), entries.map((e) => JSON.stringify(e)).join('\n'));
-  }
+  const write = (folder, id, entries) => {
+    fs.mkdirSync(path.join(home, 'projects', folder), { recursive: true });
+    fs.writeFileSync(path.join(home, 'projects', folder, `${id}.jsonl`), entries.map((e) => JSON.stringify(e)).join('\n'));
+  };
+  for (const [suffix, sessions] of Object.entries(folders)) for (const [id, entries] of Object.entries(sessions)) write(slug + suffix, id, entries);
   const lines = [];
   const run = (argv, options = {}) => main(argv, { claudeHome: home, harnessHome: home, print: (line) => lines.push(line), ...options });
   try {
-    await body({ run, lines, root, home, slug });
+    await body({ run, lines, root, home, slug, write, path });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -192,5 +193,18 @@ test('a session whose call runs across the whole window is a row with its work, 
     run(['--since', at('00:00'), '--root', root, '--from', at('10:00'), '--to', at('11:00')]);
     assert.match(lines.join('\n'), /aaaaaaaa JH 1 · gate: working 1 h, waiting 0 h/);
     assert.match(lines.join('\n'), /total of the 1 sessions with an entry or a running call inside: working 1 h/);
+  });
+});
+
+test('the folders read are the checkout, the worktrees git lists wherever they are, and the worktree folders by name', async () => {
+  const session = (title) => [{ type: 'custom-title', customTitle: title }, typed('10:00'), reply('10:05')];
+  await withHome({ '': { 'aaaaaaaa-1': session('JH 1 · lead') }, '--claude-worktrees-y': { 'bbbbbbbb-2': session('JH 2 · app tree') }, '-worktrees-x': { 'cccccccc-3': session('JH 3 · sibling tree') }, '--site': { 'dddddddd-4': session('JH 4 · other repo') } }, async ({ run, lines, root, home, write, path }) => {
+    const elsewhere = path.join(home, 'elsewhere', 'tree');
+    write(path.resolve(elsewhere).replace(/[^A-Za-z0-9]/g, '-'), 'eeeeeeee-5', session('JH 5 · listed tree'));
+    const git = (command, args) => (args[0] === 'worktree' ? { status: 0, stdout: `worktree ${root}\0HEAD 1\0\0worktree ${elsewhere}\0HEAD 2\0\0` } : { status: 1, stdout: '' });
+    run(['--since', at('00:00'), '--root', root, '--from', at('10:00'), '--to', at('11:00')], { run: git });
+    const out = lines.join('\n');
+    for (const id of ['aaaaaaaa', 'bbbbbbbb', 'cccccccc', 'eeeeeeee']) assert.match(out, new RegExp(`${id} JH`));
+    assert.doesNotMatch(out, /dddddddd/);
   });
 });
