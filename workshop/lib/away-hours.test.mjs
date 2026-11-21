@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { absencesOf, activityOf, dedupeByUuid, endedBy, manifestOf } from './away-hours.mjs';
+import { absencesOf, activityOf, cli, dedupeByUuid, endedBy, manifestOf } from './away-hours.mjs';
 
 // workshop/lib/away-hours.mjs (odd/tasks/away-work.md): his absences from his message times, and each session's
 // working and waiting hours inside one, from inline transcript entries; nothing is read from the machine.
@@ -236,4 +236,22 @@ test('what ended a wait is read from its provenance, not from tags in its text',
   assert.equal(endedBy(typed('10:00', 'I pasted <task-notification>x</task-notification> here')), 'his words');
   assert.equal(endedBy({ type: 'user', origin: { kind: 'peer', name: 'JH 1' }, timestamp: at('10:00'), message: { role: 'user', content: 'go' } }), 'a message of another session');
   assert.equal(endedBy({ type: 'attachment', attachment: { type: 'queued_command', origin: { kind: 'task-notification' }, prompt: 'done', timestamp: at('10:00') } }), 'an event of the app or a task');
+});
+
+test('the arguments are refused with usage and status 2, a transcript that cannot be read with status 1', async () => {
+  await withHome({ '': { 'aaaaaaaa-1': [typed('10:00')] } }, async ({ run, root, home, slug, path }) => {
+    const base = ['--since', at('00:00'), '--now', at('14:00'), '--root', root];
+    assert.throws(() => run([...base, '--from', at('11:00'), '--to', at('10:00')]), /--from is before --to/);
+    assert.throws(() => run([...base, '--from', at('13:00'), '--to', at('15:00')]), /inside --since and --now/);
+    assert.throws(() => run([...base, '--idle', 'Infinity']), /--idle is a number of minutes above 0/);
+    assert.throws(() => run(['--since', at('00:00'), '--root', '--json']), /--root needs a value/);
+    const errors = [];
+    const options = { claudeHome: home, harnessHome: home, print: () => {}, error: (line) => errors.push(line) };
+    assert.equal(cli(['--bogus'], options), 2);
+    assert.match(errors.join('\n'), /unknown argument: --bogus[\s\S]*usage: node workshop\/lib\/away-hours\.mjs --since <iso>/);
+    (await import('node:fs')).mkdirSync(path.join(home, 'projects', slug, 'broken.jsonl'));
+    errors.length = 0;
+    assert.equal(cli(base, options), 1);
+    assert.doesNotMatch(errors.join('\n'), /usage:/);
+  });
 });

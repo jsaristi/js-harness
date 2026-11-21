@@ -31,6 +31,10 @@ import { mainCheckout, parseTranscript, projectDirsOf, projectSlug, QUESTION_TOO
 /** The process runner `mainCheckout` and `projectDirsOf` take: git, read whole as text. */
 const gitRun = (command, args, options = {}) => spawnSync(command, args, { encoding: 'utf8', windowsHide: true, ...options });
 
+const USAGE = 'usage: node workshop/lib/away-hours.mjs --since <iso> [--now <iso>] [--idle <minutes>] [--root <checkout>] [--from <iso> --to <iso>] [--archive <session>=<iso> ...] [--json]';
+/** An argument `main` refuses: the command answers it with the usage and status 2. */
+class UsageError extends Error {}
+
 const HOUR_MS = 3_600_000;
 const round = (n) => Math.round(n * 100) / 100;
 const hours = (ms) => round(ms / HOUR_MS);
@@ -230,26 +234,35 @@ export function main(argv = process.argv.slice(2), { claudeHome = path.join(os.h
   const flags = { idle: '10', archive: [] };
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
+    const valued = token === '--archive' || ['--since', '--now', '--idle', '--root', '--from', '--to'].includes(token);
+    // A flag never stands as a value: `--root --json` is a missing directory, not one named `--json`.
+    if (valued && (argv[i + 1] === undefined || argv[i + 1].startsWith('--'))) throw new UsageError(`${token} needs a value`);
     if (token === '--json') flags.json = true;
-    else if (token === '--archive' && argv[i + 1] !== undefined) flags.archive.push(argv[(i += 1)]);
-    else if (['--since', '--now', '--idle', '--root', '--from', '--to'].includes(token) && argv[i + 1] !== undefined) flags[token.slice(2)] = argv[(i += 1)];
-    else throw new Error(`unknown argument: ${token}`);
+    else if (token === '--archive') flags.archive.push(argv[(i += 1)]);
+    else if (valued) flags[token.slice(2)] = argv[(i += 1)];
+    else throw new UsageError(`unknown argument: ${token}`);
   }
-  if (!flags.since) throw new Error('--since <iso> is required');
-  if ((flags.from === undefined) !== (flags.to === undefined)) throw new Error('--from and --to go together');
+  if (!flags.since) throw new UsageError('--since <iso> is required');
+  if ((flags.from === undefined) !== (flags.to === undefined)) throw new UsageError('--from and --to go together');
   for (const name of ['since', 'now', 'from', 'to']) {
-    if (flags[name] !== undefined && !Number.isFinite(Date.parse(flags[name]))) throw new Error(`--${name} is a time, not ${flags[name]}`);
+    if (flags[name] !== undefined && !Number.isFinite(Date.parse(flags[name]))) throw new UsageError(`--${name} is a time, not ${flags[name]}`);
   }
   // An archive time is a session's end the transcript does not hold: the app's record of it, given by hand.
   const archives = flags.archive.map((value) => {
     const [id, at] = value.split('=');
-    if (!id || !Number.isFinite(Date.parse(at ?? ''))) throw new Error(`--archive is <session>=<iso>, not ${value}`);
+    if (!id || !Number.isFinite(Date.parse(at ?? ''))) throw new UsageError(`--archive is <session>=<iso>, not ${value}`);
     return { id, at: Date.parse(at) };
   });
-  if (!(Number(flags.idle) > 0)) throw new Error(`--idle is a number of minutes above 0, not ${flags.idle}`);
+  const idleMs = Number(flags.idle) * 60_000;
+  // `Infinity` is no limit: the last gap of a session is measured as Infinity, which it would then count as work.
+  if (!(idleMs > 0 && Number.isFinite(idleMs))) throw new UsageError(`--idle is a number of minutes above 0, not ${flags.idle}`);
   const since = Date.parse(flags.since);
   const now = flags.now ? Date.parse(flags.now) : Date.now();
-  const idleMs = Number(flags.idle) * 60_000;
+  // A named window is measured with the same bounds as his messages, so it lies inside `--since` and `--now`.
+  if (flags.from !== undefined) {
+    if (!(Date.parse(flags.from) < Date.parse(flags.to))) throw new UsageError(`--from is before --to, not ${flags.from} after ${flags.to}`);
+    if (Date.parse(flags.from) < since || Date.parse(flags.to) > now) throw new UsageError('--from and --to lie inside --since and --now');
+  }
   const read = [];
   const checkout = mainCheckout(run, path.resolve(flags.root ?? root));
   const projectsDir = path.join(claudeHome, 'projects');
@@ -267,7 +280,7 @@ export function main(argv = process.argv.slice(2), { claudeHome = path.join(os.h
   const sessions = dedupeByUuid(read.map((input) => input.session)).map((session) => ({ ...session, his: personTimesOf(session.entries) }));
   for (const archive of archives) {
     const named = sessions.filter((session) => session.id.startsWith(archive.id)).length;
-    if (named !== 1) throw new Error(`--archive ${archive.id} names ${named} sessions, not one`);
+    if (named !== 1) throw new UsageError(`--archive ${archive.id} names ${named} sessions, not one`);
   }
   // The machine's gate log says how long each gate queued for the lock before it ran, and for which session.
   const lockWaits = new Map();
@@ -314,11 +327,17 @@ export function main(argv = process.argv.slice(2), { claudeHome = path.join(os.h
   return 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+/** `main` as a command: its status, 2 with the usage for an argument it refuses, 1 for anything else that fails (a
+ * transcript or a log that cannot be read), as `docs` and `subagents` keep 2 for their argument errors. */
+export function cli(argv = process.argv.slice(2), { error = console.error, ...options } = {}) {
   try {
-    process.exitCode = main();
-  } catch (error) {
-    console.error(error.message);
-    process.exitCode = 2;
+    return main(argv, options);
+  } catch (failure) {
+    error(failure.message);
+    if (!(failure instanceof UsageError)) return 1;
+    error(USAGE);
+    return 2;
   }
 }
+
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) process.exitCode = cli();
