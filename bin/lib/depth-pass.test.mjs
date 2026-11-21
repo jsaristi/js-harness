@@ -467,3 +467,11 @@ test('a branch whose merges are not the queue\'s is one pull request, and code m
   candidate(mixed, ['code', 'doc'], (number, branch) => (branch === 'code' ? byQueue(number, branch) : byButton(number, branch)));
   assert.deepEqual(errorsOf(mixed), ['code was committed before the pass\'s verdict: bin/b.mjs']);
 });
+
+// odd/tasks/folder-instructions.md: the folder's instruction file is no feature document, so it owes no contract.
+test('depthPassJudge leaves odd/tasks/CLAUDE.md alone', async () => {
+  const { depthPassJudge } = await import('./depth-pass.mjs');
+  const judge = depthPassJudge({ since: '2026-11-01', today: '2026-11-21', opened: new Map(), branch: [], staged: [], onTrunk: () => null, trail: () => [], version: () => null });
+  assert.deepEqual(judge('odd/tasks/CLAUDE.md', '# odd/tasks\n'), []);
+  assert.notDeepEqual(judge('odd/tasks/other.md', '# other\n'), []);
+});

@@ -195,6 +195,7 @@ family by folder and child names; the fields of each are in `docs/RECORDS.md`, a
 | The project's settings | `harness.json`: the pin, the switches of `functions`, the reply check | `bin/lib/project.mjs` `initProject` `syncProject`; `bin/functions.mjs` `functionsMain` | nearly every command |
 | The clone's Claude keys | `.claude/settings.local.json`: the style and the denies | `bin/lib/project-apply.mjs` `applySettings` | the host; `uninstall` by the clone's manifest |
 | The project's instructions | `AGENTS.md`, `CLAUDE.md` | `bin/lib/project.mjs` `initProject` `syncProject`; `bin/lib/claude-import.mjs` `addImport` | the host on every turn, Codex, `doctor`, `check` |
+| The folder instructions | `odd/tasks/CLAUDE.md`, `bin/CLAUDE.md`, `docs/CLAUDE.md`, `evals/CLAUDE.md`, in git, so git undoes them | sessions, by hand | the host on a read or write in the folder, `check`, `rules check` |
 | The project's own rules | `docs/rules.json` | sessions, by hand | `rules`, `rules check` |
 | The plan | `docs/ROADMAP.md`; frozen origin `docs/origin.md` | sessions, by hand | `progress`, `report`, every session at start |
 | A feature | `odd/tasks/<feature>.md`, mirrored in engram (`odd/<feature>/tasks`) | the session that holds it, by hand | `contract`, `check`'s `contracts` row, `resume` |

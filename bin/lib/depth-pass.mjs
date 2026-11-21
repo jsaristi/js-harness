@@ -14,6 +14,7 @@
 import { isContract, parseContract } from './contract.mjs';
 import { tokenize } from './progress.mjs';
 import { citationsIn } from './citations.mjs';
+import { FOLDER_INSTRUCTIONS } from './claude-md-budget.mjs';
 
 const ITEMS = ['Method', 'Raw material', 'The bar', 'Refutation', 'Request'];
 // An item opens a line, as a list item or a heading, bold or not: `- 1. Method:`, `### 2. Raw material`.
@@ -106,6 +107,8 @@ export function depthPassOrder({ branch, staged, verdict, answered }) {
  * `version(hash, path)`, its text at that commit or `null`. */
 export function depthPassJudge({ since, today, opened, branch, staged, onTrunk, trail, version }) {
   return (file, markdown) => {
+    // A folder instruction file (odd/tasks/folder-instructions.md) is no feature document.
+    if (FOLDER_INSTRUCTIONS.includes(file)) return [];
     if ((opened.get(file)?.day ?? today) < since) return [];
     // Contract first (odd/tasks/f8-s4b-contradictions.md, spec 1): the pass sits after the contract, so a document
     // opened since the day with no contract is refused as one, not skipped.

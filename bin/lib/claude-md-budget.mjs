@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { estimateTokens } from './payload.mjs';
 import { ruleValue } from './rules.mjs';
+import { RULES } from './rules-data.mjs';
 import { firstStep } from './next-step.mjs';
 
 // The budget the root CLAUDE.md is held to: the declared rule `claude-md-budget` (bin/lib/rules-data.mjs).
@@ -18,4 +19,46 @@ export function checkClaudeBudget(cwd) {
   const tokens = estimateTokens(fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n'));
   const pass = tokens <= CLAUDE_MD_BUDGET;
   return [{ name: 'claude-md budget', pass, detail: `${tokens} estimated tokens (budget ${CLAUDE_MD_BUDGET})`, ...(!pass && { next: firstStep(`cut CLAUDE.md from ${tokens} to ${CLAUDE_MD_BUDGET} estimated tokens or fewer`) }) }];
+}
+
+// The folder instruction files (odd/tasks/folder-instructions.md): the host loads one when a session reads or writes a
+// file in its folder, so each holds only what is bound to that place and names the rules it rests on, never their text.
+export const FOLDER_INSTRUCTIONS = ['odd/tasks/CLAUDE.md', 'bin/CLAUDE.md', 'docs/CLAUDE.md', 'evals/CLAUDE.md'];
+
+/** The most lines a folder instruction file may hold: 49, since the layout of odd/tasks/activity-folders-trial.md says under 50. A
+ * constant until a `rules change` declares it, which only a rule/ branch can do. */
+export const FOLDER_INSTRUCTIONS_LINES = 49;
+
+const NAMED = /`rule:([a-z][a-z0-9-]*)`/g;
+const squash = (text) => text.replace(/\s+/g, ' ');
+
+/** The PASS/FAIL rows of the folder instruction files at `cwd`, one per file that is there: within its line budget,
+ * naming at least one rule, and holding no phrase of a live prose rule of `rules`, since a rule has one home and a
+ * second copy drifts. A CRLF checkout counts as its LF text. */
+export function checkFolderInstructions(cwd, { rules = RULES } = {}) {
+  const rows = [];
+  for (const relative of FOLDER_INSTRUCTIONS) {
+    const file = path.join(cwd, ...relative.split('/'));
+    if (!fs.existsSync(file)) continue;
+    const text = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+    const lines = text.replace(/\n$/, '').split('\n').length;
+    const named = new Set([...text.matchAll(NAMED)].map((match) => match[1]));
+    const body = squash(text);
+    const copies = rules
+      .filter((rule) => !Object.hasOwn(rule, 'retired') && Array.isArray(rule.phrases))
+      .filter((rule) => rule.phrases.some((phrase) => body.includes(squash(phrase))))
+      .map((rule) => rule.id);
+    const faults = [
+      ...(lines > FOLDER_INSTRUCTIONS_LINES ? [`cut ${relative} to ${FOLDER_INSTRUCTIONS_LINES} lines or fewer`] : []),
+      ...(named.size === 0 ? [`name in ${relative} the rules it rests on, as \`rule:<id>\``] : []),
+      ...copies.map((id) => `replace in ${relative} the text of rule "${id}" with \`rule:${id}\``),
+    ];
+    const said = [
+      `${lines} lines (budget ${FOLDER_INSTRUCTIONS_LINES})`,
+      named.size === 0 ? 'names no rule' : `names ${named.size} rule${named.size === 1 ? '' : 's'}`,
+      ...copies.map((id) => `repeats rule "${id}"`),
+    ];
+    rows.push({ name: `folder instructions ${relative}`, pass: faults.length === 0, detail: said.join(', '), ...(faults.length > 0 && { next: firstStep(faults[0]) }) });
+  }
+  return rows;
 }

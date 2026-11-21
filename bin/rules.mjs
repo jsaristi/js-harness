@@ -35,6 +35,7 @@ import { readRecords } from './lib/rules-applied-read.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { readProjectRules } from './lib/project-rules-read.mjs';
 import { PROJECT_RULES_PATH } from './lib/project-rules.mjs';
+import { FOLDER_INSTRUCTIONS } from './lib/claude-md-budget.mjs';
 import { changeRule, changeRules } from './lib/rules-change-run.mjs';
 import { ADVISOR_QUESTION, PROBE_PROMPT, PROBE_QUESTION, SWITCH_USAGE, claudeProbeArgs, codexFeaturesOf, codexProbeArgs, parseSwitch, switchRules } from './lib/rules-switch.mjs';
 import { proofSaid, proveBreaks, readCoverage, REGISTER_PATH } from './lib/rules-coverage-read.mjs';
@@ -158,17 +159,20 @@ function codeFilesUnder(root) {
     .sort(byPath);
 }
 
-/** The progress records and plans read for the marks of rules: the roadmap and the spec when they exist, then each
+/** The progress records, plans and folder instruction files read for the marks of rules: the roadmap, the spec and the
+ * four folder files whole when they exist (odd/tasks/folder-instructions.md), then each
  * feature document under `odd/tasks/`, cut at its `## Progress` or `## Log` line, sorted by path. */
 function textFilesUnder(root) {
   const files = [];
-  for (const file of ['docs/ROADMAP.md', 'docs/SPEC.md']) {
+  // The folder files are read whole, so a mark below a heading of theirs counts; feature documents are cut at their history.
+  for (const file of ['docs/ROADMAP.md', 'docs/SPEC.md', ...FOLDER_INSTRUCTIONS]) {
     const text = readOptional(root, file);
     if (text !== null) files.push({ path: file, text });
   }
   const tasks = entriesOf(path.join(root, 'odd', 'tasks'))
     .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
     .map((entry) => `odd/tasks/${entry.name}`)
+    .filter((file) => !FOLDER_INSTRUCTIONS.includes(file))
     .sort();
   for (const file of tasks) {
     const text = readOptional(root, file);
