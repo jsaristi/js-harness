@@ -158,11 +158,12 @@ function codeFilesUnder(root) {
     .sort(byPath);
 }
 
-/** The progress records and plans read for the marks of rules: the roadmap and the spec when they exist, then each
+/** The progress records, plans and folder instruction files read for the marks of rules: the roadmap, the spec and the
+ * folder files of bin/, docs/ and evals/ when they exist (odd/tasks/folder-instructions.md), then each
  * feature document under `odd/tasks/`, cut at its `## Progress` or `## Log` line, sorted by path. */
 function textFilesUnder(root) {
   const files = [];
-  for (const file of ['docs/ROADMAP.md', 'docs/SPEC.md']) {
+  for (const file of ['docs/ROADMAP.md', 'docs/SPEC.md', 'bin/CLAUDE.md', 'docs/CLAUDE.md', 'evals/CLAUDE.md']) {
     const text = readOptional(root, file);
     if (text !== null) files.push({ path: file, text });
   }

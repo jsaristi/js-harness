@@ -1,12 +1,14 @@
 # JH 268 · instruction files by folder, part 1
 
-Locator: `odd/tasks/folder-instructions.md` · Engram mirror: `odd/folder-instructions/tasks` · Branch: `claude/quizzical-napier-1bb4df`
+Locator: `odd/tasks/folder-instructions.md` · Engram mirror: `odd/folder-instructions/tasks` · Branch: `claude/heuristic-margulis-a6bae7`
 Delivery: one draft pull request to main · Test runner: `node --test`
 
 ## State
-Done: the four folder files, their `check` rows, their place in `rules check` and in the SPEC's records, the load
-probe and its result. Open: the moves of lines out of `CLAUDE.md` and `AGENTS.md`, each a `rules change` on a rule/
-branch (L4); Codex's review, queued (L5).
+Done and committed by JH 271 (JH 268 built it and committed nothing): the four folder files, their `check` rows,
+their place in `rules check`, the SPEC row and its RECORDS section, the load probe and its measured run (L6), the
+depth-pass judge skipping `odd/tasks/CLAUDE.md`. Open: the lens review and Codex's, queued (L5); the moves of lines
+out of `CLAUDE.md` and `AGENTS.md`, each a `rules change` on a rule/ branch (L4). Not checked: whether `resume`
+lists `odd/tasks/CLAUDE.md` as a feature.
 
 ## Goal
 Four folder instruction files that load when a session works in their folder, held by the gate to their size and to

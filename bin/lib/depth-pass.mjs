@@ -106,6 +106,8 @@ export function depthPassOrder({ branch, staged, verdict, answered }) {
  * `version(hash, path)`, its text at that commit or `null`. */
 export function depthPassJudge({ since, today, opened, branch, staged, onTrunk, trail, version }) {
   return (file, markdown) => {
+    // The folder's instruction file (odd/tasks/folder-instructions.md) is no feature document.
+    if (file === 'odd/tasks/CLAUDE.md') return [];
     if ((opened.get(file)?.day ?? today) < since) return [];
     // Contract first (odd/tasks/f8-s4b-contradictions.md, spec 1): the pass sits after the contract, so a document
     // opened since the day with no contract is refused as one, not skipped.
