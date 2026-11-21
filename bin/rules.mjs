@@ -160,18 +160,19 @@ function codeFilesUnder(root) {
 }
 
 /** The progress records, plans and folder instruction files read for the marks of rules: the roadmap, the spec and the
- * folder files of bin/, docs/ and evals/ when they exist (odd/tasks/folder-instructions.md), then each
+ * four folder files whole when they exist (odd/tasks/folder-instructions.md), then each
  * feature document under `odd/tasks/`, cut at its `## Progress` or `## Log` line, sorted by path. */
 function textFilesUnder(root) {
   const files = [];
-  // odd/tasks/CLAUDE.md is read below with the feature documents; it holds no Log line, so it is read whole.
-  for (const file of ['docs/ROADMAP.md', 'docs/SPEC.md', ...FOLDER_INSTRUCTIONS.filter((name) => !name.startsWith('odd/tasks/'))]) {
+  // The folder files are read whole, so a mark below a heading of theirs counts; feature documents are cut at their history.
+  for (const file of ['docs/ROADMAP.md', 'docs/SPEC.md', ...FOLDER_INSTRUCTIONS]) {
     const text = readOptional(root, file);
     if (text !== null) files.push({ path: file, text });
   }
   const tasks = entriesOf(path.join(root, 'odd', 'tasks'))
     .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
     .map((entry) => `odd/tasks/${entry.name}`)
+    .filter((file) => !FOLDER_INSTRUCTIONS.includes(file))
     .sort();
   for (const file of tasks) {
     const text = readOptional(root, file);

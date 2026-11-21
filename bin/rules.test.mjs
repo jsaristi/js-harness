@@ -233,12 +233,13 @@ test('the plain listing reads no file, so a sources file that is not JSON does n
   });
 });
 
-// odd/tasks/folder-instructions.md, spec 3: rules check reads the marks of every folder instruction file.
+// odd/tasks/folder-instructions.md, spec 3: rules check reads the marks of every folder instruction file, whole, so a
+// mark below a `## Log` heading counts too (the lens finding on the feature-document cut).
 test('a folder instruction file that names an undeclared rule fails check', async () => {
   for (const file of ['bin/CLAUDE.md', 'docs/CLAUDE.md', 'evals/CLAUDE.md', 'odd/tasks/CLAUDE.md']) {
     await inProject(BASE(), async (dir) => {
       await run(['render'], dir);
-      write(dir, { [file]: '# Folder\n\nSee `rule:no-such-rule`.\n' });
+      write(dir, { [file]: '# Folder\n\n## Log\n\nSee `rule:no-such-rule`.\n' });
       assert.deepEqual(await run(['check'], dir), {
         code: 1,
         out: ['FAIL  rules  1 finding', `      ${file}: names rule "no-such-rule", which is declared nowhere`],
