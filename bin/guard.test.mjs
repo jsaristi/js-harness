@@ -858,3 +858,17 @@ test('a Bash step that launches a background session is denied, and a command th
   const terminal = await hook({ tool_name: 'mcp__terminal__run_in_terminal', cwd: 'D:/project', tool_input: { command: 'js-harness sessions start --resume 0db8bc5e', note: 'resume it' } });
   assert.match(denied(terminal).permissionDecisionReason, /in the background.*rule sessions-open-in-sidebar/s);
 });
+
+// rule:sessions-open-in-sidebar, his words of 2026-11-21: the lead's js-harness sessions start passes, by Bash and by
+// the Terminal panel; a work session's is denied, and claude --bg stays denied for the lead too.
+test('the lead\'s js-harness sessions start passes the guard; a work session\'s and the lead\'s claude --bg do not', async () => {
+  const app = new Map([['lead-1', { title: 'JH ORQ · relevo' }], ['work-1', { title: 'JH 4 · thing' }]]);
+  const start = 'js-harness sessions start --title "JH 7 · x" --brief b.md';
+  const passes = { code: 0, out: '', err: '' };
+  const bash = (command, session_id) => hook({ tool_name: 'Bash', cwd: 'D:/project', session_id, tool_input: { command } }, { app });
+  assert.deepEqual(await bash(start, 'lead-1'), passes);
+  assert.match(denied(await bash(start, 'work-1')).permissionDecisionReason, /in the background/);
+  assert.match(denied(await bash('claude --bg "p"', 'lead-1')).permissionDecisionReason, /in the background/);
+  const terminal = await hook({ tool_name: 'mcp__terminal__run_in_terminal', cwd: 'D:/project', session_id: 'lead-1', tool_input: { command: `${start}; Write-Host 'NOTE: starts a work session here'` } }, { app });
+  assert.deepEqual(terminal, passes);
+});
