@@ -4,7 +4,9 @@ import { createHash } from 'node:crypto';
 import { absencesOf, activityOf, cli, dedupeByUuid, endedBy, manifestOf } from './away-hours.mjs';
 
 // workshop/lib/away-hours.mjs (odd/tasks/away-work.md): his absences from his message times, and each session's
-// working and waiting hours inside one, from inline transcript entries; nothing is read from the machine.
+// working and waiting hours inside one, from inline transcript entries; the tests of `main` and `cli` write a temp
+// Claude home and hand in `noGit`, a git that answers nothing, so no test reads this machine's git or transcripts.
+const noGit = () => ({ status: 1, stdout: '' });
 
 const at = (hhmm) => `2026-11-19T${hhmm}:00.000Z`;
 const reply = (hhmm, text = 'done', tools = []) => ({ type: 'assistant', timestamp: at(hhmm), message: { role: 'assistant', content: [{ type: 'text', text }, ...tools.map((t, i) => ({ type: 'tool_use', id: t.id ?? `t${hhmm}${i || ''}`, name: t.name, input: t.input ?? {} }))] } });
@@ -90,20 +92,20 @@ test('main reads the project and sibling worktree folders of a temp Claude home,
   fs.writeFileSync(path.join(home, '.js-harness', 'gate-log', 'log.jsonl'), `${JSON.stringify({ v: 1, event: 'start', id: 'g1', at: at('10:20'), cwd: root, command: 'check', pid: 1, session: 'bbbbbbbb-2', lock: 'ci', waitedSeconds: 600, waitedFor: [] })}\n`);
   const lines = [];
   try {
-    assert.equal(main(['--since', at('00:00'), '--now', at('14:00'), '--root', root], { claudeHome: home, harnessHome: home, print: (line) => lines.push(line) }), 0);
+    assert.equal(main(['--since', at('00:00'), '--now', at('14:00'), '--root', root], { claudeHome: home, harnessHome: home, run: noGit, print: (line) => lines.push(line) }), 0);
     assert.match(lines[1], /^absence 2026-11-19T09:00:00.000Z -> 2026-11-19T13:00:00.000Z: 4 h, idle 10 min, his messages inside 0$/);
     assert.match(lines.join('\n'), /bbbbbbbb JH 2 · work: working 0.35 h, waiting 2.65 h \(gate lock 0.17 h\)/);
     assert.match(lines.join('\n'), /^inputs: 4 files \(3 transcripts, 1 of the gate log\), digest [0-9a-f]{16}$/m);
     lines.length = 0;
     // Archived at 10:31, JH 2 waits no longer after it.
-    main(['--since', at('00:00'), '--now', at('14:00'), '--root', root, '--archive', 'bbbbbbbb=' + at('10:31')], { claudeHome: home, harnessHome: home, print: (line) => lines.push(line) });
+    main(['--since', at('00:00'), '--now', at('14:00'), '--root', root, '--archive', 'bbbbbbbb=' + at('10:31')], { claudeHome: home, harnessHome: home, run: noGit, print: (line) => lines.push(line) });
     assert.match(lines.join('\n'), /bbbbbbbb JH 2 · work: working 0.35 h, waiting 0.17 h/);
     assert.throws(() => main(['--since', at('00:00'), '--archive', 'bbbbbbbb'], { claudeHome: home }), /--archive is <session>=<iso>/);
-    assert.throws(() => main(['--since', at('00:00'), '--root', root, '--archive', '=' + at('10:00')], { claudeHome: home, harnessHome: home }), /--archive is <session>=<iso>/);
-    assert.throws(() => main(['--since', at('00:00'), '--root', root, '--archive', 'zz=' + at('10:00')], { claudeHome: home, harnessHome: home }), /--archive zz names 0 sessions, not one/);
+    assert.throws(() => main(['--since', at('00:00'), '--root', root, '--archive', '=' + at('10:00')], { claudeHome: home, harnessHome: home, run: noGit }), /--archive is <session>=<iso>/);
+    assert.throws(() => main(['--since', at('00:00'), '--root', root, '--archive', 'zz=' + at('10:00')], { claudeHome: home, harnessHome: home, run: noGit }), /--archive zz names 0 sessions, not one/);
     assert.match(lines.join('\n'), /no entry inside .*: 1: cccccccc JH 3 · idle/);
     lines.length = 0;
-    main(['--since', at('00:00'), '--root', root, '--from', at('10:00'), '--to', at('11:00')], { claudeHome: home, harnessHome: home, print: (line) => lines.push(line) });
+    main(['--since', at('00:00'), '--root', root, '--from', at('10:00'), '--to', at('11:00')], { claudeHome: home, harnessHome: home, run: noGit, print: (line) => lines.push(line) });
     assert.match(lines[1], /^window .*: 1 h/);
     assert.throws(() => main(['--since', at('00:00'), '--from', at('10:00')], { claudeHome: home }), /go together/);
     assert.throws(() => main(['--bogus'], { claudeHome: home }), /unknown argument: --bogus/);
@@ -181,7 +183,7 @@ async function withHome(folders, body) {
   };
   for (const [suffix, sessions] of Object.entries(folders)) for (const [id, entries] of Object.entries(sessions)) write(slug + suffix, id, entries);
   const lines = [];
-  const run = (argv, options = {}) => main(argv, { claudeHome: home, harnessHome: home, print: (line) => lines.push(line), ...options });
+  const run = (argv, options = {}) => main(argv, { claudeHome: home, harnessHome: home, run: noGit, print: (line) => lines.push(line), ...options });
   try {
     await body({ run, lines, root, home, slug, write, path });
   } finally {
@@ -247,7 +249,7 @@ test('the arguments are refused with usage and status 2, a transcript that canno
     assert.throws(() => run([...base, '--idle', 'Infinity']), /--idle is a number of minutes above 0/);
     assert.throws(() => run(['--since', at('00:00'), '--root', '--json']), /--root needs a value/);
     const errors = [];
-    const options = { claudeHome: home, harnessHome: home, print: () => {}, error: (line) => errors.push(line) };
+    const options = { claudeHome: home, harnessHome: home, run: noGit, print: () => {}, error: (line) => errors.push(line) };
     assert.equal(cli(['--bogus'], options), 2);
     assert.match(errors.join('\n'), /unknown argument: --bogus[\s\S]*usage: node workshop\/lib\/away-hours\.mjs --since <iso>/);
     (await import('node:fs')).mkdirSync(path.join(home, 'projects', slug, 'broken.jsonl'));
@@ -261,4 +263,12 @@ test('a manifest pinned from digests taken as each file was read is the one its 
   const sha = (text) => createHash('sha256').update(text).digest('hex');
   const fromText = manifestOf([{ file: 'a.jsonl', text: 'x\n' }]);
   assert.deepEqual(manifestOf([{ file: 'a.jsonl', bytes: 2, sha256: sha('x\n') }]), fromText);
+});
+
+test('a span under a wait call is ended by the entry that cut it, the call only its reason', () => {
+  const a = activityOf([reply('10:00', 'waiting', [{ name: 'Bash', input: { command: 'js-harness wait --pr 930' } }]), attach('10:20'), result('11:00', 't10:00'), reply('11:01')], span('10:00', '11:01'));
+  assert.deepEqual(a.waits.map((w) => [w.to, w.endedBy, w.reason]), [
+    [at('10:20'), 'an entry of type attachment (progress)', 'its own wait call: Bash js-harness wait --pr 930'],
+    [at('11:00'), 'the result of its call', 'its own wait call: Bash js-harness wait --pr 930'],
+  ]);
 });

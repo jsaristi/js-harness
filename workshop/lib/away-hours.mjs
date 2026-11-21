@@ -177,10 +177,9 @@ export function activityOf(entries, { from, to: windowTo, idleMs, archivedAt = I
     }
     waiting += span;
     const ending = next !== undefined && timeOf(next) <= to ? next : undefined;
-    // Under a wait call, the call is the reason and its own result the ending, when that came by the cutoff.
-    const result = waitCall ? timed[waitCall.until] : undefined;
-    const ended = waitCall ? (result !== undefined && timeOf(result) <= to ? result : undefined) : ending;
-    waits.push({ from: iso(inStart), to: iso(end), hours: hours(span), endedBy: endedBy(ended, questionCalls), reason: waitCall ? `its own wait call: ${waitCall.label}` : null, lastReply: lastReply.slice(-200) });
+    // The entry that cut the span ends it (under a wait call, its own result only when that is the next entry); the
+    // call is the reason, kept apart, so a wait cut by `--to` before its result reads as ended by nothing.
+    waits.push({ from: iso(inStart), to: iso(end), hours: hours(span), endedBy: endedBy(ending, questionCalls), reason: waitCall ? `its own wait call: ${waitCall.label}` : null, lastReply: lastReply.slice(-200) });
   }
   return { workingHours: hours(working), waitingHours: hours(waiting), launchHours: hours(launch), lockHours: hours(locked), inside, waits };
 }
