@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { absencesOf, activityOf, cli, dedupeByUuid, endedBy, manifestOf } from './away-hours.mjs';
 
 // workshop/lib/away-hours.mjs (odd/tasks/away-work.md): his absences from his message times, and each session's
@@ -254,4 +255,10 @@ test('the arguments are refused with usage and status 2, a transcript that canno
     assert.equal(cli(base, options), 1);
     assert.doesNotMatch(errors.join('\n'), /usage:/);
   });
+});
+
+test('a manifest pinned from digests taken as each file was read is the one its text gives', () => {
+  const sha = (text) => createHash('sha256').update(text).digest('hex');
+  const fromText = manifestOf([{ file: 'a.jsonl', text: 'x\n' }]);
+  assert.deepEqual(manifestOf([{ file: 'a.jsonl', bytes: 2, sha256: sha('x\n') }]), fromText);
 });

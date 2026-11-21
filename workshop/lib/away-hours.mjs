@@ -207,10 +207,14 @@ export function dedupeByUuid(sessions) {
 
 const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 
-/** The manifest of the inputs read (`[{ file, text }]`): each file's bytes and sha256, and one digest over them all, in
- * the order given, so a figure can name exactly what it was measured from. */
+/** One input's line of the manifest, `{ file, bytes, sha256 }`, taken as it is read so its text need not be kept. */
+const pinOf = (file, text) => ({ file, bytes: Buffer.byteLength(text), sha256: sha256(text) });
+
+/** The manifest of the inputs read (`[{ file, text }]`, or each already pinned as `{ file, bytes, sha256 }`): each file's
+ * bytes and sha256, and one digest over them all, in the order given, so a figure can name exactly what it was measured
+ * from. */
 export function manifestOf(inputs) {
-  const files = inputs.map(({ file, text }) => ({ file, bytes: Buffer.byteLength(text), sha256: sha256(text) }));
+  const files = inputs.map((input) => (typeof input.text === 'string' ? pinOf(input.file, input.text) : { file: input.file, bytes: input.bytes, sha256: input.sha256 }));
   return { files, digest: sha256(files.map((f) => `${f.sha256} ${f.bytes} ${f.file}`).join('\n')) };
 }
 
@@ -271,9 +275,11 @@ export function main(argv = process.argv.slice(2), { claudeHome = path.join(os.h
     for (const name of fs.readdirSync(folder).filter((file) => file.endsWith('.jsonl'))) {
       const file = path.join(folder, name);
       if (fs.statSync(file).mtimeMs < since) continue;
+      // One transcript at a time: its text is pinned and dropped, and of its entries only the kinds measured are kept (a
+      // lead's transcript passed 122 MB, odd/tasks/departure-control.md).
       const text = fs.readFileSync(file, 'utf8');
       const { entries } = parseTranscript(text);
-      read.push({ file, text, session: { id: name.slice(0, -'.jsonl'.length), title: titleOf(entries), entries } });
+      read.push({ pin: pinOf(file, text), session: { id: name.slice(0, -'.jsonl'.length), title: titleOf(entries), entries: entries.filter((entry) => ACTIVITY.has(entry?.type)) } });
     }
   }
   // Copied history counts once, before his messages are read from it: a copy would double his entries too.
@@ -290,7 +296,7 @@ export function main(argv = process.argv.slice(2), { claudeHome = path.join(os.h
     lockWaits.set(event.session, [...(lockWaits.get(event.session) ?? []), [end - event.waitedSeconds * 1000, end]]);
   }
   const logInputs = ['log.1.jsonl', 'log.jsonl'].map((name) => path.join(gateLogDir(harnessHome), name)).filter((file) => fs.existsSync(file)).map((file) => ({ file, text: fs.readFileSync(file, 'utf8') }));
-  const manifest = manifestOf([...read.map(({ file, text }) => ({ file, text })), ...logInputs]);
+  const manifest = manifestOf([...read.map(({ pin }) => pin), ...logInputs]);
   const times = sessions.flatMap((session) => session.his).filter((time) => Date.parse(time) >= since && Date.parse(time) <= now);
   // A window named by a record (`--from`, `--to`) is measured as it is; otherwise his absences are.
   const windows = flags.from ? [{ from: iso(Date.parse(flags.from)), to: iso(Date.parse(flags.to)), open: false, named: true }] : absencesOf(times, { now });
