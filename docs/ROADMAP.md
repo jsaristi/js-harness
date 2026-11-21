@@ -938,6 +938,12 @@ of the first version.
 - [ ] The contracts row reads `trunk..HEAD` whole (`bin/contract.mjs` `branchOf`), so a branch stacked on another
   session's code can commit no depth pass: JH 207's S1 was refused on 2026-11-15 and waited until PR 883 landed.
   Owner: the next contract-row session (2026-11-15, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
+- [ ] The memory plan leaves MEMORY.md out of a deletion's write set. Owner: the next memory session (2026-11-15, the lead).
+- [ ] `notify --kind ready --pr` accepts a head that is not the session's HEAD (PR 886). Owner: the next notify session (2026-11-15, the lead).
+- [ ] A stretch item names nothing that closes it (0 of 3). Owner: the next stretch-protocol session (2026-11-15, the lead).
+- [ ] `merge-queue --refresh-copy` refuses (exit 75) while a gate runs, with no queue. Owner: the next merge-queue session (2026-11-15, the lead).
+- [ ] A refused refresh of the installed copy wakes nobody. Owner: the next merge-queue session (2026-11-15, the lead).
+- [ ] A question whose yes becomes a rule change says a typed line is needed: `rules change` refuses a tap, so Q296 and Q297 could not land. Owner: the next questions session (2026-11-15, JH 209).
 - [ ] A stretch's lost time counts only failed gates: the 2026-11-15 return showed 0.16 h lost while JH 199 and
   JH 207 sat about 3 h each waiting on the lead and the owner. Idle time read from `waiting` notices counts too.
   Owner: JH 208 (`odd/tasks/consistent-orders.md`), which reads the same signal (2026-11-15).
