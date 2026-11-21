@@ -874,6 +874,19 @@ GitHub Actions.
 - Control: check — bin/check.test.mjs — "a tree whose tests failed on CI is not proven by a narrower pass here: the
   next commit goes to CI again and is refused" — since 2026-10-30
 
+### gate-pass-on-other-node
+A gate's pass was taken as proof that the suite passed under one node version, while its sensors ran under another,
+and nothing in the pass said which.
+- Class: wrong-information
+- Seen: 2026-11-20 — the gate log, line 392 (`~/.js-harness/gate-log/log.jsonl`, end 21:09Z, 16:09 local) — the
+  "npm run check under node 26.13.1 PASS" that the switch to node 26 rested on ran its three sensors (tests, docs,
+  workshop spec) with `"ranIn":"wsl"`; `~/.js-harness/gate-wsl.json` names `/home/oficina/.local/node/bin`, and
+  `wsl -d Ubuntu -- /home/oficina/.local/node/bin/node --version` (under `MSYS_NO_PATHCONV=1`) printed v24.15.0 on
+  2026-11-21, so only check.mjs itself ran on node 26. Later Windows node 26 runs (claimed; JH PLAN, the lead's notes,
+  return-block-3.md): the full suite 9901 tests, 4 fail (git spawn 0xC0000142 under load, one not explained), the
+  failing file alone 225 tests, 0 fail. Check candidate: the gate's summary prints each sensor's ranIn and node
+  version. Whether the WSL node and CI move to 26 is his decision in JH PLAN's miniplan 13; nothing is decided here
+
 ### gate-ran-unseen
 "No gate runs" was said while a gate of a session that cannot notify was running.
 - Class: unseen-state
@@ -1313,6 +1326,17 @@ A session started waiting on him between two runs of the watch, and neither run 
 - Class: unseen-state
 - Seen: 2026-10-09 — relief file, line 37 — 50 minutes unreported; cause at line 39; also
   odd/tasks/session-board.md:1293-1305
+
+### node-switch-shims-shadowed
+Files left in a node folder by an earlier install shadowed the tool the switch expected, and the switch compared only
+node's version, not the folder's contents.
+- Class: unseen-state
+- Seen: 2026-11-20 — the lead's notes, return-block-3.md, "Owed after JH 259" (claimed; found and moved by JH PLAN) —
+  a hand-installed corepack had written pnpm 11.2.2 shims into the node 26.13.1 folder, which comes before pnpm's
+  own bin on PATH, so they shadowed pnpm 12.21.0; node 25 and later ship no Corepack. PR 940's verifier
+  (verify-pr940.md, B1, in the same notes) found that the update round would recreate the trap: its compare finds
+  names missing from the new folder, never extra ones. Check candidate: the update round compares the two node
+  folders' contents before a switch (PR 940's prepare step, a later part)
 
 ### old-rule-beside-new
 A rule changed and the places that state it did not all change with it: the old one stayed, read
@@ -2553,6 +2577,15 @@ never verified, and the ready notice named only Codex and the lenses.
   board's `yours` gate) the same; the lead caught both and held 868 until a verifier ran on the range ending at the head that shipped. Since then the
   verifier runs last on that range and the ready line carries its result; its proof is each ready notice of a guard
   naming a verifier range that ends at the pull request's head
+
+### wait-backgrounded-with-ampersand
+A long wait was started in the background with a shell `&`, where only the host's background run is allowed, so the
+process ran where the host did not track it.
+- Class: rule-not-acting
+- Seen: 2026-11-20 — the lead's notes, return-block-3.md, "Owed by a docs session" (claimed; the lead's own) — at
+  20:35 local the lead started `js-harness wait` with `&` in the console; it killed pid 3216 and re-armed the wait
+  with the host's background run. The chained-step guard reads `&` between steps, not one that ends the command
+- Control: owed — the lead's notes, return-block-3.md — "the guard hook refuses a Bash command ending in `&`; who builds: a small rule/guard session after the report pages"
 
 ### wait-blind-to-notices
 A session waited with `js-harness wait` on one event, and the lead's notices to it did not end the
