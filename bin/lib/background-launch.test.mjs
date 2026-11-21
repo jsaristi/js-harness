@@ -2,7 +2,7 @@
 // (odd/tasks/senior-orchestrator.md, T7). The guard's hook over these is tested in ../guard.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { backgroundLaunch, backgroundLaunchRefusal, backgroundStartRefusal, isLead } from './background-launch.mjs';
+import { backgroundLaunch, backgroundLaunchRefusal, backgroundLaunches, backgroundStartRefusal, isLead, shellLaunchRefusal } from './background-launch.mjs';
 import { RULES } from './rules-data.mjs';
 import { writeRules } from './rules.mjs';
 
@@ -105,4 +105,32 @@ test('a lead is the orchestrator of the project its code names', () => {
   assert.equal(isLead('other-1', app, 'JH'), false);
   assert.equal(isLead('lead-1', app, 'XY'), false);
   for (const code of [null, undefined, '']) assert.equal(isLead('lead-1', app, code), false, String(code));
+});
+
+// Codex P2 on PR 945 (background-launch.mjs:104): every launch of a shell command is read, not only the first.
+test('every launch of a command is read, so an allowed start does not hide a claude --bg after it', () => {
+  assert.deepEqual(backgroundLaunches('js-harness sessions start --resume 1 && claude --bg "p"'), ['js-harness sessions start', 'claude --bg']);
+  assert.deepEqual(backgroundLaunches('git status'), []);
+  assert.equal(backgroundLaunch('js-harness sessions start --resume 1 && claude --bg "p"'), 'js-harness sessions start');
+});
+
+// Codex P2 and P3 on PR 945 (background-launch.mjs:104, guard.mjs:185): every launch is held, and the app's records are
+// read only where they can change the answer: the rule declared, every launch a sessions start, a session id.
+test('a shell command is refused for any launch the lead may not make, and the records are read only where they can change it', async () => {
+  const declared = writeRules(RULES);
+  const without = writeRules(RULES.filter((rule) => rule.id !== 'sessions-open-in-sidebar'));
+  const app = new Map([['lead-1', { title: 'JH ORQ · relevo' }]]);
+  const read = [];
+  const of = (command, rules, sessionId = 'lead-1') => shellLaunchRefusal(command, { rules: () => rules, sessionId, code: () => 'JH', readApp: () => { read.push(command); return app; } });
+  assert.equal(await of('js-harness sessions start --resume 1', declared), null);
+  assert.deepEqual(read, ['js-harness sessions start --resume 1']);
+  read.length = 0;
+  assert.match(await of('js-harness sessions start --resume 1 && claude --bg "p"', declared), /claude --bg opens a session/);
+  assert.match(await of('claude --bg "p"', declared), /claude --bg/);
+  assert.equal(await of('js-harness sessions start --resume 1', without), null);
+  assert.match(await of('js-harness sessions start --resume 1', declared, ''), /in the background/);
+  assert.equal(await of('git status', declared), null);
+  assert.deepEqual(read, [], 'no read where the exception cannot apply');
+  // A reader that fails is no lead.
+  assert.match(await shellLaunchRefusal('js-harness sessions start', { rules: () => declared, sessionId: 'lead-1', code: () => 'JH', readApp: () => { throw new Error('EACCES'); } }), /in the background/);
 });

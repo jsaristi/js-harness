@@ -871,6 +871,10 @@ test('the lead\'s js-harness sessions start passes the guard; a work session\'s 
   assert.match(denied(await bash('claude --bg "p"', 'lead-1')).permissionDecisionReason, /in the background/);
   const terminal = await hook({ tool_name: 'mcp__terminal__run_in_terminal', cwd: 'D:/project', session_id: 'lead-1', tool_input: { command: `${start}; Write-Host 'NOTE: starts a work session here'` } }, { app });
   assert.deepEqual(terminal, passes);
+  // Codex P2 on PR 945 (background-launch.mjs:104): a lead's allowed start does not hide a claude --bg after it.
+  assert.match(denied(await bash(`${start} && claude --bg "p"`, 'lead-1')).permissionDecisionReason, /claude --bg opens a session/);
+  const both = await hook({ tool_name: 'mcp__terminal__run_in_terminal', cwd: 'D:/project', session_id: 'lead-1', tool_input: { command: `${start}; claude --bg "p"; Write-Host 'NOTE: starts two'` } }, { app });
+  assert.match(denied(both).permissionDecisionReason, /claude --bg opens a session/);
   // Codex P2 on PR 945 (background-launch.mjs:12): another project's orchestrator is no lead in this one.
   const other = new Map([['other-1', { title: 'XY ORQ · theirs' }]]);
   assert.match(denied(await hook({ tool_name: 'Bash', cwd: 'D:/project', session_id: 'other-1', tool_input: { command: start } }, { app: other })).permissionDecisionReason, /in the background/);

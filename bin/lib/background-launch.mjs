@@ -86,11 +86,12 @@ function launchOf(words) {
   return args[0] === 'sessions' && args[1] === 'start' ? 'js-harness sessions start' : null;
 }
 
-/** The first step of the shell command `command` that launches a background session (`launchOf`), or null: every
+/** Each launch of a background session (`launchOf`) the steps of the shell command `command` make, in order: every
  * simple command is read, joined however it is; text in quotes or in a heredoc's body is no step, so a command that
  * only names one (a grep, a commit message) launches none. */
-export function backgroundLaunch(command) {
+export function backgroundLaunches(command) {
   const words = withoutRedirections(command);
+  const launches = [];
   let start = 0;
   for (let i = 0; i <= words.length; i += 1) {
     if (i < words.length && !words.operators.has(i)) continue;
@@ -102,10 +103,32 @@ export function backgroundLaunch(command) {
       while (timed && from < i && words[from].startsWith('-')) from += 1;
     }
     const launch = from < i ? launchOf(words.slice(from, i)) : null;
-    if (launch !== null) return launch;
+    if (launch !== null) launches.push(launch);
     start = i + 1;
   }
-  return null;
+  return launches;
+}
+
+/** The first launch of a background session the shell command `command` makes (`backgroundLaunches`), or null. */
+export const backgroundLaunch = (command) => backgroundLaunches(command)[0] ?? null;
+
+/** Why the guard refuses the shell command `command` (a Bash or Terminal step), or null: each of its launches is held
+ * (`backgroundLaunchRefusal`), so a lead's allowed `js-harness sessions start` hides no `claude --bg` after it (Codex
+ * on PR 945). `rules()` gives the project's rules file text; the app's records (`readApp()`, which may throw or give a
+ * promise) and the project's code (`code()`) are read only where they can change the answer: the rule declared, every
+ * launch a sessions start and `sessionId` given, so another call does not scan every saved session record. */
+export async function shellLaunchRefusal(command, { rules, sessionId, readApp, code }) {
+  const launches = backgroundLaunches(command);
+  if (launches.length === 0) return null;
+  const projectData = rules();
+  if (sidebarRule(projectData) === null) return null;
+  // A launch no session may make is named first; only a command of sessions starts alone asks who runs it.
+  const never = launches.find((launch) => launch !== 'js-harness sessions start');
+  if (never !== undefined) return backgroundLaunchRefusal(never, projectData);
+  const refused = backgroundLaunchRefusal(launches[0], projectData);
+  if (typeof sessionId !== 'string' || sessionId === '') return refused;
+  const app = await Promise.resolve().then(readApp).catch(() => null);
+  return isLead(sessionId, app, code()) ? null : refused;
 }
 
 /** Why a Bash step that launches a session out of his sidebar, `launch` (from `backgroundLaunch` above), is refused

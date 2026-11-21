@@ -178,12 +178,14 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   }
   const { OPENING_TOOLS, SESSION_TOOL, TERMINAL_TOOL, agentEffortRefusal, allowedModels, backtickRefusal, driveRootRemovalRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal, reviewRecordWriteRefusal, sessionStartRefusal, terminalNoteRefusal } = await import('./lib/guard.mjs');
   const rootOf = () => projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
+  // A Bash or Terminal step that launches a background session (odd/tasks/senior-orchestrator.md, T7), each launch held.
+  const shellLaunchOf = async (command) => {
+    const { codeAt, shellLaunchRefusal } = await import('./lib/background-launch.mjs');
+    return shellLaunchRefusal(command, { rules: () => rulesTextOf(rootOf(), readFile), sessionId: payload.session_id, readApp, code: () => codeAt(rootOf(), readFile) });
+  };
   if (tool === TERMINAL_TOOL) {
     // The Terminal panel launches a background session as Bash does (odd/tasks/senior-orchestrator.md, T7).
-    const { backgroundLaunch, backgroundLaunchRefusal, codeAt, isLead } = await import('./lib/background-launch.mjs');
-    const launch = backgroundLaunch(input.command);
-    const launched = launch === null ? null : backgroundLaunchRefusal(launch, rulesTextOf(rootOf(), readFile), { lead: isLead(payload.session_id, await Promise.resolve().then(readApp).catch(() => null), codeAt(rootOf(), readFile)) });
-    return launched ?? terminalNoteRefusal(input.command, rulesTextOf(rootOf(), readFile));
+    return (await shellLaunchOf(input.command)) ?? terminalNoteRefusal(input.command, rulesTextOf(rootOf(), readFile));
   }
   if (!OPENING_TOOLS.includes(tool) && tool !== 'Agent' && tool !== 'Bash' && tool !== SESSION_TOOL && !MESSAGE_TOOLS.has(tool)) return null;
   if (tool === 'Agent') {
@@ -240,9 +242,7 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   // Only a command with a chained step, or one that launches a background session, reads the project's rules file
   // (lib/chained-step-guard.mjs; odd/tasks/senior-orchestrator.md, T7).
   const { chainedStep, chainedStepRefusal } = await import('./lib/chained-step-guard.mjs');
-  const { backgroundLaunch, backgroundLaunchRefusal, codeAt, isLead } = await import('./lib/background-launch.mjs');
-  const launch = backgroundLaunch(input.command);
-  const launched = launch === null ? null : backgroundLaunchRefusal(launch, rulesTextOf(rootOf(), readFile), { lead: isLead(payload.session_id, await Promise.resolve().then(readApp).catch(() => null), codeAt(rootOf(), readFile)) });
+  const launched = await shellLaunchOf(input.command);
   if (launched !== null) return launched;
   const chained = chainedStep(input.command) === null ? null : chainedStepRefusal(input.command, rulesTextOf(rootOf(), readFile));
   if (chained !== null) return chained;
