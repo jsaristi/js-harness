@@ -1121,6 +1121,18 @@ test('a senior\'s start reads the caller\'s title from the app\'s record on disk
   }
 }, { rules: true }));
 
+// Codex P2 on PR 945 (sessions-background.mjs:224): a senior the lead started visibly, with start_session, is in the
+// app's records alone; it counts as the project's live senior, and an archived one does not.
+test('a senior is refused while a visible senior of the project is live in the app records', withWorld((world) => {
+  const senior = ['--title', 'JH SR · another', '--brief', world.brief];
+  const visible = (archived) => new Map([...LEAD_RECORD, ['sr-1', { title: 'JH SR · a design', archived }], ['xy-1', { title: 'XY SR · theirs', archived: false }]]);
+  const refused = startFrom(world, senior, { caller: 'lead-1', records: visible(false) });
+  assert.equal(refused.code, 2, refused.said);
+  assert.match(refused.said, /JH SR · a design/);
+  assert.deepEqual(actions(world), [], 'nothing ran');
+  assert.equal(startFrom(world, senior, { caller: 'lead-1', records: visible(true) }).code, 0);
+}));
+
 // odd/tasks/senior-orchestrator.md, D4 and Done when: a second live senior is refused.
 test('a second senior of the project is refused while the first is recorded, finished turn or not, and starts once it is stopped', withWorld((world) => {
   const senior = (purpose) => ['--title', `JH SR · ${purpose}`, '--brief', world.brief];

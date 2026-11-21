@@ -18,7 +18,7 @@ import { backgroundStartRefusal, codeAt, isLead } from './lib/background-launch.
 import { sessionStartHome, sessionStartRefusal } from './lib/guard.mjs';
 import { leadTitle, seniorTitle, sessionTitleRefusal } from './lib/session-title-guard.mjs';
 import { appendNotice, newNotice, nextSessionNumber, placeOf, readNotices } from './lib/channel.mjs';
-import { mainCheckout, projectCode, projectSlug, sameSession } from './lib/sessions.mjs';
+import { mainCheckout, projectCode, projectSlug, roleOfTitle, sameSession } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { appRoot, appSessions } from './lib/app-record.mjs';
 // bin/sessions.mjs is at its size ceiling, so the live verb reaches it through the import it has of this module.
@@ -192,6 +192,23 @@ function liveSeniorRefusal(home, root) {
   return { code: 2, line: `js-harness sessions start: the senior ${live.id} · ${live.title} is live, and a project has one at most: send it the task with a message, or close it first (js-harness sessions stop ${live.id}).` };
 }
 
+/** Why a new senior titled `title` is refused while the app's records (`readApp`) hold a live senior of its code, or
+ * null: a senior the lead started visibly, with start_session, is in those records alone (Codex on PR 945), so D4's one
+ * live senior counts them as `seniorStartRefusal` does: not archived, a senior's title, the same code. Records that
+ * cannot be read refuse with exit 1, since whether a senior is live cannot be told. */
+function liveAppSeniorRefusal(title, readApp) {
+  const code = roleOfTitle(title)?.code;
+  let records;
+  try {
+    records = [...readApp().values()];
+  } catch (err) {
+    return { code: 1, line: `js-harness sessions start: the app's session records could not be read (${err.code ?? err.message}), so whether a senior is live cannot be told and none was started` };
+  }
+  const live = records.find((record) => record?.archived !== true && seniorTitle(record?.title ?? '') && roleOfTitle(record.title)?.code === code);
+  if (live === undefined) return null;
+  return { code: 2, line: `js-harness sessions start: the senior ${JSON.stringify(live.title)} is live in the app, and a project has one at most: send it the task with a message, or archive it first.` };
+}
+
 /** `sessions start`: exit 0 once the session runs and is recorded, 1 when claude is missing or refused (nothing is
  * recorded), 2 for a usage error or a rule that refuses the title or the effort (nothing runs), and for a senior that
  * the lead does not start or that a live senior of the project already holds (1 when the record cannot be read). */
@@ -268,7 +285,7 @@ export function sessionsStartMain(argv, given = {}) {
       stderr(starter);
       return 2;
     }
-    const second = liveSeniorRefusal(home, root);
+    const second = liveSeniorRefusal(home, root) ?? liveAppSeniorRefusal(parsed.title, readApp);
     if (second !== null) {
       stderr(second.line);
       return second.code;
