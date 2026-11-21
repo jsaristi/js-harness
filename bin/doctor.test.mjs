@@ -1,9 +1,10 @@
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { doctorMain, resolveLatestVersions } from './doctor.mjs';
+import { makeLanguageServerPrefix, withLanguageServer } from './lib/language-server.testkit.mjs';
 import { readCache, readReviewed, writeCache } from './lib/cache.mjs';
 import { recordOptionalFile } from './lib/manifest.mjs';
 import { launcherFileName, loginLauncher, remoteFiles, remoteId } from './lib/remote.mjs';
@@ -91,6 +92,10 @@ function fakeSpawn({ versions = {}, gitToplevel, lsFiles, codexLogin, loginEnvs 
   };
 }
 
+/** The language server every test gives doctor (./lib/language-server.testkit.mjs). */
+const LSP_PREFIX = makeLanguageServerPrefix();
+after(() => fs.rmSync(LSP_PREFIX, { recursive: true, force: true }));
+
 /** Runs `doctorMain`, capturing everything it printed via console.log and the exit code. */
 async function runDoctor(argv, env, deps) {
   let output = '';
@@ -99,12 +104,38 @@ async function runDoctor(argv, env, deps) {
     output += `${line}\n`;
   };
   try {
-    const code = await doctorMain(argv, env, deps);
+    const code = await doctorMain(argv, withLanguageServer(LSP_PREFIX, env), deps);
     return { code, output };
   } finally {
     console.log = original;
   }
 }
+
+test('doctorMain reports a language server that cannot start as a project gap: the reason, then both fixes, applying neither', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  const typeScript7 = makeLanguageServerPrefix({ version: '7.0.2', tsserver: false });
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    let output = '';
+    const original = console.log;
+    console.log = (line) => {
+      output += `${line}\n`;
+    };
+    try {
+      await doctorMain(['--home', home, '--cwd', project], { PATH: typeScript7, JS_HARNESS_PM: 'npm' }, { spawn, fetch: noopFetch });
+    } finally {
+      console.log = original;
+    }
+    assert.match(output, /\ntypescript-lsp\s+1\.0\.0\s+ok\s+n\/a\s+down/);
+    assert.match(output, /\n {2}typescript-lsp \(project\):\n {4}the plugin cannot start: TypeScript 7\.0\.2 beside the server .* ships no tsserver\.js.*\n {4}npm i -D .*typescript@<7.*\n {4}or turn this plugin off .*enabledPlugins/);
+    assert.equal(fs.existsSync(path.join(project, '.claude')), false, 'doctor writes no settings');
+  } finally {
+    for (const dir of [home, project, typeScript7]) fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test('doctorMain prints one line per tool and exits 0 on a fully healthy fixture', async () => {
   const home = makeTmpHome();

@@ -1,9 +1,10 @@
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { doctorMain, USAGE } from './doctor.mjs';
+import { makeLanguageServerPrefix, withLanguageServer } from './lib/language-server.testkit.mjs';
 import { readCache, readReviewed, recordReviewed, writeCache } from './lib/cache.mjs';
 import { recordOptionalFile } from './lib/manifest.mjs';
 import { launcherFileName, loginLauncher, remoteFiles, remoteId } from './lib/remote.mjs';
@@ -68,6 +69,10 @@ function healthySpawn(project, { codexCli = true } = {}) {
   };
 }
 
+/** The language server every test gives doctor (./lib/language-server.testkit.mjs). */
+const LSP_PREFIX = makeLanguageServerPrefix();
+after(() => fs.rmSync(LSP_PREFIX, { recursive: true, force: true }));
+
 async function runHook(argv, env, deps) {
   let stdout = '';
   let stderr = '';
@@ -80,7 +85,7 @@ async function runHook(argv, env, deps) {
     stderr += `${line}\n`;
   };
   try {
-    const code = await doctorMain(argv, env, deps);
+    const code = await doctorMain(argv, withLanguageServer(LSP_PREFIX, env), deps);
     return { code, stdout, stderr };
   } finally {
     console.log = originalLog;
