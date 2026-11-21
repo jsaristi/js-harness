@@ -260,9 +260,10 @@ export function main(argv = process.argv.slice(2), { claudeHome = path.join(os.h
       const activity = activityOf(session.entries, { ...window, archivedAt, lockWaits: lockWaits.get(session.id) ?? [] });
       return { id: session.id.slice(0, 8), title: session.title, copied: session.copied, ...(archivedAt !== undefined && { archivedAt: iso(archivedAt) }), ...activity };
     });
-    // A session with no entry inside the window may have been open and idle, or archived: the transcript cannot tell.
-    const rows = measured.filter((row) => row.inside > 0).sort((a, b) => b.workingHours - a.workingHours);
-    const silent = measured.filter((row) => row.inside === 0 && row.waitingHours > 0).map((row) => `${row.id} ${row.title}`);
+    // A session with an entry inside, or a call running across the whole window (work or launch measured with no entry
+    // inside it), is a row. One with neither may have been open and idle, or archived: the transcript cannot tell.
+    const rows = measured.filter((row) => row.inside > 0 || row.workingHours > 0 || row.launchHours > 0).sort((a, b) => b.workingHours - a.workingHours);
+    const silent = measured.filter((row) => !rows.includes(row) && row.waitingHours > 0).map((row) => `${row.id} ${row.title}`);
     const his = times.filter((time) => Date.parse(time) > window.from && Date.parse(time) < window.to).length;
     return { ...absence, hours: hours(window.to - window.from), hisMessagesInside: his, rows, silent };
   });
@@ -279,7 +280,7 @@ export function main(argv = process.argv.slice(2), { claudeHome = path.join(os.h
       print(`  ${row.id} ${row.title}: working ${row.workingHours} h, waiting ${row.waitingHours} h${extra.length ? ` (${extra.join('; ')})` : ''}${longest ? `; longest wait ${longest.hours} h from ${longest.from}, ended by ${longest.endedBy}` : ''}`);
     }
     const total = (key) => round(absence.rows.reduce((sum, row) => sum + row[key], 0));
-    print(`  total of the ${absence.rows.length} sessions with an entry inside: working ${total('workingHours')} h, waiting ${total('waitingHours')} h, launch ${total('launchHours')} h`);
+    print(`  total of the ${absence.rows.length} sessions with an entry or a running call inside: working ${total('workingHours')} h, waiting ${total('waitingHours')} h, launch ${total('launchHours')} h`);
     if (absence.silent.length) print(`  no entry inside (open and idle, or archived: not told apart): ${absence.silent.length}: ${absence.silent.join('; ')}`);
   }
   return 0;

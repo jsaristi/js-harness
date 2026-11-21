@@ -164,3 +164,33 @@ test('copied history counts once, in the transcript that began first, and the ma
   assert.equal(m.digest, manifestOf([{ file: 'a.jsonl', text: 'x\n' }, { file: 'b.jsonl', text: 'y\n' }]).digest);
   assert.notEqual(m.digest, manifestOf([{ file: 'a.jsonl', text: 'z\n' }, { file: 'b.jsonl', text: 'y\n' }]).digest);
 });
+
+// A temp Claude home with one project folder per `folders` key, each `{ id: entries }`, for `main`'s own tests.
+async function withHome(folders, body) {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const { main } = await import('./away-hours.mjs');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-away-hours-'));
+  const root = path.join(home, 'repo');
+  const slug = path.resolve(root).replace(/[^A-Za-z0-9]/g, '-');
+  for (const [suffix, sessions] of Object.entries(folders)) {
+    fs.mkdirSync(path.join(home, 'projects', slug + suffix), { recursive: true });
+    for (const [id, entries] of Object.entries(sessions)) fs.writeFileSync(path.join(home, 'projects', slug + suffix, `${id}.jsonl`), entries.map((e) => JSON.stringify(e)).join('\n'));
+  }
+  const lines = [];
+  const run = (argv, options = {}) => main(argv, { claudeHome: home, harnessHome: home, print: (line) => lines.push(line), ...options });
+  try {
+    await body({ run, lines, root, home, slug });
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+}
+
+test('a session whose call runs across the whole window is a row with its work, not dropped', async () => {
+  await withHome({ '': { 'aaaaaaaa-1': [{ type: 'custom-title', customTitle: 'JH 1 · gate' }, reply('09:50', 'go', [{ name: 'Bash' }]), result('11:10', 't09:50'), reply('11:11')] } }, async ({ run, lines, root }) => {
+    run(['--since', at('00:00'), '--root', root, '--from', at('10:00'), '--to', at('11:00')]);
+    assert.match(lines.join('\n'), /aaaaaaaa JH 1 · gate: working 1 h, waiting 0 h/);
+    assert.match(lines.join('\n'), /total of the 1 sessions with an entry or a running call inside: working 1 h/);
+  });
+});
