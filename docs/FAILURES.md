@@ -215,9 +215,6 @@ command could write into that session's work.
   only, moved back
 - Seen: 2026-11-14 — relief file, line 2747 (the lead's own) — a `cd` into `rule-lead-effort-split-aac740`, the third
   time, at 02:48 local, before the guard below landed at 03:46
-- Seen: 2026-11-21 — relief file, line 3626 (the lead's own) — the lead ran `git add -N .` in JH 269's worktree
-  `distracted-euler-ef9074` to diff its uncommitted change into jh269-change1.patch: a write in another session's
-  worktree, which the guard below, made for `cd`, did not refuse; no untracked files, so the index did not change
 - Control: check — bin/lib/worktrees.test.mjs — "a cd, pushd or Set-Location into another linked worktree is refused,
   naming git show and git -C" — since 2026-11-14
 
@@ -1709,11 +1706,10 @@ and stopped watching, with nothing that said the wait was gone. The follow-up: J
 lead's notes, brief-refresh-waits.md); its test becomes this entry's control when it lands.
 - Class: tool
 - Seen: 2026-11-21 — relief file, lines 3659-3660 — the refresh to 301974c at 07:15 local ended the lead's notice wait
-  with exit 127 right after its start line; the lead restarted it by hand
-- Seen: 2026-11-21 — relief file, line 3667 — the refresh to 85e45a1 at 08:22 local ended the lead's wait with exit 127
-  the same way
-- Seen: 2026-11-21 — relief file, line 3668 (claimed) — JH 267 reported its own `js-harness wait` killed with exit 127
-  by the refreshes, twice
+  with exit 127 right after its start line; the lead restarted it by hand; JH 267's wait died too (the lead's brief
+  for JH 283, claimed)
+- Seen: 2026-11-21 — relief file, lines 3667-3668 — the refresh to 85e45a1 at 08:22 local ended the lead's wait with
+  exit 127 the same way; line 3668: JH 267 confirms a refresh kills running waits (claimed)
 
 ### refresh-wait-false-way-out
 `merge-queue --land --refresh-copy`, when sessions were still at work after its wait, said that the
@@ -2122,12 +2118,11 @@ it: `sessions start` passed the claude CLI a model only when the call named one.
   2026-11-11
 
 ### stash-path-reverted-file
-`git stash push -- <file>`, run to set one file's change aside, took that change out of the working tree, so the file
-was back at its committed bytes while the session went on as if it held the change.
+`git stash push -- <file>` took that file's change out of the working tree, reverting the file.
 - Class: tool
 - Seen: 2026-11-21 — the lead's notes, lsp-starts-state.md, "Slips to place" (JH 272's own) — a
-  `git stash push -- stack.mjs` reverted `stack.mjs` in JH 272's worktree (claude/jh272-lsp-starts); recovered with
-  `git stash apply` by the entry's SHA, nothing lost
+  `git stash push -- stack.mjs` reverted `stack.mjs` in JH 272's worktree (claude/jh272-lsp-starts); recovered by the
+  stash entry's SHA
 
 ### status-report-without-facts
 The status report reached him without the migration's share or whether the last stretch met its goals, and with
@@ -2694,6 +2689,13 @@ Node 24's rmSync fails an EPERM at once (a busy folder, retried: 0 ms with rmSyn
   from the user home, not the working directory" — since 2026-11-02
 - Proof: the windows-daily runs after the merge name no failing test of bin/stack.test.mjs (`js-harness
   windows-daily`)
+
+### write-in-session-worktree
+The lead ran a git command that writes in another session's worktree, where that session's uncommitted work lives.
+- Class: rule-not-acting
+- Seen: 2026-11-21 — relief file, line 3626 (the lead's own) — the lead ran `git add -N .` in JH 269's worktree
+  `distracted-euler-ef9074` to diff its uncommitted change into jh269-change1.patch; no untracked files, so the index
+  did not change, but it was a write in that session's worktree
 
 ### written-question-buried
 A question he had to answer in writing was put at the end of long reports, so it did not read as a question and
