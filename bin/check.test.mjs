@@ -67,14 +67,14 @@ test('checkClaudeBudget gives no row where the project has no CLAUDE.md', () => 
 test('checkFolderInstructions gives a row per folder file there, passing at its line budget and failing one line over', () => {
   const dir = makeTmpDir();
   try {
-    assert.deepEqual(checkFolderInstructions(dir), []);
+    assert.deepEqual(checkFolderInstructions(dir, { own: true }), []);
     fs.mkdirSync(path.join(dir, 'bin'));
     const file = path.join(dir, 'bin', 'CLAUDE.md');
     const body = (lines) => ['# bin', '', 'See `rule:reuse-first`.', ...Array(lines - 3).fill('x')].join('\n') + '\n';
     fs.writeFileSync(file, body(FOLDER_INSTRUCTIONS_LINES).replace(/\n/g, '\r\n'));
-    assert.deepEqual(checkFolderInstructions(dir), [{ name: 'folder instructions bin/CLAUDE.md', pass: true, detail: `${FOLDER_INSTRUCTIONS_LINES} lines (budget ${FOLDER_INSTRUCTIONS_LINES}), names 1 rule` }]);
+    assert.deepEqual(checkFolderInstructions(dir, { own: true }), [{ name: 'folder instructions bin/CLAUDE.md', pass: true, detail: `${FOLDER_INSTRUCTIONS_LINES} lines (budget ${FOLDER_INSTRUCTIONS_LINES}), names 1 rule` }]);
     fs.writeFileSync(file, body(FOLDER_INSTRUCTIONS_LINES + 1));
-    const [over] = checkFolderInstructions(dir);
+    const [over] = checkFolderInstructions(dir, { own: true });
     assert.equal(over.pass, false);
     assert.match(over.detail, new RegExp(`^${FOLDER_INSTRUCTIONS_LINES + 1} lines `));
     assert.ok(over.next);
@@ -89,13 +89,54 @@ test('checkFolderInstructions fails a folder file that names no rule, or that ho
     fs.mkdirSync(path.join(dir, 'docs'));
     const file = path.join(dir, 'docs', 'CLAUDE.md');
     fs.writeFileSync(file, '# docs\n\nNothing named.\n');
-    assert.equal(checkFolderInstructions(dir)[0].pass, false);
-    assert.match(checkFolderInstructions(dir)[0].detail, /names no rule/);
+    assert.equal(checkFolderInstructions(dir, { own: true })[0].pass, false);
+    assert.match(checkFolderInstructions(dir, { own: true })[0].detail, /names no rule/);
     const prose = RULES.find((rule) => !Object.hasOwn(rule, 'retired') && Array.isArray(rule.phrases));
     fs.writeFileSync(file, `# docs\n\nSee \`rule:${prose.id}\`: ${prose.phrases[0]}\n`);
-    const [copy] = checkFolderInstructions(dir);
+    const [copy] = checkFolderInstructions(dir, { own: true });
     assert.equal(copy.pass, false);
     assert.match(copy.detail, new RegExp(`repeats rule "${prose.id}"`));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// PR 943's Codex findings: the rows are the harness's own (odd/tasks/folder-instructions.md keeps other projects out of
+// scope), a mark inside a fence names no rule as `rules check` reads it, and a file that cannot be read is a failed row.
+test('checkFolderInstructions gives no row outside the harness repository, whatever its folder files hold', () => {
+  const dir = makeTmpDir();
+  try {
+    fs.mkdirSync(path.join(dir, 'docs'));
+    fs.writeFileSync(path.join(dir, 'docs', 'CLAUDE.md'), '# docs\n\nNothing named.\n');
+    assert.deepEqual(checkFolderInstructions(dir), []);
+    assert.equal(checkFolderInstructions(dir, { own: true }).length, 1);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('checkFolderInstructions counts no rule mark that sits inside a fenced block', () => {
+  const dir = makeTmpDir();
+  try {
+    fs.mkdirSync(path.join(dir, 'bin'));
+    fs.writeFileSync(path.join(dir, 'bin', 'CLAUDE.md'), '# bin\n\n```\nSee `rule:reuse-first`.\n```\n');
+    const [row] = checkFolderInstructions(dir, { own: true });
+    assert.equal(row.pass, false);
+    assert.match(row.detail, /names no rule/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('checkFolderInstructions answers a failed row naming a folder file it cannot read', () => {
+  const dir = makeTmpDir();
+  try {
+    fs.mkdirSync(path.join(dir, 'evals', 'CLAUDE.md'), { recursive: true });
+    const [row] = checkFolderInstructions(dir, { own: true });
+    assert.equal(row.name, 'folder instructions evals/CLAUDE.md');
+    assert.equal(row.pass, false);
+    assert.match(row.detail, /cannot be read/);
+    assert.match(row.next.text, /evals\/CLAUDE\.md/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
