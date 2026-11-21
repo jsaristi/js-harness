@@ -6,8 +6,8 @@ Delivery: one draft pull request to main · Test runner: `node --test`
 ## State
 Done and committed by JH 271 (JH 268 built it and committed nothing): the four folder files, their `check` rows,
 their place in `rules check`, the SPEC row and its RECORDS section, the load probe and its measured run (L6), the
-depth-pass judge skipping `odd/tasks/CLAUDE.md`. Open: the lens review and Codex's, queued (L5); the moves of lines
-out of `CLAUDE.md` and `AGENTS.md`, each a `rules change` on a rule/ branch (L4). Not checked: whether `resume`
+depth-pass judge skipping the folder files, the lens rounds (L7). Open: Codex's review, queued (L5); the moves of
+lines out of `CLAUDE.md` and `AGENTS.md`, each a `rules change` on a rule/ branch (L4). Not checked: whether `resume`
 lists `odd/tasks/CLAUDE.md` as a feature.
 
 ## Goal
@@ -91,3 +91,9 @@ Nothing: his words L1 and L2 approve the layout; a doubt goes to the lead as a n
   `LOADED  odd/tasks/CLAUDE.md  exit 0  transcript read  nested_memory: odd/tasks/CLAUDE.md`;
   `LOADED  bin/CLAUDE.md ...  nested_memory: bin/CLAUDE.md`; `LOADED  docs/CLAUDE.md ...  nested_memory: docs/CLAUDE.md`;
   `LOADED  evals/CLAUDE.md ...  nested_memory: evals/CLAUDE.md`; exit 0.
+- L7 JH 271, 2026-11-21: JH 268's saved patch and files applied on `claude/heuristic-margulis-a6bae7`; the docs row
+  asked for a RECORDS section and a README index row for `docs/CLAUDE.md`, added. Lenses readability and reliability
+  over `555e1922..af2cea23` found the budget let 50 lines pass (now 49, `8088289e`), the four paths written by hand in
+  three places (now `FOLDER_INSTRUCTIONS`, `8088289e`) and `odd/tasks/CLAUDE.md` cut at a Log heading by `rules check`
+  (read whole, `ce2c0511`, its test red before); the last two runs closed with 0 findings. Codex recorded unavailable
+  over `63ba29f8..ce2c0511` ("JH 267 holds the meter's room for 384's five reviews"), a debt until a review pays it.
