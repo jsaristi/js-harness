@@ -78,7 +78,6 @@ const CEILINGS = {
   'bin/remote.mjs': 1118,
   'scripts/practice-lib.mjs': 1174,
   'bin/resume.mjs': 1111,
-  'evals/suite.mjs': 1129,
 };
 
 /** What `text`, the module at `file`, imports from a command: each `bin/<name>.mjs` its static and literal dynamic
