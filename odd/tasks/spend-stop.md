@@ -28,8 +28,13 @@ each step (`spend-past-approved`)".
 - The guard is high risk (a guard that blocks work): a session with no line recorded is never blocked and reads no
   transcript; an unreadable transcript or line file lets the call run; each is proven by a test.
 - The secrets denies still run on a call the stop lets through.
-- The line is recorded only for the session id the host sets (`CLAUDE_CODE_SESSION_ID`), never a guessed one; once
-  recorded it can be lowered, never raised.
+- The line is recorded only for the session id the host sets (`CLAUDE_CODE_SESSION_ID`, or the `session_id` of the
+  host's hook payload), never a guessed one. Once recorded it is the session's for good: a second `--line` is refused,
+  above or below, and only the lead (a session whose app record carries a lead's title) moves it, with `--raise`
+  naming the session (T5).
+- The line file is not the session's to touch: the guard refuses a Bash, terminal, Write, Edit, MultiEdit or
+  NotebookEdit call that names the spend folder, for every session (T5). A path the shell computes (`$HOME`, a
+  variable, `eval`) is not read, as the background-launch guard does not read one either.
 
 ## Ask me before
 Nothing in this slice: the brief and his words cover it.
@@ -66,3 +71,20 @@ Nothing in this slice: the brief and his words cover it.
   written before this depth pass, by JH 285, about 19:41-19:55 local, as its own small task under the lead's
   `brief-spend-command.md`; they are carried into this branch by cherry-pick after this document. This depth pass
   covers the stop-at-the-line work only. PR 949 is superseded by this branch.
+- L4 JH 287 (2026-11-21, about 20:10-20:50 local) built T1, answered the lens findings (a Read of a `.md` passes, as
+  the host's Edit needs one first; a lone `js-harness loop stop` passes; the refusal names the characters that keep a
+  command from passing) and opened draft PR 950 at afbf3774. It read its spend at 8.44M and not again until after the
+  PR: 22.43M against its 20M line, the 15M state write missed. Its open items, assigned to JH 288 by the lead: these
+  T2-T7. The lead's decision for T6 (brief-spend-stop-close.md, item 5): past the line a gate commit, a push, `gh pr`,
+  a notify and a write of the session's own state or feature document still pass, so work is never stranded.
+- L5 Evidence for T4 (JH 288): in the lead's transcripts d6383aea and f5c3ee4d, a UserPromptSubmit hook's output sits
+  beside 23 of 195 and 16 of 62 cross-session messages and beside 19 of 265 and 13 of 78 typed prompts; the hook logs
+  only when it prints, so it runs on both kinds. A route that read only a session's first prompt would have missed JH
+  288, whose line came in a message after a held start. One literal, "Stop at <N> cache-read", read by one parser; the
+  lead writes it in each brief's message. `sessions start` is refused in this project (rule sessions-open-in-sidebar),
+  so its `--line` serves projects without the rule.
+- L6 Evidence for T7 (JH 288, no run spent): `<home>/.js-harness/channel/rules-seen/98d451db-a8bb-4b5a-971f-a696a47184e8.json`
+  was written at 20:49:24 local by `rules --hook`, which names its file by the payload's `session_id`
+  (`bin/lib/rules-reach.mjs`, `seenPath`), on this session's first prompt; `CLAUDE_CODE_SESSION_ID` in the same
+  session is 98d451db-a8bb-4b5a-971f-a696a47184e8, and `spend --self` read that transcript. The PreToolUse payload
+  carries the same `session_id` field by the hooks contract: inferred from the one payload, not seen in a PreToolUse one.

@@ -2074,6 +2074,11 @@ after it was made: nothing measured the spend against the figure while the work 
 - Seen: 2026-11-21 — relief file, line 3665; the lead's notes, 934-fixes-2-state.md, line 19 (JH 277's own) — JH 277
   closed at about 15M cache-read (an estimate: about 130 calls, not measured) against its 8M stop line, which it did
   not track; its branch was left unpushed
+- Seen: 2026-11-21 — the lead's notes, spend-stop-state.md, "Build" (JH 287's own) — JH 287, building the spend
+  stop itself, read its spend at 8.44M and not again until after its PR: 22.43M cache-read against its 20M line, the
+  15M state write missed. Fix: the lead's briefs name fixed points for the reading (after each commit, before each gate
+  or review, `js-harness spend --self`), and the stop line is recorded from the brief's "Stop at <N> cache-read" by a
+  hook and held by the guard (odd/tasks/spend-stop.md, T4-T6), once that is installed
 
 ### stack-update-moved-hooks
 A tool of the stack was updated on purpose without the hook count read after it, so a hook entry the update added was
