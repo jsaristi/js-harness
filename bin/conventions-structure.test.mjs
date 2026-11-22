@@ -75,7 +75,6 @@ const CEILINGS = {
   'evals/isolation-probe.mjs': 1681,
   'bin/lib/profiles-data.mjs': 1598,
   'bin/backup.mjs': 1299,
-  'bin/remote.mjs': 1118,
   'bin/resume.mjs': 1111,
 };
 
