@@ -188,11 +188,11 @@ answering a block, while a session waits) were missed with nothing to say so; on
 - [ ] F4 follow-up, owner: the lead — `stretch` lost time counts only failed gates
 - [ ] F5 follow-up, owner: the lead — the lead's unconsulted `note` answering a block (10:50Z): a `note` to a waiting session is not gated; S2 forces the consult at the next close, not before the note
 - [ ] F6 follow-up, owner: the lead — JH 199's and JH 204's long stretches of commits and verifier launches with no consult: those acts are not gated by his yes to question 282; widening the gated acts is his call
-- [ ] F8 follow-up, owner: the lead — the gate's report will count `waiting` notices sent before S1 was installed as acts with no decision (bin/advisor-gate.mjs, the reconciliation)
+- [ ] F8 follow-up, owner: the lead — the gate's report will count `waiting` notices sent before S1 was installed as acts with no decision (bin/advisor-gate.mjs, the reconciliation) (JH 292, 2026-11-22: on main the report named 32 acts with no decision since 2026-11-10, 8 of them `waiting` notices sent before the first `waiting` decision at 2026-11-15T19:41Z; `reconcile` now counts an act only from the first decision of its own kind, less the 120 s a decision may follow its act, and a kind never decided from the first decision as before. The new test failed on main; bin/advisor-gate.test.mjs, 37 of 37 pass; on the real log, 24 missing, none a `waiting` before S1, 714 decided as before)
 - [ ] F9 follow-up, owner: the lead — inherited false refusals: an `echo`, a shell comment or an unquoted heredoc commit body that names a gated notify reads as that act (JH 206's T8, odd/tasks/advisor-use.md); also a non-js-harness tool chained after a notice whose own `--kind` is a gated word (L11)
 - [ ] F10 follow-up, owner: the lead — README and the gate's usage text describe the stretch without the compaction break
 - [ ] F11 follow-up, owner: the lead — `notify --kind ready --pr` refuses while the pull request's head is not the sender's HEAD
-- [ ] F12 follow-up, owner: the lead — a work session whose `waiting` S1 refused, and which then sends a `note` or ends its turn, leaves no block S2 can see (L22, Limits; the double review's codex 1)
+- [ ] F12 follow-up, owner: the lead — a work session whose `waiting` S1 refused, and which then sends a `note` or ends its turn, leaves no block S2 can see (L22, Limits; the double review's codex 1). Not built (JH 292, 2026-11-22): it is a reading for S2, which is not built (T2 awaits the lead's approval); a refused `waiting` is already in the gate's log, `decisions.jsonl` with act `waiting`, for S2's design to read
 - [ ] F7 follow-up, owner: the lead — 8 stale `waiting` notices from sessions long gone stay newest in the channel
 
 ## Log

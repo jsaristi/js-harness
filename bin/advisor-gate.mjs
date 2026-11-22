@@ -418,8 +418,18 @@ const samePath = (a, b) => (process.platform === 'win32' ? path.resolve(a).toLow
 
 /** The gated acts of the transcripts under `projects` from `from` on, each matched to a decision: by the tool call's
  * id when the decision recorded one, else by transcript, act and a decision within 120 s after the call, each
- * decision used once. A sub-agent's end is no tool call and is left out. */
+ * decision used once. A sub-agent's end is no tool call and is left out. An act of a kind is counted only from the
+ * first decision of that kind, when its gate was installed (consistent-orders F8: `waiting` was gated at S1, and the
+ * waiting notices sent before were counted with no decision); a kind with no decision yet is counted from `from`. */
 function reconcile(projects, from, decisions) {
+  const sinceOf = new Map();
+  for (const d of decisions) if (typeof d.act === 'string' && !(sinceOf.get(d.act) <= d.at)) sinceOf.set(d.act, d.at);
+  // A decision is written up to 120 s after its act, as the match below allows: the act that met the first one is in.
+  const gatedSince = (act) => {
+    if (!sinceOf.has(act)) return from;
+    const installed = new Date(Date.parse(sinceOf.get(act)) - 120_000).toISOString();
+    return installed > from ? installed : from;
+  };
   const byToolUse = new Map(decisions.filter((d) => typeof d.toolUseId === 'string').map((d) => [d.toolUseId, d]));
   const loose = decisions.filter((d) => typeof d.toolUseId !== 'string' && typeof d.transcript === 'string');
   const used = new Set();
@@ -447,7 +457,7 @@ function reconcile(projects, from, decisions) {
         const act = block.name === 'Write'
           ? (created.has(block.id) && typeof block.input?.file_path === 'string' && TASK_DOCUMENT.test(path.resolve(cwd, block.input.file_path)) ? 'plan' : null)
           : gatedAct(block.name, block.input, cwd);
-        if (act === null) continue;
+        if (act === null || entry.timestamp < gatedSince(act)) continue;
         acts.found++;
         const limit = new Date(Date.parse(entry.timestamp) + 120_000).toISOString();
         const match = byToolUse.get(block.id) ?? loose.find((d) => !used.has(d) && samePath(d.transcript, file) && d.act === act && d.at >= entry.timestamp && d.at <= limit);
