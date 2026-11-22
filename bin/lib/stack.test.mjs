@@ -1884,3 +1884,28 @@ test('probeStack outside the interactive report spawns neither version probe of 
     fs.rmSync(machine.root, { recursive: true, force: true });
   }
 });
+
+test('a codex package whose binary does not run still shows a gap outside the interactive report: its login probe fails', () => {
+  // The reliability lens on 9bc7fa2..97598c9: the version read from files says installed even when the binary cannot
+  // run. The login probe still spawns codex, so the Codex row keeps its gap and doctor --hook its notice.
+  const machine = shimMachine();
+  try {
+    const row = probeTool(findTool('codex'), { ...machine, home: machine.root, interactive: false, spawn: commandSpawn({}) });
+    assert.equal(row.installed, 'ok');
+    assert.equal(row.codex, 'missing');
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+test('a POSIX shim of pnpm is read by the script path it names from $basedir', () => {
+  const machine = shimMachine();
+  try {
+    fs.writeFileSync(path.join(machine.env.PATH, 'codex'), '#!/bin/sh\nexec node  "$basedir/../global/v11/abc/node_modules/@openai/codex/bin/codex.js" "$@"\n');
+    const calls = [];
+    assert.deepEqual(findTool('codex').installed({ ...machine, platform: 'linux', spawn: commandSpawn({}, calls) }), { state: 'ok', version: '0.333.0' });
+    assert.deepEqual(calls, []);
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});

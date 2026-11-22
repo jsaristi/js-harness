@@ -132,3 +132,11 @@ process snapshot (718 ms). U2 is there.
   `codex --version`. Measure, `doctor --hook --home <empty folder> --cwd D:/js-harness`, three runs each: the
   installed 0.97.0 took 2,595, 2,662 and 2,654 ms; the branch took 1,961, 1,691 and 1,666 ms. A package that only
   sits beside the shim is not taken (`runs`), because it may not be what the shim runs.
+- L4. 2026-11-22, lenses on 9bc7fa2..97598c9: resilience found nothing; reliability gave two findings.
+  WARNING (stack.mjs:312-319): a codex or codegraph package whose binary cannot run now reads as installed in
+  `doctor --hook`. Answered, kept: for codex the login probe still spawns the binary, so its row keeps a gap and the
+  notice comes; a test pins it. codegraph runs on every prompt through its own hook and MCP server, so a broken one
+  shows there at once; the interactive report spawns both. SUGGESTION (stack.mjs:258-273): the `$basedir` form and
+  the POSIX link walk were untested. A test now covers `$basedir`. The link walk is the same code
+  `languageServerPackage` already ran, and a symbolic link needs a privilege on Windows, so it has no test. Both
+  tests are pins: they passed at once (132 of 132). Codex: skip recorded with `--unavailable` (weekly stop).
