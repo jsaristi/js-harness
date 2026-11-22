@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { openingsDir, readNotices, recordPath, writeOpening } from './lib/channel.mjs';
 import { readManifest, recordOptionalFile } from './lib/manifest.mjs';
@@ -9,6 +8,7 @@ import { hiddenLauncherCommand } from './lib/startup-file.mjs';
 import { remoteId } from './lib/remote.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { wakeMain } from './wake.mjs';
+import { tempDir } from './lib/temp-dir.testkit.mjs';
 
 const BOOT = '2026-10-15T04:52:00.000Z';
 const at = (hour, minute) => `2026-10-15T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00.000Z`;
@@ -24,7 +24,7 @@ const WAIT = 'js-harness wait --pr 162 --every 120 --for 60';
 
 /** A project folder that is no repository, its sessions under a Claude home, and a harness home for the channel. */
 function fixture() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-wake-'));
+  const root = tempDir('js-harness-wake-');
   const cwd = path.join(root, 'proj');
   const claudeHome = path.join(root, 'claude');
   const home = path.join(root, 'home');
@@ -135,7 +135,7 @@ test('wake with a --boot-time that is no time, or an unknown flag, exits 2 with 
 /** A Startup folder under a fake APPDATA, beside the fixture's home, and `wake` run with both. */
 function atLogin() {
   const { home, err } = fixture();
-  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-wake-login-'));
+  const cwd = tempDir('js-harness-wake-login-');
   const appData = path.join(cwd, 'AppData');
   const dir = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
   fs.mkdirSync(dir, { recursive: true });
@@ -214,7 +214,7 @@ test('a home and a Claude home set only in the shell are carried into the Startu
 
 test('wake --home records its notes under that home', async () => {
   const { main, home, slug } = fixture();
-  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-wake-home-'));
+  const other = tempDir('js-harness-wake-home-');
   assert.equal(await main('--notify', '--home', other), 0);
   assert.ok(readNotices(other, slug).notices.length > 0);
   assert.equal(readNotices(home, slug).notices.length, 0);

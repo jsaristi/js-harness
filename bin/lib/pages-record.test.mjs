@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { PAGE_SCHEMA, appendPage, lastPage, pagesFile, readPages } from './pages-record.mjs';
+import { tempDir } from './temp-dir.testkit.mjs';
 
-const scratch = () => fs.mkdtempSync(path.join(os.tmpdir(), 'pages-record-'));
+const scratch = () => tempDir('pages-record-');
 
 test('the page record sits beside the throughput days of the project, which uninstall keeps', () => {
   assert.equal(pagesFile('/h', 'D--p'), path.join('/h', '.js-harness', 'throughput', 'D--p', 'pages.jsonl'));

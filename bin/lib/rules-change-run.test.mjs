@@ -3,7 +3,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { rulesMain } from '../rules.mjs';
@@ -14,6 +13,7 @@ import { CLAUDE_HOME, CODEX_HOME } from './model-home.mjs';
 import { changesOf, parseSwitch } from './rules-switch.mjs';
 import { projectSlug } from './sessions.mjs';
 import { repoTemplate } from './git-fixture.testkit.mjs';
+import { tempDir } from './temp-dir.testkit.mjs';
 
 const NOW = Date.parse('2026-10-16T17:00:00.000Z');
 // The days the command writes are local days, so the fixtures read them by the clock of the host that runs them.
@@ -60,7 +60,7 @@ const templates = new Map();
 /** A repository with `list` in force on main and origin/main, `files` over the usual ones, on the branch `branch`,
  * and folders for the relief file and the transcripts: `{ dir, home, claude, slug }`. */
 function repository({ branch = 'rule/gate-wait', list = LIST, files = {} } = {}) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'rules-change-'));
+  const base = tempDir('rules-change-');
   const dir = path.join(base, 'repo');
   fs.mkdirSync(dir);
   const key = JSON.stringify({ branch, list, files });
@@ -335,7 +335,7 @@ test('a failed rename puts the three files back and appends nothing', async () =
 });
 
 test('in a project that installs the harness the change is refused: its list is edited by hand', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rules-change-project-'));
+  const dir = tempDir('rules-change-project-');
   git(dir, 'init', '-q', '-b', 'main');
   const err = [];
   const code = await rulesMain(['change', 'gate-wait'], { cwd: dir, stdin: () => '{}', stdout: () => {}, stderr: (line) => err.push(line) });
