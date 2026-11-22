@@ -11,6 +11,7 @@ import { TASK_KINDS } from './contract.mjs';
 import { ruleValue } from './rules.mjs';
 import { closesProblem } from './stretch-forecast.mjs';
 import { busySeconds, median } from './land-records.mjs';
+import { handedNumber, workNumber } from './stall.mjs';
 
 const HOUR_MS = 3_600_000;
 
@@ -340,3 +341,46 @@ export function stretchLost({ lands, codex, gates = [] }, { from, to, root }) {
     ...clippedTo(codex.filter((one) => one.outcome === 'failed'), from, to).map((one) => failure(one, why('Codex review failed', one.reason))),
   ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }
+
+/** The hours each work session sat on its own `waiting` notice inside `[from, to)` (JH 291; docs/ROADMAP.md, "A
+ * stretch's lost time counts only failed gates"): each wait, `{ at, began, seconds, what: 'waiting', who }`, runs from
+ * the notice to the first of the session's next notice (by its id or its number), its next gate, and the
+ * orchestrator's next notice to its number, else to `to`, cut to the span. Only a work session's wait counts: the
+ * lead's own notes are none. The waits of two sessions at once are counted each, as their items' real hours are. */
+export function waitSpells(notices, gates, { from, to }) {
+  const timed = notices.map((notice) => ({ notice, at: Date.parse(notice?.at ?? '') })).filter((one) => Number.isFinite(one.at)).sort((a, b) => a.at - b.at);
+  return timed.flatMap(({ notice, at }) => {
+    const number = notice.kind === 'waiting' ? workNumber(notice.from?.title) : null;
+    if (number === null) return [];
+    const id = isText(notice.from?.id) ? notice.from.id : null;
+    const same = (other) => (id !== null && other.from?.id === id) || workNumber(other.from?.title) === number || handedNumber(other) === number;
+    const next = timed.find((one) => one.at > at && same(one.notice));
+    const gated = gates.filter((gate) => id !== null && gate.session === id).map((gate) => Date.parse(gate.startedAt)).filter((start) => start > at);
+    const start = Math.max(at, from);
+    const end = Math.min(next?.at ?? Infinity, ...gated, to);
+    return end > start ? [{ at: new Date(start).toISOString(), began: notice.at, seconds: (end - start) / 1000, what: 'waiting', who: notice.from.title }] : [];
+  });
+}
+
+/** The idle spells the lead's IDLE line told inside `[from, to]` (`readIdleSpells`, bin/lib/lead-away.mjs), each
+ * `{ at, began, seconds, what: 'idle' }`: from its `since`, or `from` when later, to the first work after it (a work
+ * session's notice, a background start, or a gate of a session other than the lead's that told it), else to `to`. */
+export function idleSpells(spells, { notices, starts, gates }, { from, to }) {
+  return spells.flatMap((spell) => {
+    const told = Date.parse(spell.at ?? '');
+    const since = Date.parse(spell.since);
+    if (!(told >= from && told <= to)) return [];
+    const after = (ms) => Number.isFinite(ms) && ms > since;
+    const work = [
+      ...notices.filter((notice) => workNumber(notice?.from?.title) !== null).map((notice) => Date.parse(notice.at)),
+      ...starts.map((one) => Date.parse(one?.at ?? '')),
+      ...gates.filter((gate) => gate.session !== spell.session).map((gate) => Date.parse(gate.startedAt)),
+    ].filter(after);
+    const start = Math.max(since, from);
+    const end = Math.min(...work, to);
+    return end > start ? [{ at: new Date(start).toISOString(), began: spell.since, seconds: (end - start) / 1000, what: 'idle' }] : [];
+  });
+}
+
+/** The hours `spells` hold, summed: waits of two sessions at once are two sessions' hours. */
+export const spellHours = (spells) => round(spells.reduce((total, one) => total + one.seconds, 0) / 3600);

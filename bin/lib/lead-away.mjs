@@ -125,6 +125,30 @@ export function leadAbsence({ home, slug, session, readFile, writeFile, say }) {
  * the lead is told (odd/tasks/idle-stretch.md): a foreground command ends at ten minutes, so twice that is no turn. */
 export const IDLE_MS = 20 * 60_000;
 
+/** The record of every idle spell told, one JSON line `{ since, at, session }` each, beside the marks: a stretch's
+ * return counts each spell as lost time (`js-harness stretch`), from its `since` to the first work after it. */
+export const idleSpellsFile = (home, slug) => path.join(loopsFolder(home, slug), 'idle', 'spells.jsonl');
+
+/** The spells `idleSpellsFile` holds, oldest first: a line that is not one is left out; no file is none, and a file
+ * that is there and cannot be read throws. */
+export function readIdleSpells(home, slug, readFile) {
+  let text;
+  try {
+    text = readFile(idleSpellsFile(home, slug));
+  } catch (err) {
+    if (err?.code === 'ENOENT') return [];
+    throw new Error(`the idle spells (${idleSpellsFile(home, slug)}): ${err?.code ?? err?.message}`);
+  }
+  return text.split('\n').flatMap((line) => {
+    try {
+      const spell = JSON.parse(line);
+      return Number.isFinite(Date.parse(spell?.since)) ? [spell] : [];
+    } catch {
+      return [];
+    }
+  }).sort((a, b) => Date.parse(a.since) - Date.parse(b.since));
+}
+
 /** The word the `IDLE:` line opens with. */
 export const IDLE_MARKER = 'IDLE:';
 
@@ -139,6 +163,16 @@ export const IDLE_MARKER = 'IDLE:';
  * once through `say`, and nothing is told. `told()` is the spell told last (its `since`), and `tell(found, now)` marks
  * `found` told and gives its `IDLE:` line, under a mark beside the absence's. */
 export function stretchIdle({ home, slug, session, dirs, readdir, mtime, readFile, writeFile, say }) {
+  // The spells' record grows through the caller's own seams, so a test's world holds it as it holds the mark.
+  const appendFile = (file, text) => {
+    let before = '';
+    try {
+      before = readFile(file);
+    } catch (err) {
+      if (err?.code !== 'ENOENT') throw err;
+    }
+    writeFile(file, before + text);
+  };
   const markFile = path.join(loopsFolder(home, slug), 'idle', `${session}.json`);
   const own = `${session}.jsonl`;
   let failureSaid = false;
@@ -192,6 +226,12 @@ export function stretchIdle({ home, slug, session, dirs, readdir, mtime, readFil
         writeFile(markFile, `${JSON.stringify({ told: found.since, at: new Date(now).toISOString() })}\n`);
       } catch (err) {
         say(`the idle stretch could not keep its mark ${markFile}: ${err.code ?? err.message}`);
+      }
+      // After the mark, whose writing made the folder: the return counts the spell (`readIdleSpells`).
+      try {
+        appendFile(idleSpellsFile(home, slug), `${JSON.stringify({ since: found.since, at: new Date(now).toISOString(), session })}\n`);
+      } catch (err) {
+        say(`the idle stretch could not record its spell in ${idleSpellsFile(home, slug)}: ${err.code ?? err.message}`);
       }
       return `${IDLE_MARKER} no work session of this project has written since ${localHour(found.since)}, local time (${localZone(found.since)}) `
         + `(${Math.round(found.idleMs / 60_000)} minutes ago), and the stretch opened at ${localHour(found.stretch)} has ${(found.leftMs / 3_600_000).toFixed(1)} hours left: `

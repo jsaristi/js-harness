@@ -361,3 +361,21 @@ test('the open stretch reads as in course, goals not checked yet said so', () =>
   assert.match(html, /en curso/);
   assert.match(html, /sin revisar/);
 });
+
+// JH 291, second unit: the return names each kind of lost time with its hours, and lists the waits and idle spells.
+test('the return names the lost time of each kind, failed gates, sessions waiting and idle with nothing running, and lists them', () => {
+  const html = renderView({
+    ...view,
+    totals: { ...view.totals, lostHours: 7.66, failedHours: 0.16, waitingHours: 6, idleHours: 1.5 },
+    lost: {
+      waiting: [{ at: '2026-10-28T13:30:00.000Z', seconds: 10800, what: 'waiting', who: 'JH 199 · <uno>' }],
+      idle: [{ at: '2026-10-28T18:00:00.000Z', seconds: 5400, what: 'idle' }],
+    },
+  });
+  assert.match(html, /<span class="soft">Perdido<\/span><b>7\.66 h<\/b>/);
+  assert.match(html, /fallas 0\.16 h · esperando 6 h · sin nada corriendo 1\.5 h/);
+  assert.match(html, /<h3>Tiempo perdido sin fallas<\/h3><ul><li>JH 199 · &lt;uno&gt; · 180 min · esperando al orquestador o a ti<\/li><li>[^<]+ · 90 min · ninguna sesión corría<\/li><\/ul>/);
+  // A view recorded before the kinds were counted shows its one figure as it was.
+  assert.match(renderView(view), /Perdido en fallas/);
+  assert.doesNotMatch(renderView(view), /Tiempo perdido sin fallas/);
+});

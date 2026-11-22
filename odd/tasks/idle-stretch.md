@@ -60,6 +60,7 @@ Nothing: the brief and his words L2, L3 ask for it; a doubt goes to the lead as 
   quiet minutes of the gate log and channel, which the lead's own notes keep alive)
   spec 3: `node --test bin/lib/lead-away.test.mjs`: none, new behaviour
   spec 4: left out because help text and the skill line are prose the `check` gate's docs rows hold
+  spec 5: `node --test bin/stretch.test.mjs`: today a fixture shaped like 2026-11-15 measures 0.16 h lost (L6)
 - 4. Refutation: the cheapest test that could show the gap is not real is whether any existing ending fires with a
   stretch open and every session quiet: `AWAY` is silenced by `covers` (`bin/lib/return-report.mjs:336`), `STALLED`
   needs a session holding handed work (`bin/lib/stall.mjs:127-129`), and `STALL` reads the channel record, which the
@@ -76,11 +77,16 @@ Nothing: the brief and his words L2, L3 ask for it; a doubt goes to the lead as 
 2. The brief: "told once per idle spell (mark it like the AWAY mark)".
 3. The brief: "A work session's wait never ends on it."
 4. The brief: "Help text and the js-harness skill line where `wait` is described."
+5. The second brief: "`lostHoursOf` ... adds, beside failed gates, (a) hours a session sat on a `waiting` notice to the
+   lead or the owner within the stretch, and (b) the stretch's idle spells with no work session running, reusing your
+   idle reading (no second reader). The return page names each kind and its hours."
 
 ## Tasks
 - T1 spec 1, 2: the reading and its tests (build, commit 2)
 - T2 spec 1, 3: the wait and the heartbeat, their tests (build, commit 2)
 - T3 spec 4: help, skill line, SPEC requirement (docs, commit 2)
+- T4 spec 5: lost time counts sessions waiting and the idle spells told; the return names each kind (build, second unit,
+  branch claude/jh291-stretch-idle-lost, stacked on PR 954)
 
 ## Log
 - L1 2026-11-22, his words (transcript 0cdab702-72bd-48e7-8a8e-0c38d4aca9c9, line 10901, 05:22Z): "no veo que nada
@@ -90,3 +96,15 @@ Nothing: the brief and his words L2, L3 ask for it; a doubt goes to the lead as 
 - L3 2026-11-22, the lead's brief (JH ORQ): build the smallest form, test first, lenses risk and reliability, no Codex.
 - L4 2026-11-22, the advisor before the first test: read "ran" from writes and fail toward telling; leave out the
   lead's own transcript, notes and gates; an unreadable listing tells nothing; test a stretch past its return.
+- L5 2026-11-22, his words (transcript 0cdab702-72bd-48e7-8a8e-0c38d4aca9c9, line 11291, 05:35Z): "si pero te dije que
+  iba a estar 8 a 10 horas por afuera la idea es que ghagas todo el trabajo"; the lead's second brief: the roadmap row "A stretch's lost time counts only failed gates" (docs/ROADMAP.md).
+- L6 2026-11-22, proof before the change: a fixture shaped like 2026-11-15 (a failed gate of 0.16 h, JH 199 and JH 207
+  waiting 3 h each, an idle spell of 1.5 h) measured `lostHours` 0.16 at origin/claude/jh291-idle-stretch
+  (`node --test --test-name-pattern="lost time counts" bin/stretch.test.mjs`: actual [undefined, undefined, undefined,
+  0.16]); after it, 7.66 = failed 0.16 + waiting 6 + idle 1.5.
+- L7 2026-11-22, decisions of the second unit: waits are summed per session (session-hours, as items' real hours are),
+  idle spells are wall hours, and the total is their sum: a session waiting while nothing ran counts in both, each its
+  own loss. Idle spells come from a record the IDLE line appends (`idle/spells.jsonl` under the loop records), since a
+  file's write time cannot be read back for a past hour; a spell counts only when told inside the stretch, and runs to
+  the first work after it (a work session's notice, a background start, another session's gate). A view recorded
+  before keeps its one figure under its old name.

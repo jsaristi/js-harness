@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 
-import { IDLE_MARKER, IDLE_MS, stretchIdle } from './lead-away.mjs';
+import { IDLE_MARKER, IDLE_MS, idleSpellsFile, readIdleSpells, stretchIdle } from './lead-away.mjs';
 import { gateLogDir } from './gate-log.mjs';
 import { loopsFolder } from './loops.mjs';
 import { stretchRecordsIn } from './return-report.mjs';
@@ -129,4 +129,19 @@ test("a stretch record gives each stretch's return: its opening plus its hours, 
   const records = stretchRecordsIn(opened(T0, 4) + `${JSON.stringify({ schema: STRETCH_SCHEMA, event: 'open', id: 'x', at: iso(T0), plan: {} })}\n`);
   assert.equal(records[0].returnAt, T0 + 4 * HOUR);
   assert.equal(records[1].returnAt, null);
+});
+
+test('each spell told is added to the spells record, which a stretch\'s return reads; a torn line is left out', () => {
+  const work = path.join(DIR, 'work-1.jsonl');
+  const { state, reading } = world({ files: { [work]: T0 - 30 * MIN }, records: { [STRETCHES]: opened(T0 - 3 * HOUR) } });
+  reading.tell(reading.at(T0), T0);
+  state.files[work] = T0 + MIN;
+  reading.tell(reading.at(T0 + 30 * MIN), T0 + 30 * MIN);
+  state.records[idleSpellsFile(HOME, SLUG)] += '{"since": torn\n';
+  assert.deepEqual(readIdleSpells(HOME, SLUG, (file) => state.records[file]), [
+    { since: iso(T0 - 30 * MIN), at: iso(T0), session: LEAD },
+    { since: iso(T0 + MIN), at: iso(T0 + 30 * MIN), session: LEAD },
+  ]);
+  assert.deepEqual(readIdleSpells(HOME, 'no-such-project', () => { throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' }); }), []);
+  assert.throws(() => readIdleSpells(HOME, SLUG, () => { throw Object.assign(new Error('EACCES'), { code: 'EACCES' }); }), /the idle spells .*EACCES/);
 });

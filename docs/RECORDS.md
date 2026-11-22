@@ -727,6 +727,21 @@ The absence of the user the lead was last told of with an `AWAY:` line, by the h
 - `at`: ISO time the line was told.
 - `heldSince`: ISO time of the question call that held the session when the absence started, or `null`.
 
+### `idle/<session>.json`
+
+The idle spell the lead was last told of with an `IDLE:` line: a stretch open with hours left and no work session written for 20 minutes. The heartbeat and the lead's `wait --notice-to orchestrator` both tell it and keep this one mark (`bin/lib/lead-away.mjs` `stretchIdle`), so a spell is told once and a relaunch of either is not woken by it again. Written whole on each `IDLE:`; a missing or unreadable file reads as none told.
+
+- `told`: ISO time of the newest write the spell runs from (its `since`).
+- `at`: ISO time the line was told.
+
+### `idle/spells.jsonl`
+
+Every idle spell told, one JSON line each, appended after the mark (`bin/lib/lead-away.mjs` `stretchIdle`), so a stretch's return counts it as lost time from its `since` to the first work after it (`bin/lib/lead-away.mjs` `readIdleSpells`, `bin/lib/stretch.mjs` `idleSpells`). A line that does not parse, or has no `since`, is left out.
+
+- `since`: ISO time of the newest write the spell runs from.
+- `at`: ISO time the line was told.
+- `session`: string, the lead's session id that told it.
+
 ## Gates
 
 The machine's record of every gate and of the lock that serializes them: one JSON line per gate event in a rotating log, the lock's holder and waiting files, and the gate-first tickets. `bin/lib/gate-log.mjs` `gateRecord` builds the log lines and `appendGateEvent` appends them; `bin/lib/gate-lock.mjs` `takeGateLock` writes the holder file; `bin/lib/gate-first.mjs` `issueTicket` writes a ticket and `logTicket` its log lines.
