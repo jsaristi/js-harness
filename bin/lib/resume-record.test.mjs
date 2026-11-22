@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ago, cutTo, waitingLinesOf } from './resume-record.mjs';
+import { ago, cutTo, waitingLinesOf, WAITING_STALE_HOURS } from './resume-record.mjs';
 
 // What the resume after a compaction reads from the channel's record beside the questions (odd/tasks/refresh-open-apply.md,
 // T3): on 2026-10-31 JH 114 sent `waiting` at 03:06Z, the lead was compacted minutes later, and its resume named the open
@@ -23,6 +23,29 @@ test('each work session whose newest notice is waiting is listed with its text, 
     '  JH 120 "JH 120 · reply"  waiting since 10m ago: his answer to question 142',
     'Answer each, or start what it waits for, before other work; the board shows each one: js-harness sessions',
   ]);
+});
+
+// consistent-orders F7: on 2026-11-22 the lead's resume listed JH 101 (22 days), JH 193 (8 days) and JH 213 (4 days) as
+// waiting on it, sessions long gone. The record keeps them; the list names them on one line after the live ones.
+test('a waiting notice older than the bound leaves the live list for one line that names it, and the live ones keep theirs', () => {
+  const day = 24 * 60;
+  const lines = waitingLinesOf(record([
+    notice('JH 101 · move', 'waiting', 'commit 386099c unpushed', 22 * day),
+    notice('JH 213 · senior', 'waiting', 'done and stops', 4 * day),
+    notice('JH 290 · live', 'waiting', 'the lead\'s ruling on T2', 30),
+  ]), NOW);
+  assert.deepEqual(lines, [
+    'Work sessions whose newest notice in the record is waiting (1), each waiting on this session:',
+    '  JH 290 "JH 290 · live"  waiting since 30m ago: the lead\'s ruling on T2',
+    'Answer each, or start what it waits for, before other work; the board shows each one: js-harness sessions',
+    `Older than ${WAITING_STALE_HOURS} h, most likely gone, still waiting in the record (2): JH 101 (22d ago), JH 213 (4d ago)`,
+  ]);
+  // Only stale ones: the line alone, so a waiter is never dropped from the resume.
+  assert.deepEqual(waitingLinesOf(record([notice('JH 193 · eval', 'waiting', 'batch 2', 8 * day)]), NOW), [
+    `Older than ${WAITING_STALE_HOURS} h, most likely gone, still waiting in the record (1): JH 193 (8d ago)`,
+  ]);
+  // A notice just under the bound is live.
+  assert.equal(waitingLinesOf(record([notice('JH 5 · edge', 'waiting', 'x', WAITING_STALE_HOURS * 60 - 1)]), NOW).length, 3);
 });
 
 test('a session whose newest notice is not waiting is not listed, whatever it sent before, and none listed gives no lines', () => {

@@ -9,6 +9,12 @@ import { roleOfTitle } from './sessions.mjs';
 // How many characters of a waiting notice's text a line prints.
 const WAITING_LISTED = 300;
 
+/** How old a session's newest `waiting` may be and still be listed as one waiting on the lead (consistent-orders F7): on
+ * 2026-11-22 the list held JH 101, JH 193 and JH 213, waiting 22, 8 and 4 days, sessions long gone. A day, so a session
+ * left waiting through the owner's night stays live; the depth pass proposed 6 h. Older ones are named on one line, never
+ * dropped: this list exists because a waiter the resume left out sat 50 minutes. */
+export const WAITING_STALE_HOURS = 24;
+
 /** `12m ago`, `5h ago`, `3d ago`: how long before `now` the time `ms` was. */
 export function ago(ms, now) {
   const minutes = Math.max(0, Math.round((now - ms) / 60000));
@@ -30,7 +36,8 @@ export const cutTo = (text, max) => {
  * title names (`roleOfTitle`), as the lead addresses it; its newest notice is the newest of any kind, by time, then by
  * the order written. That is not the board's last state, which counts only opened, waiting, closed and relieved: a note
  * or a ready sent after a `waiting` ends the wait here, since the session spoke again, and not on the board. A notice
- * to a work session is not one to the lead, and is not counted. */
+ * to a work session is not one to the lead, and is not counted. A `waiting` older than `WAITING_STALE_HOURS` is not
+ * listed with the live ones: one last line names each such session and its age. */
 export function waitingLinesOf(record, now) {
   if (record.unavailable !== undefined) return [];
   const newest = new Map();
@@ -42,11 +49,15 @@ export function waitingLinesOf(record, now) {
     const kept = newest.get(name);
     if (kept === undefined || !(Date.parse(notice.at) < Date.parse(kept.at))) newest.set(name, notice);
   }
-  const waiting = [...newest].filter(([, notice]) => notice.kind === 'waiting').sort(([, one], [, other]) => Date.parse(one.at) - Date.parse(other.at));
-  if (waiting.length === 0) return [];
-  return [
+  const all = [...newest].filter(([, notice]) => notice.kind === 'waiting').sort(([, one], [, other]) => Date.parse(one.at) - Date.parse(other.at));
+  const stale = ([, notice]) => now - Date.parse(notice.at) >= WAITING_STALE_HOURS * 3600000;
+  const waiting = all.filter((entry) => !stale(entry));
+  const gone = all.filter(stale);
+  const live = waiting.length === 0 ? [] : [
     `Work sessions whose newest notice in the record is waiting (${waiting.length}), each waiting on this session:`,
     ...waiting.map(([name, notice]) => `  ${name} ${JSON.stringify(notice.from.title)}  waiting since ${ago(Date.parse(notice.at), now)}: ${cutTo(notice.text.replace(/\s+/g, ' ').trim(), WAITING_LISTED)}`),
     'Answer each, or start what it waits for, before other work; the board shows each one: js-harness sessions',
   ];
+  if (gone.length === 0) return live;
+  return [...live, `Older than ${WAITING_STALE_HOURS} h, most likely gone, still waiting in the record (${gone.length}): ${gone.map(([name, notice]) => `${name} (${ago(Date.parse(notice.at), now)})`).join(', ')}`];
 }
