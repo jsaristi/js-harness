@@ -20,34 +20,48 @@ const LOCK_DEPTH = 4;
 
 const hoursOf = (ms) => Math.round(ms / HOUR_MS * 10) / 10;
 
-/** The scratch folders in `tmpdir` whose newest content is older than `cutoff` (ms): `{ path, hours }`. */
-function oldFolders(tmpdir, at, cutoff) {
+/** The scratch folders in `tmpdir` whose newest content is older than `cutoff` (ms): `{ path, hours }`. One whose age
+ * cannot be read (`measureTree` counts what it cannot read as nothing) is told to `unread`. */
+function oldFolders(tmpdir, at, cutoff, unread) {
   return fs.readdirSync(tmpdir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && SCRATCH_PREFIXES.some((prefix) => entry.name.startsWith(prefix)))
     .map((entry) => {
       const full = path.join(tmpdir, entry.name);
       return { path: full, newest: measureTree(full).newest };
     })
-    .filter((folder) => folder.newest > 0 && folder.newest < cutoff)
+    .filter((folder) => {
+      if (folder.newest > 0) return folder.newest < cutoff;
+      unread(`temp folder ${folder.path}: its age cannot be read`);
+      return false;
+    })
     .map((folder) => ({ path: folder.path, hours: hoursOf(at - folder.newest) }))
     .sort((a, b) => a.path.localeCompare(b.path));
 }
 
-/** The locks under `root` older than `cutoff` (ms): `{ path, hours }`. A lock folder is not looked into. */
-function oldLocks(root, at, cutoff) {
+/** The locks under `root` older than `cutoff` (ms): `{ path, hours }`. A lock folder is not looked into; a folder
+ * that cannot be read is told to `unread`, and a lock gone between the listing and the look was released. */
+function oldLocks(root, at, cutoff, unread) {
   const found = [];
   const walk = (dir, depth) => {
     let entries;
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch (err) {
-      if (dir === root && err.code !== 'ENOENT') throw err;
+      if (err.code === 'ENOENT') return;
+      if (dir === root) throw err;
+      unread(`locks under ${dir}: ${err.code ?? err.message}`);
       return;
     }
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.name === 'lock' || entry.name.endsWith('.lock')) {
-        const ms = fs.lstatSync(full).mtimeMs;
+        let ms;
+        try {
+          ms = fs.lstatSync(full).mtimeMs;
+        } catch (err) {
+          if (err.code !== 'ENOENT') unread(`lock ${full}: ${err.code ?? err.message}`);
+          continue;
+        }
         if (ms < cutoff) found.push({ path: full, hours: hoursOf(at - ms) });
       } else if (entry.isDirectory() && depth < LOCK_DEPTH) {
         walk(full, depth + 1);
@@ -73,8 +87,9 @@ export function leftoverAge({ home, tmpdir, now, listProcesses }) {
       return [];
     }
   };
-  const folders = read('temp folders', () => oldFolders(tmpdir, at, cutoff));
-  const locks = read('locks', () => oldLocks(path.join(home, '.js-harness'), at, cutoff));
+  const tell = (line) => unread.push(line);
+  const folders = read('temp folders', () => oldFolders(tmpdir, at, cutoff, tell));
+  const locks = read('locks', () => oldLocks(path.join(home, '.js-harness'), at, cutoff, tell));
   const processes = read('processes', () => listProcesses()).flatMap((process) => {
     const started = typeof process.createdAt === 'number' ? process.createdAt : Date.parse(process.createdAt ?? '');
     if (!Number.isFinite(started)) {

@@ -111,3 +111,34 @@ test('leftoverAge reads every age from one snapshot time and names a source it c
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('leftoverAge names a folder under the harness home or a scratch folder it cannot read, and keeps the locks it found when one vanishes', () => {
+  const { dir, home, tmpdir } = scratch();
+  const realReaddir = fs.readdirSync;
+  const realLstat = fs.lstatSync;
+  const hidden = path.join(home, '.js-harness', 'hidden');
+  const gone = path.join(home, '.js-harness', 'b.lock');
+  try {
+    made(hidden, 1);
+    made(path.join(home, '.js-harness', 'a.lock'), 30, { folder: false });
+    made(gone, 30, { folder: false });
+    made(path.join(tmpdir, 'js-harness-unreadable'), 30);
+    fs.readdirSync = (target, ...rest) => {
+      if (target === hidden) throw Object.assign(new Error('EACCES'), { code: 'EACCES' });
+      return realReaddir(target, ...rest);
+    };
+    fs.lstatSync = (target, ...rest) => {
+      if (target === gone) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      if (target === path.join(tmpdir, 'js-harness-unreadable')) throw Object.assign(new Error('EPERM'), { code: 'EPERM' });
+      return realLstat(target, ...rest);
+    };
+    const found = leftoverAge({ home, tmpdir, now: () => NOW, listProcesses: () => [] });
+    assert.deepEqual(found.locks, [{ path: path.join(home, '.js-harness', 'a.lock'), hours: 30 }]);
+    assert.deepEqual(found.folders, []);
+    assert.deepEqual(found.unread, [`temp folder ${path.join(tmpdir, 'js-harness-unreadable')}: its age cannot be read`, `locks under ${hidden}: EACCES`]);
+  } finally {
+    fs.readdirSync = realReaddir;
+    fs.lstatSync = realLstat;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
