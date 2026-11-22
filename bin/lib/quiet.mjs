@@ -84,8 +84,11 @@ export function workOf(commandLine) {
   let script = args[0];
   let rest = args.slice(1);
   if (nameOf(script) === 'node') {
+    // node's own flags are those before the first script file; a flag's value can be a separate word (`--import tsx`),
+    // so the script is told by its extension, not by being the first word with no dash.
+    const file = rest.findIndex((argument) => !argument.startsWith('-') && /\.[cm]?[jt]s$/i.test(argument));
+    if ((file === -1 ? rest : rest.slice(0, file)).includes('--test')) return { kind: 'tests', script: file === -1 ? null : rest[file] };
     const at = rest.findIndex((argument) => !argument.startsWith('-'));
-    if ((at === -1 ? rest : rest.slice(0, at)).includes('--test')) return { kind: 'tests', script: at === -1 ? null : rest[at] };
     if (at === -1) return null;
     script = rest[at];
     rest = rest.slice(at + 1);
