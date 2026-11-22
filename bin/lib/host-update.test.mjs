@@ -130,7 +130,7 @@ test('an update since the reviewed versions is stale until reviewed: its fix nam
     YES_STEP,
     'report to the user a full summary in everyday words: what improved, what changed and what was fixed; for each, how it helps or hurts the harness and the way the user works; and what the harness should change to work better, or must change; a version the changelog has no entry for is reported as having none',
     'write that account to docs/host-updates/claude-desktop-2.42304.0.md in the project that keeps the host reviews: the line "Code tab CLI: 2.1.299", a table of Change, Decision (adopt, adapt or ignore) and Reason, one row a change the update brings, and a "## Sources" list of what was read, the changelogs above among it, each with its span "(<from> to <to>)"',
-    'then record the review: js-harness doctor --host-reviewed, which refuses while that file lacks any of it',
+    'then, once that file is on the main branch, pull it into the checkout doctor runs in (git pull), and record the review: js-harness doctor --host-reviewed, which reads the file there and refuses while it lacks any of it',
   ]);
 });
 
