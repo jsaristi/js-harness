@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { GATE_WSL_ENV, SYNCED_MARK, TIMED_OUT_MARK, gateWslPath, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand } from './gate-wsl.mjs';
+import { GATE_WSL_ENV, NODE_MARK, nodeOf, SYNCED_MARK, TIMED_OUT_MARK, gateWslPath, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand } from './gate-wsl.mjs';
 
 const tempHome = () => fs.mkdtempSync(path.join(os.tmpdir(), 'gate-wsl-home-'));
 const writeSwitch = (home, text) => {
@@ -61,6 +61,16 @@ test('the command runs the runner by its mounted path, and the bound inside is s
   assert.equal(wslCommand('Ubuntu', toWslPath('C:\\Temp\\h\\gate-wsl.sh')), 'wsl.exe -d Ubuntu --exec bash "/mnt/c/Temp/h/gate-wsl.sh"');
   assert.equal(innerSeconds(20 * 60 * 1000), 1185);
   assert.equal(innerSeconds(1000), 1);
+});
+
+// gate-pass-on-other-node (docs/FAILURES.md): a pass of node 26 rested on sensors that ran on WSL's node 24, and
+// nothing in the pass said which. The runner prints the version of the node it runs, and the gate reads it.
+test('the runner prints the node it runs, and the version is read from its mark', () => {
+  const script = runnerScript({ source: '/mnt/d/p', mirror: 'p', node: '/home/u/.local/node/bin', command: 'npm test', held: false, heldVariable: 'H', seconds: 60 });
+  assert.match(script, new RegExp(`echo "${NODE_MARK}\\$\\('/home/u/\\.local/node/bin'/node -v 2>/dev/null\\)" >&2`));
+  assert.equal(nodeOf(`noise\n${NODE_MARK}v24.15.0\nmore`), 'v24.15.0');
+  assert.equal(nodeOf(`${NODE_MARK}\n`), null, 'a node that said nothing');
+  assert.equal(nodeOf('no mark'), null);
 });
 
 test('the sync is read from the mark, and no mark is a mirror never reached', () => {

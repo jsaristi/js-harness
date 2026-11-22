@@ -15,6 +15,8 @@ export const GATE_WSL_ENV = 'JS_HARNESS_GATE_WSL';
  * command never reached the mirror (no distro, no `wsl.exe`, a sync that failed), and the gate then
  * runs that sensor on Windows: a gate that skipped its suite would be worse than a slow one. */
 export const SYNCED_MARK = 'js-harness-gate-wsl: synced in ';
+// The line that names the node the sensor runs under, so a pass says which (gate-pass-on-other-node, docs/FAILURES.md).
+export const NODE_MARK = 'js-harness-gate-wsl: node ';
 
 /** What the runner prints when it stopped the command at its bound: `timeout` exits 124 then, and so may a
  * command by itself, so the runner tells them apart by the time the command took. The gate reads it as
@@ -123,6 +125,7 @@ export function runnerScript({ source, mirror, node, command, held, heldVariable
     'mkdir -p "$mirror" || exit 97',
     `${sync} --checksum "$source/" "$mirror/" || exit 97`,
     `echo "${SYNCED_MARK}$(( ($(date +%s%N) - started) / 1000000 )) ms" >&2`,
+    `echo "${NODE_MARK}$(${word(node)}/node -v 2>/dev/null)" >&2`,
     'home=$(mktemp -d) || exit 1',
     'cd "$mirror" || exit 1',
     'ran=$(date +%s%N)',
@@ -161,6 +164,15 @@ export function wslNodeVersion(distro, node, { spawnSync = childProcess.spawnSyn
   const asked = spawnSync('wsl.exe', ['-d', distro, '--exec', `${node.replace(/\/+$/, '')}/node`, '-v'], { encoding: 'utf8', timeout: timeoutMs, windowsHide: true });
   const said = /^v\d+\.\d+\.\d+\S*$/.exec(String(asked.stdout ?? '').trim());
   return asked.status === 0 && said ? said[0] : null;
+}
+
+/** The version of the node the runner ran under, such as `v24.15.0`, from its mark, or `null` where it printed none
+ * or the node said nothing. */
+export function nodeOf(output) {
+  const at = output.indexOf(NODE_MARK);
+  if (at === -1) return null;
+  const said = /^v\d+\.\d+\.\d+\S*/.exec(output.slice(at + NODE_MARK.length));
+  return said ? said[0] : null;
 }
 
 /** The milliseconds of the sync the runner printed, or `null` where it printed no mark: the sensor never
