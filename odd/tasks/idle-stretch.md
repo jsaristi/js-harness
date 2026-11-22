@@ -87,6 +87,7 @@ Nothing: the brief and his words L2, L3 ask for it; a doubt goes to the lead as 
 - T3 spec 4: help, skill line, SPEC requirement (docs, commit 2)
 - T4 spec 5: lost time counts sessions waiting and the idle spells told; the return names each kind (build, second unit,
   branch claude/jh291-stretch-idle-lost, stacked on PR 954)
+- T5 spec 1: a running sub-agent's transcript counts as work (build, third unit, branch claude/jh291-false-idle)
 
 ## Log
 - L1 2026-11-22, his words (transcript 0cdab702-72bd-48e7-8a8e-0c38d4aca9c9, line 10901, 05:22Z): "no veo que nada
@@ -114,3 +115,7 @@ Nothing: the brief and his words L2, L3 ask for it; a doubt goes to the lead as 
   suggestion left open, answered here: the return lists each idle spell with its full minutes while the idle total
   leaves out what a wait covered, so the list can add up to more than the tile. Open for the next unit on this page:
   say on the tile that the idle total is beside the waits, or list each spell's uncovered minutes.
+- L10 2026-11-22, third unit (the lead's brief-false-idle): the host writes a sub-agent's transcript under
+  `<project folder>/<session id>/subagents/agent-*.jsonl` (seen on disk: 121 session folders, 76 with sub-agents), so
+  the IDLE reading now counts those writes, the lead's own left out; the gap named in Constraints is closed. L9 stays
+  open: it is in the return page, not in these files.

@@ -36,7 +36,8 @@ function world({ files = {}, records = {}, dirs = [DIR, TREE_DIR], unreadable = 
     dirs: () => dirs,
     readdir: (dir) => {
       if (unreadable[dir]) throw Object.assign(new Error(`${unreadable[dir]}: ${dir}`), { code: unreadable[dir] });
-      const names = Object.keys(state.files).filter((file) => path.dirname(file) === dir).map((file) => path.basename(file));
+      // A folder lists its files and the folders that hold files further down, as a real listing does.
+      const names = [...new Set(Object.keys(state.files).map((file) => path.relative(dir, file)).filter((rel) => rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel)).map((rel) => rel.split(path.sep)[0]))];
       if (names.length === 0) throw enoent(dir);
       return names;
     },
@@ -144,4 +145,24 @@ test('each spell told is added to the spells record, which a stretch\'s return r
   ]);
   assert.deepEqual(readIdleSpells(HOME, 'no-such-project', () => { throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' }); }), []);
   assert.throws(() => readIdleSpells(HOME, SLUG, () => { throw Object.assign(new Error('EACCES'), { code: 'EACCES' }); }), /the idle spells .*EACCES/);
+});
+
+// JH 291, third unit: a foreground sub-agent writes only its own transcript, under its session's folder
+// (`<project folder>/<session id>/subagents/agent-*.jsonl`, as the host lays it out), so its writes are work too.
+test("a sub-agent's transcript written under IDLE_MS ago keeps the line silent; the lead's own sub-agent does not", () => {
+  const stretch = { [STRETCHES]: opened(T0 - 3 * HOUR) };
+  const parent = { [path.join(DIR, 'work-1.jsonl')]: T0 - HOUR };
+  const working = { ...parent, [path.join(DIR, 'work-1', 'subagents', 'agent-a1.jsonl')]: T0 - 5 * MIN };
+  assert.equal(world({ files: working, records: stretch, dirs: [DIR] }).reading.at(T0), null);
+  const own = { ...parent, [path.join(DIR, LEAD, 'subagents', 'agent-a2.jsonl')]: T0 - 5 * MIN };
+  assert.equal(world({ files: own, records: stretch, dirs: [DIR] }).reading.at(T0)?.since, iso(T0 - HOUR));
+  // A session folder with no sub-agents is none.
+  assert.equal(world({ files: { ...parent, [path.join(DIR, 'work-2', 'custom-title.json')]: T0 - MIN }, records: stretch, dirs: [DIR] }).reading.at(T0)?.since, iso(T0 - HOUR));
+});
+
+test('a file of the project folder with no dot in its name holds no sub-agents: its ENOTDIR is none, not unknown', () => {
+  const files = { [path.join(DIR, 'work-1.jsonl')]: T0 - HOUR, [path.join(DIR, 'notes')]: T0 - MIN };
+  const { state, reading } = world({ files, records: { [STRETCHES]: opened(T0 - 3 * HOUR) }, dirs: [DIR], unreadable: { [path.join(DIR, 'notes', 'subagents')]: 'ENOTDIR' } });
+  assert.equal(reading.at(T0)?.since, iso(T0 - HOUR));
+  assert.deepEqual(state.said, []);
 });
