@@ -24,7 +24,7 @@ import { gitRead, headBefore, momentAt, pullRequestsOf, readRef } from './lib/re
 import { compareMaps, comparePlans, planOf } from './lib/report-pages.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
-import { RECORD_SCHEMA, corrections, eventsOf, gateRuns, idleHoursBeside, idleSpells, itemMeasure, laneOut, lostHoursOf, openEvent, parsePlan, scaled, sessionTrail, spellHours, stretchFile, stretchLost, waitSpells } from './lib/stretch.mjs';
+import { RECORD_SCHEMA, corrections, eventsOf, gateRuns, idleBeside, idleHoursBeside, idleSpells, itemMeasure, laneOut, lostHoursOf, openEvent, parsePlan, scaled, sessionTrail, spellHours, stretchFile, stretchLost, waitSpells } from './lib/stretch.mjs';
 import { readIdleSpells } from './lib/lead-away.mjs';
 import { forecastNow, forecastOf, resolveClose } from './lib/stretch-forecast.mjs';
 import { goalShares, outsidePlan, timelineOf, workShare } from './lib/stretch-moments.mjs';
@@ -336,7 +336,7 @@ function measure(ctx, stretch, now) {
   const failed = round(sum(items.map((item) => item.lostHours)) + lostHoursOf(failures));
   // Beside what failed, the hours sessions sat waiting and the spells with nothing running (JH 291): each kind named.
   const waiting = waitSpells(records.notices, records.gates, { from: openedAt, to: end });
-  const idle = idleSpells(records.spells, records, { from: openedAt, to: end });
+  const idle = idleBeside(idleSpells(records.spells, records, { from: openedAt, to: end }), waiting);
   const lost = round(failed + spellHours(waiting) + idleHoursBeside(idle, waiting));
   return {
     id: stretch.open.id,
