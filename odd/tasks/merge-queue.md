@@ -83,8 +83,8 @@ reopen-tested-old-base.
 - [x] T3 (S8): bisection on a red local suite: the shortest red prefix of the candidate's merges names the pull request; it leaves, the rest are merged again on the green prefix and landed. Route: inline. RED then GREEN: "a candidate red on this machine is bisected..." (suites seen: red, green, green); 11 of 11. A candidate green here and red on CircleCI is not bisected: it is reported, and main is not pushed.
 - [x] T4 (S9): the pre-push hook refuses a push or delete of main unless `JS_HARNESS_MERGE_QUEUE=1`, which `--land` sets on its push of main. Route: inline. RED: two of the three new tests of bin/pre-push-hook.test.mjs; GREEN 10 of 10. High risk (a guard): independent verifier pending. Its limit, L6.
 - [x] T5: help and README say what `--land` does, its bisection and the hook's refusal (L12). Route: inline. The keeper script is the orchestrator's to retire, once the first real `--land` has run.
-- [ ] T6 (kind: build) (S11) the land holds a pull request with an open step of his. Route: inline, test first.
-- [ ] T7 (kind: build) (S12) `--reopen <n>` waits for the merge ref on the base. Route: inline, test first.
+- [x] T6 (kind: build) (S11) the land holds a pull request with an open step of his. Route: inline, test first. RED 2 of 3 on main; GREEN 3 of 3.
+- [x] T7 (kind: build) (S12) `--reopen <n>` waits for the merge ref on the base. Route: inline, test first. RED 3 of 3; GREEN 3 of 3.
 
 ## Log
 - L1. 2026-10-14 16:26, the orchestrator's order to JH 10 (cross-session message): "Yours is step 3 ... Order: merge-ready first as planned, then the queue, then the conflict-hunk review. Specs in your document with his words from the file, test first." His words in S1 and S2 were read with `js-harness sessions --quote`.

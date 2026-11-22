@@ -105,8 +105,8 @@ export function filledContract(template) {
     .replace('- Out: <areas it must not touch, and why>', '- Out: anything else, since the walk needs one unit')
     .replace('- <real constraint> — because <reason>', '- No dependency — because the project has none')
     .replace('<the few decisions that are mine: spend, irreversible, product choices>', 'Nothing.')
-    .replace('(kind: design | build | verify | docs)', '(kind: build)')
-    .replace('<the first task; its kind sets its effort and sub-agent models>', 'greet and its test');
+    .replace('(kind: design | build | verify | docs | his)', '(kind: build)')
+    .replace('<the first task; his is a step only he can do, which holds the land>', 'greet and its test');
 }
 
 /** Engram's own variables for the walk: its port and its data folder in the scratch home. No ENGRAM_URL, since

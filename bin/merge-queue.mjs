@@ -23,6 +23,7 @@ import { reviewEvidence } from './lib/merge-queue-reviews.mjs';
 import { nextLine } from './lib/next-step.mjs';
 import { defaultBranchOf } from './lib/default-branch.mjs';
 import { conflictSaid, mergeMessage, pullRequestProblems } from './lib/pull-request.mjs';
+import { hisStepOpen, reopenRun } from './lib/merge-queue-holds.mjs';
 import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug, roleOfTitle } from './lib/sessions.mjs';
 import { refreshCopy as refreshInstalledCopy } from './lib/refresh-copy.mjs';
@@ -38,7 +39,7 @@ import { harnessHome } from './lib/home.mjs';
 // Where `notify --kind ready` has read it from (bin/notify.mjs), and where the tests read the copy guard.
 export { reviewEvidence, staleBin, UNSHIPPED_GLOBS };
 
-export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--refresh-copy] | --refresh-copy | --prune [--cwd <path>]
+export const USAGE = `Usage: js-harness merge-queue --dry-run | --land [--refresh-copy] | --refresh-copy | --prune | --reopen <n> [--cwd <path>]
 
 Builds the candidate the default branch would be: origin's default branch (what origin's HEAD names, else what gh names)
 with each ready pull request merged into it in order of number. Ready means open, not a draft, mergeable, based on the default branch, a Codex
@@ -171,9 +172,13 @@ function answer(run, command, args, cwd, timeout = TIMEOUT_MS, env = null) {
 }
 
 function parseArgs(argv) {
-  const args = { dryRun: false, land: false, prune: false, refreshCopy: false, cwd: process.cwd() };
+  const args = { dryRun: false, land: false, prune: false, refreshCopy: false, reopen: null, cwd: process.cwd() };
   for (let at = 0; at < argv.length; at += 1) {
-    if (argv[at] === '--dry-run') args.dryRun = true;
+    if (argv[at] === '--reopen') {
+      const number = argv[(at += 1)];
+      if (!/^[1-9]\d*$/.test(number ?? '')) return null;
+      args.reopen = Number(number);
+    } else if (argv[at] === '--dry-run') args.dryRun = true;
     else if (argv[at] === '--land') args.land = true;
     else if (argv[at] === '--prune') args.prune = true;
     else if (argv[at] === '--refresh-copy') args.refreshCopy = true;
@@ -182,6 +187,7 @@ function parseArgs(argv) {
   }
   // One mode, named: a run that pushes main is never what a bare command does. --refresh-copy is a part of --land, or
   // a mode of its own when it comes alone.
+  if (args.reopen !== null) return args.dryRun || args.land || args.prune || args.refreshCopy ? null : args;
   if (args.refreshCopy && !args.land) return args.dryRun || args.prune ? null : args;
   return [args.dryRun, args.land, args.prune].filter(Boolean).length === 1 ? args : null;
 }
@@ -764,6 +770,7 @@ export async function mergeQueueMain(argv = process.argv.slice(2), deps = {}) {
     return 2;
   }
   if (args.prune) return pruneRun(args, { ...deps, stdout: printOut, stderr: printErr });
+  if (args.reopen !== null) return reopenRun(args, { ...deps, ask: (command, cmdArgs) => answer(deps.run ?? spawnSync, command, cmdArgs, args.cwd), stdout: printOut, stderr: printErr });
   if (args.refreshCopy && !args.land) {
     const versionOf = (sha) => versionAt(sha, args.cwd, deps.run ?? spawnSync);
     return (deps.refreshNow ?? refreshNowRun)(args, { ...deps, env, now, stdout: printOut, stderr: printErr, answer, versionOf, pnpmBinDir });
@@ -898,6 +905,11 @@ async function queueRun(args, { run = spawnSync, covered = null, suite = null, e
     const problems = pullRequestProblems(pr.mergeable === 'UNKNOWN' ? { ...pr, mergeable: 'MERGEABLE' } : pr, defaultBranch);
     if (problems.length) {
       leaveOut(log, stdout, pr, 'not-ready', problems.join(' '));
+      continue;
+    }
+    const his = hisStepOpen(gitIn, cwd, main, pr);
+    if (his !== null) {
+      leaveOut(log, stdout, pr, 'his-step', his);
       continue;
     }
     const coverage = isCovered(pr.headRefOid, onto);

@@ -41,7 +41,7 @@ export const CONTRACT_TEMPLATE = `## State
   Adds: none
 
 ## Tasks
-- [ ] T1 (kind: design | build | verify | docs) <the first task; its kind sets its effort and sub-agent models>
+- [ ] T1 (kind: design | build | verify | docs | his) <the first task; his is a step only he can do, which holds the land>
 `;
 
 // `## Effort` is no longer required: a task's kind sets its effort (odd/tasks/effort-by-task.md, S1). It is
@@ -247,9 +247,13 @@ export function validateContract(markdown, { platform = process.platform } = {})
   return { ok: errors.length === 0, errors };
 }
 
+/** A step only he can do, such as a walk through the console or an approval: a pull request whose feature document
+ * holds one open is left out of the land (odd/tasks/merge-queue.md, S11). */
+export const HIS_KIND = 'his';
+
 /** The kinds of work a task names as `(kind: <kind>)` (odd/tasks/effort-by-task.md, S1). They name
  * work, not a value Sebastián set, so they are a constant here and not rules. */
-export const TASK_KINDS = ['design', 'build', 'verify', 'docs'];
+export const TASK_KINDS = ['design', 'build', 'verify', 'docs', HIS_KIND];
 
 // A checklist line: its box, then the rest of its first line.
 const TASK_LINE_PATTERN = /^\s*[-*+]\s+\[([ xX])\]\s+(.*)$/;
