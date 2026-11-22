@@ -102,6 +102,20 @@ export function installProblem(result, answered, version, label) {
   return `${label} exited 0, but the copy answers "${got}", not ${version}`;
 }
 
+/** What is wrong with `js-harness upgrade` to `version`, or `null`. Its exit is the harness's when that is not 0, else
+ * its stack step's, and the stack step exits 1 by design when a tool of the machine's real stack is behind and no
+ * terminal consents (upgradeAll in bin/update.mjs, `stack upgrade` in bin/stack.mjs). The proof has no terminal, so an
+ * exit of 1 passes only when the harness said it moved to `version` and the stack's no-terminal line is all it wrote on
+ * stderr; `check-to` then judges the copy. Any other exit, or any other line on stderr, is the failure it names. */
+export function upgradeProblem(result, version, label) {
+  if (!result.error && result.status === 0) return null;
+  const moved = String(result.stdout ?? '').split(/\r?\n/).some((line) => line.trim() === `upgraded to ${version}`);
+  const errLines = String(result.stderr ?? '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const onlyWaited = errLines.length > 0 && errLines.every((line) => line.startsWith('js-harness stack upgrade runs nothing without a terminal:'));
+  if (!result.error && result.status === 1 && moved && onlyWaited) return null;
+  return `${label} exited ${result.status ?? result.error?.code}`;
+}
+
 /** What is wrong with the output of `--version` (one line, the version alone), or `null`. */
 export function versionProblem(stdout, expected) {
   const got = String(stdout).trim();

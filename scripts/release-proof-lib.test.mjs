@@ -23,6 +23,7 @@ import {
   tagVersion,
   throwawayTags,
   upgradePmCommand,
+  upgradeProblem,
   versionProblem,
   EARLIER_CODEX_HOOKS,
   codexHooksOf,
@@ -134,6 +135,26 @@ test('stepsFor lists the steps of an install-only proof, and adds the project an
     'uninstall',
     'compare-home',
   ]);
+});
+
+// `upgrade` exits 1 by design when a stack tool is behind and no terminal consents (upgradeAll in bin/update.mjs), so
+// the proof failed at its upgrade step on any machine whose real codegraph or codex had a newer release, before the
+// harness was judged (S8's C4.1, odd/tasks/f8-s8-certification.md; odd/tasks/f8-s8-designs/misses.md).
+const NO_TERMINAL = 'js-harness stack upgrade runs nothing without a terminal: pass --yes with --tool <id> for each tool the person said yes to.\n';
+const UPGRADE = 'js-harness upgrade to 0.98.0';
+
+test('upgradeProblem passes an upgrade whose harness moved to the version and whose stack only waited for a terminal', () => {
+  assert.equal(upgradeProblem({ status: 0, stdout: 'upgraded to 0.98.0\n', stderr: '' }, '0.98.0', UPGRADE), null);
+  assert.equal(upgradeProblem({ status: 1, stdout: 'upgraded to 0.98.0\n', stderr: NO_TERMINAL }, '0.98.0', UPGRADE), null);
+});
+
+test('upgradeProblem fails an upgrade whose harness did not reach the version, or whose exit has another cause', () => {
+  assert.match(upgradeProblem({ status: 1, stdout: '', stderr: NO_TERMINAL }, '0.98.0', UPGRADE), /^js-harness upgrade to 0\.98\.0 exited 1/);
+  assert.match(upgradeProblem({ status: 1, stdout: 'upgraded to 0.97.1\n', stderr: NO_TERMINAL }, '0.98.0', UPGRADE), /exited 1/);
+  assert.match(upgradeProblem({ status: 1, stdout: 'upgraded to 0.98.0\n', stderr: 'codex: the update failed\n' }, '0.98.0', UPGRADE), /exited 1/);
+  assert.match(upgradeProblem({ status: 1, stdout: 'upgraded to 0.98.0\n', stderr: `codex: the update failed\n${NO_TERMINAL}` }, '0.98.0', UPGRADE), /exited 1/);
+  assert.match(upgradeProblem({ status: 2, stdout: 'upgraded to 0.98.0\n', stderr: NO_TERMINAL }, '0.98.0', UPGRADE), /exited 2/);
+  assert.match(upgradeProblem({ status: null, error: { code: 'ENOENT' } }, '0.98.0', UPGRADE), /exited ENOENT/);
 });
 
 test('installProblem judges an install by the copy it left, as upgrade does: a copy of the version passes whatever the exit', () => {
