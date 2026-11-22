@@ -159,7 +159,7 @@ export const IDLE_MARKER = 'IDLE:';
  * gate log; the spell runs from the newest such write, or from the stretch's opening. It is `{ since, idleMs, stretch,
  * leftMs }`, `since` ISO and `stretch` the stretch's id. "Ran" is read from writes, not turns: a dead session's dangling
  * turn would hold the line back forever, and a foreground sub-agent, which writes only under its session's
- * `subagents/` folder, may give a false line, which costs one wake. What cannot be read is unknown, never idle: said
+ * `subagents/` folder, is read there too. What cannot be read is unknown, never idle: said
  * once through `say`, and nothing is told. `told()` is the spell told last (its `since`), and `tell(found, now)` marks
  * `found` told and gives its `IDLE:` line, under a mark beside the absence's. */
 export function stretchIdle({ home, slug, session, dirs, readdir, mtime, readFile, writeFile, say }) {
@@ -183,7 +183,7 @@ export function stretchIdle({ home, slug, session, dirs, readdir, mtime, readFil
     try {
       names = readdir(dir);
     } catch (err) {
-      if (err?.code === 'ENOENT') return -Infinity;
+      if (err?.code === 'ENOENT' || err?.code === 'ENOTDIR') return -Infinity;
       throw new Error(`the folder ${dir}: ${err?.code ?? err?.message}`);
     }
     let last = -Infinity;
@@ -203,7 +203,21 @@ export function stretchIdle({ home, slug, session, dirs, readdir, mtime, readFil
         const open = stretchesOf(home, slug, readFile).findLast((one) => one.closedAt === null && one.openedAt <= now && one.returnAt !== null && one.returnAt > now);
         if (open === undefined) return null;
         let last = open.openedAt;
-        for (const dir of dirs()) last = Math.max(last, newestIn(dir, (name) => name.endsWith('.jsonl') && name !== own));
+        for (const dir of dirs()) {
+          last = Math.max(last, newestIn(dir, (name) => name.endsWith('.jsonl') && name !== own));
+          // A foreground sub-agent writes only its own transcript, under its session's folder
+          // (`<session id>/subagents/agent-*.jsonl`, as the host lays it out): its writes are work too, the lead's not.
+          let entries = [];
+          try {
+            entries = readdir(dir);
+          } catch {
+            // the listing's failure was said by newestIn above
+          }
+          for (const entry of entries) {
+            if (entry.includes('.') || entry === session) continue;
+            last = Math.max(last, newestIn(path.join(dir, entry, 'subagents'), (name) => name.endsWith('.jsonl')));
+          }
+        }
         last = Math.max(last, newestIn(gateLogDir(home), () => true));
         if (now - last < IDLE_MS) return null;
         return { since: new Date(last).toISOString(), idleMs: now - last, stretch: open.id, leftMs: open.returnAt - now };
