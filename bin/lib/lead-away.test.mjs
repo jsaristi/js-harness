@@ -159,3 +159,10 @@ test("a sub-agent's transcript written under IDLE_MS ago keeps the line silent; 
   // A session folder with no sub-agents is none.
   assert.equal(world({ files: { ...parent, [path.join(DIR, 'work-2', 'custom-title.json')]: T0 - MIN }, records: stretch, dirs: [DIR] }).reading.at(T0)?.since, iso(T0 - HOUR));
 });
+
+test('a file of the project folder with no dot in its name holds no sub-agents: its ENOTDIR is none, not unknown', () => {
+  const files = { [path.join(DIR, 'work-1.jsonl')]: T0 - HOUR, [path.join(DIR, 'notes')]: T0 - MIN };
+  const { state, reading } = world({ files, records: { [STRETCHES]: opened(T0 - 3 * HOUR) }, dirs: [DIR], unreadable: { [path.join(DIR, 'notes', 'subagents')]: 'ENOTDIR' } });
+  assert.equal(reading.at(T0)?.since, iso(T0 - HOUR));
+  assert.deepEqual(state.said, []);
+});
