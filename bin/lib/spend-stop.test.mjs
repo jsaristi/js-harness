@@ -96,9 +96,13 @@ test('a raise of a line from a shell is refused when it names the running sessio
     'js-harness spend $(cat id.txt) --line 99M --raise',
     'js-harness spend "$ID" --line 99M --raise',
     'js-harness spend `cat id` --line 99M --raise',
+    `js-harness spend ${ID.slice(0, 8)}''${ID.slice(8)} --line 99M "--raise"`,
+    `js-harness spend ${ID.slice(0, 8)} --line 99M --raise`,
   ]) assert.match(call(command) ?? '', /its own line/, command);
   assert.equal(call(`js-harness spend ${other} --line 30M --raise`), null, 'the lead names another session: spend checks its title');
   assert.equal(call(`js-harness spend ${ID}`), null, 'reading the figure is not a raise');
+  assert.equal(call(`cat > m.txt <<'EOF' && git commit -F m.txt\nthe guard refuses \`spend ... --raise\` of $ID\nEOF`), null, 'a heredoc\'s text is not a raise');
+  assert.equal(call('echo "spend --raise" $HOME'), null, 'the words alone, in another program, are not a raise');
 });
 
 test('a read of the spend folder passes; a write, a removal or a redirection into it stays refused', (t) => {
@@ -106,7 +110,7 @@ test('a read of the spend folder passes; a write, a removal or a redirection int
   const file = stopLinePath(home, ID).replace(/\\/g, '/');
   const call = (command) => lineFileRefusal({ tool_name: 'Bash', tool_input: { command } }, { home });
   for (const command of [`cat ${file}`, 'ls ~/.js-harness/channel/spend', 'ls -la ~/.js-harness/channel/spend && git status', `head -1 ${file} | wc -c`, 'Get-Content ~/.js-harness/channel/spend/x.json', 'git mv a b && ls ~/.js-harness']) assert.equal(call(command), null, command);
-  for (const command of [`cat x > ${file}`, `echo 1 | tee ${file}`, `cp x ${file}`, `sed -i s/9/99/ ${file}`, `cat ${file} && rm ${file}`, `ls $(rm ${file})`, 'rm -rf ~/.js-harness', `cat <<'EOF' > ${file}\n{}\nEOF`]) assert.match(call(command) ?? '', /stop line/, command);
+  for (const command of [`cat x > ${file}`, `echo 1 | tee ${file}`, `cp x ${file}`, `sed -i s/9/99/ ${file}`, `cat ${file} && rm ${file}`, `ls $(rm ${file})`, 'rm -rf ~/.js-harness', 'ls -d ~/.js-harness/channel/spend/* | xargs rm', 'Get-ChildItem ~/.js-harness/channel/spend | Remove-Item', `ls ${file} && rm "$_"`, `rg --pre rm x ${file}`, 'rm -rf "~/.js-harness',`cat <<'EOF' > ${file}\n{}\nEOF`]) assert.match(call(command) ?? '', /stop line/, command);
 });
 
 test('the guard refuses a step that names the spend folder, for any session, and lets others by', (t) => {

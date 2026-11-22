@@ -288,6 +288,9 @@ test('the command answers in the hooks contract, and exits 0 on empty input, on 
     assert.equal(readStopLine(m.home, worker), 7_000_000);
     assert.equal(await rulesHookMain([], io(message(lead, 'JH PLAN · plan'), () => ({ status: 1, stdout: '' }))), 0);
     assert.equal(readStopLine(m.home, lead), null);
+    const briefedAtHandover = '33333333-2222-3333-4444-555555555555';
+    assert.equal(await rulesHookMain([], io(message(briefedAtHandover, 'JH ORQ nueva · orquestador F9'), () => ({ status: 1, stdout: '' }))), 0);
+    assert.equal(readStopLine(m.home, briefedAtHandover), 7_000_000, 'the arriving lead of a handover is the lead');
     out.length = 0;
     err.length = 0;
 

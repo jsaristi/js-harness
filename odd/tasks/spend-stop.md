@@ -74,11 +74,11 @@ Nothing in this slice: the brief and his words cover it.
   state file (`*state.md`) or a feature document (`odd/tasks/*.md`) pass, chained too; everything else is refused
   with the one line; route JH 288
 - [x] T7 (kind: verify) spec 1: the hook payload's `session_id` is the id `spend --self` reads (L6); route JH 288
-- [x] T8 (kind: build) spec 1: no session raises its own line: the guard refuses a shell `spend ... --raise` that names
-  the hook's `session_id` or an id the shell computes, and `spend` refuses a raise of its CLAUDE_CODE_SESSION_ID (L9);
-  route JH 290
-- [x] T9 (kind: build) spec 1: a read of the spend folder passes; a write, removal, move or redirection into it stays
-  refused, judged per simple command (L9); route JH 290
+- [x] T8 (kind: build) spec 1: no session raises its own line: the guard refuses a `js-harness spend ... --raise` step
+  that does not name another session by a literal whole id, and `spend` refuses a raise of its CLAUDE_CODE_SESSION_ID
+  (L9); route JH 290
+- [x] T9 (kind: build) spec 1: a read of the spend folder passes; a write, removal, move, redirection into it, or a
+  pipeline or expansion that hands it to one stays refused (L9); route JH 290
 - [x] T10 (kind: build) spec 1: a cross-session message records a line only when its sender is titled as the lead, so
   a brief relayed to the lead records nothing on it (L9); route JH 290
 - [x] T11 (kind: docs) spec 1: a `- Seen:` line under `spend-past-approved` for JH 288's overrun; route JH 290
@@ -130,13 +130,18 @@ Nothing in this slice: the brief and his words cover it.
 - L9 JH 290 (2026-11-22, the lead's brief-951-open.md) closed PR 951's Open items. Searched first for how the harness
   tells the lead from a worker: `leadTitle` (session-title-guard), `isLeadSession` (stale-board, the notices' sender
   title) and the relay lease (`permit lease`); each rests on a title or an id a worker can set, so none stops a
-  worker's own raise. The one value a worker cannot set is the hook payload's `session_id`: the guard refuses a
-  `spend ... --raise` that names it or an id the shell computes (`$`, a backtick, `%name%`), and `spend` refuses a
-  raise of its own CLAUDE_CODE_SESSION_ID, the lead's included (the lead's own line is the owner's to move). The folder
-  guard reads per simple command: a reader passes; any other program naming the folder, a remover of the folders above
-  it, a redirection into it or a substitution on a command naming it is refused, which also ends the false refusal of
-  `git mv a b && ls ~/.js-harness`. Relayed text: the host hands a message as `<cross-session-message ...
-  from-name="<title>">` (seen in this session's own transcript); a message whose sender is not titled as the lead is
-  taken out before the literal is read, and the rules hook passes `leadTitle`; L4's test of an untitled message now
-  carries a lead's title. Left open: a script file a command runs, or a path the shell computes, is not read; a worker
-  that retitles itself as a lead can still raise another worker's line, never its own.
+  worker's own raise. The one value a worker cannot set is the hook payload's `session_id`: the guard splits the
+  command into its steps and refuses a `js-harness spend ... --raise` step unless it names, as one literal whole id
+  with no expanding word, a session other than that `session_id`; `spend` refuses a raise of its own
+  CLAUDE_CODE_SESSION_ID, the lead's included (decided here: the lead's own line is the owner's to move). The folder
+  guard reads per simple command: a command naming the folder passes only when every step of each pipeline naming it
+  is a reader and no word expands (`ls <folder> && rm "$_"`, `ls <folder> | xargs rm` are refused); a remover of the
+  folders above it, a redirection into it, or a command that cannot be split is refused; this also ends the false
+  refusal of `git mv a b && ls ~/.js-harness`. Relayed text: a cross-session message whose sender is not titled as the
+  lead is taken out before the literal is read; the rules hook passes the board's `isLeadTitle`, which also reads a
+  handover's `ORQ nueva`, so a worker briefed by an arriving lead still gets its line; L4's test of an untitled message
+  now carries a lead's title. The `from-name` wrapper is inferred from this session's transcript, not seen in a
+  UserPromptSubmit payload's `prompt`: if the hook gets the body only, a lead's line in a message records nothing.
+  Left open: a script file, `bash -c` or `eval` script, or a path the shell computes is not read; a worker that
+  retitles itself as a lead can still raise another worker's line, never its own; a draft brief the lead sends to
+  another session (JH PLAN) with the literal on its own line still records on that session.

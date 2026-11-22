@@ -2079,9 +2079,9 @@ after it was made: nothing measured the spend against the figure while the work 
   15M state write missed. Fix: the lead's briefs name fixed points for the reading (after each commit, before each gate
   or review, `js-harness spend --self`), and the stop line is recorded from the brief's "Stop at <N> cache-read" by a
   hook and held by the guard (odd/tasks/spend-stop.md, T4-T6), once that is installed
-- Seen: 2026-11-21 — the lead's notes, spend-stop-close-state.md, last line (JH 288's own) — JH 288 closed at 24.15M
-  cache-read against its line raised to 24M, though it read its spend at the fixed points; the overrun was the cost of
-  its last lens review, run after a reading below the line. Fix: the guard holds the line once it is recorded
+- Seen: 2026-11-21 — the lead's notes, spend-stop-close-state.md, last line (JH 288's own), and brief-951-open.md,
+  item 4 (claimed; the lead's own) — JH 288 closed at 24.15M cache-read against its line raised to 24M; by the lead's
+  account it read its spend at the fixed points, and the overrun was the cost of its last lens review. Fix: the guard holds the line once it is recorded
   (odd/tasks/spend-stop.md, T4-T6), so a review started past it is refused; a review started below it still runs to
   its end
 

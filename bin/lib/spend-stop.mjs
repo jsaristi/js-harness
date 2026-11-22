@@ -128,45 +128,72 @@ const slashed = (text) => String(text ?? '').replace(/\\/g, '/').toLowerCase();
 const NAMES_FOLDER = /\.js-harness\/+channel\/+spend(?:\/|\b)/;
 const ABOVE_WHOLE = /\.js-harness(?:\/+channel)?\/*$/;
 // The programs that only read what they name, so a session may look at its line; and those that remove or move.
-const READERS = new Set(['cat', 'ls', 'dir', 'head', 'tail', 'wc', 'stat', 'file', 'grep', 'rg', 'less', 'more', 'type', 'get-content', 'gc', 'get-childitem', 'gci', 'get-item', 'test-path']);
+// Not rg, whose --pre runs a program on each file, nor a pager, which can start a shell.
+const READERS = new Set(['cat', 'ls', 'dir', 'head', 'tail', 'wc', 'stat', 'file', 'grep', 'type', 'get-content', 'gc', 'get-childitem', 'gci', 'get-item', 'test-path']);
+// A word the shell expands (`$x`, `$_`, `$(`, a backtick, cmd's `%x%`): what it names is not read from the call.
+const EXPANDS = /\$|`|%\w+%/;
+const WHOLE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** The simple commands of the split words `words`, each as `{ step, piped }`: its words, and the index of the
+ * pipeline it belongs to (steps joined by `|` share one). */
+function stepsOf(words) {
+  const steps = [];
+  let start = 0;
+  let pipeline = 0;
+  for (let at = 0; at <= words.length; at += 1) {
+    if (at < words.length && !words.operators.has(at)) continue;
+    if (at > start) steps.push({ step: words.slice(start, at), piped: pipeline });
+    if (at < words.length && words[at] !== '|') pipeline += 1;
+    start = at + 1;
+  }
+  return steps;
+}
 const REMOVERS = new Set(['rm', 'rmdir', 'mv', 'del', 'erase', 'rd', 'move', 'remove-item', 'ri', 'move-item', 'ren', 'rename-item']);
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const SHELL_TOOLS = new Set(['Bash', 'mcp__terminal__run_in_terminal']);
 
-/** Whether the shell command `command` (slashed and lower-cased) writes, removes or moves the spend folder: a simple
- * command that names it and is not a reader (`READERS`), one that removes or moves it or a folder above it, a
- * redirection into it, or any substitution on a command that names it. A command that cannot be split is read as one
- * that does. */
+/** Whether the shell command `command` (slashed and lower-cased) writes, removes or moves the spend folder. A command
+ * that names the folder passes only when every step of each pipeline that names it is a reader (`READERS`) and no
+ * word of it expands (`EXPANDS`: `rm "$_"` after an `ls` of the folder); a remover of a folder above it, or a
+ * redirection into it, is refused too. A command that cannot be split is read as one that does. */
 function shellTouches(command) {
-  if (!NAMES_FOLDER.test(command) && !/\.js-harness/.test(command)) return false;
-  if (NAMES_FOLDER.test(command) && /`|\$\(|<\(|>\(/.test(command)) return true;
+  if (!/\.js-harness/.test(command)) return false;
   let words;
   try {
     words = shellWords(command, { groups: true, redirections: true });
   } catch {
-    return NAMES_FOLDER.test(command);
+    return true;
   }
   for (const at of words.redirections) if (NAMES_FOLDER.test(words[at + 1] ?? '') || ABOVE_WHOLE.test(words[at + 1] ?? '')) return true;
-  let start = 0;
-  for (let at = 0; at <= words.length; at += 1) {
-    if (at < words.length && !words.operators.has(at)) continue;
-    const step = words.slice(start, at);
-    start = at + 1;
-    if (step.length === 0) continue;
+  const steps = stepsOf(words);
+  const named = new Set(steps.filter(({ step }) => step.some((word) => NAMES_FOLDER.test(word))).map(({ piped }) => piped));
+  if (named.size > 0 && (EXPANDS.test(command) || /<\(|>\(/.test(command))) return true;
+  for (const { step, piped } of steps) {
     const { program } = programOf(step);
-    if (step.some((word) => NAMES_FOLDER.test(word)) && !READERS.has(program)) return true;
+    if (named.has(piped) && !READERS.has(program)) return true;
     if (REMOVERS.has(program) && step.some((word) => ABOVE_WHOLE.test(word))) return true;
   }
   return false;
 }
 
-/** Whether the shell command `command` (slashed and lower-cased) runs `spend ... --raise` naming the session
- * `sessionId` that runs it, or an id the shell computes (a `$`, a backtick or a `%name%`): the host sets the hook's
+/** Whether the shell command `command` (slashed and lower-cased) has a step `js-harness spend ... --raise` that does
+ * not name, as a literal whole id, a session other than `sessionId`, the one that runs it: the host sets the hook's
  * `session_id`, which a worker cannot, so its own raise is refused here whatever it puts in CLAUDE_CODE_SESSION_ID or
- * its title (odd/tasks/spend-stop.md, L9). */
+ * its title (odd/tasks/spend-stop.md, L9). A heredoc's text is no step; a `bash -c` or `eval` script is not read. */
 function raisesOwnLine(command, sessionId) {
-  if (!/\bspend\b/.test(command) || !/(?:^|\s)--raise\b/.test(command)) return false;
-  return (isSessionId(sessionId) && command.includes(sessionId.toLowerCase())) || /\$|`|%\w+%/.test(command);
+  if (!/spend/.test(command) || !/--raise/.test(command)) return false;
+  let words;
+  try {
+    words = shellWords(command, { groups: true, redirections: true });
+  } catch {
+    return true;
+  }
+  return stepsOf(words).some(({ step }) => {
+    const { program, args } = programOf(step);
+    if (program !== 'js-harness' || args[0] !== 'spend' || !args.includes('--raise')) return false;
+    const named = args.slice(1).filter((arg, at, rest) => !arg.startsWith('-') && rest[at - 1] !== '--line');
+    return named.length !== 1 || !WHOLE_ID.test(named[0]) || named[0] === String(sessionId ?? '').toLowerCase() || step.some((word) => EXPANDS.test(word));
+  });
 }
 
 /** Why the PreToolUse call of `payload` is refused for touching the stop lines, or null: a Write, Edit, MultiEdit or
