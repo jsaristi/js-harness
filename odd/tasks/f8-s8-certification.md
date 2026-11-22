@@ -253,9 +253,9 @@ Still open: C5.1 by hand, R3, T2 to T7. A second grading after T6 changes the gr
 
 ## Tasks
 - [x] T1 (kind: docs) this document, its contract, its depth pass and its double review, no paid run — S1 to S8; inline
-- [ ] T2 (kind: build) the `doctor` row for hooks cancelled or timed out: which 20 sessions, terminal events per expected invocation; tests for a cancel, a timeout, a truncated trace and fewer than 20 sessions; on his yes — S8; inline
-- [ ] T3 (kind: build) a read-only age check for C4.2's roots, locks and processes, one snapshot time; tests for a 25-hour folder, a stale lock, a lingering process; on his yes — S8; inline
-- [ ] T4 (kind: build) the closing count per class with ids and host-caused exceptions; on his yes — S4; inline
+- [x] T2 (kind: build) the `doctor` row for hooks cancelled or timed out: which 20 sessions, terminal events per expected invocation; tests for a cancel, a timeout, a truncated trace and fewer than 20 sessions; on his yes — S8; inline
+- [x] T3 (kind: build) a read-only age check for C4.2's roots, locks and processes, one snapshot time; tests for a 25-hour folder, a stale lock, a lingering process; on his yes — S8; inline
+- [x] T4 (kind: build) the closing count per class with ids and host-caused exceptions; on his yes — S4; inline
 - [ ] T5 (kind: design) R1's behavioural run: case inventory, repeats, acceptance, the paired proof standard; on his yes — S3; inline; design: `odd/tasks/f8-s8-designs/t5-behavioural-run.md`
 - [ ] T6 (kind: build) the long-session grader fixes: a share from fewer than 5 valid runs cannot certify; tdd per feature with the feature's own test; spanish after English tool output only; tests first; on his yes — S2; inline
 - [ ] T7 (kind: design) the audits: a frozen package and rubric, pinned model and effort, blind baseline and candidate, three runs each, their cost; on his yes — S7; inline; design: `odd/tasks/f8-s8-designs/t7-audits.md`
@@ -291,3 +291,25 @@ Still open: C5.1 by hand, R3, T2 to T7. A second grading after T6 changes the gr
   6439, read with `sessions --quote`), through the lead: grade S8's long run once, before JH 235's T5/T7, not at 60%
   weekly or above; no new S8 runs, no second grading after T6. Codex meter 49% before, 50% after. Graded on
   `docs/s8-long-grade` from `5ae4021a`: both setups 44%; C1.2, C1.3, C1.5 and C2.4 miss.
+- L6 (2026-11-22, JH 293, the brief of JH ORQ under his words "sigamos trabajando entonces, llena las horas de
+  hoy", transcript `0cdab702`, line 12505, and the lead's taking of question 387's recommended option): T2 to T4
+  built test first, no paid run, Codex skipped (`--unavailable`, the weekly meter at 70%), lenses on each slice and
+  their findings fixed; draft PRs 963 (T2), 964 (T3) and the T4 one stacked on them. Measured free on this machine:
+  - C3.4, `doctor`'s `hooks` row: 5,964 hook invocations in the 20 newest sessions, 801 cancelled and 367 timed
+    out (80.4% clean), against 100%. Most cancels carry no command: one `hook_cancelled` stands for every
+    PostToolUse hook of a tool use (627 tool uses in d6383aea). Whether a host-side cancel is a miss is his.
+  - C4.2, `clean --age`: 2,614 temp folders older than a day (968 `js-harness-merge-queue-*`, 570
+    `js-harness-codex-review-*`, 330 `js-harness-check-push-*`), no lock, no process, against 0. The 2,578
+    `advisor-gate-*` folders are off `clean`'s prefixes and not counted.
+  - R2, `failures closing`: open tool 5, machine 2, unseen-state 4; none host-caused, since no entry has the new
+    `Upstream:` field yet (which are host-caused is not decided here); 21 `once` and 3 `owed` count settled
+    with no control built.
+  T5's design, read against its task line, still lacks: R1's line (its item 5, his); B3, whether a trial loads the
+  rule's skill, which needs a model; a command that builds the per-case report with its validity; the exact
+  enumeration of `tellsApart` at n = 5, 8 and 10; rules named in `task.json` for 9 of the 11 cases and all ten
+  incidents (free, not done); and this document still prints 543 obligations where the design reads 542.
+  T7's design still lacks: the rubric file with its anchors; a package builder and the blinding grep, so A1 and A2
+  still have no command; the baseline (his); the pilot's spend, asked after 2026-11-23 23:45; six Codex runs priced
+  at 18M to 42M, more than one weekly window. T6 not started: PR 930 edits `evals/long-session/grade.mjs`.
+  Left out: `docs/SPEC.md` (PRs 950, 951, 954, 955) and `docs/FAILURES.md` (PRs 927, 950, 951, 953), each edited
+  by an open PR; this document is edited by PR 930 too, so this line will conflict with it.
