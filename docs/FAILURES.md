@@ -121,8 +121,7 @@ is away, and nothing made the sessions take more work once the briefs they held 
   hours away, he read "el avance de fue nulo": the map moved 0 points, about 3.5 h worked of 10; the work waited on
   a start only his typed turn allows, his typed words, the held Codex gate, and no next brief for a session that
   finished
-- Seen: 2026-11-22 — the lead's transcript 0cdab702, lines 9816 and 10901 (claimed; the lead's own, in JH 289's
-  brief) — from 03:52Z to 05:22Z no session ran while his stretch had 4 to 6 hours left; the lead had rested with no
+- Seen: 2026-11-22 — his words in transcript 0cdab702, lines 9816 and 10901 (checked with sessions --quote) — from 03:52Z to 05:22Z no session ran while his stretch had 4 to 6 hours left; the lead had rested with no
   next unit planned, and he saw it: "no veo que nada este trabajando". What stops it: the lead plans the stretch's
   next units before it rests
 
