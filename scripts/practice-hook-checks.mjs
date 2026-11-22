@@ -2,7 +2,7 @@
 // pause, the channel, the tools that open a session where he does not see it, and the reply check. Kept apart from
 // practice-lib.mjs so that file stays under the size limit (bin/conventions-structure.test.mjs); it imports from
 // practice-lib and practice-lib never imports it, so the release gate that copies practice-lib alone still loads.
-import { childEnv, gateLogFolder, isInside, pathFor } from './practice-lib.mjs';
+import { isInside, pathFor } from './practice-lib.mjs';
 
 // ---- the context pause, as the hook of the installed command meets it ----
 

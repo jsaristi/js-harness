@@ -48,7 +48,7 @@ import { cellBasis, planLines, runPlan, taskRecord } from './plan.mjs';
 import { LIST_PRICES } from './prices.mjs';
 import { CODEX_LIST_PRICES } from './report.mjs';
 import { loadTask, planTrials, removeDir, runSuite, runTrial as runRealTrial, trialKey } from './runner.mjs';
-import { AGENTS, agentOf, armChanges, armPins, diffRun, isObject, listed, readCodexStack, readStack, refusalOf, runChanges, setupChanges } from './suite-stack.mjs';
+import { AGENTS, agentOf, armChanges, armPins, isObject, listed, readCodexStack, readStack, refusalOf, runChanges, setupChanges } from './suite-stack.mjs';
 
 export { diffRun, readCodexStack, readStack } from './suite-stack.mjs';
 

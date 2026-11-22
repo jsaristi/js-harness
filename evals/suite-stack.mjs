@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { tools } from '../bin/lib/stack.mjs';
 import { codexSandboxEnv } from './codex-configs.mjs';
 import { codexHomeOf } from './codex-home.mjs';
-import { SANDBOX_SWITCHES, assertWorkRoot, ensureSandboxDirs, honestyPin, subagentPin } from './configs.mjs';
+import { SANDBOX_SWITCHES, ensureSandboxDirs } from './configs.mjs';
 import { PAYLOAD, minimalWithDigest, settledBytes } from './home.mjs';
 import { allocatePort, releasePort } from './ports.mjs';
 import { parseArm } from './arms.mjs';
