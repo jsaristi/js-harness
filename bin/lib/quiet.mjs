@@ -15,10 +15,11 @@ export const WORK_KINDS = [
   { kind: 'codex-review', text: 'Codex review' },
   { kind: 'lens-review', text: 'lens review' },
   { kind: 'evals', text: 'eval batch' },
+  { kind: 'tests', text: 'test run' },
 ];
 
 /** The pattern of the process listing (./process-list.mjs) on Windows: every process `workKindOf` may count. */
-export const QUIET_PROCESSES = String.raw`merge-queue|codex|lens-review|suite\.mjs`;
+export const QUIET_PROCESSES = String.raw`merge-queue|codex|lens-review|suite\.mjs|--test`;
 
 const sessionName = (agent) => `session ${agent.name ?? '(no title)'} (${agent.id ?? String(agent.sessionId ?? '').slice(0, 8)})`;
 
@@ -74,7 +75,9 @@ const nameOf = (argument) => argument.split(/[\\/]/).pop().toLowerCase().replace
  * in review, 2026-10-25). The program is the first argument; for `node`, the first argument that is no flag, its
  * script; for the dispatcher (`js-harness`), the word after it. A land is `merge-queue` with `--land` and no
  * `--dry-run`, which pushes nothing; a review is `codex-review` or `lens-review` with no `--unavailable`, which only
- * records a skip, or Codex's `exec`; an eval batch is `evals/suite.mjs`. */
+ * records a skip, or Codex's `exec`; an eval batch is `evals/suite.mjs`; a test run is `node` with its own `--test`
+ * flag before the script, or with no script at all, its `script` the first file named (a session's own `node --test`
+ * kept the PC on unseen: docs/FAILURES.md, quiet-misses-background-work). */
 export function workOf(commandLine) {
   const args = splitCommandLine(commandLine);
   if (args.length === 0) return null;
@@ -82,6 +85,7 @@ export function workOf(commandLine) {
   let rest = args.slice(1);
   if (nameOf(script) === 'node') {
     const at = rest.findIndex((argument) => !argument.startsWith('-'));
+    if ((at === -1 ? rest : rest.slice(0, at)).includes('--test')) return { kind: 'tests', script: at === -1 ? null : rest[at] };
     if (at === -1) return null;
     script = rest[at];
     rest = rest.slice(at + 1);

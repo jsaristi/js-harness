@@ -24,13 +24,15 @@ test('the gates, the Codex and lens reviews and the eval batches are found by th
   assert.equal(items[3].since, null, 'a listing with no start time gives none');
 });
 
-test('a test file or another command that holds the same words is no running work', () => {
+// A `node --test` run is a test run whatever its files are named (docs/FAILURES.md, quiet-misses-background-work), never
+// the review a file's name holds.
+test('a test file or another command that holds the same words is no review: a node --test run is a test run', () => {
   assert.deepEqual(findRunning([
     proc(5, `${NODE} --test bin\\codex-review.test.mjs`),
     proc(6, `${NODE} ${TREE}\\bin\\js-harness.mjs sessions --quote codex-review 1`),
     proc(7, `${NODE} ${TREE}\\evals\\suite.test.mjs`),
     proc(8, 'C:\\tools\\codex.exe review'),
-  ], [TREE]), []);
+  ], [TREE]).map((one) => [one.kind, one.pid]), [['tests', 5]]);
 });
 
 // Audit M34 (2026-11-09): `quiet` and the board kept two lists of the work that runs, so a lens review or an eval batch
