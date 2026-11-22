@@ -412,24 +412,22 @@ function transcriptsUnder(folder, day) {
   return found;
 }
 
+/** When an act gated after the others became one, by the merge to main that gated it: no installed copy decided it
+ * before. `waiting` was gated by S1 (odd/tasks/consistent-orders.md), PR 886 merged at 5f22aa6a; before F8 the report
+ * counted the waiting notices sent before it as acts with no decision. A fixed date, not the first decision seen: a
+ * gate that failed for its first acts must still show them. */
+export const GATED_SINCE = { waiting: '2026-11-15T19:00:14.000Z' };
+
 /** Whether two paths name one file: the host writes `transcript_path` in its own spelling, and Windows ignores case and
  * takes either slash. */
 const samePath = (a, b) => (process.platform === 'win32' ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase() : path.resolve(a) === path.resolve(b));
 
 /** The gated acts of the transcripts under `projects` from `from` on, each matched to a decision: by the tool call's
  * id when the decision recorded one, else by transcript, act and a decision within 120 s after the call, each
- * decision used once. A sub-agent's end is no tool call and is left out. An act of a kind is counted only from the
- * first decision of that kind, when its gate was installed (consistent-orders F8: `waiting` was gated at S1, and the
- * waiting notices sent before were counted with no decision); a kind with no decision yet is counted from `from`. */
+ * decision used once. A sub-agent's end is no tool call and is left out. An act gated later than the others is counted
+ * from the day its gate reached main (`GATED_SINCE`). */
 function reconcile(projects, from, decisions) {
-  const sinceOf = new Map();
-  for (const d of decisions) if (typeof d.act === 'string' && !(sinceOf.get(d.act) <= d.at)) sinceOf.set(d.act, d.at);
-  // A decision is written up to 120 s after its act, as the match below allows: the act that met the first one is in.
-  const gatedSince = (act) => {
-    if (!sinceOf.has(act)) return from;
-    const installed = new Date(Date.parse(sinceOf.get(act)) - 120_000).toISOString();
-    return installed > from ? installed : from;
-  };
+  const gatedSince = (act) => (GATED_SINCE[act] !== undefined && GATED_SINCE[act] > from ? GATED_SINCE[act] : from);
   const byToolUse = new Map(decisions.filter((d) => typeof d.toolUseId === 'string').map((d) => [d.toolUseId, d]));
   const loose = decisions.filter((d) => typeof d.toolUseId !== 'string' && typeof d.transcript === 'string');
   const used = new Set();

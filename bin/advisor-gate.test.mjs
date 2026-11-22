@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { advisorGateMain, advisorGateReport, gatedAct, readStretch, STRETCH_TOOL_CALLS } from './advisor-gate.mjs';
+import { advisorGateMain, advisorGateReport, GATED_SINCE, gatedAct, readStretch, STRETCH_TOOL_CALLS } from './advisor-gate.mjs';
 
 const OPUS = 'claude-opus-5-5';
 const FABLE = 'claude-fable-5-2';
@@ -527,25 +527,29 @@ test('report: reconciles the decisions with the gated acts found in the transcri
 
 // consistent-orders F8: `waiting` became a gated act at S1 (2026-11-15), and the report counted the waiting notices sent
 // before it as acts with no decision (8 of the 32 it named missing on 2026-11-22).
-test('report: an act is reconciled only from the first decision of its own kind, the day its gate was installed', () => {
+test('report: a waiting is reconciled only from the day its gate reached main; every other act as before', () => {
   const { home, project } = scratch();
   const t = path.join(home, '.claude', 'projects', 'p', 's.jsonl');
-  const at = (m) => `2026-11-15T19:${String(m).padStart(2, '0')}:00.000Z`;
+  const at = (m) => new Date(Date.parse('2026-11-15T18:50:00.000Z') + m * 60_000).toISOString();
   const use = (m, toolId, command) => ({ type: 'assistant', timestamp: at(m), cwd: project, message: { id: id('m'), model: OPUS, content: [{ type: 'tool_use', id: toolId, name: 'Bash', input: { command } }] } });
   writeTranscript(t, [
     use(1, 'tLand', 'js-harness merge-queue --land 3'),
     use(2, 'tW1', 'js-harness notify --to orchestrator --kind waiting "blocked, before S1"'),
-    use(5, 'tW2', 'js-harness notify --to orchestrator --kind waiting "blocked, decided"'),
-    use(8, 'tW3', 'js-harness notify --to orchestrator --kind waiting "blocked, after S1, no decision"'),
+    use(3, 'tLand2', 'js-harness merge-queue --land 4'),
+    use(15, 'tW2', 'js-harness notify --to orchestrator --kind waiting "blocked, decided"'),
+    use(18, 'tW3', 'js-harness notify --to orchestrator --kind waiting "blocked, after S1, no decision"'),
   ]);
   writeDecisions(home, [
     { at: at(0), act: 'land', decision: 'covered', toolUseId: 'tX', transcript: path.join(home, 'other.jsonl') },
-    { at: '2026-11-15T19:01:02.000Z', act: 'land', decision: 'covered', toolUseId: 'tLand', transcript: t },
-    { at: '2026-11-15T19:05:02.000Z', act: 'waiting', decision: 'covered', toolUseId: 'tW2', transcript: t },
+    { at: at(1), act: 'land', decision: 'covered', toolUseId: 'tLand', transcript: t },
+    { at: at(15), act: 'waiting', decision: 'covered', toolUseId: 'tW2', transcript: t },
   ]);
+  assert.equal(GATED_SINCE.waiting, '2026-11-15T19:00:14.000Z');
   const r = advisorGateReport({ home });
-  assert.deepEqual(r.acts, { found: 3, decided: 2, missing: [{ act: 'waiting', tool: 'Bash', at: at(8), transcript: t }], unread: 0 },
-    'the waiting before the first waiting decision is left out; the one after it with no decision stays missing');
+  assert.deepEqual(r.acts, {
+    found: 4, decided: 2, unread: 0,
+    missing: [{ act: 'land', tool: 'Bash', at: at(3), transcript: t }, { act: 'waiting', tool: 'Bash', at: at(18), transcript: t }],
+  }, 'the waiting before S1 is left out; a land with no decision and a waiting after S1 with none stay missing');
 });
 
 test('each gated act is refused when uncovered, by a session and by a sub-agent (his yes to 285)', () => {
