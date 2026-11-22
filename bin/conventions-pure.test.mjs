@@ -8,8 +8,9 @@
 // say in the header what the module does read instead of calling it pure. "Pure-ish" is no claim.
 //
 // Only direct static imports are read (`import ... from`, `import '...'`, `export ... from`), with or without the
-// `node:` prefix. Every module under `bin/lib` is read, at any depth (bin/lib/source.testkit.mjs). LEGACY lists the
-// modules whose header claims more than their imports keep, each with why; it only shrinks (bin/lib/ratchet.testkit.mjs).
+// `node:` prefix. Every module under `bin/lib` is read, at any depth (bin/lib/source.testkit.mjs). LEGACY, the
+// modules whose header claimed more than their imports keep, reached 0 on 2026-11-22; it only shrinks
+// (bin/lib/ratchet.testkit.mjs), so it stays empty.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -21,9 +22,7 @@ const LIB = path.join(import.meta.dirname, 'lib');
 const IMPURE = new Set(['fs', 'fs/promises', 'child_process', 'net', 'os']);
 const CLAIM = /\bpure\b(?!-)/i;
 
-const LEGACY = {
-  'version.mjs': 'says "Pure version-comparison" and imports node:fs for a directory listing and its own package.json',
-};
+const LEGACY = {};
 
 /** The comment lines that open `text`, after a shebang: the header a writer reads first. */
 function headerOf(text) {
