@@ -30,7 +30,6 @@ const EXIT_EXEMPT = { 'no-test-outside-turn.cjs': 'a --require preload: it ends 
 const LEGACY = {
   'backup.mjs': 'prints the usage from its dispatch and returns 2',
   'fetch.mjs': 'prints the refusal from its main and returns 2',
-  'functions.mjs': 'its parse returns { error }',
   'guard.mjs': 'prints the usage and returns 2',
   'merge-queue.mjs': 'prints the usage and returns 2',
   'onboard.mjs': 'its parse returns { error }',
