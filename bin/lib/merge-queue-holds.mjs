@@ -51,8 +51,10 @@ export async function reopenRun(args, { ask, now = Date.now, sleep = (ms) => new
   let last = null;
   for (;;) {
     // Each look reads both again: main may move while GitHub computes the ref.
+    // An origin that cannot be fetched is said at once with git's words: waiting would only hide it.
     const fetched = gitIn('fetch', '-q', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`);
-    const main = fetched.ok ? gitIn('rev-parse', `origin/${branch}`).out.trim() : '';
+    if (!fetched.ok) return fail(`git fetch of origin's ${branch} failed (${fetched.err || `git exited ${fetched.status}`}): no run of PR ${number} is to be trusted yet.`);
+    const main = gitIn('rev-parse', `origin/${branch}`).out.trim();
     const merge = main && gitIn('fetch', '-q', 'origin', `refs/pull/${number}/merge`).ok ? gitIn('rev-parse', 'FETCH_HEAD').out.trim() : '';
     const parent = merge ? gitIn('rev-parse', `${merge}^1`).out.trim() : '';
     if (parent && parent === main) {

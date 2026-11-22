@@ -362,12 +362,16 @@ function movedMainRepo() {
 
 /** `merge-queue --reopen` over `root` with gh answering `reopen`, a clock that moves only by the waits, and `onSleep`
  * run at each wait: `{ code, out, calls }`. */
-async function reopen(root, argv, { reopenAnswer = { status: 0, stdout: '', stderr: '' }, onSleep = () => {} } = {}) {
+async function reopen(root, argv, { reopenAnswer = { status: 0, stdout: '', stderr: '' }, onSleep = () => {}, fetchAnswer = null } = {}) {
   const { run: real, calls } = runner([]);
   const run = (command, args, options) => {
     if (command === 'gh' && args[0] === 'pr' && args[1] === 'reopen') {
       calls.push([command, ...args].join(' '));
       return reopenAnswer;
+    }
+    if (fetchAnswer && command === 'git' && args[0] === 'fetch') {
+      calls.push([command, ...args].join(' '));
+      return fetchAnswer;
     }
     return real(command, args, options);
   };
@@ -396,6 +400,16 @@ test('--reopen past its bound says no run is to be trusted yet, and exits 5 (S12
   const { code, out } = await reopen(root, ['--reopen', '5']);
   assert.equal(code, 5, out.join('\n'));
   assert.equal(out.at(-1), `PR 5's merge ref ${stale.slice(0, 7)} still has ${oldMain.slice(0, 7)} as its first parent, not main ${newMain.slice(0, 7)}, after 10 minutes: no run of PR 5 is to be trusted yet.`);
+});
+
+// The resilience lens on 4b9fd455: an origin that cannot be read is said at once, with git's words, not after 10 minutes.
+test('--reopen over an origin it cannot fetch says git\'s words and exits 1 without waiting (S12)', async () => {
+  const { root } = movedMainRepo();
+  let waits = 0;
+  const { code, out } = await reopen(root, ['--reopen', '5'], { fetchAnswer: { status: 128, stdout: '', stderr: 'fatal: could not read from remote' }, onSleep: () => { waits += 1; } });
+  assert.equal(code, 1, out.join('\n'));
+  assert.equal(out.at(-1), "merge-queue: git fetch of origin's main failed (fatal: could not read from remote): no run of PR 5 is to be trusted yet.");
+  assert.equal(waits, 0);
 });
 
 test('--reopen that gh refuses waits for nothing and exits 1; a number that is no number is a usage error (S12)', async () => {
