@@ -876,3 +876,55 @@ test('heartbeat says the lead\'s HOME line once per value, at its start and afte
     assert.equal(state.out.filter((line) => line.startsWith('HOME:')).length, 0);
   }
 });
+
+// JH 291 (odd/tasks/idle-stretch.md): the heartbeat ends with the IDLE line the lead's wait gives, from the same
+// reading and the same mark, when a stretch is open with hours left and no work session has written for 20 minutes.
+const IDLE_MARK = path.join(loopsFolder(HOME, projectSlug(CWD)), 'idle', `${OWNER}.json`);
+const WORK = path.join(HOME, '.claude', 'projects', projectSlug(CWD), `${OTHER}.jsonl`);
+const nineHours = (at) => `${JSON.stringify({ schema: STRETCH_SCHEMA, event: 'open', id: iso(at), at: iso(at), plan: { hours: 9 } })}\n`;
+const idleLines = (state) => state.out.filter((line) => line.startsWith('IDLE:'));
+
+test('heartbeat ends with the IDLE line when a stretch is open and no work session has written for 20 minutes', async () => {
+  const { state, deps } = world({ files: { [GATE_LOG]: T0 - 30 * 60000, [WORK]: T0 - 10 * 60000 }, channel: LEADS });
+  state.transcript = his(T0 - 30 * 60000);
+  state.marks = { [STRETCHES]: nineHours(T0 - 3 * HOUR) };
+  deps.readTail = tailOf(state);
+  assert.equal(await loopMain(['heartbeat', '--quiet', '120', '--every', '120'], ENV, deps), 0);
+  assert.equal(state.clock, T0 + 10 * 60000, 'the tick the quiet reaches twenty minutes');
+  assert.match(state.out.at(-1), /^IDLE: no work session of this project has written since \d\d:\d\d, local time \(UTC[+-]\d\d:\d\d\) \(20 minutes ago\), and the stretch opened at \d\d:\d\d has 5\.8 hours left: plan the next unit or close the stretch/);
+  assert.match(state.out[0], /and in the lead's session a stretch open with hours left and no work session written for 20 minutes end it/);
+  assert.equal(JSON.parse(state.marks[IDLE_MARK]).told, iso(T0 - 10 * 60000));
+
+  // A relaunch names the spell it was told and goes on; new work and a new quiet end it again.
+  state.out = [];
+  assert.equal(await loopMain(['heartbeat', '--quiet', '120', '--max', '1', '--every', '600'], ENV, deps), 1);
+  assert.deepEqual(idleLines(state), []);
+  assert.equal(state.out.filter((line) => /^already told: the idle stretch since \d\d:\d\d$/.test(line)).length, 1);
+  state.files[WORK] = state.clock;
+  state.out = [];
+  assert.equal(await loopMain(['heartbeat', '--quiet', '120', '--every', '600'], ENV, deps), 0);
+  assert.equal(idleLines(state).length, 1);
+});
+
+test('heartbeat: a session that writes, no stretch, or a work session running it is never told IDLE', async () => {
+  const running = world({ files: { [GATE_LOG]: T0, [WORK]: T0 }, channel: LEADS, onSleep: (s) => { s.files[WORK] = s.clock; } });
+  running.state.transcript = his(T0 - 30 * 60000);
+  running.state.marks = { [STRETCHES]: nineHours(T0 - 3 * HOUR) };
+  running.deps.readTail = tailOf(running.state);
+  assert.equal(await loopMain(['heartbeat', '--quiet', '120', '--max', '1', '--every', '600'], ENV, running.deps), 1);
+  assert.deepEqual(idleLines(running.state), []);
+
+  const none = world({ files: { [GATE_LOG]: T0 - 5 * HOUR }, channel: LEADS });
+  none.state.transcript = his(T0 - 30 * 60000);
+  none.deps.readTail = tailOf(none.state);
+  assert.equal(await loopMain(['heartbeat', '--quiet', '600', '--max', '1', '--every', '600'], ENV, none.deps), 1);
+  assert.deepEqual(idleLines(none.state), []);
+
+  const work = world({ files: { [GATE_LOG]: T0 - 5 * HOUR }, channel: notice({ at: T0 - 4 * HOUR, id: OWNER, title: 'JH 5 · canal' }) });
+  work.state.transcript = his(T0 - 30 * 60000);
+  work.state.marks = { [STRETCHES]: nineHours(T0 - 3 * HOUR) };
+  work.deps.readTail = tailOf(work.state);
+  assert.equal(await loopMain(['heartbeat', '--quiet', '600', '--max', '1', '--every', '600'], ENV, work.deps), 1);
+  assert.deepEqual(idleLines(work.state), []);
+  assert.equal(work.state.marks[IDLE_MARK], undefined);
+});

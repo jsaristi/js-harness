@@ -8,6 +8,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { readNotices } from './channel.mjs';
+import { gateLogDir } from './gate-log.mjs';
+import { localHour, localZone } from './local-time.mjs';
 import { loopsFolder } from './loops.mjs';
 import { departureLine, departureWatch, stretchesOf } from './return-report.mjs';
 import { projectDirsOf, projectSlug } from './sessions.mjs';
@@ -115,6 +117,85 @@ export function leadAbsence({ home, slug, session, readFile, writeFile, say }) {
     leads() {
       const record = readNotices(home, slug, { readFile });
       return record.unavailable === undefined && leadsIn(record.notices);
+    },
+  };
+}
+
+/** How long no work session of the project may go without a write, while a stretch is open with hours left, before
+ * the lead is told (odd/tasks/idle-stretch.md): a foreground command ends at ten minutes, so twice that is no turn. */
+export const IDLE_MS = 20 * 60_000;
+
+/** The word the `IDLE:` line opens with. */
+export const IDLE_MARKER = 'IDLE:';
+
+/** The lead's reading of a stretch with nothing running (odd/tasks/idle-stretch.md; 2026-11-22, 03:52Z to 05:22Z, a
+ * stretch whose goals were met early and no session ran). `at(now)` is the idle spell in course at `now` (ms) or `null`:
+ * a stretch that is open with hours left (`stretchesOf`, its `returnAt` after `now`) and no write for `IDLE_MS` to a
+ * transcript of the project's folders (`dirs()`, as `projectDirsOf` lists them) other than the lead's own, nor to the
+ * gate log; the spell runs from the newest such write, or from the stretch's opening. It is `{ since, idleMs, stretch,
+ * leftMs }`, `since` ISO and `stretch` the stretch's id. "Ran" is read from writes, not turns: a dead session's dangling
+ * turn would hold the line back forever, and a foreground sub-agent, which writes only under its session's
+ * `subagents/` folder, may give a false line, which costs one wake. What cannot be read is unknown, never idle: said
+ * once through `say`, and nothing is told. `told()` is the spell told last (its `since`), and `tell(found, now)` marks
+ * `found` told and gives its `IDLE:` line, under a mark beside the absence's. */
+export function stretchIdle({ home, slug, session, dirs, readdir, mtime, readFile, writeFile, say }) {
+  const markFile = path.join(loopsFolder(home, slug), 'idle', `${session}.json`);
+  const own = `${session}.jsonl`;
+  let failureSaid = false;
+  /** The newest time a file of `dir` was written, among those `wanted` keeps, or -Infinity; a folder that is not there
+   * holds none, and one that cannot be listed throws. */
+  const newestIn = (dir, wanted) => {
+    let names;
+    try {
+      names = readdir(dir);
+    } catch (err) {
+      if (err?.code === 'ENOENT') return -Infinity;
+      throw new Error(`the folder ${dir}: ${err?.code ?? err?.message}`);
+    }
+    let last = -Infinity;
+    for (const name of names) {
+      if (!wanted(name)) continue;
+      try {
+        last = Math.max(last, mtime(path.join(dir, name)));
+      } catch {
+        // a file gone between the listing and its time was not written since
+      }
+    }
+    return last;
+  };
+  return {
+    at(now) {
+      try {
+        const open = stretchesOf(home, slug, readFile).findLast((one) => one.closedAt === null && one.openedAt <= now && one.returnAt !== null && one.returnAt > now);
+        if (open === undefined) return null;
+        let last = open.openedAt;
+        for (const dir of dirs()) last = Math.max(last, newestIn(dir, (name) => name.endsWith('.jsonl') && name !== own));
+        last = Math.max(last, newestIn(gateLogDir(home), () => true));
+        if (now - last < IDLE_MS) return null;
+        return { since: new Date(last).toISOString(), idleMs: now - last, stretch: open.id, leftMs: open.returnAt - now };
+      } catch (err) {
+        if (!failureSaid) say(`the idle stretch could not be read: ${err.message}`);
+        failureSaid = true;
+        return null;
+      }
+    },
+    told() {
+      try {
+        const told = JSON.parse(readFile(markFile)).told;
+        return typeof told === 'string' ? told : null;
+      } catch {
+        return null;
+      }
+    },
+    tell(found, now) {
+      try {
+        writeFile(markFile, `${JSON.stringify({ told: found.since, at: new Date(now).toISOString() })}\n`);
+      } catch (err) {
+        say(`the idle stretch could not keep its mark ${markFile}: ${err.code ?? err.message}`);
+      }
+      return `${IDLE_MARKER} no work session of this project has written since ${localHour(found.since)}, local time (${localZone(found.since)}) `
+        + `(${Math.round(found.idleMs / 60_000)} minutes ago), and the stretch opened at ${localHour(found.stretch)} has ${(found.leftMs / 3_600_000).toFixed(1)} hours left: `
+        + 'plan the next unit or close the stretch (`js-harness stretch close --html <file>`). Told once for this idle spell.';
     },
   };
 }
