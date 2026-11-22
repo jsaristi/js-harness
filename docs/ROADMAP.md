@@ -730,6 +730,8 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   with a `CUT:` line after the lead's second compaction, and the orchestrator skill cuts the lead then and at a phase's
   close. The plan's Sonnet writers met his Haiku rule; asked (question 227), he tapped "Seguir con Haiku (Recomendada)"
   (the lead's transcript `0f71b2c6`, line 75063, 2026-11-08), so the five writer slices run on the Haiku writer type.
+  Merged: PR 794 as cb539ba8 on 2026-11-09; L8, the type's first turn in an app session, is still owed
+  (`odd/tasks/f8-s7-topology.md`, its State of 2026-11-18).
 
 ### S9 The host watch
 - **His words:** line 33399 (2026-10-30), a session "que nos investigue las actualizaciones nuevas
@@ -840,7 +842,9 @@ built in rule 1's pull request.
 - **1.0.0:** comes after S8 and the outside feature, and is the version that feature ran on (Decided,
   "1.0.0 and gentle-ai #4036", question 153).
 - **His decisions:** G7, the recurring certification spend, after S8.
-- **State:** document written, `odd/tasks/f8-s8-certification.md` (PR 912, c5e4fe3b); nothing paid has run.
+- **State (2026-11-19):** run, and S8 does not pass (`odd/tasks/f8-s8-certification.md`, `## State` and `## Result`;
+  PRs 912 and 924). T8 ran on `0c28d083` for $45.38 of $74; the long-session grading, by his answer to question 363,
+  gave both setups 11 of 25 moments (44%), C1.2, C1.3, C1.5 and C2.4 missing. Open in T8: C5.1 by hand, R3.
 
 ### Beside F8
 - **The long-session eval**, built in a session of its own (`odd/tasks/f8-s0-baseline.md`, its build
