@@ -584,7 +584,7 @@ function flightLinesOf(transcript, worktree, { gate, home }) {
     lines.push(`In flight when it was compacted, by the transcript: ${open.length} (${named.join(', ')}${open.length > IN_FLIGHT_LISTED ? ', …' : ''}).`);
     // A timer outlived what it waited for and could have acted on its own (his correction, 2026-10-14): after a
     // compaction each piece is judged at once, by what its description says.
-    lines.push('Each says in its description what it is for and what ends it. Stop now (TaskStop) one whose condition resolved another way, or that says neither; write what stays running, and who stops it, to this session\'s state.');
+    lines.push('Each says in its description what it is for and what ends it. Stop now (TaskStop) one whose condition resolved another way, or that says neither; write what stays running, and who stops it, to this session\'s state. The transcript records ends, not processes: a task the host lost with no record of its end is listed too, and neither this list nor its output file says whether it still runs.');
   }
   if (worktree !== null) lines.push(...gateLinesOf(worktree, { gate, home }));
   return lines;
