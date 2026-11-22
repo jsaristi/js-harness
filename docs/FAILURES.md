@@ -529,6 +529,7 @@ asked that decisions pass through the advisor.
 - Seen: 2026-11-14 — JH 196's note of 15:08 local (claimed; relayed by the lead to JH 198) — JH 196 sent its ready
   notice for pull request 871 at 20:03Z with no advisor call in its stretch, flagged by the hook while it was still in
   warning mode; the refusal mode is installed since 15:24 local (main a20aa33)
+- Control: check — bin/advisor-gate.test.mjs — "an act with no call in its stretch is flagged and refused, with how to retry" — since 2026-11-14
 
 ### design-not-faithful
 A design document passed gentle-ai and its own contract and still dropped or misstated decisions of
@@ -637,6 +638,7 @@ command substitution before the program saw them, so the program ran with other 
 - Seen: 2026-11-21 — the lead's notes, lsp-starts-state.md, "Slips to place" (JH 272's own) — a bash double-quoted
   `node -e` with backticks ran `claude plugin install`, `enable` and `update` with a literal id in place of the
   plugin's; all three failed and nothing changed
+- Control: check — bin/guard.test.mjs — "a Bash command with backticks inside double quotes is denied; in single quotes or as $(...) it passes" — since 2026-10-14
 
 ### edit-during-review
 A tracked file was edited in the worktree while Codex reviewed it, so the run read a tree that was
