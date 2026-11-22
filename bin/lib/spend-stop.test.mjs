@@ -52,10 +52,10 @@ test('a line is recorded once: the same line again is no change, any other is re
 });
 
 test('a prompt\'s line is read from the one literal "Stop at <N> cache-read", and nothing looser', () => {
-  assert.equal(stopLineIn('Do the work. Stop at 20M cache-read.'), 20_000_000);
-  assert.equal(stopLineIn('Spend: stop at 1.5m cache-read, then write your state'), 1_500_000);
+  assert.equal(stopLineIn('Do the work.\nStop at 20M cache-read.\nThen report.'), 20_000_000);
+  assert.equal(stopLineIn('Your brief is in x.md: read it. Stop at 1.5m cache-read.'), 1_500_000);
   assert.equal(stopLineIn('STOP AT 500K CACHE-READ'), 500_000);
-  for (const loose of ['20M cap', 'stop at 20M', 'Stop at lots cache-read', 'nonstop at 20M cache-read', '', undefined]) assert.equal(stopLineIn(loose), null, String(loose));
+  for (const loose of ['tell JH 5: Stop at 20M cache-read, then go on', 'Spend: stop at 1.5m cache-read, then write your state', '20M cap', 'stop at 20M', 'Stop at lots cache-read', 'nonstop at 20M cache-read', '', undefined]) assert.equal(stopLineIn(loose), null, String(loose));
 });
 
 test('a UserPromptSubmit carrying the literal records the line once, for the session the payload names', (t) => {
@@ -66,7 +66,7 @@ test('a UserPromptSubmit carrying the literal records the line once, for the ses
   assert.equal(recordPromptLine(prompt('task: Stop at 900 cache-read', { agent_id: 'a1' }), { home }), null, 'a sub-agent\'s prompt records nothing');
   assert.equal(recordPromptLine({ ...prompt('Stop at 900 cache-read'), hook_event_name: 'SessionStart' }, { home }), null);
   assert.equal(recordPromptLine({ ...prompt('Stop at 900 cache-read'), session_id: '../x' }, { home }), null);
-  assert.equal(recordPromptLine(prompt('<cross-session-message> your task. Stop at 900 cache-read. </cross-session-message>'), { home }), 900);
+  assert.equal(recordPromptLine(prompt('<cross-session-message>\nyour task.\nStop at 900 cache-read.\n</cross-session-message>'), { home }), 900);
   assert.equal(readStopLine(home, ID), 900);
   assert.equal(recordPromptLine(prompt('Stop at 5000 cache-read'), { home }), null, 'a later prompt does not move it');
   assert.equal(readStopLine(home, ID), 900);
@@ -164,6 +164,7 @@ test('past the line, the steps that close the work pass, chained with && too; ev
     ['Write', { file_path: 'docs/ROADMAP.md', content: 'x' }],
     ['Bash', { command: 'git add x && npm test' }],
     ['Bash', { command: 'gh pr merge 951' }],
+    ['Bash', { command: "git push --receive-pack='rm -rf bin' ." }],
     ['Bash', { command: 'gh pr create --body "`whoami`"' }],
     ['Bash', { command: 'git push && (rm -rf x)' }],
     ['Read', { file_path: 'bin/x.mjs' }],

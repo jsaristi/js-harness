@@ -32,7 +32,7 @@ export const USAGE = [
   "changes nothing, any other is refused. --raise moves another session's line, run from a session whose app record",
   "carries a lead's title. A prompt that names \"Stop at <N> cache-read\" records the line once by itself, through",
   'the rules turn hook. The plain form then names the line recorded.',
-  'Exit 0 printed or recorded; 1 the transcript could not be found or read, or a line above the one recorded; 2 a usage error.',
+  'Exit 0 printed or recorded; 1 the transcript could not be found or read, a line other than the one recorded, or a --raise from a session not titled as the lead; 2 a usage error.',
 ].join('\n');
 
 class SpendArgError extends Error {}

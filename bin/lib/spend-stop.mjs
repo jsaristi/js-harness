@@ -84,13 +84,15 @@ export function sessionSpend({ file, id, readFile = (one) => fs.readFileSync(one
 }
 
 // The literal a brief or a lead's message writes for a session's line, read by one parser (odd/tasks/spend-stop.md, T4).
-const LITERAL = /(?:^|[^\w-])stop at (\d+(?:\.\d+)?[km]?) cache-read\b/i;
+// It stands on a line of its own, or ends the text after a sentence (the one-line prompt `sessions start` gives), so a
+// literal quoted inside a sentence for another session ("tell JH 5: Stop at 20M cache-read") records nothing.
+const LITERAL = /^[ \t]*stop at (\d+(?:\.\d+)?[km]?) cache-read\.?[ \t]*$|\. stop at (\d+(?:\.\d+)?[km]?) cache-read\.?\s*(?![\s\S])/im;
 
 /** The stop line the text `text` names with the literal "Stop at <N> cache-read" (`20M`, `1.5M`, `500K` or digits),
  * or null: a looser wording ("a 20M cap") names none, so a line is never guessed from prose. */
 export function stopLineIn(text) {
   const match = LITERAL.exec(String(text ?? ''));
-  return match === null ? null : parseStopLine(match[1]);
+  return match === null ? null : parseStopLine(match[1] ?? match[2]);
 }
 
 /** The line the UserPromptSubmit payload `payload` records for its session, or null where it records none: another
@@ -141,7 +143,8 @@ const STATE_FILE = /(?:^|\/)[^/]*state\.md$|(?:^|\/)odd\/tasks\/[^/]+\.md$/;
 function closingStep(words) {
   const { program, args } = programOf(words);
   if (program === 'cd') return true;
-  if (program === 'git') return ['add', 'commit', 'push'].includes(args[0]);
+  // A push that names another receive-pack or exec runs a command of its choosing: refused.
+  if (program === 'git') return ['add', 'commit', 'push'].includes(args[0]) && !args.some((arg) => /^--(?:receive-pack|exec)\b/.test(arg));
   if (program === 'gh') return args[0] === 'pr' && ['create', 'edit', 'ready'].includes(args[1]);
   if (program !== 'js-harness') return false;
   if (args[0] === 'gate') return args[1] === '--' && programOf(args.slice(2)).program === 'git' && programOf(args.slice(2)).args[0] === 'commit';

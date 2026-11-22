@@ -110,3 +110,11 @@ Nothing in this slice: the brief and his words cover it.
   Left open: a session can rename itself to a lead's title (set_session_title) and pass the raise's role check; the
   pre-push hook can still refuse a push past the line for a missing review record; a line sent in a later message after
   one is recorded is ignored, by design.
+- L8 Lenses risk, resilience, reliability on afbf377..2c41126 (JH 288). Fixed in the next commit: the literal anywhere
+  in a prompt recorded a line on the session that only relayed it (the lead told "tell JH 5: Stop at 20M cache-read"),
+  so it now stands on a line of its own or ends the prompt after a sentence; `git push --receive-pack=` or `--exec`
+  past the line is refused; the usage's exit line matches. Open, for the lead: `--raise` trusts
+  `CLAUDE_CODE_SESSION_ID`, which a worker can set to the lead's id, and a session can retitle itself; with no app
+  record (a plain CLI) no raise works, and the line is lifted only by the user removing the file outside a session;
+  `lineFileRefusal` also refuses a read-only `cat` or `ls` of the spend folder, and a remove word earlier on the line
+  (`git mv a b && ls ~/.js-harness`).

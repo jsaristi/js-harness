@@ -185,7 +185,7 @@ function withWorld(body, options) {
 test('sessions start carries the brief\'s "Stop at <N> cache-read" into the first prompt, and none where the brief has none', withWorld((world) => {
   assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
   assert.doesNotMatch(actions(world)[0].at(-1), /cache-read/);
-  fs.writeFileSync(world.brief, '# Build the thing\n\nSpend: stop at 6M cache-read, then write your state.\n');
+  fs.writeFileSync(world.brief, '# Build the thing\n\nStop at 6M cache-read.\n');
   assert.equal(js(world, ['sessions', 'start', '--title', 'Build the other', '--brief', world.brief]).code, 0);
   const prompt = actions(world).at(-1).at(-1);
   assert.match(prompt, / Stop at 6000000 cache-read\.$/);
