@@ -35,6 +35,7 @@ import { backgroundMeasure, cleanNotice, cleanRow } from './lib/clean.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { readSigninExpiry, signinRow } from './lib/signin-expiry.mjs';
 import { modelHomeHealth } from './lib/home-doctor.mjs';
+import { HOOK_SESSIONS, hookHealth } from './lib/hook-health.mjs';
 
 const COLUMN_WIDTHS = [16, 10, 10, 10, 10];
 const HEADER_LABELS = ['tool', 'version', 'claude', 'codex', 'project'];
@@ -227,7 +228,10 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   const withFinished = deps.finishedSessions && interactive ? [...withTrees, finishedSessionsRow(deps.finishedSessions, project, home)] : withTrees;
   const withSkips = deps.reviewSkips && interactive ? [...withFinished, reviewSkipsRow(deps.reviewSkips, project)] : withFinished;
   // The templates' records are read by the interactive report only, as the skips are.
-  const withTemplates = deps.templates && interactive ? [...withSkips, templatesRow(deps.templates, project, home)] : withSkips;
+  // The hooks row reads the twenty newest transcripts: the interactive report only, never the hook, which runs under a
+  // timeout of its own and would be the miss it counts.
+  const withHooks = deps.hookHealth && interactive ? [...withSkips, hooksRow(deps.hookHealth, home)] : withSkips;
+  const withTemplates = deps.templates && interactive ? [...withHooks, templatesRow(deps.templates, project, home)] : withHooks;
   // The idea watch lists the upstream tags over the network: the interactive online report only.
   const withUnseen = deps.ideas && interactive && !offline ? [...withTemplates, await ideasRow(deps.ideas, project)] : withTemplates;
   const withBackup = deps.backup ? [...withUnseen, backupRow(deps.backup, home, now)] : withUnseen;
@@ -400,6 +404,39 @@ function reviewSkipsRow(reviewSkips, project) {
   return { ...row, project: 'stale', fix: { project: [`${count}, and a pull request that holds a lens skip does not land: run the review it skipped`, ...found] } };
 }
 
+/** The hooks row (odd/tasks/f8-s8-certification.md, T2), C3.4's reading: of the hook invocations the host recorded in the
+ * `HOOK_SESSIONS` newest sessions (bin/lib/hook-health.mjs), those it cancelled or timed out. `stale` with each session
+ * that holds one; `unknown` when it read fewer sessions, a trace may have lost a hook's end, or the transcripts cannot
+ * be read, since then 100% cannot be shown; `ok` with none. `sessions` names the sessions read, for `--json`.
+ * `health(home)` gives what `hookHealth` gives or throws. */
+function hooksRow(health, home) {
+  const row = { id: 'hooks', version: null, installed: 'n/a', claude: 'ok', codex: 'n/a', project: 'n/a', upToDate: 'n/a', fix: {} };
+  let found;
+  try {
+    found = health(home);
+  } catch (err) {
+    return { ...row, claude: 'unknown', note: `the transcripts cannot be read: ${err.message}` };
+  }
+  const { sessions, invocations, cancelled, timedOut, truncated, short } = found;
+  const read = sessions.length;
+  const window = read === 0 ? '' : `, ${sessions.at(-1).id} to ${sessions[0].id}`;
+  const missed = cancelled + timedOut;
+  const share = invocations === 0 ? 'none' : `${(((invocations - missed) / invocations) * 100).toFixed(1)}%`;
+  const doubts = [
+    ...(short > 0 ? [`only ${read} of the ${HOOK_SESSIONS} sessions`] : []),
+    ...(truncated.length > 0 ? [`truncated: ${truncated.join(', ')}`] : []),
+  ];
+  const note = `${invocations - missed} of ${invocations} hook invocations ended clean (${share}) in the ${read} newest sessions${window}${doubts.length > 0 ? `; ${doubts.join('; ')}` : ''}`;
+  const base = { ...row, sessions, note };
+  if (missed > 0) {
+    const lines = sessions
+      .filter((session) => session.cancelled + session.timedOut > 0)
+      .map((session) => `${session.id} (${session.project}): ${session.cancelled} cancelled, ${session.timedOut} timed out of ${session.invocations}`);
+    return { ...base, claude: 'stale', fix: { claude: [`${missed} of ${invocations} hook invocations cancelled (${cancelled}) or timed out (${timedOut}) in the ${read} newest sessions`, ...lines] } };
+  }
+  return doubts.length > 0 ? { ...base, claude: 'unknown' } : base;
+}
+
 /** The templates row (odd/tasks/templates.md, "Proof"): what `template shown` reports for the last days, `stale` with
  * each escape, `unknown` while a call went unchecked or the records cannot be read, since then no escape can be ruled
  * out, `ok` with neither, and `n/a` where the project's `harness.json` does not hold `"templates": true` (`null`). */
@@ -452,6 +489,7 @@ export function doctorCommand(argv, extra = {}) {
       list: () => listAgents(claudeRunner({ env: process.env, timeout: 15000 })),
     }),
     reviewSkips: (cwd) => owedSkipLines(cwd),
+    hookHealth: (home) => hookHealth({ claudeDir: process.env.CLAUDE_CONFIG_DIR || `${home}/.claude` }),
     templates: (project, home) => templatesHealth(project, home),
     backup: (home, now) => backupHealth(home, now),
     permissions: (home) => permissionsHealth(home),
