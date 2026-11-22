@@ -716,6 +716,7 @@ A session lost what it had written to engram after each of its two compactions.
 - Class: tool
 - Seen: 2026-10-06 — odd/tasks/session-board.md:280-281 — one sentence; nothing else about it was
   found
+- Control: measured — docs/audits/2026-11-22-failures-without-a-check.md — "on 2026-11-22 no check in this repository can see a lost engram write" — since 2026-11-22
 
 ### estimate-passed-as-fact
 A figure that was an estimate, or came from notes, was passed on as a fact and a decision was taken
@@ -841,6 +842,7 @@ A session ran a harness command with flags it guessed, instead of reading the co
 - Class: wrong-information
 - Seen: 2026-10-30 — the lead's note to JH 106 at 17:20Z (claimed; the lead's own) — the lead guessed the flags of
   `js-harness notify` twice before reading its usage
+- Control: measured — docs/audits/2026-11-22-failures-without-a-check.md — "on 2026-11-22 no command can tell a guessed flag that exists from one that was meant" — since 2026-11-22
 
 ### gate-at-its-bound
 A gate reached, or came within seconds of, its bound of 1,200 s with no test failing, and the commit
@@ -1029,6 +1031,7 @@ while it acted on another session's answer.
   00:41 and queued; JH 7 read it at 00:52, after JH 8's "start now" and with both pieces
   written (odd/tasks/rule-hierarchy.md, Progress of that day). Nothing was spent on Codex or
   pushed; one sub-agent and the session's own turns were. His answer later lifted the hold
+- Control: measured — docs/audits/2026-11-22-failures-without-a-check.md — "on 2026-11-22 no check in this repository can see a message waiting behind a session's turn" — since 2026-11-22
 
 ### host-restart-unseen
 The app restarts a session's process: the session goes on in a new transcript, its background work
@@ -1162,6 +1165,7 @@ A defect already reported was written down for later instead of fixed, and a pai
 dearest part finding it again.
 - Class: delivery
 - Seen: 2026-10-08 — odd/tasks/codex-review-cost.md:234-239 — "the parent's error, to not repeat"
+- Control: measured — docs/audits/2026-11-22-failures-without-a-check.md — "on 2026-11-22 no command can tell a known defect left for later from work rightly deferred" — since 2026-11-22
 
 ### land-removed-live-worktree
 `merge-queue --land` ran `git worktree remove` on the worktree of the pull request it landed while a session still
@@ -1327,6 +1331,8 @@ was away, and the sessions it could no longer tell stopped.
 - Seen: 2026-10-14 — relief file, line 748 — ten of ten sent by 06:03 (the rule at line 714); from
   then the lead only merged what was ready; JH 8 never got its "merged" message (line 759). The fix
   owed is JH 5's `js-harness wait` and its rule, so no session waits on a message (line 760)
+- Control: protocol — bin/lib/manifest.mjs — "Never end a turn waiting for a message or an event,
+  whether the user is present or not" — since 2026-10-15
 
 ### message-to-wrong-session
 A prompt or a message went to a session that was not the one for it: one that never existed, or one
@@ -1697,7 +1703,11 @@ stood.
   from the replay). What stops it: a figure from a scratch script is checked on one case by hand, in the record
   itself, before it is written or sent; here the verifier's brief asks for it, and a replay now exists in the tests
   (`bin/lib/return-report.test.mjs`, the one rule for a held session). Proof it has not come back: the verifier's
-  command in L19 gives 8 again — "a task the change checks off names a commit
+  command in L19 gives 8 again
+- Seen: 2026-11-22 — the lead's message to JH 299 (claimed; the lead's own) — JH 297's Spanish page of the
+  host review said 252 changes where docs/host-updates/claude-desktop-6.28899.6.md holds 281 rows (a grep -c of
+  its ignore rows); the lead corrected it before the page was published
+- Control: check — bin/check-citations.test.mjs — "a task the change checks off names a commit
   reachable from HEAD, unless it rides with staged work" — since 2026-10-17
 - Was: owed — odd/tasks/commands-and-doctor.md — "a task the change checks off in a feature
   document names a commit, and that commit is reachable from HEAD" — replaced on 2026-10-17: T6 built
@@ -1935,6 +1945,7 @@ path.
 - Seen: 2026-10-10 — odd/tasks/practice-project.md:577-579 — `d639bdf` carries
   `D:js-harnesspractice`
 - Seen: 2026-11-14 — odd/tasks/audit-cement.md, L32 — JH 198 wrote two regexes of `bin/progress.mjs` through a shell heredoc and node script, which dropped their backslashes (`/^d{4}-d{2}-d{2}$/`); the new test failed, fixed with Edit
+- Control: measured — docs/audits/2026-11-22-failures-without-a-check.md — "on 2026-11-22 no check in this repository can read shell quoting reliably enough to catch a lost backslash" — since 2026-11-22
 
 ### scripted-turn-hung-lock
 A scripted measure run in a turn of the gate never returned, and it held the machine's lock while the
@@ -2195,6 +2206,7 @@ session believed he had rejected it and asked for his word.
 - Seen: 2026-10-13 — relief file, line 565 — JH 5 asked the lead to put to him whether it goes on;
   he had rejected nothing: the lead had stopped that turn, and the app listed the session as running
   at 13:08 and at 14:10, which it would not after a refusal at 07:00
+- Control: measured — docs/audits/2026-11-22-failures-without-a-check.md — "on 2026-11-22 no check in this repository can tell a stopped turn from his refusal" — since 2026-11-22
 
 ### stop-removed-live-worktree
 `js-harness sessions stop`, run to restart a background session, runs `claude rm`, which deleted the files of the
@@ -2634,6 +2646,10 @@ process ran where the host did not track it.
 - Seen: 2026-11-20 — the lead's notes, return-block-3.md, "Owed by a docs session" (claimed; the lead's own) — at
   20:35 local the lead started `js-harness wait` with `&` in the console; it killed pid 3216 and re-armed the wait
   with the host's background run. The chained-step guard reads `&` between steps, not one that ends the command
+- Seen: 2026-11-22 — the lead's message to JH 299 (claimed; the lead's own, transcript d6383aea) — at 17:04 local the
+  lead started `js-harness wait --notice-to orchestrator` with a trailing `&` (pid 5296), which would never have
+  woken it; seen at once, the process stopped and the wait started again as a background run. The guard refuses
+  `&` only after push, commit, gh pr or notify, not before a wait
 - Control: owed — the lead's notes, return-block-3.md — "the guard hook refuses a Bash command ending in `&`; who builds: a small rule/guard session after the report pages"
 
 ### wait-blind-to-notices
