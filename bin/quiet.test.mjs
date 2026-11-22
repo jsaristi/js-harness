@@ -248,13 +248,15 @@ test("quiet: a node --test run is work, by node's own flag; --test after a scrip
     // A flag's value that ends like a script, and a script with no extension that takes --test (the lenses on ff8bf2e).
     proc(47, 'node --import ./register.mjs --test'),
     proc(48, 'node ./bin/www --test'),
+    // Every valued flag of `node --help`, not a hand-picked few (the lenses on 2b8f480).
+    proc(49, 'node --disable-warning ExperimentalWarning --test-coverage-include src/** --test'),
   ];
   for (const { pid, commandLine } of processes.filter((one) => ![43, 44, 48].includes(one.pid))) assert.match(commandLine, new RegExp(QUIET_PROCESSES), `the listing keeps pid ${pid}`);
   const run = await quiet(world, ['--json'], { processes });
   assert.equal(run.code, 1, run.stdout);
-  assert.deepEqual(JSON.parse(run.stdout).work.map((item) => [item.source, item.pid]), [['tests', 41], ['tests', 42], ['tests', 45], ['tests', 46], ['tests', 47]]);
+  assert.deepEqual(JSON.parse(run.stdout).work.map((item) => [item.source, item.pid]), [['tests', 41], ['tests', 42], ['tests', 45], ['tests', 46], ['tests', 47], ['tests', 49]]);
   const text = await quiet(world, [], { processes });
-  assert.match(text.stdout, /^busy: 5 things run/);
+  assert.match(text.stdout, /^busy: 6 things run/);
   assert.match(text.stdout, /test run, pid 41: /);
   assert.doesNotMatch(text.stdout, /pid 4[34]/);
 }));
