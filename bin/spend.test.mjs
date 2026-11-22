@@ -96,7 +96,10 @@ test("only a session whose app record carries a lead's title raises or lowers an
   const as = (caller) => ({ env: { CLAUDE_CODE_SESSION_ID: caller, JS_HARNESS_HOME: home }, readApp: () => records });
   const worker = run([ID, '--line', '30M', '--raise'], as(ID));
   assert.equal(worker.code, 1);
-  assert.match(worker.err, /only the lead/);
+  assert.match(worker.err, /its own line/);
+  const otherWorker = run([ID, '--line', '30M', '--raise'], { ...as('22222222-2222-3333-4444-555555555555'), readApp: () => new Map([...records, ['22222222-2222-3333-4444-555555555555', { title: 'JH 290 · work' }]]) });
+  assert.equal(otherWorker.code, 1);
+  assert.match(otherWorker.err, /only the lead/);
   const stranger = run([ID, '--line', '30M', '--raise'], { env: { JS_HARNESS_HOME: home }, readApp: () => records });
   assert.equal(stranger.code, 1, 'no session runs it');
   const raised = run([ID, '--line', '30M', '--raise'], as('11111111-2222-3333-4444-555555555555'));
@@ -104,6 +107,17 @@ test("only a session whose app record carries a lead's title raises or lowers an
   assert.match(raised.out, /stop line 30,000,000 cache-read recorded for session .*moved from 20,000,000 by the lead/);
   assert.equal(run([ID.slice(0, 8), '--line', '30M', '--raise'], as('11111111-2222-3333-4444-555555555555')).code, 2, 'the whole id, never a short one');
   assert.equal(run(['--self', '--line', '30M', '--raise'], as('11111111-2222-3333-4444-555555555555')).code, 2, 'a raise names the session');
+});
+
+test('no session raises its own line, not even one titled as the lead', (t) => {
+  const { root } = scratch(t);
+  const home = path.join(root, 'home');
+  const lead = '11111111-2222-3333-4444-555555555555';
+  assert.equal(run(['--self', '--line', '20M'], { env: { CLAUDE_CODE_SESSION_ID: lead, JS_HARNESS_HOME: home } }).code, 0);
+  const records = new Map([[lead, { title: 'JH ORQ · orquestador F8' }]]);
+  const own = run([lead, '--line', '30M', '--raise'], { env: { CLAUDE_CODE_SESSION_ID: lead, JS_HARNESS_HOME: home }, readApp: () => records });
+  assert.equal(own.code, 1);
+  assert.match(own.err, /its own line/);
 });
 
 test('--line takes --self and a token count, and refuses a session not named by the host', (t) => {

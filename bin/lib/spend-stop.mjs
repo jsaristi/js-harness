@@ -98,30 +98,83 @@ export function stopLineIn(text, { brief = false } = {}) {
   return match === null ? null : parseStopLine(match[1] ?? match[2]);
 }
 
+// A cross-session message as the host hands it to the receiving session, closed or cut off at the end of the prompt.
+const MESSAGE = /<cross-session-message\b([^>]*)>[\s\S]*?(?:<\/cross-session-message>|(?![\s\S]))/g;
+const SENDER = /\bfrom-name="([^"]*)"/;
+
+/** The prompt `prompt` with every cross-session message whose sender `isLeadTitle` does not read as the lead's taken
+ * out: a brief one session relays to another (JH PLAN's draft sent to the lead) names the line of the session it is
+ * for, never the one that carries it (odd/tasks/spend-stop.md, L9). */
+function ownText(prompt, isLeadTitle) {
+  return String(prompt ?? '').replace(MESSAGE, (whole, attributes) => (isLeadTitle(SENDER.exec(attributes)?.[1] ?? '') ? whole : '\n'));
+}
+
 /** The line the UserPromptSubmit payload `payload` records for its session, or null where it records none: another
  * event, a sub-agent's prompt, no session id of the right shape, no literal in the prompt, or a line already recorded,
  * which a later prompt never moves. A start_session's first prompt and a cross-session message both reach this hook
- * (odd/tasks/spend-stop.md, L5), so a session's line is recorded with no step of its own. */
-export function recordPromptLine(payload, { home, now } = {}) {
+ * (odd/tasks/spend-stop.md, L5), so a session's line is recorded with no step of its own; a message counts only when
+ * `isLeadTitle` reads its sender's title as the lead's, and with no `isLeadTitle` none does. */
+export function recordPromptLine(payload, { home, now, isLeadTitle = () => false } = {}) {
   if (payload?.hook_event_name !== 'UserPromptSubmit' || !isSessionId(payload.session_id)) return null;
   if (typeof payload.agent_id === 'string' && payload.agent_id !== '') return null;
-  const line = stopLineIn(payload.prompt);
+  const line = stopLineIn(ownText(payload.prompt, isLeadTitle));
   if (line === null || readStopLine(home, payload.session_id) !== null) return null;
   recordStopLine({ home, sessionId: payload.session_id, line, ...(now ? { now } : {}) });
   return line;
 }
 
 const slashed = (text) => String(text ?? '').replace(/\\/g, '/').toLowerCase();
-// The spend folder named anywhere, or the home's folders above it named whole by a command that removes or moves.
+// The spend folder named anywhere, or the home's folders above it named whole.
 const NAMES_FOLDER = /\.js-harness\/+channel\/+spend(?:\/|\b)/;
-const REMOVES_ABOVE = /\b(?:rm|rmdir|mv|del|rd|move|remove-item|move-item|ren|rename-item)\b[^\n]*\.js-harness(?:\/+channel)?\/*(?=["'\s]|$)/m;
+const ABOVE_WHOLE = /\.js-harness(?:\/+channel)?\/*$/;
+// The programs that only read what they name, so a session may look at its line; and those that remove or move.
+const READERS = new Set(['cat', 'ls', 'dir', 'head', 'tail', 'wc', 'stat', 'file', 'grep', 'rg', 'less', 'more', 'type', 'get-content', 'gc', 'get-childitem', 'gci', 'get-item', 'test-path']);
+const REMOVERS = new Set(['rm', 'rmdir', 'mv', 'del', 'erase', 'rd', 'move', 'remove-item', 'ri', 'move-item', 'ren', 'rename-item']);
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const SHELL_TOOLS = new Set(['Bash', 'mcp__terminal__run_in_terminal']);
 
+/** Whether the shell command `command` (slashed and lower-cased) writes, removes or moves the spend folder: a simple
+ * command that names it and is not a reader (`READERS`), one that removes or moves it or a folder above it, a
+ * redirection into it, or any substitution on a command that names it. A command that cannot be split is read as one
+ * that does. */
+function shellTouches(command) {
+  if (!NAMES_FOLDER.test(command) && !/\.js-harness/.test(command)) return false;
+  if (NAMES_FOLDER.test(command) && /`|\$\(|<\(|>\(/.test(command)) return true;
+  let words;
+  try {
+    words = shellWords(command, { groups: true, redirections: true });
+  } catch {
+    return NAMES_FOLDER.test(command);
+  }
+  for (const at of words.redirections) if (NAMES_FOLDER.test(words[at + 1] ?? '') || ABOVE_WHOLE.test(words[at + 1] ?? '')) return true;
+  let start = 0;
+  for (let at = 0; at <= words.length; at += 1) {
+    if (at < words.length && !words.operators.has(at)) continue;
+    const step = words.slice(start, at);
+    start = at + 1;
+    if (step.length === 0) continue;
+    const { program } = programOf(step);
+    if (step.some((word) => NAMES_FOLDER.test(word)) && !READERS.has(program)) return true;
+    if (REMOVERS.has(program) && step.some((word) => ABOVE_WHOLE.test(word))) return true;
+  }
+  return false;
+}
+
+/** Whether the shell command `command` (slashed and lower-cased) runs `spend ... --raise` naming the session
+ * `sessionId` that runs it, or an id the shell computes (a `$`, a backtick or a `%name%`): the host sets the hook's
+ * `session_id`, which a worker cannot, so its own raise is refused here whatever it puts in CLAUDE_CODE_SESSION_ID or
+ * its title (odd/tasks/spend-stop.md, L9). */
+function raisesOwnLine(command, sessionId) {
+  if (!/\bspend\b/.test(command) || !/(?:^|\s)--raise\b/.test(command)) return false;
+  return (isSessionId(sessionId) && command.includes(sessionId.toLowerCase())) || /\$|`|%\w+%/.test(command);
+}
+
 /** Why the PreToolUse call of `payload` is refused for touching the stop lines, or null: a Write, Edit, MultiEdit or
- * NotebookEdit of a file in the spend folder, or a Bash or terminal command that names that folder or removes the
- * folders above it, for every session, with or without a line, read from the call alone (odd/tasks/spend-stop.md,
- * T5). A path the shell computes (`$HOME`, a variable, `eval`, a `cd` then a relative path) is not read. */
+ * NotebookEdit of a file in the spend folder, a Bash or terminal command that writes, removes or moves that folder or
+ * removes the folders above it (`shellTouches`; a read passes), or one that raises the running session's own line
+ * (`raisesOwnLine`), for every session, with or without a line, read from the call alone (odd/tasks/spend-stop.md,
+ * T5, L9). A path the shell computes (`$HOME`, a variable, `eval`, a `cd` then a relative path) is not read, nor a
+ * script file a command runs. */
 export function lineFileRefusal(payload, { home } = {}) {
   const tool = payload?.tool_name;
   const input = payload?.tool_input;
@@ -132,9 +185,10 @@ export function lineFileRefusal(payload, { home } = {}) {
     touches = file.startsWith(`${folder}/`) || NAMES_FOLDER.test(file);
   } else if (SHELL_TOOLS.has(tool)) {
     const command = slashed(input?.command);
-    touches = NAMES_FOLDER.test(command) || REMOVES_ABOVE.test(command);
+    if (raisesOwnLine(command, payload?.session_id)) return 'js-harness guard: this step raises the stop line of the session that runs it, or of a session the shell computes: no session raises its own line; the lead raises it, naming the session whole (js-harness spend <session> --line <tokens> --raise)';
+    touches = shellTouches(command);
   }
-  return touches ? 'js-harness guard: this step writes or removes a session\'s stop line (the spend folder under the harness home), which no session touches: a line is recorded once, and only the lead moves it (js-harness spend <session> --line <tokens> --raise)' : null;
+  return touches ?'js-harness guard: this step writes or removes a session\'s stop line (the spend folder under the harness home), which no session touches: a line is recorded once, and only the lead moves it (js-harness spend <session> --line <tokens> --raise)' : null;
 }
 
 // The files a session past its line may still read and write: its state (`*state.md`) and a feature document.

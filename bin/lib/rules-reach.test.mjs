@@ -280,6 +280,14 @@ test('the command answers in the hooks contract, and exits 0 on empty input, on 
     assert.equal(readStopLine(m.home, id), 20_000_000);
     assert.equal(await rulesHookMain([], io(said('Stop at 9M cache-read'), () => ({ status: 1, stdout: '' }))), 0);
     assert.equal(readStopLine(m.home, id), 20_000_000, 'a later prompt does not move it');
+    // L9: a message records only when its sender is titled as the lead; a brief relayed by another session does not.
+    const message = (sessionId, sender) => JSON.stringify({ hook_event_name: 'UserPromptSubmit', session_id: sessionId, prompt: `<cross-session-message from="local_1" from-name="${sender}">\nbrief\nStop at 7M cache-read.\n</cross-session-message>` });
+    const worker = '11111111-2222-3333-4444-555555555555';
+    const lead = '22222222-2222-3333-4444-555555555555';
+    assert.equal(await rulesHookMain([], io(message(worker, 'JH ORQ · orquestador F8'), () => ({ status: 1, stdout: '' }))), 0);
+    assert.equal(readStopLine(m.home, worker), 7_000_000);
+    assert.equal(await rulesHookMain([], io(message(lead, 'JH PLAN · plan'), () => ({ status: 1, stdout: '' }))), 0);
+    assert.equal(readStopLine(m.home, lead), null);
     out.length = 0;
     err.length = 0;
 

@@ -23,6 +23,7 @@ function scratch(t, { main = 600, sub = 300 } = {}) {
   return { home: path.join(root, 'home'), transcript };
 }
 
+const isLeadTitle = (title) => / ORQ · /.test(title);
 const payload = (transcript, tool = 'Bash', input = { command: 'git status' }) => ({ session_id: ID, transcript_path: transcript, tool_name: tool, tool_input: input });
 
 test('a stop line is written as digits or with a K or M suffix, and nothing else', () => {
@@ -68,10 +69,44 @@ test('a UserPromptSubmit carrying the literal records the line once, for the ses
   assert.equal(recordPromptLine(prompt('task: Stop at 900 cache-read', { agent_id: 'a1' }), { home }), null, 'a sub-agent\'s prompt records nothing');
   assert.equal(recordPromptLine({ ...prompt('Stop at 900 cache-read'), hook_event_name: 'SessionStart' }, { home }), null);
   assert.equal(recordPromptLine({ ...prompt('Stop at 900 cache-read'), session_id: '../x' }, { home }), null);
-  assert.equal(recordPromptLine(prompt('<cross-session-message>\nyour task.\nStop at 900 cache-read.\n</cross-session-message>'), { home }), 900);
+  assert.equal(recordPromptLine(prompt('<cross-session-message from="local_1" from-name="JH ORQ · lead">\nyour task.\nStop at 900 cache-read.\n</cross-session-message>'), { home, isLeadTitle }), 900, 'the lead\'s message to a worker records');
   assert.equal(readStopLine(home, ID), 900);
   assert.equal(recordPromptLine(prompt('Stop at 5000 cache-read'), { home }), null, 'a later prompt does not move it');
   assert.equal(readStopLine(home, ID), 900);
+});
+
+test('a line in text relayed to a session records nothing on it: only the lead\'s own message or a typed prompt does', (t) => {
+  const { home } = scratch(t);
+  const prompt = (text) => ({ hook_event_name: 'UserPromptSubmit', session_id: ID, prompt: text });
+  const relayed = '<cross-session-message from="local_2" from-name="JH PLAN · plan">\nbrief for JH 5:\nStop at 900 cache-read.\n</cross-session-message>';
+  assert.equal(recordPromptLine(prompt(relayed), { home, isLeadTitle }), null, 'a worker\'s brief relayed to the lead');
+  assert.equal(recordPromptLine(prompt(relayed.replace('</cross-session-message>', '')), { home, isLeadTitle }), null, 'an unclosed one too');
+  assert.equal(recordPromptLine(prompt(relayed.replace('JH PLAN · plan', 'JH ORQ · lead')), { home }), null, 'with no title check given, no message records');
+  assert.equal(fs.existsSync(stopLinePath(home, ID)), false);
+  assert.equal(recordPromptLine(prompt(`${relayed}\nStop at 700 cache-read.`), { home, isLeadTitle }), 700, 'the typed text beside it still records');
+});
+
+test('a raise of a line from a shell is refused when it names the running session or an id the shell computes', (t) => {
+  const { home } = scratch(t);
+  const other = '11111111-2222-3333-4444-555555555555';
+  const call = (command) => lineFileRefusal({ session_id: ID, tool_name: 'Bash', tool_input: { command } }, { home });
+  for (const command of [
+    `js-harness spend ${ID} --line 99M --raise`,
+    `CLAUDE_CODE_SESSION_ID=${other} node bin/js-harness.mjs spend ${ID.toUpperCase()} --raise --line 99M`,
+    'js-harness spend $(cat id.txt) --line 99M --raise',
+    'js-harness spend "$ID" --line 99M --raise',
+    'js-harness spend `cat id` --line 99M --raise',
+  ]) assert.match(call(command) ?? '', /its own line/, command);
+  assert.equal(call(`js-harness spend ${other} --line 30M --raise`), null, 'the lead names another session: spend checks its title');
+  assert.equal(call(`js-harness spend ${ID}`), null, 'reading the figure is not a raise');
+});
+
+test('a read of the spend folder passes; a write, a removal or a redirection into it stays refused', (t) => {
+  const { home } = scratch(t);
+  const file = stopLinePath(home, ID).replace(/\\/g, '/');
+  const call = (command) => lineFileRefusal({ tool_name: 'Bash', tool_input: { command } }, { home });
+  for (const command of [`cat ${file}`, 'ls ~/.js-harness/channel/spend', 'ls -la ~/.js-harness/channel/spend && git status', `head -1 ${file} | wc -c`, 'Get-Content ~/.js-harness/channel/spend/x.json', 'git mv a b && ls ~/.js-harness']) assert.equal(call(command), null, command);
+  for (const command of [`cat x > ${file}`, `echo 1 | tee ${file}`, `cp x ${file}`, `sed -i s/9/99/ ${file}`, `cat ${file} && rm ${file}`, `ls $(rm ${file})`, 'rm -rf ~/.js-harness', `cat <<'EOF' > ${file}\n{}\nEOF`]) assert.match(call(command) ?? '', /stop line/, command);
 });
 
 test('the guard refuses a step that names the spend folder, for any session, and lets others by', (t) => {

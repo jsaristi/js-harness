@@ -1,7 +1,7 @@
 # spend-stop: a session stops at its spend line
 
 ## State
-JH 287, on origin/main with JH 285's two commits cherry-picked after this document (L3). T1 is built test-first; next: lenses, Codex skip, push, draft PR.
+JH 290, stacked on PR 951 (0c6e6169): T8-T11 close 951's Open items (L9); next: lenses, Codex skip, push, draft PR.
 
 ## Goal
 A session given a stop line in cache-read tokens is refused its next step once it has spent past it, without having to
@@ -32,8 +32,9 @@ each step (`spend-past-approved`)".
   host's hook payload), never a guessed one. Once recorded it is the session's for good: a second `--line` is refused,
   above or below, and only the lead (a session whose app record carries a lead's title) moves it, with `--raise`
   naming the session (T5).
-- The line file is not the session's to touch: the guard refuses a Bash, terminal, Write, Edit, MultiEdit or
-  NotebookEdit call that names the spend folder, for every session (T5). A path the shell computes (`$HOME`, a
+- The line file is not the session's to touch: the guard refuses a Write, Edit, MultiEdit or NotebookEdit of the
+  spend folder, and a Bash or terminal command that writes, removes or moves it, for every session (T5); a read
+  (cat, ls, head and the other readers) passes (T9). No session raises its own line (T8). A path the shell computes (`$HOME`, a
   variable, `eval`) is not read, as the background-launch guard does not read one either.
 
 ## Ask me before
@@ -73,6 +74,14 @@ Nothing in this slice: the brief and his words cover it.
   state file (`*state.md`) or a feature document (`odd/tasks/*.md`) pass, chained too; everything else is refused
   with the one line; route JH 288
 - [x] T7 (kind: verify) spec 1: the hook payload's `session_id` is the id `spend --self` reads (L6); route JH 288
+- [x] T8 (kind: build) spec 1: no session raises its own line: the guard refuses a shell `spend ... --raise` that names
+  the hook's `session_id` or an id the shell computes, and `spend` refuses a raise of its CLAUDE_CODE_SESSION_ID (L9);
+  route JH 290
+- [x] T9 (kind: build) spec 1: a read of the spend folder passes; a write, removal, move or redirection into it stays
+  refused, judged per simple command (L9); route JH 290
+- [x] T10 (kind: build) spec 1: a cross-session message records a line only when its sender is titled as the lead, so
+  a brief relayed to the lead records nothing on it (L9); route JH 290
+- [x] T11 (kind: docs) spec 1: a `- Seen:` line under `spend-past-approved` for JH 288's overrun; route JH 290
 
 ## Log
 - L1 His request, typed (0cdab702 line 9744): "incluye primero que todo las mejoras para que nos nos vuelva a fallar y
@@ -118,3 +127,16 @@ Nothing in this slice: the brief and his words cover it.
   record (a plain CLI) no raise works, and the line is lifted only by the user removing the file outside a session;
   `lineFileRefusal` also refuses a read-only `cat` or `ls` of the spend folder, and a remove word earlier on the line
   (`git mv a b && ls ~/.js-harness`).
+- L9 JH 290 (2026-11-22, the lead's brief-951-open.md) closed PR 951's Open items. Searched first for how the harness
+  tells the lead from a worker: `leadTitle` (session-title-guard), `isLeadSession` (stale-board, the notices' sender
+  title) and the relay lease (`permit lease`); each rests on a title or an id a worker can set, so none stops a
+  worker's own raise. The one value a worker cannot set is the hook payload's `session_id`: the guard refuses a
+  `spend ... --raise` that names it or an id the shell computes (`$`, a backtick, `%name%`), and `spend` refuses a
+  raise of its own CLAUDE_CODE_SESSION_ID, the lead's included (the lead's own line is the owner's to move). The folder
+  guard reads per simple command: a reader passes; any other program naming the folder, a remover of the folders above
+  it, a redirection into it or a substitution on a command naming it is refused, which also ends the false refusal of
+  `git mv a b && ls ~/.js-harness`. Relayed text: the host hands a message as `<cross-session-message ...
+  from-name="<title>">` (seen in this session's own transcript); a message whose sender is not titled as the lead is
+  taken out before the literal is read, and the rules hook passes `leadTitle`; L4's test of an untitled message now
+  carries a lead's title. Left open: a script file a command runs, or a path the shell computes, is not read; a worker
+  that retitles itself as a lead can still raise another worker's line, never its own.
