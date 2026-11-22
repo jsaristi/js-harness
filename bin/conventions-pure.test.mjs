@@ -22,7 +22,6 @@ const IMPURE = new Set(['fs', 'fs/promises', 'child_process', 'net', 'os']);
 const CLAIM = /\bpure\b(?!-)/i;
 
 const LEGACY = {
-  'process-tree.mjs': 'says `selectDescendants` is pure, and the module imports node:child_process and node:fs',
   'version.mjs': 'says "Pure version-comparison" and imports node:fs for a directory listing and its own package.json',
 };
 
