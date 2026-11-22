@@ -86,7 +86,7 @@ function transcripts(claudeDir) {
 
 /** The hooks of the `limit` newest sessions under `claudeDir` (`~/.claude`): each session `{ id, project, at,
  * invocations, events, cancelled, timedOut, truncated }`, newest first, `at` its last write; the totals; `truncated`,
- * the ids of the traces that may have lost a hook's end; `short`, how many sessions short of `limit` it read. Newest
+ * the ids of the traces that may have lost a hook's end, one that cannot be read among them; `short`, how many sessions short of `limit` it read. Newest
  * first, so a fork's copy of its parent's lines counts in the fork. Throws when there is no projects folder. */
 export function hookHealth({ claudeDir, limit = HOOK_SESSIONS }) {
   const seen = new Set();
@@ -97,6 +97,8 @@ export function hookHealth({ claudeDir, limit = HOOK_SESSIONS }) {
     try {
       text = fs.readFileSync(transcript.file, 'utf8');
     } catch {
+      // One of the newest that cannot be read is no clean session: it stays in its place, its ends lost.
+      sessions.push({ id: transcript.id, project: transcript.project, at: new Date(transcript.ms).toISOString(), invocations: 0, events: 0, cancelled: 0, timedOut: 0, truncated: true });
       continue;
     }
     sessions.push({ id: transcript.id, project: transcript.project, at: new Date(transcript.ms).toISOString(), ...readTranscriptHooks(text, seen) });

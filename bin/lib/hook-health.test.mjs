@@ -98,6 +98,26 @@ test('hookHealth says how many sessions it is short of, and which traces are tru
   }
 });
 
+test('hookHealth keeps a newest session it cannot read in its place, as truncated, never passing to an older one', () => {
+  const dir = home([{ id: 'old', text: `${ok()}
+` }, { id: 'locked', text: `${ok({ toolUseID: 'x' })}
+` }]);
+  const locked = path.join(dir, 'projects', 'p', 'locked.jsonl');
+  const real = fs.readFileSync;
+  fs.readFileSync = (file, ...rest) => {
+    if (file === locked) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' });
+    return real(file, ...rest);
+  };
+  try {
+    const health = hookHealth({ claudeDir: dir, limit: 1 });
+    assert.deepEqual(health.sessions.map((s) => s.id), ['locked']);
+    assert.deepEqual(health.truncated, ['locked']);
+  } finally {
+    fs.readFileSync = real;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('hookHealth throws when there is no projects folder to read', () => {
   assert.throws(() => hookHealth({ claudeDir: path.join(os.tmpdir(), 'no-such-claude-dir-hook-health') }));
 });
