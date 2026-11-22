@@ -2527,6 +2527,10 @@ ran.
 - Seen: 2026-11-01 — odd/tasks/double-review-alignment.md, L19 — JH 126 ended its turn at 18:58 local near the
   end of its window, waiting for a compaction that comes only on a new turn, with no wait armed; nothing ran for
   about two hours until the lead woke it at 20:53 (the lead's notice, claimed)
+- Seen: 2026-11-22 — the lead's transcript 0cdab702, lines 9816 and 10901 (claimed; the lead's own, in JH 289's
+  brief) — from 03:52Z to 05:22Z no session ran while his stretch had 4 to 6 hours left; the lead had rested with no
+  next unit planned, and he saw it: "no veo que nada este trabajando". What stops it: the lead plans the stretch's
+  next units before it rests
 - Control: protocol — bin/lib/manifest.mjs — "Never end a turn waiting for a message or an event,
   whether the user is present or not" — since 2026-10-15
 
