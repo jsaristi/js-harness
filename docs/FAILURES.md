@@ -2427,6 +2427,8 @@ nothing to say so.
   changed at ae471e7; Windows skips the test, and the first run on Linux (run 38296748258) showed
   it red (claimed; odd/tasks/gate-wait.md of `feat/gate-wait` at ea02144); the expectation was
   corrected by reading ae471e7 and no run has shown it green, since this machine skips the test
+- Control: check — bin/conventions-platform-skip.test.mjs — "every platform a test file compares to has a gate" —
+  since 2026-11-22
 
 ### test-wrote-real-home
 A test that forgot `--home` wrote into the real home.
