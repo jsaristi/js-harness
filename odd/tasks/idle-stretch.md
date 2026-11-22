@@ -110,3 +110,7 @@ Nothing: the brief and his words L2, L3 ask for it; a doubt goes to the lead as 
 - L8 2026-11-22, the reliability lens on 427de6b..49d2693, two warnings, both fixed with a test first: an idle hour
   a session sat waiting through counted twice (now counted once, under waiting: `idleHoursBeside`), and one spell
   told twice counted twice (now kept once by its `since`). The risk lens found nothing.
+- L9 2026-11-22, the reliability lens on the fix (49d2693..d0e563b): both warnings rechecked fixed; one follow-up
+  suggestion left open, answered here: the return lists each idle spell with its full minutes while the idle total
+  leaves out what a wait covered, so the list can add up to more than the tile. Open for the next unit on this page:
+  say on the tile that the idle total is beside the waits, or list each spell's uncovered minutes.
