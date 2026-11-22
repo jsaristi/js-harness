@@ -98,6 +98,9 @@ test('a raise of a line from a shell is refused when it names the running sessio
     'js-harness spend `cat id` --line 99M --raise',
     `js-harness spend ${ID.slice(0, 8)}''${ID.slice(8)} --line 99M "--raise"`,
     `js-harness spend ${ID.slice(0, 8)} --line 99M --raise`,
+    `bash -c 'CLAUDE_CODE_SESSION_ID=${other} js-harness spend ${ID} --line 99M --raise'`,
+    `pwsh -Command "js-harness spend ${ID} --line 99M --raise"`,
+    `eval "js-harness spend ${ID} --line 99M --raise"`,
   ]) assert.match(call(command) ?? '', /its own line/, command);
   assert.equal(call(`js-harness spend ${other} --line 30M --raise`), null, 'the lead names another session: spend checks its title');
   assert.equal(call(`js-harness spend ${ID}`), null, 'reading the figure is not a raise');

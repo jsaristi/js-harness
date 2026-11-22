@@ -30,8 +30,9 @@ export const USAGE = [
   'chain and sub-agents, reaches the line, but for the steps that close the work (a state file or feature document, cd,',
   'git add, commit and push, gh pr create|edit|ready, notify, loop stop). A line is recorded once: the same line again',
   "changes nothing, any other is refused. --raise moves another session's line, run from a session whose app record",
-  "carries a lead's title; no session raises its own. A prompt that names \"Stop at <N> cache-read\" records the line once by itself, through",
-  'the rules turn hook. The plain form then names the line recorded.',
+  "carries a lead's title; no session raises its own. A prompt with \"Stop at <N> cache-read\" on a line of its own, or",
+  'ending it after a sentence, records the line once by itself, through the rules turn hook; inside a cross-session',
+  "message it counts only when the sender is titled as the lead. The plain form then names the line recorded.",
   'Exit 0 printed or recorded; 1 the transcript could not be found or read, a line other than the one recorded, or a --raise of its own line or from a session not titled as the lead; 2 a usage error.',
 ].join('\n');
 

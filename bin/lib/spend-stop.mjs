@@ -132,6 +132,8 @@ const ABOVE_WHOLE = /\.js-harness(?:\/+channel)?\/*$/;
 const READERS = new Set(['cat', 'ls', 'dir', 'head', 'tail', 'wc', 'stat', 'file', 'grep', 'type', 'get-content', 'gc', 'get-childitem', 'gci', 'get-item', 'test-path']);
 // A word the shell expands (`$x`, `$_`, `$(`, a backtick, cmd's `%x%`): what it names is not read from the call.
 const EXPANDS = /\$|`|%\w+%/;
+// The programs that run their argument as a script, which the guard does not split.
+const SCRIPT_RUNNERS = new Set(['bash', 'sh', 'zsh', 'dash', 'pwsh', 'powershell', 'cmd', 'eval', 'xargs', 'wsl']);
 const WHOLE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** The simple commands of the split words `words`, each as `{ step, piped }`: its words, and the index of the
@@ -179,7 +181,8 @@ function shellTouches(command) {
 /** Whether the shell command `command` (slashed and lower-cased) has a step `js-harness spend ... --raise` that does
  * not name, as a literal whole id, a session other than `sessionId`, the one that runs it: the host sets the hook's
  * `session_id`, which a worker cannot, so its own raise is refused here whatever it puts in CLAUDE_CODE_SESSION_ID or
- * its title (odd/tasks/spend-stop.md, L9). A heredoc's text is no step; a `bash -c` or `eval` script is not read. */
+ * its title (odd/tasks/spend-stop.md, L9). A heredoc's text is no step; a raise handed to a shell or `eval` as a
+ * script (`bash -c '...'`) is not read, so it is refused whatever it names; a script file is not read at all. */
 function raisesOwnLine(command, sessionId) {
   if (!/spend/.test(command) || !/--raise/.test(command)) return false;
   let words;
@@ -190,6 +193,7 @@ function raisesOwnLine(command, sessionId) {
   }
   return stepsOf(words).some(({ step }) => {
     const { program, args } = programOf(step);
+    if (SCRIPT_RUNNERS.has(program)) return args.some((arg) => /spend/.test(arg) && /--raise/.test(arg)) || (args.some((arg) => /spend/.test(arg)) && args.includes('--raise'));
     if (program !== 'js-harness' || args[0] !== 'spend' || !args.includes('--raise')) return false;
     const named = args.slice(1).filter((arg, at, rest) => !arg.startsWith('-') && rest[at - 1] !== '--line');
     return named.length !== 1 || !WHOLE_ID.test(named[0]) || named[0] === String(sessionId ?? '').toLowerCase() || step.some((word) => EXPANDS.test(word));

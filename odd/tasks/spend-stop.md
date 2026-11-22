@@ -142,6 +142,9 @@ Nothing in this slice: the brief and his words cover it.
   handover's `ORQ nueva`, so a worker briefed by an arriving lead still gets its line; L4's test of an untitled message
   now carries a lead's title. The `from-name` wrapper is inferred from this session's transcript, not seen in a
   UserPromptSubmit payload's `prompt`: if the hook gets the body only, a lead's line in a message records nothing.
-  Left open: a script file, `bash -c` or `eval` script, or a path the shell computes is not read; a worker that
+  The risk lens on 0c6e616..800175e: a raise inside `bash -c '...'` passed both checks; a raise handed to a shell,
+  `eval`, `xargs` or `wsl` as a script is now refused whatever it names. Left open: a script file or a path the shell
+  computes is not read; the lens's carried findings from PR 951 (no recovery text for a wrong line, the push
+  allow-list, the brief path of `sessions start`) and a message with no `from-name` recording nothing; a worker that
   retitles itself as a lead can still raise another worker's line, never its own; a draft brief the lead sends to
   another session (JH PLAN) with the literal on its own line still records on that session.
