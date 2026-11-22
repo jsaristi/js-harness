@@ -637,7 +637,7 @@ function buildPublicSummary(deps, paths, config) {
 function summaryCommand(args, deps) {
   const paths = backupPaths(deps.home);
   const config = readJson(paths.config) ?? {};
-  if (refuseBareFlag(args, ['--summary-repo'], 'summary', deps)) return 2;
+  refuseBareFlag(args, ['--summary-repo'], 'summary');
   const named = valueOf(args, '--summary-repo');
   try {
     deps.stdout.write(buildPublicSummary(deps, paths, named ? { ...config, summaryRepo: path.resolve(named) } : config).text);
@@ -674,33 +674,33 @@ function valueOf(args, flag) {
   return value === undefined || value.startsWith('--') ? null : value;
 }
 
-function refuseBareFlag(args, flags, command, deps) {
+/** A bad command line: its message is printed alone, and the exit is 2. */
+class BackupArgError extends Error {}
+
+/** Throws a `BackupArgError` for the first of `flags` that `args` holds with no value after it. */
+function refuseBareFlag(args, flags, command) {
   const bare = flags.find((flag) => valueOf(args, flag) === null);
-  if (bare) deps.stderr.write(`backup ${command}: ${bare} needs a value\n`);
-  return Boolean(bare);
+  if (bare) throw new BackupArgError(`backup ${command}: ${bare} needs a value`);
 }
 
 function restoreCommand(args, deps) {
-  if (refuseBareFlag(args, ['--from', '--home', '--transcripts'], 'restore', deps)) return 2;
+  refuseBareFlag(args, ['--from', '--home', '--transcripts'], 'restore');
   const from = valueOf(args, '--from');
   const transcripts = valueOf(args, '--transcripts');
   // The home defaults to this user's: a documented `--home %USERPROFILE%` reaches PowerShell
   // unexpanded and would restore into a folder named after the literal text.
   const home = valueOf(args, '--home') ?? deps.home;
   if ((!from && !transcripts) || !home) {
-    deps.stderr.write('backup restore: --from <dir|git url> or --transcripts <dir|git url> is required (--home <dir> defaults to this user\'s home)\n');
-    return 2;
+    throw new BackupArgError('backup restore: --from <dir|git url> or --transcripts <dir|git url> is required (--home <dir> defaults to this user\'s home)');
   }
   if (/%[^%\s]+%|^\$/.test(home)) {
-    deps.stderr.write(`backup restore: --home ${home} was not expanded by the shell; leave --home out to restore into this user's home\n`);
-    return 2;
+    throw new BackupArgError(`backup restore: --home ${home} was not expanded by the shell; leave --home out to restore into this user's home`);
   }
   // --map <old>=<new>, as often as needed: a project now at another path.
   const maps = args.flatMap((arg, i) => (arg === '--map' ? [args[i + 1] ?? ''] : []));
   const malformed = maps.find((value) => value.indexOf('=') < 1);
   if (malformed !== undefined) {
-    deps.stderr.write(`backup restore: --map needs <old path>=<new path>, got "${malformed}"\n`);
-    return 2;
+    throw new BackupArgError(`backup restore: --map needs <old path>=<new path>, got "${malformed}"`);
   }
   const map = Object.fromEntries(maps.map((value) => [value.slice(0, value.indexOf('=')), value.slice(value.indexOf('=') + 1)]));
   let source;
@@ -725,18 +725,12 @@ function restoreCommand(args, deps) {
 }
 
 function verifyCommand(args, deps) {
-  if (refuseBareFlag(args, ['--from', '--summary', '--transcripts'], 'verify', deps)) return 2;
+  refuseBareFlag(args, ['--from', '--summary', '--transcripts'], 'verify');
   const from = valueOf(args, '--from');
   const summary = valueOf(args, '--summary');
   const transcripts = valueOf(args, '--transcripts');
-  if (!from && !summary && !transcripts) {
-    deps.stderr.write('backup verify: --from <dir|git url>, --summary <dir|git url> or --transcripts <dir|git url> is required\n');
-    return 2;
-  }
-  if ([from, summary, transcripts].filter(Boolean).length > 1) {
-    deps.stderr.write('backup verify: one of --from, --summary or --transcripts at a time\n');
-    return 2;
-  }
+  if (!from && !summary && !transcripts) throw new BackupArgError('backup verify: --from <dir|git url>, --summary <dir|git url> or --transcripts <dir|git url> is required');
+  if ([from, summary, transcripts].filter(Boolean).length > 1) throw new BackupArgError('backup verify: one of --from, --summary or --transcripts at a time');
   let source;
   try {
     let result;
@@ -1160,29 +1154,22 @@ function initTranscripts(repo, deps) {
 }
 
 function initCommand(args, deps) {
-  if (refuseBareFlag(args, ['--summary-repo', '--checkout'], 'init', deps)) return 2;
+  refuseBareFlag(args, ['--summary-repo', '--checkout'], 'init');
   const t = args.indexOf('--transcripts-repo');
   if (t !== -1) {
     const repo = args[t + 1];
-    if (!repo || !/^[^/\s]+\/[^/\s]+$/.test(repo)) {
-      deps.stderr.write('backup init: --transcripts-repo <owner/name> needs a value\n');
-      return 2;
-    }
+    if (!repo || !/^[^/\s]+\/[^/\s]+$/.test(repo)) throw new BackupArgError('backup init: --transcripts-repo <owner/name> needs a value');
     return initTranscripts(repo, deps);
   }
   const i = args.indexOf('--repo');
   const repo = i === -1 ? undefined : args[i + 1];
-  if (!repo || !/^[^/\s]+\/[^/\s]+$/.test(repo)) {
-    deps.stderr.write('backup init: --repo <owner/name> is required\n');
-    return 2;
-  }
+  if (!repo || !/^[^/\s]+\/[^/\s]+$/.test(repo)) throw new BackupArgError('backup init: --repo <owner/name> is required');
   // The checkout is named by `--checkout <path>`, else the git repository the folder init runs in. It is resolved before
   // anything is written or asked of GitHub: a path in no work tree is refused with nothing changed.
   const checkoutFlag = valueOf(args, '--checkout');
   const checkout = checkoutRoot(deps, checkoutFlag === undefined ? deps.cwd() : path.resolve(deps.cwd(), checkoutFlag));
   if (checkoutFlag !== undefined && !checkout) {
-    deps.stderr.write(`backup init: refused: ${checkoutFlag} is not inside a git work tree; --checkout names one\n`);
-    return 2;
+    throw new BackupArgError(`backup init: refused: ${checkoutFlag} is not inside a git work tree; --checkout names one`);
   }
   const paths = backupPaths(deps.home);
   const refusal = privateClone(deps, repo, paths.clone, 'js-harness memory backup (private)');
@@ -1277,12 +1264,22 @@ const FLAGS = {
   verify: { valued: ['--from', '--summary', '--transcripts'] },
 };
 
+/** Runs one subcommand; a `BackupArgError` from any of them is its usage error, printed with exit 2. */
 export async function backupMain(args, deps = defaultDeps()) {
+  try {
+    return await dispatch(args, deps);
+  } catch (err) {
+    if (!(err instanceof BackupArgError)) throw err;
+    deps.stderr.write(`${err.message}\n`);
+    return 2;
+  }
+}
+
+async function dispatch(args, deps) {
   const [sub, ...rest] = args;
   const unknown = Object.hasOwn(FLAGS, sub) ? unknownArgument(rest, FLAGS[sub]) : null;
   if (unknown !== null) {
-    deps.stderr.write(`backup ${sub}: unknown argument: ${unknown}\n`);
-    return 2;
+    throw new BackupArgError(`backup ${sub}: unknown argument: ${unknown}`);
   }
   if (sub === 'run') return runCommand(rest, deps);
   if (sub === 'status') return statusCommand(deps);
