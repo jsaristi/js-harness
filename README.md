@@ -1743,6 +1743,28 @@ js-harness wait: waits for the merge of pull request 133; ends when it holds, or
 js-harness wait: the merge of pull request 133 holds (14:12)
 ```
 
+### js-harness spend
+
+What one session spent, read from its transcript: the main chain's calls, cache-read, input,
+output and cache-write tokens, the context of its last call and of its first (the fixed context
+it opened with), and its sub-agents apart (side-chain lines and the files under
+`<session>/subagents/`). Claude Code writes one API message as several transcript lines that
+each repeat its usage, so a sum over lines reads about twice the truth; here the lines of one
+message are one call. Name the session by its id (whole, or its first eight characters or more),
+which is looked for in this project's sessions folders and its worktrees', by its `.jsonl`, or
+with `--self`, which reads `CLAUDE_CODE_SESSION_ID`. A cut last line, as a session still writing
+leaves, is counted as unreadable and in no figure. `--json` gives the same data. Exit 0 printed;
+1 the transcript could not be found or read; 2 a usage error.
+
+```console
+$ js-harness spend --self
+js-harness spend: C:\Users\Oficina\.claude\projects\D--js-harness--claude-worktrees-unruffled-mirzakhani-803a9b\b0763246-0204-44cf-9fee-40cd05bf65f0.jsonl
+main chain: 38 calls; cache-read 4,845,234; input 78; output 24,570; cache-write 122,934
+context: last call 154,442; first call 77,711 (the fixed context it opened with)
+sub-agents (0 files): 0 calls; cache-read 0; input 0; output 0; cache-write 0
+Each API message is one call, however many transcript lines repeat its usage.
+```
+
 ### js-harness resume
 
 The hook that runs after a compaction or a clear, which `install` registers for Claude Code.

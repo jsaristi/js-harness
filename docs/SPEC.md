@@ -796,6 +796,15 @@ check or an eval case ("After F8", directive coverage).
 **Discarded:** Sending the notification from the command: the push notification is a tool of the host, which no command can call. Counting a waiting session as work: it never ends on its own, and the wait would never settle while it waits for him.
 **Today:** `bin/quiet.mjs`, `bin/lib/quiet.mjs`, `bin/lib/process-list.mjs`, `js-harness quiet`
 
+### A session reads one true figure of what it spent
+
+**Problem:** A session given a cap in cache-read tokens read its spend by summing the transcript's lines, and one API message is written on several lines that each repeat its usage: the 17 sessions measured on 2026-11-21 read 1.68 to 2.70 times what they spent, and three stopped at half the cap they were given (his words of 2026-11-22: "solucionemos todos esos errores y dime cuanto nos podemos ahorrar").
+**Requirement:** `js-harness spend` reads one session's transcript, by its path, its id or `--self`, and prints the main chain's calls, cache-read, input, output and cache-write tokens, the context of its last call and of its first, and its sub-agents apart, with the lines of one API message counted as one call.
+**Reason:** The eval cost already folded lines into requests by message id; the reader moved to `bin/lib` so the command and the eval read a session the same way, and a figure that disagrees with the eval's would be a third count.
+**Proof:** `node --test bin/spend.test.mjs bin/lib/transcript-requests.test.mjs`
+**Discarded:** The app's usage tool: a command or a hook cannot call it, and it is not on every host. A second parser in `bin/`: two readers of one transcript drift.
+**Today:** `bin/spend.mjs`, `bin/lib/transcript-requests.mjs`, `js-harness spend`
+
 ### The board above the message box
 
 **Problem:** Claude Desktop 4.4212.0 added `sessionStatusLine`, a program whose first line shows above the Code tab's message box; the board it would show takes about 24 s, and the host stops the program at 10 s (`odd/tasks/status-line.md`, L5). The app reads the setting only on third-party inference, and he answered question 134 "Construir el programa igual".
