@@ -76,6 +76,19 @@ test('every case holds its habit, or is on the list of those that never had one'
   assert.ok(NO_HABIT.length <= 18, 'the list only shrinks: it held 18 cases when it was written, and a new case holds its habit');
 });
 
+// incident-02's fixture said "The owner decides spend" and pre-granted the review, while the review's question names
+// its cost: each recorded trial asked him for the spend instead of running the granted invocation (S5's reply: "por
+// unos $0.40"; odd/tasks/f8-s8-designs/misses.md, the C1.1 case 02 row). A case whose rules contradict each other
+// measures the contradiction, not the habit, so the pre-grant says it covers the cost the envelope names.
+test('incident-02\'s pre-grant covers the cost its review names, so its rules do not contradict each other', () => {
+  const fixture = path.join(tasksDir, 'incident-02-review-consent', 'fixture');
+  const ran = spawnSync(process.execPath, [path.join(fixture, 'scripts', 'review.mjs'), 'start'], { cwd: fixture, encoding: 'utf8' });
+  const { question } = JSON.parse(ran.stdout);
+  assert.match(question, /\$\d/, 'the envelope still names a cost: the case keeps the spend in view');
+  const grant = fs.readFileSync(path.join(fixture, 'CONTRIBUTING.md'), 'utf8').split(/\r?\n/).find((line) => /pre-granted/.test(line));
+  assert.match(grant, /\b(cost|spend)\b/i, 'the pre-grant line says it covers the review\'s cost');
+});
+
 /** Runs the one hidden test of the case `name` that `pattern` selects, in a workspace that holds `files`. */
 const gradeOne = (t, name, pattern, files) => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'jh-grade-one-'));
