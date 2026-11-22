@@ -25,9 +25,15 @@ const hoursOf = (ms) => Math.round(ms / HOUR_MS * 10) / 10;
 function oldFolders(tmpdir, at, cutoff, unread) {
   return fs.readdirSync(tmpdir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && SCRATCH_PREFIXES.some((prefix) => entry.name.startsWith(prefix)))
-    .map((entry) => {
+    .flatMap((entry) => {
       const full = path.join(tmpdir, entry.name);
-      return { path: full, newest: measureTree(full).newest };
+      // A folder removed since the listing, as a run cleans up its own, was not left behind.
+      try {
+        fs.lstatSync(full);
+      } catch (err) {
+        if (err.code === 'ENOENT') return [];
+      }
+      return [{ path: full, newest: measureTree(full).newest }];
     })
     .filter((folder) => {
       if (folder.newest > 0) return folder.newest < cutoff;

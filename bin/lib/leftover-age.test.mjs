@@ -118,17 +118,19 @@ test('leftoverAge names a folder under the harness home or a scratch folder it c
   const realLstat = fs.lstatSync;
   const hidden = path.join(home, '.js-harness', 'hidden');
   const gone = path.join(home, '.js-harness', 'b.lock');
+  const cleaned = path.join(tmpdir, 'js-harness-cleaned-up');
   try {
     made(hidden, 1);
     made(path.join(home, '.js-harness', 'a.lock'), 30, { folder: false });
     made(gone, 30, { folder: false });
     made(path.join(tmpdir, 'js-harness-unreadable'), 30);
+    made(cleaned, 30);
     fs.readdirSync = (target, ...rest) => {
       if (target === hidden) throw Object.assign(new Error('EACCES'), { code: 'EACCES' });
       return realReaddir(target, ...rest);
     };
     fs.lstatSync = (target, ...rest) => {
-      if (target === gone) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      if (target === gone || target === cleaned) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
       if (target === path.join(tmpdir, 'js-harness-unreadable')) throw Object.assign(new Error('EPERM'), { code: 'EPERM' });
       return realLstat(target, ...rest);
     };

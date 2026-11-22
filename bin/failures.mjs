@@ -194,8 +194,9 @@ function renderClosing(rows) {
  * refuses while an entry is not settled, which is how a contract's "Done when" carries the register;
  * `failures weeks` prints the sightings by week (`weeklyCounts`), so he sees whether the mistakes go down;
  * `failures closing` prints S8's closing count of the classes it closes (`closingCount`), `--json` as data.
- * Exit 0; 1 when the register is refused, an id is not in it or `--settled` finds an entry that is
- * not settled; 2, with usage on stderr and no file read, for an argument it does not know. With no
+ * Exit 0; 1 when the register is refused, an id is not in it, `--settled` finds an entry that is
+ * not settled, or `closing` finds a closing class with an open entry that names no upstream issue; 2,
+ * with usage on stderr and no file read, for an argument it does not know. With no
  * `docs/FAILURES.md` nothing is recorded, so nothing is refused: it says so and exits 0. The register is
  * read at the top of the git repository `cwd` is in, so a subfolder finds it; outside one, in `cwd`. */
 export async function failuresMain(argv, { cwd = process.cwd(), stdout = console.log, stderr = console.error, readFile = readText, spawn = spawnSync, now = () => new Date() } = {}) {
