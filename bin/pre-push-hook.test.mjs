@@ -35,7 +35,7 @@ after(() => {
 const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** The release gate the hook runs for a version tag, with what it imports: `scripts/practice-lib.mjs` imports the
- * evals' configs, which import their own helpers and one file of `bin/lib`, and the gate reads what a release is from
+ * evals' configs, which import their own helpers and two files of `bin/lib`, and the gate reads what a release is from
  * `bin/lib/version.mjs`. The stub carries the real files, not
  * copies of their decisions, so a change to the gate is what this test runs. */
 function copyGate(root) {
@@ -47,7 +47,7 @@ function copyGate(root) {
   for (const name of fs.readdirSync(path.join(REPO, 'evals'))) {
     if (name.endsWith('.mjs') && !name.endsWith('.test.mjs')) fs.copyFileSync(path.join(REPO, 'evals', name), path.join(root, 'evals', name));
   }
-  for (const name of ['process-tree.mjs', 'version.mjs']) fs.copyFileSync(path.join(REPO, 'bin', 'lib', name), path.join(root, 'bin', 'lib', name));
+  for (const name of ['process-tree.mjs', 'transcript-requests.mjs', 'version.mjs']) fs.copyFileSync(path.join(REPO, 'bin', 'lib', name), path.join(root, 'bin', 'lib', name));
 }
 
 /** A repo holding the real hook and a stub check that appends `--head`'s value to `calls.log` and
