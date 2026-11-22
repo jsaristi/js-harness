@@ -494,3 +494,42 @@ test('failures weeks takes no other word and no flag: a usage error, and nothing
     }
   });
 });
+
+// ── failures closing (odd/tasks/f8-s8-certification.md, T4; R2) ─────────────────────────────────────────────────
+
+const HOST = [
+  '### host-cancels-hooks',
+  'The host cancelled the PostToolUse hooks of a tool use.',
+  '- Class: tool',
+  '- Seen: 2026-11-18 — transcript d6383aea — 627 tool uses with only a cancel',
+  '- Seen: 2026-11-19 — transcript 0cdab702 — the same, again',
+  '- Upstream: https://github.com/anthropics/claude-code/issues/123 — no control we can build',
+];
+
+test('failures closing gives the closing count of tool, machine and unseen-state: open ids, host-caused ids with their issue', async () => {
+  await inProject(FULL, async (dir) => {
+    const open = await run(['closing'], dir);
+    assert.equal(open.code, 1);
+    assert.match(open.stdout, /^tool  0 open, 0 host-caused$/m);
+    assert.match(open.stdout, /^machine  1 open, 0 host-caused$/m);
+    assert.match(open.stdout, /^  open: gate-reaches-its-bound \(repeated\)$/m);
+    assert.match(open.stdout, /^unseen-state  not a class of docs\/FAILURES\.md$/m);
+    assert.match(open.stdout, /^1 open in the closing classes; settled with no control built: 0 once, 0 owed$/m);
+  });
+  await inProject({ ...FULL, 'docs/FAILURES.md': register(HOST, QUESTION, RENAMED, STATED) }, async (dir) => {
+    const host = await run(['closing'], dir);
+    assert.equal(host.code, 0);
+    assert.match(host.stdout, /^tool  0 open, 1 host-caused$/m);
+    assert.match(host.stdout, /^  host-caused: host-cancels-hooks \(repeated\): https:\/\/github\.com\/anthropics\/claude-code\/issues\/123 — no control we can build$/m);
+    const json = JSON.parse((await run(['closing', '--json'], dir)).stdout);
+    assert.deepEqual(json.map((row) => row.class), ['tool', 'machine', 'unseen-state']);
+    assert.equal(json[0].host[0].id, 'host-cancels-hooks');
+  });
+});
+
+test('--json goes with closing only', async () => {
+  await inProject(FULL, async (dir) => {
+    assert.equal((await run(['check', '--json'], dir)).code, 2);
+    assert.equal((await run(['--json'], dir)).code, 2);
+  });
+});
