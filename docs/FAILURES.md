@@ -1242,6 +1242,8 @@ thread's name, so a listener was left alone as "not engram".
   `evals/ports.mjs:168-169` got `MainThread` for a Node child; whether the real engram binary is
   named right is not known. It can be reproduced only on Linux: a run there in which the probe
   names a Node listener and the engram binary by what they are would prove a fix
+- Control: check — evals/ports.test.mjs — "on Linux the name of a listener is the image its process runs, read from
+  /proc, not the name of its main thread" — since 2026-10-13
 
 ### live-board-read-off-project
 `sessions live` run from a folder that holds no project counted that folder's empty record and answered "0 rows wait
