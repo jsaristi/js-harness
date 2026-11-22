@@ -24,7 +24,8 @@ import { gitRead, headBefore, momentAt, pullRequestsOf, readRef } from './lib/re
 import { compareMaps, comparePlans, planOf } from './lib/report-pages.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
-import { RECORD_SCHEMA, corrections, eventsOf, gateRuns, itemMeasure, laneOut, lostHoursOf, openEvent, parsePlan, scaled, sessionTrail, stretchFile, stretchLost } from './lib/stretch.mjs';
+import { RECORD_SCHEMA, corrections, eventsOf, gateRuns, idleHoursBeside, idleSpells, itemMeasure, laneOut, lostHoursOf, openEvent, parsePlan, scaled, sessionTrail, spellHours, stretchFile, stretchLost, waitSpells } from './lib/stretch.mjs';
+import { readIdleSpells } from './lib/lead-away.mjs';
 import { forecastNow, forecastOf, resolveClose } from './lib/stretch-forecast.mjs';
 import { goalShares, outsidePlan, timelineOf, workShare } from './lib/stretch-moments.mjs';
 import { recordPageRendered } from './lib/pages-rendered.mjs';
@@ -75,8 +76,11 @@ export const USAGE = [
   '    the map at the opening does not hold open.',
   '  status: the open stretch measured now from the records: each item from its session\'s first record (or the',
   '    opening) to its first closed notice, its removal, its last record once silent past the rule session-stall, or',
-  '    now; its lost time the failed gates of its session inside that span. --goals also runs each goal, one at a',
-  '    time in the main checkout, and records the result. Exit 1 with no stretch open.',
+  '    now; its lost time the failed gates of its session inside that span. The stretch\'s lost time also counts, each',
+  '    kind named with its hours, the hours a work session sat on its own waiting notice (to its next notice, its next',
+  '    gate or the orchestrator\'s next notice to it) and the idle spells the lead\'s IDLE line told (to the first work',
+  '    after each). --goals also runs each goal, one at a time in the main checkout, and records the result. Exit 1',
+  '    with no stretch open.',
   '  close: runs the goals, measures and records the stretch closed, and prints the return. Exit 0 whether or not',
   '    the goals were met; exit 1 with no stretch open.',
   '  explain: records why a goal, an item or a failure of the stretch went wrong, how it was or can be fixed (--fixed',
@@ -296,7 +300,14 @@ function readRecords(ctx) {
   } catch (err) {
     unavailable.codex = err.message;
   }
-  return { notices: channel.notices, starts, gates: gateRuns(log.events ?? []), lands, codex, unavailable };
+  // The idle spells the lead's IDLE line told (bin/lib/lead-away.mjs), counted as lost time.
+  let spells = [];
+  try {
+    spells = readIdleSpells(ctx.home, ctx.slug, (file) => ctx.fileSystem.readFileSync(file, 'utf8'));
+  } catch (err) {
+    unavailable['idle spells'] = err.message;
+  }
+  return { notices: channel.notices, starts, gates: gateRuns(log.events ?? []), lands, codex, spells, unavailable };
 }
 
 // What no record holds, said in the view instead of guessed: a rewrite after a review, a wait for the user's answer,
@@ -322,7 +333,11 @@ function measure(ctx, stretch, now) {
   const failures = stretchLost(records, { from: openedAt, to: end, root: ctx.root });
   const counted = items.filter((item) => !item.waitsFor);
   const real = sum(items.map((item) => item.realHours));
-  const lost = round(sum(items.map((item) => item.lostHours)) + lostHoursOf(failures));
+  const failed = round(sum(items.map((item) => item.lostHours)) + lostHoursOf(failures));
+  // Beside what failed, the hours sessions sat waiting and the spells with nothing running (JH 291): each kind named.
+  const waiting = waitSpells(records.notices, records.gates, { from: openedAt, to: end });
+  const idle = idleSpells(records.spells, records, { from: openedAt, to: end });
+  const lost = round(failed + spellHours(waiting) + idleHoursBeside(idle, waiting));
   return {
     id: stretch.open.id,
     openedAt: stretch.open.at,
@@ -336,8 +351,12 @@ function measure(ctx, stretch, now) {
       estimate: [sum(counted.map((item) => item.corrected[0])), sum(counted.map((item) => item.corrected[1]))],
       realHours: real,
       lostHours: lost,
+      failedHours: failed,
+      waitingHours: spellHours(waiting),
+      idleHours: idleHoursBeside(idle, waiting),
       lostShare: real > 0 ? round(lost / real) : 0,
     },
+    lost: { waiting, idle },
     goals: goalsOf(stretch),
     waits: stretch.open.plan.waits,
     unmeasured: UNMEASURED,
@@ -422,7 +441,7 @@ function departureLines(view) {
 function viewLines(view) {
   return [
     `stretch ${view.id}: ${view.elapsedHours} of ${view.hours} h; goals ${view.goals.met} of ${view.goals.total} met${view.goals.checkedAt ? ` at ${view.goals.checkedAt}` : ', not checked yet'}`,
-    `estimated ${range(view.totals.estimate)}, real ${view.totals.realHours} h, lost ${view.totals.lostHours} h`,
+    `estimated ${range(view.totals.estimate)}, real ${view.totals.realHours} h, lost ${view.totals.lostHours} h: failed gates ${view.totals.failedHours} h, sessions waiting ${view.totals.waitingHours} h, idle with nothing running ${view.totals.idleHours} h`,
     ...view.items.map((item) => `  ${item.id} ${item.title}: ${item.state}, ${item.realHours} h of ${range(item.corrected)}, lost ${item.lostHours} h`),
     ...view.goals.list.map((goal) => `  goal ${goal.id} ${goal.met === null ? 'not checked' : goal.met ? 'met' : `not met (${goal.said})`}: ${goal.text}`),
     ...Object.entries(view.unavailable).map(([name, why]) => `  ${name} could not be read: ${why}`),

@@ -27,6 +27,18 @@ const pct = (value, scale) => `${Math.round((value / scale) * 1000) / 10}%`;
 const range = ([low, high]) => (low === high ? `${low} h` : `${low}-${high} h`);
 const clock = (iso) => new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
 const tile = (label, value, note = '') => `<div class="tile"><span class="soft">${label}</span><b>${value}</b>${note ? `<span class="soft">${note}</span>` : ''}</div>`;
+/** The lost time's tile: each kind with its hours (JH 291), or, for a view recorded before the kinds were counted, its
+ * one figure as it was then, what failed. */
+const lostTile = (totals) => (Number.isFinite(totals.failedHours)
+  ? tile('Perdido', `${totals.lostHours} h`, `fallas ${totals.failedHours} h · esperando ${totals.waitingHours} h · sin nada corriendo ${totals.idleHours} h`)
+  : tile('Perdido en fallas', `${totals.lostHours} h`, `${Math.round(totals.lostShare * 100)}% del real`));
+/** The waits and idle spells lost beside the failures, oldest first, or nothing when there is none. */
+const lostList = (lost) => {
+  const spells = [...(lost?.waiting ?? []), ...(lost?.idle ?? [])].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  if (spells.length === 0) return '';
+  const said = (one) => (one.what === 'waiting' ? `${escapeHtml(one.who)} · ${Math.round(one.seconds / 60)} min · esperando al orquestador o a ti` : `${clock(one.at)} · ${Math.round(one.seconds / 60)} min · ninguna sesión corría`);
+  return `<h3>Tiempo perdido sin fallas</h3><ul>${spells.map((one) => `<li>${said(one)}</li>`).join('')}</ul>`;
+};
 const bar = (kind, from, width, scale) => (width > 0 ? `<span class="bar ${kind}" style="left:${pct(from, scale)};width:${pct(width, scale)}"></span>` : '');
 
 // The kinds of an item (TASK_KINDS of ./contract.mjs) in the page's words; a kind not here is shown as written.
@@ -308,10 +320,10 @@ export function renderView(view) {
   const title = closed ? `Ya volviste: ${view.goals.met} de ${view.goals.total} metas` : `Tramo en curso: ${view.elapsedHours} de ${view.hours} h`;
   const unavailable = Object.entries(view.unavailable ?? {}).map(([name, why]) => `<li>${escapeHtml(name)} no se pudo leer: ${escapeHtml(why)}</li>`).join('');
   return `${STYLE}<div class="js-stretch"><h2>${title}</h2>
-<div class="tiles">${tile('Metas cumplidas', `${view.goals.met} de ${view.goals.total}`, view.goals.checkedAt ? `revisadas ${clock(view.goals.checkedAt)}` : 'sin revisar aún')}${tile('Estimado total', range(view.totals.estimate))}${tile('Real total', `${view.totals.realHours} h`)}${tile('Perdido en fallas', `${view.totals.lostHours} h`, `${Math.round(view.totals.lostShare * 100)}% del real`)}</div>
+<div class="tiles">${tile('Metas cumplidas', `${view.goals.met} de ${view.goals.total}`, view.goals.checkedAt ? `revisadas ${clock(view.goals.checkedAt)}` : 'sin revisar aún')}${tile('Estimado total', range(view.totals.estimate))}${tile('Real total', `${view.totals.realHours} h`)}${lostTile(view.totals)}</div>
 <h3>Metas</h3>${goalList(view.goals, true)}
 <h3>Tiempo: arriba lo estimado, abajo lo real (rojo, lo perdido en fallas; la línea, ${view.hours} h)</h3>${rows}
-<h3>Qué falló</h3>${failures.length ? `<ul>${failures.map((one) => `<li>${escapeHtml(one.who)} · ${Math.round(one.seconds / 60)} min · ${escapeHtml(one.what)}</li>`).join('')}</ul>` : '<p class="soft">nada en los registros</p>'}
+<h3>Qué falló</h3>${failures.length ? `<ul>${failures.map((one) => `<li>${escapeHtml(one.who)} · ${Math.round(one.seconds / 60)} min · ${escapeHtml(one.what)}</li>`).join('')}</ul>` : '<p class="soft">nada en los registros</p>'}${lostList(view.lost)}
 <p class="soft">No se mide (ningún registro lo guarda): ${view.unmeasured.map((key) => escapeHtml(UNMEASURED[key] ?? key)).join('; ')}.</p>${unavailable ? `<ul class="no">${unavailable}</ul>` : ''}</div>`;
 }
 

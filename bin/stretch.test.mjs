@@ -7,6 +7,7 @@ import path from 'node:path';
 import { RECORD_SCHEMA, reportStretch, stretchFile, stretchMain } from './stretch.mjs';
 import { newNotice } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
+import { idleSpellsFile } from './lib/lead-away.mjs';
 
 // Its times are shown in local time (rule:local-time): the zone is pinned so no machine's own decides a result.
 process.env.TZ = 'America/Bogota';
@@ -694,4 +695,68 @@ test('reportStretch keeps the records the measure could not read, so the report 
   const read = (readCodexRuns) => reportStretch({ home: place.home, root: place.project, slug: projectSlug(place.project), since: T0, now: T0 + H, run: () => ({ status: 1, stdout: '', stderr: 'not a repository' }), readLands: () => [], readCodexRuns });
   assert.deepEqual(read(() => { throw new Error('EACCES: the Codex record'); }).unread, { codex: 'EACCES: the Codex record' });
   assert.deepEqual(read(() => []).unread, {});
+});
+
+// JH 291, second unit (odd/tasks/idle-stretch.md; docs/ROADMAP.md, the row "A stretch's lost time counts only failed
+// gates"): the 2026-11-15 return showed 0.16 h lost while JH 199 and JH 207 sat about 3 h each waiting on the lead.
+// Lost time now counts, beside failed gates, the hours a session sat on a `waiting` notice and the stretch's idle
+// spells the lead's IDLE line told (bin/lib/lead-away.mjs), each named with its hours.
+test('lost time counts the hours sessions sat waiting and the idle spells told, beside the failed gates', async () => {
+  const place = scratch({
+    notices: [
+      notice(0.5, 's69', 'JH 69 · registros', 'note'),
+      notice(1.5, 's199', 'JH 199 · uno', 'waiting'),
+      notice(1.5, 's207', 'JH 207 · dos', 'waiting'),
+      notice(4.5, 's199', 'JH 199 · uno', 'closed'),
+      notice(4.5, 's207', 'JH 207 · dos', 'note'),
+      notice(5, 's69', 'JH 69 · registros', 'closed'),
+      // The lead's own notes start no wait and end no idle spell.
+      notice(6.2, 'lead', 'JH ORQ · lead', 'waiting'),
+    ],
+    gates: [
+      { v: 1, event: 'start', id: 'g1', at: at(1), session: 's69', cwd: 'x', lock: 'own', command: 'check' },
+      { v: 1, event: 'end', id: 'g1', at: at(1.16), result: 'fail', sensors: [{ name: 'tests', failing: ['bin/a.test.mjs'] }] },
+    ],
+  });
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)]);
+  // The idle spell the lead's IDLE line told at 6.5 h, since the last write at 6 h; nothing ran after it.
+  const spells = idleSpellsFile(place.home, projectSlug(place.project));
+  fs.mkdirSync(path.dirname(spells), { recursive: true });
+  fs.writeFileSync(spells, `${JSON.stringify({ since: at(6), at: at(6.5), session: 'lead' })}\n${JSON.stringify({ since: at(-3), at: at(-2.5), session: 'lead' })}\n`);
+  const view = JSON.parse((await stretch(place, ['status', '--json'], { hours: 7.5 })).out);
+  assert.deepEqual(
+    [view.totals.failedHours, view.totals.waitingHours, view.totals.idleHours, view.totals.lostHours],
+    [0.16, 6, 1.5, 7.66],
+    'failed gates 0.16 h (the figure before), two sessions waiting 3 h each, one idle spell of 1.5 h',
+  );
+  assert.deepEqual(view.lost.waiting.map((one) => [one.who, one.seconds / 3600]), [['JH 199 · uno', 3], ['JH 207 · dos', 3]]);
+  assert.deepEqual(view.lost.idle.map((one) => [one.at, one.seconds / 3600]), [[at(6), 1.5]]);
+  const text = (await stretch(place, ['status'], { hours: 7.5 })).out;
+  assert.match(text, /lost 7\.66 h: failed gates 0\.16 h, sessions waiting 6 h, idle with nothing running 1\.5 h/);
+});
+
+test('a wait ends at the session\'s next notice, its next gate or the orchestrator\'s next notice to it, and is cut to the stretch', async () => {
+  const handed = newNotice({ at: at(2.5), from: { host: 'claude-code', id: 'lead', title: 'JH ORQ · lead' }, to: '199', kind: 'note', text: 'sigue' });
+  const place = scratch({
+    notices: [notice(-1, 's199', 'JH 199 · uno', 'waiting'), handed, notice(1, 's207', 'JH 207 · dos', 'waiting'), notice(3, 's300', 'JH 300 · tres', 'waiting')],
+    gates: [{ v: 1, event: 'start', id: 'g2', at: at(2), session: 's207', cwd: 'x', lock: 'own', command: 'check' }],
+  });
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)]);
+  const view = JSON.parse((await stretch(place, ['status', '--json'], { hours: 4 })).out);
+  assert.deepEqual(view.lost.waiting.map((one) => [one.who, one.seconds / 3600]), [['JH 199 · uno', 2.5], ['JH 207 · dos', 1], ['JH 300 · tres', 1]]);
+  assert.equal(view.totals.waitingHours, 4.5);
+});
+
+// The reliability lens on 427de6b..49d2693: an idle hour a session also sat waiting is counted once, under waiting,
+// and a spell told twice (two leads, or the wait and the heartbeat racing) is one spell.
+test('an idle hour a session sat waiting through counts once, and one spell told twice counts once', async () => {
+  const place = scratch({ notices: [notice(1, 's199', 'JH 199 · uno', 'waiting'), notice(3, 's199', 'JH 199 · uno', 'closed')] });
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)]);
+  const spells = idleSpellsFile(place.home, projectSlug(place.project));
+  fs.mkdirSync(path.dirname(spells), { recursive: true });
+  // Idle from 2 h, told at 2.5 h, twice; the session's closed notice at 3 h is the first work after it.
+  fs.writeFileSync(spells, `${JSON.stringify({ since: at(2), at: at(2.5), session: 'lead' })}\n${JSON.stringify({ since: at(2), at: at(2.6), session: 'other' })}\n`);
+  const view = JSON.parse((await stretch(place, ['status', '--json'], { hours: 4 })).out);
+  assert.deepEqual([view.totals.waitingHours, view.totals.idleHours, view.totals.lostHours], [2, 0, 2]);
+  assert.equal(view.lost.idle.length, 1, 'the spell is listed once');
 });
