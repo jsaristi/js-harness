@@ -43,10 +43,11 @@ const ADR_SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const ADR_FILE = /^(\d{4})-.+\.md$/;
 const ADR_CLAIM = /^\.(\d{4})\.claim$/;
 
-/** Walks argv token by token: an unknown flag or word is a usage error, never one silently ignored. */
 /** A bad command line: its message is printed above the usage, and the exit is 2. */
 class OnboardArgError extends Error {}
 
+/** Walks argv token by token: an unknown flag or word is a usage error, never one silently ignored; it throws an
+ * `OnboardArgError` for one. */
 function parseArgs(argv, cwd) {
   const parsed = { cwd, plan: false, write: false, area: null, checklist: null, size: null, words: [] };
   for (let index = 0; index < argv.length; index += 1) {
