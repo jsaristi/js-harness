@@ -4,7 +4,8 @@
 // same stretch of work (odd/tasks/advisor-use.md, P1 and P2, his yes to question 282). Why a hook: with the tool on
 // for every role since 2026-11-12, the lead consulted it before 6 of its 20 questions, and the host's own prompt
 // already asks (M2, Depth pass 1). Policy R: one advisor call with a result covers every gated act after it until his
-// next message (typed or queued), the next session event, or STRETCH_TOOL_CALLS tool calls.
+// next message (typed or queued), the next session event, the host's next compaction (`breakOf`), or STRETCH_TOOL_CALLS
+// tool calls.
 // It refuses an uncovered act (his answer to question 285, which moved refusal ahead of the warning week of P3): the
 // reason says how to consult and retry, and the decision is recorded either way. A sub-agent's uncovered end is turned
 // back once and its next stop let through (his answer to question 294, odd/tasks/consistent-orders.md S4). It fails open: an unreadable transcript or payload lets the act through, recorded
@@ -34,7 +35,8 @@ const USAGE = `Usage: js-harness advisor-gate --hook    (PreToolUse: the hook pa
        js-harness advisor-gate --stop    (SubagentStop: the hook payload on standard input)
        js-harness advisor-gate report [--since <YYYY-MM-DD>]
   Holds the acts that decide to an advisor call with a result in the caller's stretch (policy R): since his last
-  message or the last session event, within ${STRETCH_TOOL_CALLS} tool calls. Mode ${MODE}: an uncovered act is refused, its reason
+  message, the last session event or the host's last compaction, within ${STRETCH_TOOL_CALLS} tool calls: a
+  consult made before a compaction covers no act after it. Mode ${MODE}: an uncovered act is refused, its reason
   saying how to consult and retry; a sub-agent's uncovered end (--stop) is turned back once, its next stop let through, and one whose transcript does not exist is recorded
   no-transcript with its agent type. Every decision is appended to <home>/.js-harness/advisor-gate/decisions.jsonl. It prints {} outside a
   project with a harness.json, and fails open: what it cannot read lets the act through, recorded unchecked.
