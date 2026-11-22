@@ -11,9 +11,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { ratchet } from './ratchet.testkit.mjs';
+import { tempDir } from './temp-dir.testkit.mjs';
 
 const REPO = path.join(import.meta.dirname, '..', '..');
 const ROOTS = ['bin', 'evals', 'scripts', 'workshop'];
@@ -123,7 +123,7 @@ function trackedFiles(repo) {
 }
 
 test('with no .git, as in the gate\'s WSL mirror, what git tracks cannot be told, and a stray file decides nothing', () => {
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'absence-mirror-'));
+  const scratch = tempDir('absence-mirror-');
   try {
     fs.mkdirSync(path.join(scratch, 'bin'));
     fs.writeFileSync(path.join(scratch, 'bin', 'stray.mjs'), '// gentle-ai\n');
@@ -139,7 +139,7 @@ test('with no .git, as in the gate\'s WSL mirror, what git tracks cannot be told
 const skipWhy = (repo, env) => !fs.existsSync(path.join(repo, '.git')) && !env.CI && 'no .git here, so what git tracks cannot be read: the GitHub gate, a checkout, runs this';
 
 test('the check skips only with no .git outside CI: on a CI machine the same tree fails it', () => {
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'absence-ci-'));
+  const scratch = tempDir('absence-ci-');
   try {
     assert.match(skipWhy(scratch, {}), /^no \.git here/);
     assert.equal(skipWhy(scratch, { CI: 'true' }), false);
