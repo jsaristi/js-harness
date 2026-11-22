@@ -87,6 +87,7 @@ test('below the line a step passes; at or past it the step is refused with the f
   assert.match(reason, /900 cache-read/);
   assert.match(reason, /stop line 900/);
   assert.match(reason, /write your state and stop/);
+  assert.ok(reason.includes('with none of ; & | < > ` $( or a line break anywhere in the command, its quoted text too'));
   assert.equal(reason.split('\n').length, 1);
   assert.match(reason, /channel[\\/]spend[\\/]0cdab702[^ ]*\.json: only the user lifts it/);
 });

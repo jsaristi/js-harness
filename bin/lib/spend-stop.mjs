@@ -103,5 +103,5 @@ export function spendStopRefusal(payload, { home, exists = fs.existsSync, readFi
   const figure = spend.main.cacheReadTokens + spend.subagents.cacheReadTokens;
   if (figure < line) return null;
   const n = (value) => value.toLocaleString('en-US');
-  return `js-harness guard: this session has spent ${n(figure)} cache-read (main ${n(spend.main.cacheReadTokens)}, sub-agents ${n(spend.subagents.cacheReadTokens)}), past its stop line ${n(line)} (js-harness spend --self --line): write your state and stop; a Read, Write or Edit of a .md file, a lone js-harness notify and a lone js-harness loop stop still pass. The line is in ${stopLinePath(home, sessionId)}: only the user lifts it, by deleting that file`;
+  return `js-harness guard: this session has spent ${n(figure)} cache-read (main ${n(spend.main.cacheReadTokens)}, sub-agents ${n(spend.subagents.cacheReadTokens)}), past its stop line ${n(line)} (js-harness spend --self --line): write your state and stop; a Read, Write or Edit of a .md file, a lone js-harness notify and a lone js-harness loop stop still pass, with none of ; & | < > \` $( or a line break anywhere in the command, its quoted text too. The line is in ${stopLinePath(home, sessionId)}: only the user lifts it, by deleting that file`;
 }
