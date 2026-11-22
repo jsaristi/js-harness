@@ -66,6 +66,11 @@ export function workOfGateLock(lock) {
   ];
 }
 
+/** The flags of node that take their value as the next word when written without `=` (`node --help`). */
+const NODE_VALUED = new Set(['-r', '--require', '--import', '--loader', '--experimental-loader', '-C', '--conditions',
+  '--env-file', '--input-type', '--title', '--test-reporter', '--test-reporter-destination', '--test-name-pattern',
+  '--test-skip-pattern', '--test-concurrency', '--test-timeout', '--test-shard', '--watch-path', '--inspect-port']);
+
 /** The name of the program or script an argument names: its file name, in lower case, with no extension. */
 const nameOf = (argument) => argument.split(/[\\/]/).pop().toLowerCase().replace(/\.(exe|cmd|mjs|cjs|js)$/, '');
 
@@ -84,11 +89,17 @@ export function workOf(commandLine) {
   let script = args[0];
   let rest = args.slice(1);
   if (nameOf(script) === 'node') {
-    // node's own flags are those before the first script file; a flag's value can be a separate word (`--import tsx`),
-    // so the script is told by its extension, not by being the first word with no dash.
-    const file = rest.findIndex((argument) => !argument.startsWith('-') && /\.[cm]?[jt]s$/i.test(argument));
-    if ((file === -1 ? rest : rest.slice(0, file)).includes('--test')) return { kind: 'tests', script: file === -1 ? null : rest[file] };
-    const at = rest.findIndex((argument) => !argument.startsWith('-'));
+    // node's own flags come before its script, and some take their value as the next word (`--import tsx`), which is
+    // no script: the script is the first word that is neither a flag nor such a value.
+    let at = -1;
+    for (let i = 0; i < rest.length; i += 1) {
+      if (!rest[i].startsWith('-')) {
+        at = i;
+        break;
+      }
+      if (NODE_VALUED.has(rest[i])) i += 1;
+    }
+    if ((at === -1 ? rest : rest.slice(0, at)).includes('--test')) return { kind: 'tests', script: at === -1 ? null : rest[at] };
     if (at === -1) return null;
     script = rest[at];
     rest = rest.slice(at + 1);
