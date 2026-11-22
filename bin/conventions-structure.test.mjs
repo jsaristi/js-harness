@@ -76,7 +76,6 @@ const CEILINGS = {
   'bin/lib/profiles-data.mjs': 1598,
   'bin/backup.mjs': 1299,
   'bin/remote.mjs': 1118,
-  'scripts/practice-lib.mjs': 1174,
   'bin/resume.mjs': 1111,
 };
 
