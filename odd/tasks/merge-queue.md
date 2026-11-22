@@ -107,3 +107,9 @@ reopen-tested-old-base.
 - L9. 2026-11-22, JH 298: the lead's brief (brief-298-roadmap-owed.md, unit 4) and messages give this document T6 and
   T7, one branch and one draft pull request for both, since both edit bin/merge-queue.mjs. Codex is held at its 70%
   stop until 2026-11-23 23:45, so its review is recorded unavailable; the lenses run on each commit.
+- L18. 2026-11-22, JH 299 for JH 298, which stopped with this line owed: the Control lines of the two failures this
+  branch controls are in draft pull request 992, from main. land-took-pending-pr names the S11 test "a pull request
+  whose feature document holds an open step of his (kind: his) is left out, naming it", and reopen-tested-old-base
+  names the S12 test "--reopen reopens the pull request and trusts its run only once". 992 lands after this pull
+  request: before it, the tests are not on main and the register reads both as "control lost". Numbered L18, not
+  L10, because L10 to L17 of 2026-10 are above.
