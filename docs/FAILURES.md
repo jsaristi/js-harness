@@ -638,6 +638,7 @@ command substitution before the program saw them, so the program ran with other 
 - Seen: 2026-11-21 — the lead's notes, lsp-starts-state.md, "Slips to place" (JH 272's own) — a bash double-quoted
   `node -e` with backticks ran `claude plugin install`, `enable` and `update` with a literal id in place of the
   plugin's; all three failed and nothing changed
+- Control: check — bin/guard.test.mjs — "a Bash command with backticks inside double quotes is denied; in single quotes or as $(...) it passes" — since 2026-10-14
 
 ### edit-during-review
 A tracked file was edited in the worktree while Codex reviewed it, so the run read a tree that was
