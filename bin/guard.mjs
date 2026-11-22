@@ -57,7 +57,7 @@ import { spendStopRefusal } from './lib/spend-stop.mjs';
 
 export const USAGE = 'Usage: js-harness guard --hook\n'
   + '  reads a PreToolUse payload on standard input; refuses any step of a session past the stop line it recorded with\n'
-  + '  js-harness spend --self --line (a Write or Edit of a .md file and a lone notify still pass), an Agent call on a model the rules do not give, a\n'
+  + '  js-harness spend --self --line (a Read, Write or Edit of a .md file, a lone notify and a lone loop stop still pass), an Agent call on a model the rules do not give, a\n'
   + '  scheduled-task or cloud tool that opens a session where he does not see it (where the rules declare\n'
   + '  sessions-open-in-sidebar), a start_session that names no effort or another level than the rule session-effort, or lead-effort for a new lead,\n'
   + '  or a model other than the rule session-model (where\n'

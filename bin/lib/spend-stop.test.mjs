@@ -88,6 +88,7 @@ test('below the line a step passes; at or past it the step is refused with the f
   assert.match(reason, /stop line 900/);
   assert.match(reason, /write your state and stop/);
   assert.equal(reason.split('\n').length, 1);
+  assert.match(reason, /channel[\\/]spend[\\/]0cdab702[^ ]*\.json: only the user lifts it/);
 });
 
 test('past the line, writing the state and a lone notify still pass; a notify with a step chained after it does not', (t) => {
@@ -97,11 +98,16 @@ test('past the line, writing the state and a lone notify still pass; a notify wi
     ['Write', { file_path: 'C:/notes/state.md', content: 'x' }],
     ['Edit', { file_path: 'odd/tasks/x.md', old_string: 'a', new_string: 'b' }],
     ['Bash', { command: 'js-harness notify --to orchestrator --kind note "JH 1: stopped at the line"' }],
+    ['Read', { file_path: 'odd/tasks/x.md' }],
+    ['Bash', { command: 'js-harness loop stop my-wait' }],
   ];
   for (const [tool, input] of passes) assert.equal(spendStopRefusal(payload(transcript, tool, input), { home }), null, tool);
   const refused = [
     ['Write', { file_path: 'bin/x.mjs', content: 'x' }],
-    ['Read', { file_path: 'README.md' }],
+    ['Read', { file_path: 'bin/x.mjs' }],
+    ['Bash', { command: 'js-harness notify --to orchestrator --kind note <(git push)' }],
+    ['Bash', { command: 'js-harness notify --to orchestrator --kind note x > out.txt' }],
+    ['Bash', { command: 'js-harness loop stop w && git push' }],
     ['Agent', { prompt: 'x' }],
     ['Bash', { command: 'js-harness notify --to orchestrator --kind note "x" && git push' }],
     ['Bash', { command: 'js-harness notify --to orchestrator --kind note "x"; git push' }],

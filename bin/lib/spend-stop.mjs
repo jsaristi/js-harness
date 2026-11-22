@@ -5,7 +5,7 @@
 //
 // The guard runs on every tool call of every session, so a session with no line costs one existence check and reads
 // no transcript; whatever cannot be read throws, and the guard lets the call run. Past the line the calls that write
-// the session's state (a Write or Edit of a Markdown file) and a lone `js-harness notify` still pass, so the refusal
+// the session's state (a Read, Write or Edit of a Markdown file), a lone `js-harness notify` and a lone `js-harness loop stop` still pass, so the refusal
 // never traps a session before it can say where it stopped.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -78,13 +78,15 @@ export function sessionSpend({ file, id, readFile = (one) => fs.readFileSync(one
   return { ...spendOf(mainText, subagentTexts), subagentFiles: subagentTexts.length, unreadSubagentFiles };
 }
 
-/** Whether the call still passes past the line: a Write or Edit of a Markdown file (the session's state), or a Bash
- * command that is one `js-harness notify` and nothing chained, substituted or on another line. */
+/** Whether the call still passes past the line: a Read, Write or Edit of a Markdown file (the session's state, which
+ * the host's Edit needs read first), or a Bash command that is one `js-harness notify` or `js-harness loop stop` (to
+ * end the loops it started) and nothing chained, substituted, redirected or on another line. TaskStop is not in the
+ * guard's matcher, so a session can always stop its background tasks. */
 function passesAtStop(tool, input) {
-  if (tool === 'Write' || tool === 'Edit') return /\.md$/i.test(String(input?.file_path ?? '').trim());
+  if (tool === 'Read' || tool === 'Write' || tool === 'Edit') return /\.md$/i.test(String(input?.file_path ?? '').trim());
   if (tool !== 'Bash') return false;
   const command = String(input?.command ?? '');
-  return /^\s*js-harness\s+notify\s/.test(command) && !/[;&|\r\n`]|\$\(/.test(command);
+  return /^\s*js-harness\s+(?:notify|loop\s+stop)\s/.test(command) && !/[;&|<>\r\n`]|\$\(/.test(command);
 }
 
 /** Why the PreToolUse call of `payload` is refused for the session's spend, or null. Null with no read of the
@@ -101,5 +103,5 @@ export function spendStopRefusal(payload, { home, exists = fs.existsSync, readFi
   const figure = spend.main.cacheReadTokens + spend.subagents.cacheReadTokens;
   if (figure < line) return null;
   const n = (value) => value.toLocaleString('en-US');
-  return `js-harness guard: this session has spent ${n(figure)} cache-read (main ${n(spend.main.cacheReadTokens)}, sub-agents ${n(spend.subagents.cacheReadTokens)}), past its stop line ${n(line)} (js-harness spend --self --line): write your state and stop; a Write or Edit of a .md file and a lone js-harness notify still pass`;
+  return `js-harness guard: this session has spent ${n(figure)} cache-read (main ${n(spend.main.cacheReadTokens)}, sub-agents ${n(spend.subagents.cacheReadTokens)}), past its stop line ${n(line)} (js-harness spend --self --line): write your state and stop; a Read, Write or Edit of a .md file, a lone js-harness notify and a lone js-harness loop stop still pass. The line is in ${stopLinePath(home, sessionId)}: only the user lifts it, by deleting that file`;
 }

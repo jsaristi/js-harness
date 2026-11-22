@@ -24,7 +24,7 @@ export const USAGE = [
   'line, as a session still writing leaves, is counted as unreadable and in no figure.',
   '--self --line records the stop line in cache-read tokens (20000000, 20M or 500K) for the session that runs it, beside',
   'its pause state under the harness home: from then on js-harness guard refuses its next step once its cache-read, main',
-  'chain and sub-agents, reaches the line, but for a Write or Edit of a .md file and a lone js-harness notify. A line can',
+  'chain and sub-agents, reaches the line, but for a Read, Write or Edit of a .md file, a lone notify and a lone loop stop. A line can',
   'be lowered, never raised. The plain form then names the line recorded.',
   'Exit 0 printed or recorded; 1 the transcript could not be found or read, or a line above the one recorded; 2 a usage error.',
 ].join('\n');
