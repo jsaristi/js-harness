@@ -4,9 +4,9 @@ Branch `claude/jh286-context-diet`, from origin/main (c9144af9). Session JH 286.
 only file the work writes; nothing on the machine was changed.
 
 ## State
-Measured and written. Next is the owner's decision, asked by the lead: which candidates in the table to turn off for
-work sessions. Open: whether the host honours a deny on its own tools (one probe, C1), and the per-tool schema sizes,
-which no transcript holds.
+Measured and written; C1's lever measured in the CLI engine (JH 289, "C1 probe"). Next is the owner's decision, asked
+by the lead: which candidates in the table to turn off for work sessions. Open: whether the desktop honours a deny on
+its own tools and on MCP names (one probe, in "C1 probe"), and the per-tool schema sizes, which no transcript holds.
 
 ## Goal
 Say what the fixed context of a work session of this repo holds, who owns each part, whether work sessions use it,
@@ -107,7 +107,7 @@ visible tool list, not counted, then divided by 2.7.
 
 | # | Candidate | Tokens a call | Night | Owner | Calls in 17 sessions | Risk | Measured / estimated |
 |---|---|---|---|---|---|---|---|
-| C1 | Desktop tools no work session called: Artifact (about 11.5K), the built-in browser's 19 tools (5.2K), Agent (1.8K), Workflow (1.6K), ScheduleWakeup (1.5K), visualize read_me and show_widget (1.5K), AskUserQuestion (1.1K), session tools dismiss_task, hand_off, mark_chapter, read_widget_context (1.0K), ReportFindings (0.9K), SendUserFile (0.9K), SuggestPluginInstall and SuggestSkills (1.2K), the Docs connector (0.7K), ListAgents (0.7K), claude-in-chrome's instructions and 20 deferred names (0.7K), SearchPlugins (0.6K), read_terminal (0.4K) | about 31K | about 41M (22%) | host | 0 | Agent is the writer route in the protocols (none used tonight); AskUserQuestion is closed to work sessions anyway. The lever is unverified: whether a bare-name deny or the session's disallowed-tools list removes a desktop tool's schema from the request, not only blocks its call. One probe settles it | estimated |
+| C1 | Desktop tools no work session called: Artifact (about 11.5K), the built-in browser's 19 tools (5.2K), Agent (1.8K), Workflow (1.6K), ScheduleWakeup (1.5K), visualize read_me and show_widget (1.5K), AskUserQuestion (1.1K), session tools dismiss_task, hand_off, mark_chapter, read_widget_context (1.0K), ReportFindings (0.9K), SendUserFile (0.9K), SuggestPluginInstall and SuggestSkills (1.2K), the Docs connector (0.7K), ListAgents (0.7K), claude-in-chrome's instructions and 20 deferred names (0.7K), SearchPlugins (0.6K), read_terminal (0.4K) | about 31K | about 41M (22%) | host | 0 | Agent is the writer route in the protocols (none used tonight); AskUserQuestion is closed to work sessions anyway. The lever is measured in the engine (JH 289, "C1 probe" below): a deny removes a tool's schema from the request, by flag or by `permissions.deny`; whether the desktop passes it for its own tools is not checked | sizes estimated; lever measured in the CLI |
 | C2 | Re-orientation of relay sessions: 7 extra sessions tonight (change 1 three sessions, PR 940 three, folder files two, PR 934 two, PR 945's fixes two) | about 1.9M a relay | about 13M (7%) | ours: how units are cut and capped | n/a | none; the lead's note already points to one session a unit with a cap it can finish in | estimated (lead's note) |
 | C3 | His MCP servers unused by work sessions: engram (start block 2.0K where it loads, instructions 0.6K, 23 deferred names 0.45K) and context7 (0.3K) | about 2.2K on average (3.4K where engram's block loads) | about 2.9M (1.5%) | his | 0 memory calls, 0 context7 | engram is the stack's memory by design (`AGENTS.md`): drop it from work sessions only; the lead and the closer keep it | engram block measured; the rest estimated |
 | C4 | `~/.claude/CLAUDE.md` parts a work session here never acts on or gets twice: the "High risk" paragraph (also in `AGENTS.md`, about 0.35K), the graphify routing (0.45K, no graphify call), Delegation and Task Size overlapping the protocols skill (about 0.9K) | about 1.6K | about 2.2M (1.2%) | his (the file applies to every project, so a cut there reaches all of them) | n/a | low here; check his other projects first | measured characters / 2.7 |
@@ -132,14 +132,46 @@ Our own text (repo `CLAUDE.md`, `AGENTS.md`, the output style, our hook notes, o
 ## Not checked
 
 - Per-tool schema sizes: read by eye and converted at 2.7; only their sum is pinned, by the 78K closure.
-- Whether the desktop app removes a denied tool's schema from the request (C1's lever). The probe: one scratch
-  session with a deny list for the C1 tools; compare its first-call context with 77.6K.
+- Whether the desktop app honours a deny for its own tools (C1). The CLI half is measured; the desktop half has its
+  probe in "C1 probe".
 - `hook_cancelled` attachments (112 on PostToolUse:Bash, 56 on the guard): metadata only; why hooks were cancelled
   is outside this measure.
+
+## C1 probe (JH 289)
+
+Measured 2026-11-22 with Claude Code 2.1.330, in a scratch folder outside the repo; no settings file was changed. Each
+run is one call; the figure is input + cache creation + cache read of that call, from `--output-format json`.
+
+| Run | Command | Input | Cache creation | Cache read | Total |
+|---|---|---|---|---|---|
+| Plain | `claude -p "say ok" --output-format json` | 2 | 45,635 | 0 | 45,637 |
+| Deny by flag | the same plus `--disallowedTools "Agent Workflow Glob Grep WebSearch WebFetch NotebookEdit"` | 2 | 38,473 | 0 | 38,475 |
+| Deny by settings | the same plus `--settings` with inline JSON `permissions.deny` of the same seven names | 2 | 12,983 | 25,522 | 38,507 |
+
+- Proved: a deny of built-in tools removes what they add to the request, not only their calls: 7,162 tokens fewer a
+  call for seven names, by the flag and by `permissions.deny` alike (32 tokens apart). Which of the seven were loaded
+  and which deferred under `-p` was not split, and the drop may include text tied to a tool besides its schema (the
+  agent-type listing that goes with `Agent`); the drop is their sum.
+- Not proved: all seven names are built-in tools; no MCP name was denied, so whether a `mcp__<server>` deny drops a
+  server's schemas is untested even in the CLI. And the C1 tools (Artifact, the built-in browser, visualize, the
+  session and turn tools, the Docs connector) are added by the desktop app, most of them as MCP servers, so this probe
+  cannot say whether a deny reaches them. Saving: up to about 31K a call, about 41M a night (C1), only if the desktop
+  honours it; 0 if it does not.
+- The setting a work session would need (his to apply; not applied): a `permissions.deny` list in the project's
+  `.claude/settings.local.json` naming the C1 tools by their request names (for example `Artifact`,
+  `mcp__Claude_Browser`, `mcp__visualize`, `ScheduleWakeup`, `Workflow`). The file is git-ignored
+  (`~/.config/git/ignore`), so a worktree holds its own copy: this worktree's matches the main checkout's byte for
+  byte (`cmp`), which suggests the app copies it when it cuts a worktree; whether a later change reaches worktrees
+  already cut, and so which sessions, the lead's included, a deny reaches, is not checked.
+- The probe that settles the desktop case: one desktop session in a scratch project whose `.claude/settings.local.json`
+  denies Artifact, `mcp__Claude_Browser` and `mcp__visualize`, and a twin with no deny, each sent "say ok"; compare the
+  first assistant entry's usage in the two transcripts. A drop near 18K proves it; none disproves it.
 
 ## Tasks
 - [x] T1 (kind: verify) measure the fixed context and propose; spec 1; route: inline, read-only scripts in the
   scratchpad; commit: this document alone.
+- [x] T2 (kind: verify) C1 probe: does a deny drop a tool's schema; spec 1; route: inline, three `claude -p` runs in
+  JH 289's scratchpad, no settings file; commit: this document and one `docs/FAILURES.md` line (PR 952).
 
 ## Log
 - L1 His request, typed (0cdab702 line 9413): "solucionemos todos esos errores y dime cuanto nos podemos ahorrar y
@@ -150,3 +182,5 @@ Our own text (repo `CLAUDE.md`, `AGENTS.md`, the output style, our hook notes, o
 - L4 Advisor review before the write: the first draft used 4 characters a token, which the measured engram cluster
   and the 78K closure refute; recalibrated to 2.7 and the use count extended to server-side blocks and sub-agent
   folders.
+- L5 C1 probe (JH 289, brief `brief-c1-probe.md`, JH ORQ 2026-11-22): three `claude -p` runs in the scratchpad; a
+  deny by flag or by `permissions.deny` drops the denied schemas (45,637 to 38,475 and 38,507). Desktop half open.
