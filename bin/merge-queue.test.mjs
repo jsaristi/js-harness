@@ -320,12 +320,27 @@ test('a pull request whose feature document holds an open step of his (kind: his
   assert.match(out.join('\n'), /with 2 pull requests merged in order: PR 1 \(feat\/a\), PR 6 \(feat\/walked\)\.$/m);
 });
 
-test('an open step of his in a feature document the pull request does not touch holds nothing; other kinds hold nothing (S11)', async () => {
-  const { root, main } = makeQueueRepo();
+test('an open step of his in a feature document the pull request does not touch, or deletes, holds nothing; other kinds hold nothing (S11)', async () => {
+  const { root, main: first } = makeQueueRepo();
+  // Main itself holds a document with an open step of his, which neither pull request below may be held by.
+  git(root, 'checkout', '--quiet', '--detach', first);
+  fs.mkdirSync(path.join(root, 'odd', 'tasks'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'odd', 'tasks', 'held.md'), featureDoc('- [ ] T2 (kind: his) a walk of his'), 'utf8');
+  git(root, 'add', '.');
+  git(root, 'commit', '--quiet', '-m', 'held');
+  git(root, 'push', '--quiet', 'origin', 'HEAD:main');
+  const main = git(root, 'rev-parse', 'HEAD');
   const other = branchWith(root, main, 'feat/other', { 'odd/tasks/other.md': featureDoc('- [ ] T2 (kind: verify) a check of mine') });
-  const { code, out } = await dryRun(root, [pr(7, 'feat/other', other)]);
+  git(root, 'checkout', '--quiet', '-b', 'feat/gone', main);
+  git(root, 'rm', '--quiet', 'odd/tasks/held.md');
+  git(root, 'commit', '--quiet', '-m', 'gone');
+  git(root, 'push', '--quiet', 'origin', 'feat/gone');
+  const gone = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', '--detach', main);
+  git(root, 'fetch', '--quiet', 'origin');
+  const { code, out } = await dryRun(root, [pr(7, 'feat/other', other), pr(8, 'feat/gone', gone)]);
   assert.equal(code, 0, out.join('\n'));
-  assert.match(out.join('\n'), /with 1 pull request merged in order: PR 7 \(feat\/other\)\.$/m);
+  assert.match(out.join('\n'), /with 2 pull requests merged in order: PR 7 \(feat\/other\), PR 8 \(feat\/gone\)\.$/m);
 });
 
 test('a feature document of the pull request that cannot be read leaves it out: could not look is never none (S11)', async () => {
@@ -357,6 +372,8 @@ function movedMainRepo() {
   // The fresh merge commit goes to origin under a branch of its own, so the test can point the ref at it later.
   git(root, 'push', '--quiet', 'origin', `${fresh}:refs/heads/fresh-merge`);
   git(root, 'checkout', '--quiet', '--detach', oldMain);
+  // The push moved this clone's origin/main; put it back, so only --reopen's own fetch can see the new main.
+  git(root, 'update-ref', 'refs/remotes/origin/main', oldMain);
   return { root, origin, oldMain, newMain, stale, fresh };
 }
 

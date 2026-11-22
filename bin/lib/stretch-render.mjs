@@ -30,7 +30,7 @@ const tile = (label, value, note = '') => `<div class="tile"><span class="soft">
 const bar = (kind, from, width, scale) => (width > 0 ? `<span class="bar ${kind}" style="left:${pct(from, scale)};width:${pct(width, scale)}"></span>` : '');
 
 // The kinds of an item (TASK_KINDS of ./contract.mjs) in the page's words; a kind not here is shown as written.
-const KIND_WORDS = { design: 'diseño', build: 'construcción', verify: 'verificación', docs: 'documentación' };
+const KIND_WORDS = { design: 'diseño', build: 'construcción', verify: 'verificación', docs: 'documentación', his: 'pasos del dueño' };
 
 /** An item's hours as the reader takes them: the adjusted range, then how it was adjusted in words (by the kind's
  * history, every kind's) or why it was not (fewer than HISTORY_MIN items measured). */
