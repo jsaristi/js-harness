@@ -4983,9 +4983,9 @@ test('a notification that names several tasks ends each of them, and its scan ma
   assert.equal(facts.state, 'waiting');
 });
 
-test('a TaskStop the host answers with no such task ends the work of that id: the host holds no task to run', () => {
+test('a TaskStop the host answers with no such task ends the work of that id as lost: the host holds no such task', () => {
   // The lead's transcript d6383aea, line 24107: the host's answer to a TaskStop of bwfwe08il.
   const facts = lib.sessionFacts(transcript(prompt('go', 1), ...backgroundBash('toolu_1', 'bwfwe08il', 2), stop('toolu_3', 'bwfwe08il', 6),
     result('toolu_3', 'Error: No task found with ID: bwfwe08il', 7, { content: '<tool_use_error>No task found with ID: bwfwe08il</tool_use_error>', is_error: true }), reply('done', 8)));
-  assert.deepEqual(facts.work.map((work) => [work.ended, work.endedAt, work.status]), [[true, at(7), 'gone']]);
+  assert.deepEqual(facts.work.map((work) => [work.ended, work.endedAt, work.status]), [[true, at(7), 'lost']]);
 });

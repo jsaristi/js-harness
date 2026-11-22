@@ -689,9 +689,9 @@ export function sessionFacts(
         // that the host stopped the task, not that its process is gone: the process listing says that.
         const task = typeof outcome.task_id === 'string' ? outcome.task_id : launch.block.input?.task_id;
         if (block.is_error !== true && typeof task === 'string') for (const item of workByCall.values()) if (item.id === task && launchIndex(item) < launch.index) end(item, entry.timestamp, 'stopped');
-        // A stop the host answers with no such task holds none to run: that id's work is `gone` (d6383aea:24107).
-        const gone = block.is_error === true ? /No task found with ID: ([^\s<"\\]+)/.exec(typeof block.content === 'string' ? block.content : JSON.stringify(block.content ?? '')) : null;
-        for (const item of workByCall.values()) if (gone !== null && item.id === gone[1] && launchIndex(item) < launch.index) end(item, entry.timestamp, 'gone');
+        // A stop answered "No task found": the host lost that id (`lost`), whatever its process did (d6383aea:24107).
+        const lost = block.is_error === true && typeof task === 'string' && JSON.stringify(block.content ?? '').includes('No task found with ID');
+        for (const item of workByCall.values()) if (lost && item.id === task && launchIndex(item) < launch.index) end(item, entry.timestamp, 'lost');
       } else if (typeof outcome.backgroundTaskId === 'string') {
         // Also a call that never asked for the background: one that outlived its timeout is moved there.
         if (!work) workByCall.set(block.tool_use_id, (work = newWork(launch.block, launch.entry, 'background')));
