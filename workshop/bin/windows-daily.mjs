@@ -26,6 +26,20 @@ const valueOf = (argv, flag) => {
   return at === -1 ? undefined : argv[at + 1];
 };
 
+/** A bad command line: its message is printed above the usage, and the exit is 2. */
+class WindowsDailyArgError extends Error {}
+
+/** Throws a `WindowsDailyArgError` for a token the command does not take or a path flag with no path after it. */
+function checkArgs(argv) {
+  const unknown = unknownArgument(argv, KNOWN);
+  if (unknown !== null) throw new WindowsDailyArgError(`js-harness windows-daily: unknown argument: ${unknown}`);
+  for (const flag of KNOWN.valued) {
+    if (argv.includes(flag) && (valueOf(argv, flag) === undefined || valueOf(argv, flag).startsWith('--'))) {
+      throw new WindowsDailyArgError(`js-harness windows-daily: ${flag} takes a path`);
+    }
+  }
+}
+
 export async function windowsDailyMain(
   argv = [],
   {
@@ -38,16 +52,12 @@ export async function windowsDailyMain(
     daily = windowsDaily,
   } = {},
 ) {
-  const unknown = unknownArgument(argv, KNOWN);
-  if (unknown !== null) {
-    stderr(`js-harness windows-daily: unknown argument: ${unknown}\n\n${USAGE}`);
+  try {
+    checkArgs(argv);
+  } catch (err) {
+    if (!(err instanceof WindowsDailyArgError)) throw err;
+    stderr(`${err.message}\n\n${USAGE}`);
     return 2;
-  }
-  for (const flag of KNOWN.valued) {
-    if (argv.includes(flag) && (valueOf(argv, flag) === undefined || valueOf(argv, flag).startsWith('--'))) {
-      stderr(`js-harness windows-daily: ${flag} takes a path\n\n${USAGE}`);
-      return 2;
-    }
   }
   if (argv.includes('--help') || argv.includes('-h')) {
     stdout(USAGE);
