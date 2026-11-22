@@ -2203,7 +2203,7 @@ session's worktree and its git registration while the work it held was meant to 
 - Seen: 2026-11-04 — odd/tasks/f8-s2-removal.md, L43 — at 20:06 local the lead stopped `bf3a3340` (JH 137) after the
   Claude Desktop restart; `D:\js-harness\.claude\worktrees\f8-s2-nobackup` lost its files (a `.git` file is left);
   nothing committed was lost, `git rev-parse f8-s2-removal origin/f8-s2-removal` gives `e4c1f48d` twice
-- Control: owed — odd/tasks/f8-s2-removal.md — "refuses while the session's worktree holds files unless told to remove it"
+- Control: check — bin/sessions-background.test.mjs — "sessions stop refuses a session whose worktree holds files, runs no claude and leaves every file" — since 2026-11-05
 
 ### stopped-work-shown-live
 A task stopped by hand, and a session that was archived, are printed by the board as live.
