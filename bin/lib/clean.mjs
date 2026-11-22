@@ -18,6 +18,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const CLEAN_EVERY_DAYS = 7;
 export const CLEAN_THRESHOLD_BYTES = 2 * 1024 ** 3;
 const SCRATCH_AGE_DAYS = 3;
+/** The names a test scratch folder of the temp folder starts with: the `temp-scratch` kind, and the folders
+ * `clean --age` ages (./leftover-age.mjs). */
+export const SCRATCH_PREFIXES = Object.freeze(['tmp.', 'js-harness-']);
 // A measure that started this recently is still running (or died): another session start does not start a second.
 const STARTED_FRESH_MS = 60 * 60 * 1000;
 // The name a folder is renamed to before it is removed, so a removal that stops halfway is found again by the scan.
@@ -62,7 +65,7 @@ function answer(run, command, args) {
 /** `{ bytes, newest, linkedWorktree }` of a file or folder: its size with everything under it, the newest time of
  * anything in it, and whether it holds a `.git` (a clone, or a linked worktree of a repository elsewhere). Links are not
  * followed; what cannot be read counts as nothing. */
-function measureTree(target) {
+export function measureTree(target) {
   const total = { bytes: 0, newest: 0, linkedWorktree: false };
   const stack = [target];
   while (stack.length > 0) {
@@ -195,7 +198,7 @@ function folderKinds({ home, tmpdir, platform, now, run }) {
     why: `test scratch folders (tmp.*, js-harness-*) in the temp folder, untouched for ${SCRATCH_AGE_DAYS} days, holding no worktree`,
     root: tmpdir,
     items: itemsOf(tmpdir, (name, full) => {
-      if (!name.startsWith('tmp.') && !name.startsWith('js-harness-')) return false;
+      if (!SCRATCH_PREFIXES.some((prefix) => name.startsWith(prefix))) return false;
       if (!isFolder(full)) return false;
       const tree = measureTree(full);
       return !tree.linkedWorktree && tree.newest < now().getTime() - SCRATCH_AGE_DAYS * DAY_MS;

@@ -6,12 +6,17 @@ import readline from 'node:readline';
 import { unknownArgument } from './lib/args.mjs';
 import { KIND_IDS, applyKinds, formatBytes, logPath, readLog, remainingAfter, scan, writeMeasure } from './lib/clean.mjs';
 import { harnessHome } from './lib/home.mjs';
+import { LEFTOVER_AGE_HOURS, leftoverAge } from './lib/leftover-age.mjs';
+import { listCommandLines } from './lib/process-list.mjs';
+import { QUIET_PROCESSES } from './lib/quiet.mjs';
+import { spawnSync } from 'node:child_process';
 
 export const USAGE = [
   'Usage: js-harness clean [--json] [--home <path>]',
   '       js-harness clean --apply [--kind <id>]... [--home <path>]',
   '       js-harness clean --measure [--home <path>]',
   '       js-harness clean --log [--json] [--home <path>]',
+  '       js-harness clean --age [--json] [--home <path>]',
   '',
   'With no flags it lists each known kind of regenerable leftover (why it is safe to delete, each item with its',
   'size) and a total, and deletes nothing; where ~/.js-harness exists it also writes the sizes to clean.json, which the',
@@ -19,6 +24,9 @@ export const USAGE = [
   'it asks y/N per kind; without one it deletes only the kinds named with --kind, and with none named it deletes',
   'nothing (exit 1). Each deletion is appended to ~/.js-harness/clean-log.jsonl, which --log prints. --measure writes',
   'the sizes for the clean row of doctor and deletes nothing. Package caches are cleaned only by their own tools.',
+  `--age lists, read at one time and writing nothing, what is older than ${LEFTOVER_AGE_HOURS} hours: the scratch folders`,
+  'of temp-scratch in the temp folder, each lock under ~/.js-harness and the processes quiet watches; exit 0 with none,',
+  '1 with any, 3 when none was found but a source could not be read.',
   `Kinds: ${KIND_IDS.join(', ')}.`,
   'Never deleted: ~/.claude/projects, ~/.engram, ~/.js-harness, the current Codex runtime, the running Claude,',
   'anything inside a git worktree, anything off the known list. Exit 0, 1 when --apply has no terminal and no --kind',
@@ -28,7 +36,7 @@ export const USAGE = [
 class CleanArgError extends Error {}
 
 function parseArgs(argv, env, deps) {
-  const unknown = unknownArgument(argv, { valued: ['--home', '--kind'], bare: ['--apply', '--measure', '--log', '--json'] });
+  const unknown = unknownArgument(argv, { valued: ['--home', '--kind'], bare: ['--apply', '--measure', '--log', '--json', '--age'] });
   if (unknown !== null) throw new CleanArgError(`unknown argument: ${unknown}`);
   const values = (flag) => argv.flatMap((token, i) => {
     if (token !== flag) return [];
@@ -43,11 +51,12 @@ function parseArgs(argv, env, deps) {
     apply: argv.includes('--apply'),
     measure: argv.includes('--measure'),
     log: argv.includes('--log'),
+    age: argv.includes('--age'),
     json: argv.includes('--json'),
     kinds,
   };
   if (kinds.length > 0 && !args.apply) throw new CleanArgError('--kind goes with --apply');
-  if ([args.apply, args.measure, args.log].filter(Boolean).length > 1) throw new CleanArgError('--apply, --measure and --log go one at a time');
+  if ([args.apply, args.measure, args.log, args.age].filter(Boolean).length > 1) throw new CleanArgError('--apply, --measure, --log and --age go one at a time');
   if (args.json && (args.apply || args.measure)) throw new CleanArgError('--json goes with the listing or --log, not with --apply or --measure');
   return args;
 }
@@ -125,6 +134,26 @@ async function apply(args, scanDeps, { interactive, ask, log, error, now }) {
   return deleted.length === results.length ? 0 : 1;
 }
 
+/** `clean --age` (odd/tasks/f8-s8-certification.md, T3; C4.2): what `leftoverAge` finds older than a day, one line each
+ * or as data. `deps.listProcesses` replaces the listing of the processes `quiet` watches, for the tests. */
+function printAge(home, scanDeps, deps, json, log) {
+  const platform = scanDeps.platform ?? process.platform;
+  const listProcesses = deps.listProcesses ?? (() => listCommandLines((command, args, options) => spawnSync(command, args, { ...options, encoding: 'utf8', windowsHide: true }), platform, QUIET_PROCESSES)
+    .filter((process) => new RegExp(QUIET_PROCESSES).test(process.commandLine)));
+  const found = leftoverAge({ home, tmpdir: scanDeps.tmpdir ?? os.tmpdir(), now: scanDeps.now ?? (() => new Date()), listProcesses });
+  const code = found.over > 0 ? 1 : found.unread.length > 0 ? 3 : 0;
+  if (json) {
+    log(JSON.stringify(found, null, 2));
+    return code;
+  }
+  log(`${found.over} older than ${LEFTOVER_AGE_HOURS} hours at ${found.at}`);
+  for (const folder of found.folders) log(`temp folder ${folder.path} (${folder.hours}h)`);
+  for (const lock of found.locks) log(`lock ${lock.path} (${lock.hours}h)`);
+  for (const process of found.processes) log(`process ${process.pid} (${process.hours}h): ${process.commandLine}`);
+  for (const line of found.unread) log(`not read: ${line}`);
+  return code;
+}
+
 /** `js-harness clean`. `deps`: `scan` (the scan's deps: tmpdir, platform, now, run), `interactive`, `ask`, `log`,
  * `error`. */
 export async function cleanMain(argv, env = process.env, deps = {}) {
@@ -141,6 +170,7 @@ export async function cleanMain(argv, env = process.env, deps = {}) {
   const scanDeps = { ...deps.scan, home: args.home };
   const now = scanDeps.now ?? (() => new Date());
   if (args.log) return printLog(args.home, args.json, log);
+  if (args.age) return printAge(args.home, scanDeps, deps, args.json, log);
   if (args.measure) {
     writeMeasure(args.home, scan(scanDeps), now(), { onlyIfHome: true });
     return 0;
