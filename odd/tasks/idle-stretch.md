@@ -4,8 +4,9 @@ Locator: `odd/tasks/idle-stretch.md` · Engram mirror: `odd/idle-stretch/tasks` 
 Delivery: one draft pull request to main · Test runner: `node --test`
 
 ## State
-Feature document committed before the first code commit. Next: the tests of T1 and T2, then the reading, the wait and
-the heartbeat. Open: nothing decided by the owner is pending; the gaps of the reading are named in Constraints.
+Built at 274ea50f, test first (T1-T3): the reading, the wait's exit 5, the heartbeat, help, skill line and SPEC; gate
+PASS; lenses risk and reliability complete with 0 findings; Codex skipped and recorded; draft PR 954. Open: Codex's
+review once its stop lifts (2026-11-23 23:45); the sub-agent gap named in Constraints.
 
 ## Goal
 While a stretch covers now and has hours left, the lead's notice wait and its heartbeat end with one `IDLE:` line
