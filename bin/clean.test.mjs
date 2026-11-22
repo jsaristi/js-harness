@@ -144,6 +144,35 @@ test('clean --measure writes nothing when the harness home is gone', async (t) =
   assert.equal(fs.existsSync(path.join(setup.home, '.js-harness')), false);
 });
 
+// C4.2 of odd/tasks/f8-s8-certification.md (T3): the leftovers older than a day, read at one time, written nowhere.
+test('clean --age lists the scratch folders, locks and processes older than a day, exits 1 with any, and writes nothing', async (t) => {
+  const setup = fixture(t);
+  const lingering = [{ pid: 7, createdAt: new Date(setup.deps.now().getTime() - 30 * 3600 * 1000).toISOString(), commandLine: 'node js-harness merge-queue' }];
+  const found = await clean(['--age'], setup, { listProcesses: () => lingering });
+  assert.equal(found.code, 1);
+  assert.match(found.out, /^temp folder .*tmp\.oldOne \(\d+(\.\d)?h\)$/m);
+  assert.match(found.out, /^process 7 \(30h\): node js-harness merge-queue$/m);
+  assert.match(found.out, new RegExp(`older than 24 hours at ${setup.deps.now().toISOString().replace(/\./g, '\\.')}`));
+  assert.equal(fs.existsSync(path.join(setup.home, '.js-harness', 'clean.json')), false);
+
+  const json = await clean(['--age', '--json'], setup, { listProcesses: () => [] });
+  const data = JSON.parse(json.out);
+  assert.equal(json.code, 1);
+  assert.deepEqual(data.processes, []);
+  assert.ok(data.folders.some((folder) => folder.path.endsWith('tmp.oldOne')));
+
+  const unread = await clean(['--age'], setup, { listProcesses: () => { throw new Error('no listing'); }, scan: { ...setup.deps, tmpdir: path.join(setup.root, 'empty-tmp') } });
+  assert.equal(unread.code, 3);
+  assert.match(unread.out, /^not read: processes: no listing$/m);
+});
+
+test('clean --age goes alone, or with --json', async (t) => {
+  const setup = fixture(t);
+  for (const flags of [['--age', '--apply'], ['--age', '--measure'], ['--age', '--log']]) {
+    assert.equal((await clean(flags, setup, { listProcesses: () => [] })).code, 2, flags.join(' '));
+  }
+});
+
 test('js-harness clean --help prints the usage and runs nothing', () => {
   const result = spawnSync(process.execPath, [BIN, 'clean', '--help'], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
