@@ -119,3 +119,10 @@ Nothing: the brief and his words L2, L3 ask for it; a doubt goes to the lead as 
   `<project folder>/<session id>/subagents/agent-*.jsonl` (seen on disk: 121 session folders, 76 with sub-agents), so
   the IDLE reading now counts those writes, the lead's own left out; the gap named in Constraints is closed. L9 stays
   open: it is in the return page, not in these files.
+- L11 2026-11-22, L9 closed by JH 296 (the lead's queue), on `claude/jh296-idle-l9` from PR 958's head dc57d6d3, test
+  first: three tests were seen failing, then 93 of 93 passed (`node --test bin/stretch.test.mjs
+  bin/lib/stretch-render.test.mjs bin/lib/stretch.test.mjs`). Each idle spell now carries `beside`, its seconds that no
+  wait and no earlier spell covers (`idleBeside`, bin/lib/stretch.mjs). Those seconds add up to the idle tile, which
+  is now their sum. The return lists a spell by those minutes, and adds its whole length when a wait covered part of it:
+  "60 min · ninguna sesión corría (de 90 min; el resto ya cuenta como espera)". A view recorded before `beside` lists the
+  spell whole, as it did.

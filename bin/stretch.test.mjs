@@ -759,4 +759,22 @@ test('an idle hour a session sat waiting through counts once, and one spell told
   const view = JSON.parse((await stretch(place, ['status', '--json'], { hours: 4 })).out);
   assert.deepEqual([view.totals.waitingHours, view.totals.idleHours, view.totals.lostHours], [2, 0, 2]);
   assert.equal(view.lost.idle.length, 1, 'the spell is listed once');
+  assert.deepEqual(view.lost.idle.map((one) => [one.seconds, one.beside]), [[3600, 0]], 'listed whole, none of it beside the wait');
+});
+
+// PR 955's L9 (odd/tasks/idle-stretch.md): the return listed each idle spell whole while the idle tile left out what a
+// wait covered, so the list could add up to more than the tile. Each spell now carries the seconds no wait and no
+// earlier spell covers, `beside`, and those add up to the tile.
+test('each idle spell carries the seconds beside the waits, and they add up to the idle tile', async () => {
+  const handed = newNotice({ at: at(2), from: { host: 'claude-code', id: 'lead', title: 'JH ORQ · lead' }, to: '199', kind: 'note', text: 'sigue' });
+  const place = scratch({ notices: [notice(1, 's199', 'JH 199 · uno', 'waiting'), handed, notice(3, 's207', 'JH 207 · dos', 'closed')] });
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)]);
+  const spells = idleSpellsFile(place.home, projectSlug(place.project));
+  fs.mkdirSync(path.dirname(spells), { recursive: true });
+  // JH 199 waits from 1 h to the lead's note at 2 h; idle from 1.5 h to JH 207's notice at 3 h, half an hour of it inside the wait.
+  fs.writeFileSync(spells, `${JSON.stringify({ since: at(1.5), at: at(1.6), session: 'lead' })}\n`);
+  const view = JSON.parse((await stretch(place, ['status', '--json'], { hours: 4 })).out);
+  assert.deepEqual(view.lost.idle.map((one) => [one.seconds / 3600, one.beside / 3600]), [[1.5, 1]]);
+  assert.equal(view.totals.idleHours, 1);
+  assert.equal(view.lost.idle.reduce((total, one) => total + one.beside, 0) / 3600, view.totals.idleHours);
 });

@@ -375,6 +375,14 @@ test('the return names the lost time of each kind, failed gates, sessions waitin
   assert.match(html, /<span class="soft">Perdido<\/span><b>7\.66 h<\/b>/);
   assert.match(html, /fallas 0\.16 h · esperando 6 h · sin nada corriendo 1\.5 h/);
   assert.match(html, /<h3>Tiempo perdido sin fallas<\/h3><ul><li>JH 199 · &lt;uno&gt; · 180 min · esperando al orquestador o a ti<\/li><li>[^<]+ · 90 min · ninguna sesión corría<\/li><\/ul>/);
+  // PR 955's L9: a spell partly inside a wait is listed by its minutes beside the waits, as the tile counts it, with
+  // its whole length said; a view recorded before `beside` lists it whole, as it did.
+  const partly = renderView({
+    ...view,
+    totals: { ...view.totals, lostHours: 7.16, failedHours: 0.16, waitingHours: 6, idleHours: 1 },
+    lost: { waiting: [], idle: [{ at: '2026-10-28T18:00:00.000Z', seconds: 5400, beside: 3600, what: 'idle' }] },
+  });
+  assert.match(partly, /<li>[^<]+ · 60 min · ninguna sesión corría \(de 90 min; el resto ya cuenta como espera\)<\/li>/);
   // A view recorded before the kinds were counted shows its one figure as it was.
   assert.match(renderView(view), /Perdido en fallas/);
   assert.doesNotMatch(renderView(view), /Tiempo perdido sin fallas/);

@@ -389,9 +389,18 @@ export function idleSpells(spells, { notices, starts, gates }, { from, to }) {
 /** The hours `spells` hold, summed: waits of two sessions at once are two sessions' hours. */
 export const spellHours = (spells) => round(spells.reduce((total, one) => total + one.seconds, 0) / 3600);
 
-/** The hours of the idle spells `idle` that no wait of `waiting` covers: an hour a session sat waiting through is
- * that wait's loss already, so the stretch's lost time counts it once. */
-export function idleHoursBeside(idle, waiting) {
-  const spans = (spells) => spells.map((one) => [Date.parse(one.at), Date.parse(one.at) + one.seconds * 1000]);
-  return round((busySeconds([...spans(idle), ...spans(waiting)]) - busySeconds(spans(waiting))) / 3600);
+/** The idle spells `idle`, oldest first, each with `beside`: its seconds that no wait of `waiting` and no earlier
+ * spell covers. An hour a session sat waiting through is that wait's loss already, so the return lists each spell by
+ * these seconds and they add up to the idle tile (PR 955's L9, odd/tasks/idle-stretch.md). */
+export function idleBeside(idle, waiting) {
+  const span = (one) => [Date.parse(one.at), Date.parse(one.at) + one.seconds * 1000];
+  const covered = waiting.map(span);
+  return [...idle].sort((a, b) => Date.parse(a.at) - Date.parse(b.at)).map((one) => {
+    const before = busySeconds(covered);
+    covered.push(span(one));
+    return { ...one, beside: busySeconds(covered) - before };
+  });
 }
+
+/** The hours of the idle spells `idle` that no wait of `waiting` covers (`idleBeside`), counted once. */
+export const idleHoursBeside = (idle, waiting) => round(idleBeside(idle, waiting).reduce((total, one) => total + one.beside, 0) / 3600);

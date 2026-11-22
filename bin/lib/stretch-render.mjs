@@ -32,11 +32,19 @@ const tile = (label, value, note = '') => `<div class="tile"><span class="soft">
 const lostTile = (totals) => (Number.isFinite(totals.failedHours)
   ? tile('Perdido', `${totals.lostHours} h`, `fallas ${totals.failedHours} h · esperando ${totals.waitingHours} h · sin nada corriendo ${totals.idleHours} h`)
   : tile('Perdido en fallas', `${totals.lostHours} h`, `${Math.round(totals.lostShare * 100)}% del real`));
+/** An idle spell as the list says it: by its minutes beside the waits (`beside`), as the idle tile counts them, with
+ * its whole length when a wait covered part of it; a view recorded before `beside` says it whole (PR 955's L9). */
+const idleSaid = (one) => {
+  const whole = Math.round(one.seconds / 60);
+  const beside = Number.isFinite(one.beside) ? Math.round(one.beside / 60) : whole;
+  const rest = beside < whole ? ` (de ${whole} min; el resto ya cuenta como espera)` : '';
+  return `${clock(one.at)} · ${beside} min · ninguna sesión corría${rest}`;
+};
 /** The waits and idle spells lost beside the failures, oldest first, or nothing when there is none. */
 const lostList = (lost) => {
   const spells = [...(lost?.waiting ?? []), ...(lost?.idle ?? [])].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
   if (spells.length === 0) return '';
-  const said = (one) => (one.what === 'waiting' ? `${escapeHtml(one.who)} · ${Math.round(one.seconds / 60)} min · esperando al orquestador o a ti` : `${clock(one.at)} · ${Math.round(one.seconds / 60)} min · ninguna sesión corría`);
+  const said = (one) => (one.what === 'waiting' ? `${escapeHtml(one.who)} · ${Math.round(one.seconds / 60)} min · esperando al orquestador o a ti` : idleSaid(one));
   return `<h3>Tiempo perdido sin fallas</h3><ul>${spells.map((one) => `<li>${said(one)}</li>`).join('')}</ul>`;
 };
 const bar = (kind, from, width, scale) => (width > 0 ? `<span class="bar ${kind}" style="left:${pct(from, scale)};width:${pct(width, scale)}"></span>` : '');
