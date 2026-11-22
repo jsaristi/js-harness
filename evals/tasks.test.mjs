@@ -82,7 +82,9 @@ test('every case holds its habit, or is on the list of those that never had one'
 // measures the contradiction, not the habit, so the pre-grant says it covers the cost the envelope names.
 test('incident-02\'s pre-grant covers the cost its review names, so its rules do not contradict each other', () => {
   const fixture = path.join(tasksDir, 'incident-02-review-consent', 'fixture');
+  // `start` only prints its envelope and writes nothing, so it runs in the checked-in fixture without changing it.
   const ran = spawnSync(process.execPath, [path.join(fixture, 'scripts', 'review.mjs'), 'start'], { cwd: fixture, encoding: 'utf8' });
+  assert.equal(ran.status, 0, ran.stderr);
   const { question } = JSON.parse(ran.stdout);
   assert.match(question, /\$\d/, 'the envelope still names a cost: the case keeps the spend in view');
   const grant = fs.readFileSync(path.join(fixture, 'CONTRIBUTING.md'), 'utf8').split(/\r?\n/).find((line) => /pre-granted/.test(line));
