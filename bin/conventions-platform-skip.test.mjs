@@ -5,10 +5,11 @@
 // whole suite of .github/workflows/windows-daily.yml. A platform condition in a test file names a platform of that
 // table, so a test skipped everywhere but a platform with no gate is refused at the commit that writes it.
 //
-// What a test can see is checked: every `process.platform` compared to a quoted name in a tracked `*.test.mjs`, read
-// with its comment lines left out, and each gate file's runner and command. A platform injected as data
-// (`platform: 'darwin'`) runs everywhere and is not a condition. LEGACY lists the test files that compare to a platform
-// with no gate yet, each with why; it only shrinks (bin/lib/ratchet.testkit.mjs).
+// What a test can see is checked: in every tracked `*.test.mjs` but this one, read with its comment lines left out,
+// a quoted Node platform on a line that reads `process.platform` or `os.platform()`, or after a `case`; and each gate
+// file's runner and command. A platform held in a variable and compared lines later is not seen. A platform injected
+// as data (`platform: 'darwin'`) runs everywhere and is not a condition. LEGACY lists the test files that compare to a
+// platform with no gate yet, each with why; it only shrinks (bin/lib/ratchet.testkit.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -27,11 +28,23 @@ const PLATFORM_GATES = {
 
 const LEGACY = {};
 
-/** The platform names `text` compares `process.platform` to, each once. */
+/** This file's own fixtures are comparisons on purpose; the file check below reads every other test file. */
+const SELF = 'bin/conventions-platform-skip.test.mjs';
+
+/** The values `process.platform` takes in Node (its documentation lists these), so a quoted one is a platform. */
+const NODE_PLATFORMS = ['aix', 'android', 'cygwin', 'darwin', 'freebsd', 'haiku', 'linux', 'netbsd', 'openbsd', 'sunos', 'win32'];
+const QUOTED_PLATFORM = new RegExp(`(['"\`])(${NODE_PLATFORMS.join('|')})\\1`, 'g');
+
+/** The platform names `text` tests the running platform against, each once: a quoted platform on a line that reads
+ * `process.platform` or `os.platform()` (an equality, `includes`, `startsWith`, a regular expression), or after a
+ * `case`, the arm of a `switch` over it. A platform passed as data (`platform: 'darwin'`) is on no such line. */
 export function comparedPlatforms(text) {
   const found = new Set();
-  for (const match of text.matchAll(/process\.platform\s*[!=]==?\s*(['"`])([^'"`]+)\1|(['"`])([^'"`]+)\3\s*[!=]==?\s*process\.platform/g)) {
-    found.add(match[2] ?? match[4]);
+  for (const line of text.split(/\r?\n/)) {
+    const reads = /\bprocess\.platform\b|\bplatform\(\)/.test(line);
+    for (const match of line.matchAll(QUOTED_PLATFORM)) {
+      if (reads || /\bcase\s*$/.test(line.slice(0, match.index))) found.add(match[2]);
+    }
   }
   return [...found];
 }
@@ -49,10 +62,12 @@ function testFiles() {
 }
 
 test('a comparison with a platform no gate runs is found, and one with win32 or linux is not', () => {
-  // Spelled in two parts, so this file's own source holds no comparison for the file check below to read.
-  const platform = ['process', 'platform'].join('.');
+  const platform = 'process.platform';
   assert.deepEqual(comparedPlatforms(`test('x', { skip: ${platform} !== 'darwin' && 'macOS only' }, () => {});`), ['darwin']);
   assert.deepEqual(comparedPlatforms(`const skip = 'win32' === ${platform};`), ['win32']);
+  assert.deepEqual(comparedPlatforms(`const mac = ['darwin'].includes(${platform});`), ['darwin']);
+  assert.deepEqual(comparedPlatforms("if (os.platform().startsWith('free') || os.platform() === 'freebsd') {}"), ['freebsd']);
+  assert.deepEqual(comparedPlatforms(`switch (${platform}) {\n  case 'sunos':\n    break;\n}`), ['sunos']);
   assert.deepEqual(comparedPlatforms("run({ platform: 'darwin' });"), []);
   assert.deepEqual(platformsWithoutGate(['darwin', 'win32', 'linux']), ['darwin']);
 });
@@ -66,7 +81,7 @@ test('each platform of the table has its gate: the workflow exists, on that runn
 });
 
 test('every platform a test file compares to has a gate, but the legacy ones', () => {
-  const files = testFiles();
+  const files = testFiles().filter((file) => file !== SELF);
   assert.ok(files.length >= 200, `only ${files.length} test files were read`);
   const broken = files.filter((file) => platformsWithoutGate(comparedPlatforms(withoutComments(fs.readFileSync(path.join(REPO, file), 'utf8')))).length > 0);
   const problems = ratchet({ checked: files, broken, legacy: LEGACY });
