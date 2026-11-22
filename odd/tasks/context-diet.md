@@ -4,9 +4,9 @@ Branch `claude/jh286-context-diet`, from origin/main (c9144af9). Session JH 286.
 only file the work writes; nothing on the machine was changed.
 
 ## State
-Measured and written. Next is the owner's decision, asked by the lead: which candidates in the table to turn off for
-work sessions. Open: whether the host honours a deny on its own tools (one probe, C1), and the per-tool schema sizes,
-which no transcript holds.
+Measured and written; C1's lever measured in the CLI engine (JH 289, "C1 probe"). Next is the owner's decision, asked
+by the lead: which candidates in the table to turn off for work sessions. Open: whether the desktop honours a deny on
+its own tools and on MCP names (one probe, in "C1 probe"), and the per-tool schema sizes, which no transcript holds.
 
 ## Goal
 Say what the fixed context of a work session of this repo holds, who owns each part, whether work sessions use it,
@@ -148,16 +148,21 @@ run is one call; the figure is input + cache creation + cache read of that call,
 | Deny by flag | the same plus `--disallowedTools "Agent Workflow Glob Grep WebSearch WebFetch NotebookEdit"` | 2 | 38,473 | 0 | 38,475 |
 | Deny by settings | the same plus `--settings` with inline JSON `permissions.deny` of the same seven names | 2 | 12,983 | 25,522 | 38,507 |
 
-- Proved: a deny removes the denied tools' schemas from the request, not only their calls: 7,162 tokens fewer a call
-  for seven names, by the flag and by `permissions.deny` alike (32 tokens apart). Which of the seven were loaded and
-  which deferred under `-p` was not split; the drop is their sum.
-- Not proved: the C1 tools (Artifact, the built-in browser, visualize, the session and turn tools, the Docs connector)
-  are added by the desktop app, not by the CLI, so this probe cannot say whether a deny reaches them. Saving: up to
-  about 31K a call, about 41M a night (C1), only if the desktop honours it; 0 if it does not.
+- Proved: a deny of built-in tools removes what they add to the request, not only their calls: 7,162 tokens fewer a
+  call for seven names, by the flag and by `permissions.deny` alike (32 tokens apart). Which of the seven were loaded
+  and which deferred under `-p` was not split, and the drop may include text tied to a tool besides its schema (the
+  agent-type listing that goes with `Agent`); the drop is their sum.
+- Not proved: all seven names are built-in tools; no MCP name was denied, so whether a `mcp__<server>` deny drops a
+  server's schemas is untested even in the CLI. And the C1 tools (Artifact, the built-in browser, visualize, the
+  session and turn tools, the Docs connector) are added by the desktop app, most of them as MCP servers, so this probe
+  cannot say whether a deny reaches them. Saving: up to about 31K a call, about 41M a night (C1), only if the desktop
+  honours it; 0 if it does not.
 - The setting a work session would need (his to apply; not applied): a `permissions.deny` list in the project's
   `.claude/settings.local.json` naming the C1 tools by their request names (for example `Artifact`,
-  `mcp__Claude_Browser`, `mcp__visualize`, `ScheduleWakeup`, `Workflow`). It reaches every session of the project,
-  the lead's too, so the list must leave out what the lead uses.
+  `mcp__Claude_Browser`, `mcp__visualize`, `ScheduleWakeup`, `Workflow`). The file is git-ignored
+  (`~/.config/git/ignore`), so a worktree holds its own copy: this worktree's matches the main checkout's byte for
+  byte (`cmp`), which suggests the app copies it when it cuts a worktree; whether a later change reaches worktrees
+  already cut, and so which sessions, the lead's included, a deny reaches, is not checked.
 - The probe that settles the desktop case: one desktop session in a scratch project whose `.claude/settings.local.json`
   denies Artifact, `mcp__Claude_Browser` and `mcp__visualize`, and a twin with no deny, each sent "say ok"; compare the
   first assistant entry's usage in the two transcripts. A drop near 18K proves it; none disproves it.
@@ -165,6 +170,8 @@ run is one call; the figure is input + cache creation + cache read of that call,
 ## Tasks
 - [x] T1 (kind: verify) measure the fixed context and propose; spec 1; route: inline, read-only scripts in the
   scratchpad; commit: this document alone.
+- [x] T2 (kind: verify) C1 probe: does a deny drop a tool's schema; spec 1; route: inline, three `claude -p` runs in
+  JH 289's scratchpad, no settings file; commit: this document and one `docs/FAILURES.md` line (PR 952).
 
 ## Log
 - L1 His request, typed (0cdab702 line 9413): "solucionemos todos esos errores y dime cuanto nos podemos ahorrar y
