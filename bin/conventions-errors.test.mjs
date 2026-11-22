@@ -36,7 +36,6 @@ const LEGACY = {
   'onboard.mjs': 'its parse returns { error }',
   'reply.mjs': 'prints the usage and returns 2',
   'resume.mjs': 'prints the refusal from its main and returns 2',
-  'summary.mjs': 'its parse returns the usage line',
   'wake.mjs': 'throws a plain Error',
 };
 
