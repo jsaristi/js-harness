@@ -91,22 +91,30 @@ test('a candidate something already accepts connections on is skipped when the c
 
 test('real allocations are distinct, bindable once released, and none is the real engram port', async () => {
   // On GitHub's machines another process once took a port in the moment between its release and this test's look
-  // (docs/FAILURES.md, ports-test-free-port-race), so the allocations probe their candidates before handing them out.
+  // (docs/FAILURES.md, ports-test-free-port-race). Another process on a shared machine may take any free port at any
+  // moment, so the allocations probe their candidates before handing them out and the test does not look again; and
+  // the bind goes to the first of the twelve still free, since one may be held without a listener in that moment.
   const ports = await Promise.all(Array.from({ length: 12 }, () => allocatePort({ held: isListening })));
   try {
     assert.equal(new Set(ports).size, 12);
-    for (const port of ports) {
-      assert.ok(Number.isInteger(port) && port >= 1024 && port !== REAL_ENGRAM_PORT, String(port));
-      assert.equal(await isListening(port), false, 'nothing holds it');
-    }
+    for (const port of ports) assert.ok(Number.isInteger(port) && port >= 1024 && port !== REAL_ENGRAM_PORT, String(port));
     const server = net.createServer();
-    await new Promise((resolve, reject) => {
-      server.once('error', reject);
-      server.listen(ports[0], '127.0.0.1', resolve);
-    });
-    assert.equal(await isListening(ports[0]), true);
+    let bound = null;
+    for (const port of ports) {
+      const error = await new Promise((resolve) => {
+        server.once('error', resolve);
+        server.listen(port, '127.0.0.1', () => resolve(null));
+      });
+      if (error === null) {
+        bound = port;
+        break;
+      }
+      if (error.code !== 'EADDRINUSE') throw error;
+    }
+    assert.notEqual(bound, null, 'one of twelve fresh ports is bindable');
+    assert.equal(await isListening(bound), true);
     await new Promise((resolve) => server.close(resolve));
-    assert.equal(await isListening(ports[0]), false);
+    assert.equal(await isListening(bound), false);
   } finally {
     for (const port of ports) releasePort(port);
   }
