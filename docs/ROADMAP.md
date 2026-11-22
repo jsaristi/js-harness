@@ -340,8 +340,7 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
   target 17; `honest-unknown` 3 of 3 and the three tasks 3 of 3 a task, both arms; false premise 2 of
   4, below its line of 3 of 4.
 - **Cost:** $59.64, measured.
-- **State:** done (`odd/tasks/f8-s0-baseline.md`); its T8, the closing check and notice, is
-  unticked there. The long-session eval's build plan is written there, for S8.
+- **State:** done (`odd/tasks/f8-s0-baseline.md`, T8 too). The long-session eval's build plan is written there, for S8.
 
 ### S3 The split, and the interim exclusion
 - **Changes:** a root `CLAUDE.md` that imports `@AGENTS.md` and holds how Claude works here;
@@ -724,7 +723,7 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **Probe and pass:** the first turn of five Haiku sub-agents at most 30k; at most one unrequested
   file in five Sonnet writer slices, each naming its `S#`.
 - **Cost:** no eval beyond those runs [i].
-- **State (2026-11-11):** built (JH 159, `odd/tasks/f8-s7-topology.md`, 6 of 7 tasks; only T1, a documentation task, is unticked). Writers launch as the project agent
+- **State (2026-11-11):** built (JH 159, `odd/tasks/f8-s7-topology.md`, 7 of 7 tasks). Writers launch as the project agent
   type `.claude/agents/js-harness-writer.md` (the model of `rule:session-model`, `omitClaudeMd`, six tools),
   whose first turn measured 6,881 to 6,998 tokens in five headless runs, against 21,468 for a headless
   `general-purpose` Haiku launch (already under 30k there; 35,683 and 49,602 in app sessions, where the type is owed); the protocols skill asks a writer's brief for its `S#` and its return for `Covered: S<n>`; the heartbeat ends
@@ -941,9 +940,9 @@ of the first version.
 - [ ] A stretch's lost time counts only failed gates: the 2026-11-15 return showed 0.16 h lost while JH 199 and
   JH 207 sat about 3 h each waiting on the lead and the owner. Idle time read from `waiting` notices counts too.
   Owner: JH 208 (`odd/tasks/consistent-orders.md`), which reads the same signal (2026-11-15).
-- [ ] Stalled-session detection: the board, the lead's watch and its heartbeat name a work session that holds
+- [x] Stalled-session detection: the board, the lead's watch and its heartbeat name a work session that holds
   handed work and has made no commit, notice or gate for an hour. On 2026-10-16 three sessions sat five to six
-  hours before anyone noticed. Tracked in `odd/tasks/stalled-sessions.md`.
+  hours before anyone noticed. Done: `odd/tasks/stalled-sessions.md`, PR 865.
 - [ ] The lead's relief file, bounded (1.72 MB on 2026-11-11; November alone 235 KB in 11 days, so a file a
   month does not give a head the lead reads at once). Taken out of F8's S6 by his answer A to question 268:
   its design is reviewed before any code, with readers landed before the writer, an undo that is a tested
