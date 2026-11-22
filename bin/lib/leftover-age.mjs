@@ -25,18 +25,19 @@ const hoursOf = (ms) => Math.round(ms / HOUR_MS * 10) / 10;
 function oldFolders(tmpdir, at, cutoff, unread) {
   return fs.readdirSync(tmpdir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && SCRATCH_PREFIXES.some((prefix) => entry.name.startsWith(prefix)))
-    .flatMap((entry) => {
+    .map((entry) => {
       const full = path.join(tmpdir, entry.name);
-      // A folder removed since the listing, as a run cleans up its own, was not left behind.
-      try {
-        fs.lstatSync(full);
-      } catch (err) {
-        if (err.code === 'ENOENT') return [];
-      }
-      return [{ path: full, newest: measureTree(full).newest }];
+      return { path: full, newest: measureTree(full).newest };
     })
     .filter((folder) => {
       if (folder.newest > 0) return folder.newest < cutoff;
+      // Looked at after the measure: a folder removed since the listing, or during the walk, as a run cleans up its
+      // own, was not left behind.
+      try {
+        fs.lstatSync(folder.path);
+      } catch (err) {
+        if (err.code === 'ENOENT') return false;
+      }
       unread(`temp folder ${folder.path}: its age cannot be read`);
       return false;
     })
