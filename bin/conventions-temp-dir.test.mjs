@@ -7,8 +7,11 @@
 // folder made somewhere else than the OS temporary folder (under a scratch root the test removes) is not refused.
 //
 // What is read: every `*.test.mjs` under bin/, workshop/, scripts/ and evals/, outside comment lines
-// (bin/lib/source.testkit.mjs); a file breaks the convention when one line calls `mkdtemp` or `mkdtempSync` with
-// `tmpdir()` in it. LEGACY lists the files that did on 2026-11-22; it only shrinks (bin/lib/ratchet.testkit.mjs).
+// (bin/lib/source.testkit.mjs); a file breaks the convention when it calls `mkdtemp` or `mkdtempSync` and names
+// `tmpdir()` anywhere, so a call split over lines or a temp path kept in a variable is refused too (the reliability
+// lens on 8a575816). A file that needs `tmpdir()` for something else and makes folders elsewhere uses tempDir all the
+// same, or goes without mkdtemp. This file is not read: its examples name both. LEGACY lists the files that broke it
+// on 2026-11-22; it only shrinks (bin/lib/ratchet.testkit.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -18,7 +21,9 @@ import { withoutComments } from './lib/source.testkit.mjs';
 
 const ROOT = path.join(import.meta.dirname, '..');
 const FOLDERS = ['bin', 'workshop', 'scripts', 'evals'];
-const OWN_TEMP = /mkdtemp(?:Sync)?\([^\n]*tmpdir\(\)/;
+const SELF = 'bin/conventions-temp-dir.test.mjs';
+const MKDTEMP = /\bmkdtemp(?:Sync)?\(/;
+const TMPDIR = /\btmpdir\(\)/;
 
 const WHY = 'made its temporary folders with mkdtemp under os.tmpdir() on 2026-11-22, before tempDir';
 const LEGACY = Object.fromEntries([
@@ -261,13 +266,14 @@ function testFiles() {
     fs
       .readdirSync(path.join(ROOT, folder), { recursive: true })
       .map((name) => `${folder}/${name.split(path.sep).join('/')}`)
-      .filter((name) => name.endsWith('.test.mjs')),
+      .filter((name) => name.endsWith('.test.mjs') && name !== SELF),
   ).sort();
 }
 
-/** Whether `text`, outside its comment lines, makes a folder of its own under the OS temporary folder. */
+/** Whether `text`, outside its comment lines, calls mkdtemp and names the OS temporary folder. */
 function makesOwnTemp(text) {
-  return OWN_TEMP.test(withoutComments(text));
+  const code = withoutComments(text);
+  return MKDTEMP.test(code) && TMPDIR.test(code);
 }
 
 test('no test file makes its own folder under the OS temporary folder but the legacy ones: tempDir does, and removes it', () => {
@@ -278,11 +284,13 @@ test('no test file makes its own folder under the OS temporary folder but the le
   assert.deepEqual(problems, [], `${problems.join('\n')}\n\nmake the folder with tempDir from bin/lib/temp-dir.testkit.mjs`);
 });
 
-test('a call to mkdtemp with tmpdir() on its line is refused, in a comment or under another root it is not', () => {
+test('mkdtemp with tmpdir() is refused on one line, split over lines or through a variable; in a comment or under another root it is not', () => {
   const call = (name, root) => `const dir = fs.${name}(path.join(${root}, 'x-'));`;
   assert.ok(makesOwnTemp(call('mkdtempSync', 'os.tmpdir()')));
   assert.ok(makesOwnTemp(call('mkdtempSync', 'tmpdir()')));
   assert.ok(makesOwnTemp(`await fsp.${'mkdtemp'}(join(tmpdir(), 'x-'));`));
+  assert.ok(makesOwnTemp(`const dir = fs.mkdtempSync(\n  path.join(\n    os.tmpdir(),\n    'x-',\n  ),\n);`));
+  assert.ok(makesOwnTemp(`const base = os.tmpdir();\n${call('mkdtempSync', 'base')}`));
   assert.ok(!makesOwnTemp(`// ${call('mkdtempSync', 'os.tmpdir()')}`));
   assert.ok(!makesOwnTemp(call('mkdtempSync', 'scratchRoot')));
   assert.ok(!makesOwnTemp("const dir = tempDir('x-', t);"));
