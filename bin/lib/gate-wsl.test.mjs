@@ -67,7 +67,10 @@ test('the command runs the runner by its mounted path, and the bound inside is s
 // nothing in the pass said which. The runner prints the version of the node it runs, and the gate reads it.
 test('the runner prints the node it runs, and the version is read from its mark', () => {
   const script = runnerScript({ source: '/mnt/d/p', mirror: 'p', node: '/home/u/.local/node/bin', command: 'npm test', held: false, heldVariable: 'H', seconds: 60 });
-  assert.match(script, new RegExp(`echo "${NODE_MARK}\\$\\('/home/u/\\.local/node/bin'/node -v 2>/dev/null\\)" >&2`));
+  // Asked on the PATH the command runs on, so the version is of the node the command finds first (reliability lens).
+  const runPath = "PATH='/home/u/.local/node/bin'':/usr/local/bin:/usr/bin:/bin'";
+  assert.ok(script.includes(`echo "${NODE_MARK}$(env -i ${runPath} node -v 2>/dev/null)" >&2`), script);
+  assert.ok(script.includes(` ${runPath} \\\n`), 'the command runs on that same PATH');
   assert.equal(nodeOf(`noise\n${NODE_MARK}v24.15.0\nmore`), 'v24.15.0');
   assert.equal(nodeOf(`${NODE_MARK}\n`), null, 'a node that said nothing');
   assert.equal(nodeOf('no mark'), null);

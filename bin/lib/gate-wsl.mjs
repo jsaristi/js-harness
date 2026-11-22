@@ -112,6 +112,7 @@ export function runnerScript({ source, mirror, node, command, held, heldVariable
     ? `JS_HARNESS_TRACE_ROOT="$mirror" JS_HARNESS_TRACE_DIR=${word(trace.dir)} JS_HARNESS_TRACE_RESULTS=${word(trace.results)} NODE_OPTIONS=${word(`--require=${preload}`)} `
     : '';
   const sync = 'rsync -a --delete --delete-excluded --exclude=/.git --exclude=/.codegraph --exclude=node_modules';
+  const runPath = `PATH=${word(node)}':/usr/local/bin:/usr/bin:/bin'`;
   return [
     '#!/bin/bash',
     '# Written by js-harness check for one sensor of a gate; see bin/lib/gate-wsl.mjs.',
@@ -125,11 +126,12 @@ export function runnerScript({ source, mirror, node, command, held, heldVariable
     'mkdir -p "$mirror" || exit 97',
     `${sync} --checksum "$source/" "$mirror/" || exit 97`,
     `echo "${SYNCED_MARK}$(( ($(date +%s%N) - started) / 1000000 )) ms" >&2`,
-    `echo "${NODE_MARK}$(${word(node)}/node -v 2>/dev/null)" >&2`,
+    // Asked on the PATH the command runs on, so it is the node the command finds first.
+    `echo "${NODE_MARK}$(env -i ${runPath} node -v 2>/dev/null)" >&2`,
     'home=$(mktemp -d) || exit 1',
     'cd "$mirror" || exit 1',
     'ran=$(date +%s%N)',
-    `env -i HOME="$home" ${Object.entries(RUNNER_ENV).map(([key, value]) => `${key}=${value}`).join(' ')} PATH=${word(node)}':/usr/local/bin:/usr/bin:/bin' \\`,
+    `env -i HOME="$home" ${Object.entries(RUNNER_ENV).map(([key, value]) => `${key}=${value}`).join(' ')} ${runPath} \\`,
     `  JS_HARNESS_CHECK_INNER=1 ${held ? `${heldVariable}=1 ` : ''}${traced}npm_config_cache="$home/.npm-cache" \\`,
     `  timeout -k 10 ${seconds} bash -c ${word(command)}`,
     'code=$?',
