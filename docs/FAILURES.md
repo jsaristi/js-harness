@@ -124,6 +124,15 @@ is away, and nothing made the sessions take more work once the briefs they held 
 - Seen: 2026-11-22 — his words in transcript 0cdab702, lines 9816 and 10901 (checked with sessions --quote) — from 03:52Z to 05:22Z no session ran while his stretch had 4 to 6 hours left; the lead had rested with no
   next unit planned, and he saw it: "no veo que nada este trabajando". What stops it: the lead plans the stretch's
   next units before it rests
+- Seen: 2026-11-22 — his transcript 0cdab702, line 11291 (checked with sessions --quote), asks every hour of his 8 to
+  10 away filled — from 02:15 to 12:21 local no session worked. Causes: (a) the lead's queue ran dry, its notes'
+  night-queue-2026-11-22.md line 17, "nothing on the roadmap is buildable without his word"; (b) the lead read his
+  0cdab702:7106 (take a card's recommended option, report after) too narrowly: S8's build card was buildable
+  (question 387, withdrawn 12:48 citing it); (c) the lead rested with no wait armed: in its transcript d6383aea
+  its last wait ended on a notice at 07:09:51Z (line 30539), the host compacted it at 07:11 (line 30575), it closed
+  its turn at 07:14:39Z with nothing in the background and the Stop hook let it through (lines 30882 to 30884), and
+  its next wait started at 18:03Z (line 31377), so no AWAY line could fire. Four short network cuts, about 7
+  minutes in all, 03:14 to 06:20 (Windows NetworkProfile log, read by JH PLAN), came after the gap began
 
 ### block-read-as-task
 A block meant to hold his answer was worded as an instruction and he read it as a task for him to
