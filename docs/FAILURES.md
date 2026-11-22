@@ -1201,6 +1201,8 @@ the console, was still pending.
   `gh pr ready --undo` made it a draft again about three minutes later, before any land ran (state OPEN, not
   merged). The ready notice stays in the record: no kind withdraws one. The check that would have caught it:
   `notify --kind ready` refusing a pull request whose feature document's State names an approval of his as pending
+- Control: check — bin/merge-queue.test.mjs — "a pull request whose feature document holds an open step of his (kind:
+  his) is left out, naming it" — since 2026-11-22
 
 ### language-server-load
 A TypeScript language server per session works whenever tests write files, takes up to a whole
@@ -1790,6 +1792,8 @@ computes the merge ref later.
 - Class: tool
 - Seen: 2026-10-14 — relief file, line 765 — at 14:34; in place since 14:39, outside the repository:
   the lead's script reopens only once `refs/pull/<n>/merge^1` equals `main` (line 767)
+- Control: check — bin/merge-queue.test.mjs — "--reopen reopens the pull request and trusts its run only once" — since
+  2026-11-22
 
 ### reply-budget-wall-flake
 The two 90th-percentile tests of `bin/reply-budget.test.mjs` timed the reply hook by the wall clock, which the
