@@ -291,7 +291,7 @@ export function sessionsStartMain(argv, given = {}) {
   try {
     // The brief's stop line rides in the first prompt as the literal the UserPromptSubmit hook records
     // (odd/tasks/spend-stop.md, T4): the prompt is only a pointer to the brief, which no hook reads.
-    const line = stopLineIn(brief);
+    const line = stopLineIn(brief, { brief: true });
     const prompt = line === null ? startPrompt(copy) : `${startPrompt(copy)} Stop at ${line} cache-read.`;
     result = claude(startArgs({ ...parsed, model, effort, advisor, briefs, prompt }), { cwd });
   } catch (err) {

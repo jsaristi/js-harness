@@ -55,6 +55,8 @@ test('a prompt\'s line is read from the one literal "Stop at <N> cache-read", an
   assert.equal(stopLineIn('Do the work.\nStop at 20M cache-read.\nThen report.'), 20_000_000);
   assert.equal(stopLineIn('Your brief is in x.md: read it. Stop at 1.5m cache-read.'), 1_500_000);
   assert.equal(stopLineIn('STOP AT 500K CACHE-READ'), 500_000);
+  assert.equal(stopLineIn('Do the work.\r\nStop at 20M cache-read.\r\nThen report.\r\n'), 20_000_000, 'a CRLF text');
+  assert.equal(stopLineIn('Spend: stop at 6M cache-read, then write your state.', { brief: true }), 6_000_000, 'a brief counts the literal anywhere');
   for (const loose of ['tell JH 5: Stop at 20M cache-read, then go on', 'Spend: stop at 1.5m cache-read, then write your state', '20M cap', 'stop at 20M', 'Stop at lots cache-read', 'nonstop at 20M cache-read', '', undefined]) assert.equal(stopLineIn(loose), null, String(loose));
 });
 
@@ -165,6 +167,8 @@ test('past the line, the steps that close the work pass, chained with && too; ev
     ['Bash', { command: 'git add x && npm test' }],
     ['Bash', { command: 'gh pr merge 951' }],
     ['Bash', { command: "git push --receive-pack='rm -rf bin' ." }],
+    ['Bash', { command: "git push --receive='rm -rf bin' ." }],
+    ['Bash', { command: "git push --exe='rm -rf bin' ." }],
     ['Bash', { command: 'gh pr create --body "`whoami`"' }],
     ['Bash', { command: 'git push && (rm -rf x)' }],
     ['Read', { file_path: 'bin/x.mjs' }],
