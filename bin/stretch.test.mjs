@@ -746,3 +746,17 @@ test('a wait ends at the session\'s next notice, its next gate or the orchestrat
   assert.deepEqual(view.lost.waiting.map((one) => [one.who, one.seconds / 3600]), [['JH 199 · uno', 2.5], ['JH 207 · dos', 1], ['JH 300 · tres', 1]]);
   assert.equal(view.totals.waitingHours, 4.5);
 });
+
+// The reliability lens on 427de6b..49d2693: an idle hour a session also sat waiting is counted once, under waiting,
+// and a spell told twice (two leads, or the wait and the heartbeat racing) is one spell.
+test('an idle hour a session sat waiting through counts once, and one spell told twice counts once', async () => {
+  const place = scratch({ notices: [notice(1, 's199', 'JH 199 · uno', 'waiting'), notice(3, 's199', 'JH 199 · uno', 'closed')] });
+  await stretch(place, ['open', '--plan', planFile(place, PLAN)]);
+  const spells = idleSpellsFile(place.home, projectSlug(place.project));
+  fs.mkdirSync(path.dirname(spells), { recursive: true });
+  // Idle from 2 h, told at 2.5 h, twice; the session's closed notice at 3 h is the first work after it.
+  fs.writeFileSync(spells, `${JSON.stringify({ since: at(2), at: at(2.5), session: 'lead' })}\n${JSON.stringify({ since: at(2), at: at(2.6), session: 'other' })}\n`);
+  const view = JSON.parse((await stretch(place, ['status', '--json'], { hours: 4 })).out);
+  assert.deepEqual([view.totals.waitingHours, view.totals.idleHours, view.totals.lostHours], [2, 0, 2]);
+  assert.equal(view.lost.idle.length, 1, 'the spell is listed once');
+});

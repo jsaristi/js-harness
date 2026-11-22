@@ -366,7 +366,11 @@ export function waitSpells(notices, gates, { from, to }) {
  * `{ at, began, seconds, what: 'idle' }`: from its `since`, or `from` when later, to the first work after it (a work
  * session's notice, a background start, or a gate of a session other than the lead's that told it), else to `to`. */
 export function idleSpells(spells, { notices, starts, gates }, { from, to }) {
+  // One spell told twice (two leads, or the wait and the heartbeat racing on the mark) is one spell: kept by its since.
+  const seen = new Set();
   return spells.flatMap((spell) => {
+    if (seen.has(spell.since)) return [];
+    seen.add(spell.since);
     const told = Date.parse(spell.at ?? '');
     const since = Date.parse(spell.since);
     if (!(told >= from && told <= to)) return [];
@@ -384,3 +388,10 @@ export function idleSpells(spells, { notices, starts, gates }, { from, to }) {
 
 /** The hours `spells` hold, summed: waits of two sessions at once are two sessions' hours. */
 export const spellHours = (spells) => round(spells.reduce((total, one) => total + one.seconds, 0) / 3600);
+
+/** The hours of the idle spells `idle` that no wait of `waiting` covers: an hour a session sat waiting through is
+ * that wait's loss already, so the stretch's lost time counts it once. */
+export function idleHoursBeside(idle, waiting) {
+  const spans = (spells) => spells.map((one) => [Date.parse(one.at), Date.parse(one.at) + one.seconds * 1000]);
+  return round((busySeconds([...spans(idle), ...spans(waiting)]) - busySeconds(spans(waiting))) / 3600);
+}

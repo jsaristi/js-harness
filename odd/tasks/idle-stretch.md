@@ -103,8 +103,10 @@ Nothing: the brief and his words L2, L3 ask for it; a doubt goes to the lead as 
   (`node --test --test-name-pattern="lost time counts" bin/stretch.test.mjs`: actual [undefined, undefined, undefined,
   0.16]); after it, 7.66 = failed 0.16 + waiting 6 + idle 1.5.
 - L7 2026-11-22, decisions of the second unit: waits are summed per session (session-hours, as items' real hours are),
-  idle spells are wall hours, and the total is their sum: a session waiting while nothing ran counts in both, each its
-  own loss. Idle spells come from a record the IDLE line appends (`idle/spells.jsonl` under the loop records), since a
+  idle spells are wall hours, and the total is their sum. Idle spells come from a record the IDLE line appends (`idle/spells.jsonl` under the loop records), since a
   file's write time cannot be read back for a past hour; a spell counts only when told inside the stretch, and runs to
   the first work after it (a work session's notice, a background start, another session's gate). A view recorded
   before keeps its one figure under its old name.
+- L8 2026-11-22, the reliability lens on 427de6b..49d2693, two warnings, both fixed with a test first: an idle hour
+  a session sat waiting through counted twice (now counted once, under waiting: `idleHoursBeside`), and one spell
+  told twice counted twice (now kept once by its `since`). The risk lens found nothing.
