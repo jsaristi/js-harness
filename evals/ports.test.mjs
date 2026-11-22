@@ -77,8 +77,22 @@ test('an allocation that cannot find a usable port in its attempts fails instead
   await assert.rejects(allocatePort({ listen: async () => 7437, attempts: 4, reserved: new Set() }), /free port/);
 });
 
+test('a candidate something already accepts connections on is skipped when the caller asks to probe it', async () => {
+  const candidates = [40001, 40002];
+  const asked = [];
+  const held = async (port) => {
+    asked.push(port);
+    return port === 40001;
+  };
+  const port = await allocatePort({ listen: async () => candidates.shift(), held, reserved: new Set(), recent: [] });
+  assert.equal(port, 40002);
+  assert.deepEqual(asked, [40001, 40002]);
+});
+
 test('real allocations are distinct, bindable once released, and none is the real engram port', async () => {
-  const ports = await Promise.all(Array.from({ length: 12 }, () => allocatePort()));
+  // On GitHub's machines another process once took a port in the moment between its release and this test's look
+  // (docs/FAILURES.md, ports-test-free-port-race), so the allocations probe their candidates before handing them out.
+  const ports = await Promise.all(Array.from({ length: 12 }, () => allocatePort({ held: isListening })));
   try {
     assert.equal(new Set(ports).size, 12);
     for (const port of ports) {

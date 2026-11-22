@@ -1502,6 +1502,8 @@ the test asked again, so a gate failed on a commit that touched no port code.
   "real allocations are distinct, bindable once released, and none is the real engram port" said
   "nothing holds it", actual true; 1 failure of 6692 tests, on the commit of the walk fix
   (`scripts/tui-walk.mjs`, `odd/tasks/release-095.md`)
+- Control: check — evals/ports.test.mjs — "a candidate something already accepts connections on is skipped when the
+  caller asks to probe it" — since 2026-11-22
 
 ### probe-end-hook-flake
 A gate failed on `evals/codex-isolation-probe.test.mjs` as a whole, with no test of it red, and the
