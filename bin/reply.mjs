@@ -159,11 +159,17 @@ async function wakeOf(payload, state, io, stderr) {
     const { wakeWarning } = await import('./lib/stop-wake.mjs');
     const work = wakeWarning(payload, state, io);
     if (work !== null) return work;
-    // The lead is asked too (JH 294): it rested bare after a compaction on 2026-11-22 while work sessions ran.
+  } catch (err) {
+    stderr(`js-harness reply: ${err?.message ?? err}; the wake check did not run\n`);
+    return null;
+  }
+  // The lead is asked too (JH 294): it rested bare after a compaction on 2026-11-22 while work sessions ran. Its own
+  // failure is said as its own, since the work session's check above has run by then.
+  try {
     const { leadWakeWarning } = await import('./lib/return-report.mjs');
     return leadWakeWarning(payload, state, io);
   } catch (err) {
-    stderr(`js-harness reply: ${err?.message ?? err}; the wake check did not run\n`);
+    stderr(`js-harness reply: ${err?.message ?? err}; the lead's wake check did not run\n`);
     return null;
   }
 }
