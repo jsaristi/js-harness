@@ -148,3 +148,13 @@ Nothing in this slice: the brief and his words cover it.
   allow-list, the brief path of `sessions start`) and a message with no `from-name` recording nothing; a worker that
   retitles itself as a lead can still raise another worker's line, never its own; a draft brief the lead sends to
   another session (JH PLAN) with the literal on its own line still records on that session.
+- L10 JH 296 (2026-11-22, the lead's queue) on PR 953's Open items 1 and 3, branch `claude/jh296-953-items` from
+  882161c8. Item 1 (a raise piped to a shell, in a script file, or built at runtime) is skipped, not built: its home is
+  `bin/guard.mjs`, a guard file, and the real fix needs an identity the caller cannot set, which is the lead's design
+  decision (Open, item 1). Item 3 is now seen, no longer inferred: JH 296's transcript 1625f772 holds the delivered
+  prompts, line 59 `<cross-session-message from="local_…" from-name="JH ORQ · orquestador F8">` and line 1071 a
+  second shape, `from="uds:\.\pipe\LOCAL\cc-msg-…" from-session="local_…" from-name="…" from-mode="bypass"`. A test
+  with both shapes passes at once (a pin: 16 of 16 in `bin/lib/spend-stop.test.mjs`). Still open, likely and not
+  proven: a message that arrives while the session works (line 1071) is delivered as a `queued_command` attachment in
+  the turn, not as a new prompt, so whether a UserPromptSubmit hook sees it is not shown by the transcript. If no hook
+  sees it, a lead's line sent mid-turn records nothing.

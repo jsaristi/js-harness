@@ -75,6 +75,22 @@ test('a UserPromptSubmit carrying the literal records the line once, for the ses
   assert.equal(readStopLine(home, ID), 900);
 });
 
+// PR 953's Open item 3: the wrapper was inferred, not seen. Both shapes below are copied from a delivered prompt of
+// JH 296's transcript 1625f772 (lines 59 and 1071, 2026-11-22): the host writes `from-name` in each, and in the second
+// it comes after `from-session`, with a `from` that is a pipe and not a session.
+test('the lead\'s message records in both wrapper shapes the host delivered on 2026-11-22', (t) => {
+  const prompt = (text) => ({ hook_event_name: 'UserPromptSubmit', session_id: ID, prompt: `Another Claude session sent a message:\n${text}` });
+  const body = '\nyour task.\nStop at 900 cache-read.\n</cross-session-message>';
+  const shapes = [
+    '<cross-session-message from="local_41e31b68-c8b2-4729-8c54-b1e701bb5a40" from-name="JH ORQ · orquestador F8">',
+    '<cross-session-message from="uds:\\\\.\\pipe\\LOCAL\\cc-msg-ae89a563208ea02c4040e91f55ddccdb" from-session="local_41e31b68-c8b2-4729-8c54-b1e701bb5a40" from-name="JH ORQ · orquestador F8" from-mode="bypass">',
+  ];
+  for (const shape of shapes) {
+    const { home } = scratch(t);
+    assert.equal(recordPromptLine(prompt(`${shape}${body}`), { home, isLeadTitle }), 900, shape);
+  }
+});
+
 test('a line in text relayed to a session records nothing on it: only the lead\'s own message or a typed prompt does', (t) => {
   const { home } = scratch(t);
   const prompt = (text) => ({ hook_event_name: 'UserPromptSubmit', session_id: ID, prompt: text });
