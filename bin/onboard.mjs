@@ -44,51 +44,54 @@ const ADR_FILE = /^(\d{4})-.+\.md$/;
 const ADR_CLAIM = /^\.(\d{4})\.claim$/;
 
 /** Walks argv token by token: an unknown flag or word is a usage error, never one silently ignored. */
+/** A bad command line: its message is printed above the usage, and the exit is 2. */
+class OnboardArgError extends Error {}
+
 function parseArgs(argv, cwd) {
   const parsed = { cwd, plan: false, write: false, area: null, checklist: null, size: null, words: [] };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--cwd') {
       const value = argv[index + 1];
-      if (value === undefined || value.startsWith('--')) return { error: '--cwd requires a value' };
+      if (value === undefined || value.startsWith('--')) throw new OnboardArgError('--cwd requires a value');
       parsed.cwd = path.resolve(value);
       index += 1;
     } else if (VALUE_FLAGS.includes(arg)) {
       const value = argv[index + 1];
-      if (value === undefined || value.startsWith('--')) return { error: `${arg} requires a value` };
+      if (value === undefined || value.startsWith('--')) throw new OnboardArgError(`${arg} requires a value`);
       parsed[arg.slice(2)] = value;
       index += 1;
     } else if (arg === '--plan') parsed.plan = true;
     else if (arg === '--write') parsed.write = true;
     else if (!arg.startsWith('-')) parsed.words.push(arg);
-    else return { error: `unknown argument: ${arg}` };
+    else throw new OnboardArgError(`unknown argument: ${arg}`);
   }
   const [word, ...rest] = parsed.words;
   // No verb is the stage: what the session does next.
   const verb = word ?? 'stage';
   const flagsOf = { stage: [], check: ['plan'], hash: [], template: ['write'], profile: ['area', 'checklist', 'size'] };
-  if (word === 'stage' || !Object.hasOwn(flagsOf, verb)) return { error: `unknown argument: ${word}` };
+  if (word === 'stage' || !Object.hasOwn(flagsOf, verb)) throw new OnboardArgError(`unknown argument: ${word}`);
   for (const flag of ['plan', 'write', 'area', 'checklist', 'size']) {
-    if (parsed[flag] && !flagsOf[verb].includes(flag)) return { error: `--${flag} is not an option of ${word ?? 'onboard with no verb'}` };
+    if (parsed[flag] && !flagsOf[verb].includes(flag)) throw new OnboardArgError(`--${flag} is not an option of ${word ?? 'onboard with no verb'}`);
   }
   if (verb === 'profile') {
-    if (rest.length > 1) return { error: `unknown argument: ${rest[1]}; joined kinds are written with a comma, as platform,multiplatform-app` };
-    if (parsed.area && parsed.checklist) return { error: '--area and --checklist are printed apart: pass one of them' };
-    if (parsed.checklist && !['advice', 'bar'].includes(parsed.checklist)) return { error: '--checklist takes advice or bar' };
-    if (parsed.size && !parsed.checklist) return { error: '--size goes with --checklist' };
-    if (parsed.size && !['small', 'large'].includes(parsed.size)) return { error: '--size takes small or large' };
+    if (rest.length > 1) throw new OnboardArgError(`unknown argument: ${rest[1]}; joined kinds are written with a comma, as platform,multiplatform-app`);
+    if (parsed.area && parsed.checklist) throw new OnboardArgError('--area and --checklist are printed apart: pass one of them');
+    if (parsed.checklist && !['advice', 'bar'].includes(parsed.checklist)) throw new OnboardArgError('--checklist takes advice or bar');
+    if (parsed.size && !parsed.checklist) throw new OnboardArgError('--size goes with --checklist');
+    if (parsed.size && !['small', 'large'].includes(parsed.size)) throw new OnboardArgError('--size takes small or large');
     return { ...parsed, verb, kind: rest[0] ?? null };
   }
   if (verb === 'template') {
     if (rest[0] === 'adr') {
       // The slug is the file's name: nothing in it can leave docs/adr/.
-      if (rest.length !== 2 || !ADR_SLUG.test(rest[1])) return { error: 'template adr takes a slug of lowercase letters and digits, joined by single dashes, as auth-provider' };
+      if (rest.length !== 2 || !ADR_SLUG.test(rest[1])) throw new OnboardArgError('template adr takes a slug of lowercase letters and digits, joined by single dashes, as auth-provider');
       return { ...parsed, verb, template: 'adr', slug: rest[1] };
     }
-    if (rest.length !== 1 || !Object.hasOwn(TEMPLATES, rest[0])) return { error: 'template takes one of feature, origin, roadmap, or adr <slug>' };
+    if (rest.length !== 1 || !Object.hasOwn(TEMPLATES, rest[0])) throw new OnboardArgError('template takes one of feature, origin, roadmap, or adr <slug>');
     return { ...parsed, verb, template: rest[0] };
   }
-  if (rest.length > 0) return { error: `unknown argument: ${rest[0]}` };
+  if (rest.length > 0) throw new OnboardArgError(`unknown argument: ${rest[0]}`);
   return { ...parsed, verb };
 }
 
@@ -395,9 +398,12 @@ function profile(root, args, { stdout, stderr }) {
  * of its own, this is no initialized project, or a profile cannot tell the kind, the size or the area it needs, or 2
  * for an argument it does not take or a kind or an area that is not one. */
 export async function onboardMain(argv, env = process.env, { cwd = process.cwd(), stdout = console.log, stderr = console.error } = {}) {
-  const args = parseArgs(argv, cwd);
-  if (args.error) {
-    stderr(`${args.error}\n\n${USAGE}`);
+  let args;
+  try {
+    args = parseArgs(argv, cwd);
+  } catch (err) {
+    if (!(err instanceof OnboardArgError)) throw err;
+    stderr(`${err.message}\n\n${USAGE}`);
     return 2;
   }
   const { root, error } = projectRoot(args.cwd);

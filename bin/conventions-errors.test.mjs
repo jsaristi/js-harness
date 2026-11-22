@@ -32,7 +32,6 @@ const LEGACY = {
   'functions.mjs': 'its parse returns { error }',
   'guard.mjs': 'prints the usage and returns 2',
   'merge-queue.mjs': 'prints the usage and returns 2',
-  'onboard.mjs': 'its parse returns { error }',
   'reply.mjs': 'prints the usage and returns 2',
   'resume.mjs': 'prints the refusal from its main and returns 2',
   'summary.mjs': 'its parse returns the usage line',
