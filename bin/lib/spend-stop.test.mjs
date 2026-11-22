@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { StopLineError, parseStopLine, readStopLine, recordStopLine, sessionSpend, spendStopRefusal, stopLinePath } from './spend-stop.mjs';
+import { StopLineError, lineFileRefusal, parseStopLine, readStopLine, recordPromptLine, recordStopLine, sessionSpend, spendStopRefusal, stopLineIn, stopLinePath } from './spend-stop.mjs';
 
 const ID = '0cdab702-72bd-48e7-8a8e-0c38d4aca9c9';
 const line = (id, cacheRead, extra = {}) => JSON.stringify({ type: 'assistant', message: { id, model: 'claude-opus-5-5', usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: cacheRead, cache_creation_input_tokens: 0 } }, ...extra });
@@ -38,15 +38,63 @@ test('the line lives under the home beside the pause state, by a session id of t
   assert.throws(() => stopLinePath('/h', '../x'), TypeError);
 });
 
-test('a line is recorded once, may be lowered and is never raised', (t) => {
+test('a line is recorded once: the same line again is no change, any other is refused but for the lead\'s raise', (t) => {
   const { home } = scratch(t);
   const now = () => new Date('2026-11-22T01:00:00Z');
   assert.deepEqual(recordStopLine({ home, sessionId: ID, line: 900, now }), { line: 900, previous: null });
   assert.equal(readStopLine(home, ID), 900);
   assert.deepEqual(recordStopLine({ home, sessionId: ID, line: 900, now }), { line: 900, previous: 900 });
-  assert.deepEqual(recordStopLine({ home, sessionId: ID, line: 800, now }), { line: 800, previous: 900 });
-  assert.throws(() => recordStopLine({ home, sessionId: ID, line: 5000, now }), StopLineError);
-  assert.equal(readStopLine(home, ID), 800);
+  assert.throws(() => recordStopLine({ home, sessionId: ID, line: 800, now }), StopLineError, 'lowered by the session');
+  assert.throws(() => recordStopLine({ home, sessionId: ID, line: 5000, now }), StopLineError, 'raised by the session');
+  assert.equal(readStopLine(home, ID), 900);
+  assert.deepEqual(recordStopLine({ home, sessionId: ID, line: 5000, now, raise: true }), { line: 5000, previous: 900 });
+  assert.equal(readStopLine(home, ID), 5000);
+});
+
+test('a prompt\'s line is read from the one literal "Stop at <N> cache-read", and nothing looser', () => {
+  assert.equal(stopLineIn('Do the work. Stop at 20M cache-read.'), 20_000_000);
+  assert.equal(stopLineIn('Spend: stop at 1.5m cache-read, then write your state'), 1_500_000);
+  assert.equal(stopLineIn('STOP AT 500K CACHE-READ'), 500_000);
+  for (const loose of ['20M cap', 'stop at 20M', 'Stop at lots cache-read', 'nonstop at 20M cache-read', '', undefined]) assert.equal(stopLineIn(loose), null, String(loose));
+});
+
+test('a UserPromptSubmit carrying the literal records the line once, for the session the payload names', (t) => {
+  const { home } = scratch(t);
+  const prompt = (text, extra = {}) => ({ hook_event_name: 'UserPromptSubmit', session_id: ID, prompt: text, ...extra });
+  assert.equal(recordPromptLine(prompt('held: do nothing'), { home }), null, 'no literal, no line');
+  assert.equal(fs.existsSync(stopLinePath(home, ID)), false);
+  assert.equal(recordPromptLine(prompt('task: Stop at 900 cache-read', { agent_id: 'a1' }), { home }), null, 'a sub-agent\'s prompt records nothing');
+  assert.equal(recordPromptLine({ ...prompt('Stop at 900 cache-read'), hook_event_name: 'SessionStart' }, { home }), null);
+  assert.equal(recordPromptLine({ ...prompt('Stop at 900 cache-read'), session_id: '../x' }, { home }), null);
+  assert.equal(recordPromptLine(prompt('<cross-session-message> your task. Stop at 900 cache-read. </cross-session-message>'), { home }), 900);
+  assert.equal(readStopLine(home, ID), 900);
+  assert.equal(recordPromptLine(prompt('Stop at 5000 cache-read'), { home }), null, 'a later prompt does not move it');
+  assert.equal(readStopLine(home, ID), 900);
+});
+
+test('the guard refuses a step that names the spend folder, for any session, and lets others by', (t) => {
+  const { home } = scratch(t);
+  const file = stopLinePath(home, ID);
+  const refused = [
+    ['Bash', { command: `rm ${file}` }],
+    ['Bash', { command: 'rm ~/.js-harness/channel/spend/x.json' }],
+    ['Bash', { command: 'del C:\\Users\\u\\.JS-HARNESS\\Channel\\Spend\\x.json' }],
+    ['Bash', { command: 'rm -rf ~/.js-harness/channel' }],
+    ['Bash', { command: 'Remove-Item -Recurse C:/Users/u/.js-harness' }],
+    ['mcp__terminal__run_in_terminal', { command: `echo {} > ${file}` }],
+    ['Write', { file_path: file, content: '{"line":1e12}' }],
+    ['Edit', { file_path: file, old_string: '9', new_string: '99' }],
+    ['MultiEdit', { file_path: file, edits: [] }],
+    ['NotebookEdit', { notebook_path: path.join(path.dirname(file), 'x.ipynb') }],
+  ];
+  for (const [tool, input] of refused) assert.match(lineFileRefusal({ tool_name: tool, tool_input: input }, { home }) ?? '', /stop line/, `${tool} ${JSON.stringify(input)}`);
+  const passes = [
+    ['Bash', { command: 'git status' }],
+    ['Bash', { command: 'ls ~/.js-harness/channel/pause' }],
+    ['Write', { file_path: path.join(home, '.js-harness', 'channel', 'pause', 'x.json'), content: 'x' }],
+    ['Read', { file_path: file }],
+  ];
+  for (const [tool, input] of passes) assert.equal(lineFileRefusal({ tool_name: tool, tool_input: input }, { home }), null, `${tool} ${JSON.stringify(input)}`);
 });
 
 test('a line file that is missing or unreadable reads as no line', (t) => {
@@ -82,17 +130,18 @@ test('below the line a step passes; at or past it the step is refused with the f
   const { home, transcript } = scratch(t);
   recordStopLine({ home, sessionId: ID, line: 901 });
   assert.equal(spendStopRefusal(payload(transcript), { home }), null);
-  recordStopLine({ home, sessionId: ID, line: 900 });
+  recordStopLine({ home, sessionId: ID, line: 900, raise: true });
   const reason = spendStopRefusal(payload(transcript), { home });
   assert.match(reason, /900 cache-read/);
   assert.match(reason, /stop line 900/);
   assert.match(reason, /write your state and stop/);
-  assert.ok(reason.includes('with none of ; & | < > ` $( or a line break anywhere in the command, its quoted text too'));
+  assert.ok(reason.includes('with no ( ), redirection, ` or $( anywhere, quoted text too'));
   assert.equal(reason.split('\n').length, 1);
-  assert.match(reason, /channel[\\/]spend[\\/]0cdab702[^ ]*\.json: only the user lifts it/);
+  assert.match(reason, /Only the lead moves the line \(js-harness spend 0cdab702-72bd-48e7-8a8e-0c38d4aca9c9 --line <tokens> --raise\)$/);
+  assert.doesNotMatch(reason, /deleting/, 'the refusal names no way to lift the line by hand');
 });
 
-test('past the line, writing the state and a lone notify still pass; a notify with a step chained after it does not', (t) => {
+test('past the line, the steps that close the work pass, chained with && too; every other step is refused', (t) => {
   const { home, transcript } = scratch(t);
   recordStopLine({ home, sessionId: ID, line: 10 });
   const passes = [
@@ -101,19 +150,29 @@ test('past the line, writing the state and a lone notify still pass; a notify wi
     ['Bash', { command: 'js-harness notify --to orchestrator --kind note "JH 1: stopped at the line"' }],
     ['Read', { file_path: 'odd/tasks/x.md' }],
     ['Bash', { command: 'js-harness loop stop my-wait' }],
+    ['Bash', { command: 'cd D:/repo && git add bin/x.mjs odd/tasks/x.md && js-harness gate -- git commit -m "feat: x\n\nwhy it is" && git push -u origin HEAD' }],
+    ['Bash', { command: 'git commit -q -m "docs: state" && git push' }],
+    ['Bash', { command: 'gh pr create --draft --base main --title "x" --body "a; b && c"' }],
+    ['Bash', { command: 'gh pr edit 951 --body "x"' }],
+    ['Bash', { command: 'gh pr ready 951' }],
+    ['Bash', { command: 'js-harness notify --to orchestrator --kind note "x" && git push' }],
+    ['Write', { file_path: 'C:/Users/u/notes/spend-stop-close-state.md', content: 'x' }],
   ];
   for (const [tool, input] of passes) assert.equal(spendStopRefusal(payload(transcript, tool, input), { home }), null, tool);
   const refused = [
     ['Write', { file_path: 'bin/x.mjs', content: 'x' }],
+    ['Write', { file_path: 'docs/ROADMAP.md', content: 'x' }],
+    ['Bash', { command: 'git add x && npm test' }],
+    ['Bash', { command: 'gh pr merge 951' }],
+    ['Bash', { command: 'gh pr create --body "`whoami`"' }],
+    ['Bash', { command: 'git push && (rm -rf x)' }],
     ['Read', { file_path: 'bin/x.mjs' }],
     ['Bash', { command: 'js-harness notify --to orchestrator --kind note <(git push)' }],
     ['Bash', { command: 'js-harness notify --to orchestrator --kind note x > out.txt' }],
-    ['Bash', { command: 'js-harness loop stop w && git push' }],
     ['Agent', { prompt: 'x' }],
-    ['Bash', { command: 'js-harness notify --to orchestrator --kind note "x" && git push' }],
-    ['Bash', { command: 'js-harness notify --to orchestrator --kind note "x"; git push' }],
+    ['Bash', { command: 'js-harness notify --to orchestrator --kind note "x"; rm -rf bin' }],
     ['Bash', { command: 'js-harness notify --to orchestrator --kind note "$(git push)"' }],
-    ['Bash', { command: 'js-harness notify --to orchestrator --kind note "x"\ngit push' }],
+    ['Bash', { command: 'js-harness notify --to orchestrator --kind note "x"\nrm -rf bin' }],
   ];
   for (const [tool, input] of refused) assert.notEqual(spendStopRefusal(payload(transcript, tool, input), { home }), null, `${tool} ${JSON.stringify(input)}`);
 });

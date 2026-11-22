@@ -4,6 +4,7 @@
 // failure inside it lets the call run: a check that cannot read what it checks says nothing rather than block work.
 //   - Every tool the hook sees, first and in a try of its own: a step of a session past the stop line it recorded with
 //     `js-harness spend --self --line` (bin/lib/spend-stop.mjs; odd/tasks/spend-stop.md); with no line, nothing is read.
+//     A step of any session that writes or removes a stop line file is refused there too.
 //   - `Agent`: the sub-agent's model against the rules in force in the project (bin/lib/guard.mjs, `modelRefusal`),
 //     then the effort it names, if any, against the sessions' level (`agentEffortRefusal`).
 //   - The four tools that open a session in the app's Routines or in the cloud (`OPENING_TOOLS`): refused where the
@@ -53,11 +54,11 @@ import path from 'node:path';
 import { memoryFileOf, memoryIndexRefusal, memoryNoteType, resultOf } from './lib/memory-index-guard.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { deniedPlace, heldPlace } from './lib/deny-paths.mjs';
-import { spendStopRefusal } from './lib/spend-stop.mjs';
+import { lineFileRefusal, spendStopRefusal } from './lib/spend-stop.mjs';
 
 export const USAGE = 'Usage: js-harness guard --hook\n'
   + '  reads a PreToolUse payload on standard input; refuses any step of a session past the stop line it recorded with\n'
-  + '  js-harness spend --self --line (a Read, Write or Edit of a .md file, a lone notify and a lone loop stop still pass), an Agent call on a model the rules do not give, a\n'
+  + '  js-harness spend --self --line (the steps that close the work still pass) or that writes or removes a stop line, an Agent call on a model the rules do not give, a\n'
   + '  scheduled-task or cloud tool that opens a session where he does not see it (where the rules declare\n'
   + '  sessions-open-in-sidebar), a start_session that names no effort or another level than the rule session-effort, or lead-effort for a new lead,\n'
   + '  or a model other than the rule session-model (where\n'
@@ -408,7 +409,8 @@ export async function guardMain(argv, {
   // The session's stop line first, in a try of its own: a failure there lets the call run and never skips the checks
   // below, and a call it lets through past the line still meets them (odd/tasks/spend-stop.md).
   try {
-    reason = spendStopRefusal(payload, { home: harnessHome({ env, homedir }), exists });
+    const home = harnessHome({ env, homedir });
+    reason = lineFileRefusal(payload, { home }) ?? spendStopRefusal(payload, { home, exists });
   } catch {
     reason = null;
   }

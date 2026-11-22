@@ -72,18 +72,38 @@ test('a session that cannot be found, or no session named, is said and never pri
   assert.equal(run(['--bogus'], {}).code, 2);
 });
 
-test('--self --line records the stop line of the session that runs it, lowers it, never raises it, and the plain form names it', (t) => {
+test('--self --line records the stop line of the session that runs it once, and the plain form names it', (t) => {
   const { root, project } = scratch(t);
   const env = { CLAUDE_CODE_SESSION_ID: ID, JS_HARNESS_HOME: path.join(root, 'home') };
   const recorded = run(['--self', '--line', '20M'], { env });
   assert.equal(recorded.code, 0);
   assert.match(recorded.out, /stop line 20,000,000 cache-read recorded for session/);
-  assert.equal(run(['--self', '--line', '15M'], { env }).code, 0);
-  const raised = run(['--self', '--line', '30M'], { env });
-  assert.equal(raised.code, 1);
-  assert.match(raised.err, /can be lowered, never raised/);
+  assert.equal(run(['--self', '--line', '20M'], { env }).code, 0, 'the same line again changes nothing');
+  for (const other of ['15M', '30M']) {
+    const moved = run(['--self', '--line', other], { env });
+    assert.equal(moved.code, 1, other);
+    assert.match(moved.err, /recorded once: only the lead moves it/);
+  }
   const shown = run(['--self'], { env, projectDirs: () => [project] });
-  assert.match(shown.out, /stop line: 15,000,000 cache-read, recorded with --self --line; spent 80,000 of it/);
+  assert.match(shown.out, /stop line: 20,000,000 cache-read, recorded with --self --line; spent 80,000 of it/);
+});
+
+test("only a session whose app record carries a lead's title raises or lowers another session's line", (t) => {
+  const { root } = scratch(t);
+  const home = path.join(root, 'home');
+  assert.equal(run(['--self', '--line', '20M'], { env: { CLAUDE_CODE_SESSION_ID: ID, JS_HARNESS_HOME: home } }).code, 0);
+  const records = new Map([['11111111-2222-3333-4444-555555555555', { title: 'JH ORQ · orquestador F8' }], [ID, { title: 'JH 288 · work' }]]);
+  const as = (caller) => ({ env: { CLAUDE_CODE_SESSION_ID: caller, JS_HARNESS_HOME: home }, readApp: () => records });
+  const worker = run([ID, '--line', '30M', '--raise'], as(ID));
+  assert.equal(worker.code, 1);
+  assert.match(worker.err, /only the lead/);
+  const stranger = run([ID, '--line', '30M', '--raise'], { env: { JS_HARNESS_HOME: home }, readApp: () => records });
+  assert.equal(stranger.code, 1, 'no session runs it');
+  const raised = run([ID, '--line', '30M', '--raise'], as('11111111-2222-3333-4444-555555555555'));
+  assert.equal(raised.code, 0, raised.err);
+  assert.match(raised.out, /stop line 30,000,000 cache-read recorded for session .*moved from 20,000,000 by the lead/);
+  assert.equal(run([ID.slice(0, 8), '--line', '30M', '--raise'], as('11111111-2222-3333-4444-555555555555')).code, 2, 'the whole id, never a short one');
+  assert.equal(run(['--self', '--line', '30M', '--raise'], as('11111111-2222-3333-4444-555555555555')).code, 2, 'a raise names the session');
 });
 
 test('--line takes --self and a token count, and refuses a session not named by the host', (t) => {

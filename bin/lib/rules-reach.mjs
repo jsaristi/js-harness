@@ -257,6 +257,16 @@ export async function rulesHookMain(argv, {
   } catch {
     return 0;
   }
+  // The same UserPromptSubmit carries a session's stop line, "Stop at <N> cache-read", recorded once with no step of
+  // the session (odd/tasks/spend-stop.md, T4); it rides this hook because the install holds its entries to a limit.
+  // Loaded only for a prompt that names the literal's last word, so a turn without one pays nothing.
+  if (typeof input?.prompt === 'string' && /cache-read/i.test(input.prompt)) {
+    try {
+      (await import('./spend-stop.mjs')).recordPromptLine(input, { home });
+    } catch {
+      // No line recorded: the turn runs as it would with none, and the rules' notice below is unchanged.
+    }
+  }
   let result;
   try {
     result = reachHook(input, { home, git, now });

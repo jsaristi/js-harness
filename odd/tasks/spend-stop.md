@@ -60,6 +60,19 @@ Nothing in this slice: the brief and his words cover it.
 
 ## Tasks
 - [x] T1 (kind: build) spec 1: `spend --self --line <N>` records the line; `guard --hook` refuses past it; route JH 287
+- [x] T2 (kind: docs) spec 1: State and Log brought up to date with what JH 287 built and its overrun; route JH 288
+- [x] T3 (kind: docs) spec 1: a `- Seen:` line under `spend-past-approved` for JH 287's overrun; route JH 288
+- [x] T4 (kind: build) spec 1: a line is recorded with no step of the session: the rules turn hook (`rules --hook`, on
+  UserPromptSubmit) reads "Stop at <N> cache-read" in the prompt (a start_session first prompt and a cross-session
+  message both reach it, L5) and records it once; `sessions start` carries the brief's literal into the first prompt
+  it gives; route JH 288
+- [x] T5 (kind: build) spec 1: the line is write-once (a lead's `--raise` the only way to move it) and the guard
+  refuses a step that writes or removes the spend folder; route JH 288
+- [x] T6 (kind: build) spec 1: past the line, `cd`, `git add`, `git commit` (plain or through `js-harness gate --`),
+  `git push`, `gh pr create|edit|ready`, `js-harness notify`, `js-harness loop stop`, and a Read, Write or Edit of a
+  state file (`*state.md`) or a feature document (`odd/tasks/*.md`) pass, chained too; everything else is refused
+  with the one line; route JH 288
+- [x] T7 (kind: verify) spec 1: the hook payload's `session_id` is the id `spend --self` reads (L6); route JH 288
 
 ## Log
 - L1 His request, typed (0cdab702 line 9744): "incluye primero que todo las mejoras para que nos nos vuelva a fallar y
@@ -88,3 +101,12 @@ Nothing in this slice: the brief and his words cover it.
   (`bin/lib/rules-reach.mjs`, `seenPath`), on this session's first prompt; `CLAUDE_CODE_SESSION_ID` in the same
   session is 98d451db-a8bb-4b5a-971f-a696a47184e8, and `spend --self` read that transcript. The PreToolUse payload
   carries the same `session_id` field by the hooks contract: inferred from the one payload, not seen in a PreToolUse one.
+- L7 Built (JH 288): T4 first as its own `spend --hook` entry; `npm run check`'s hook-entries row refused it ("install
+  writes 18 entries (limit 17)"), and that limit is a rule, his to move, so the recording rides the rules turn hook,
+  loaded only for a prompt that holds "cache-read". `sessions start` gives a pointer to the brief as the first prompt,
+  so it appends "Stop at <N> cache-read." from the brief. Past the line, plain `git commit` passes as well as one
+  through `js-harness gate --`: the guard's own hint in this repo sends a commit to a plain `git commit`. `git add` and
+  `cd` pass too, since a new file cannot be committed without the one and a chained step starts with the other.
+  Left open: a session can rename itself to a lead's title (set_session_title) and pass the raise's role check; the
+  pre-push hook can still refuse a push past the line for a missing review record; a line sent in a later message after
+  one is recorded is ignored, by design.

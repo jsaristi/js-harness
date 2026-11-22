@@ -11,10 +11,13 @@ import { transcriptOf } from './lib/channel.mjs';
 import { mainCheckout, projectDirsOf } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { StopLineError, parseStopLine, readStopLine, recordStopLine, sessionSpend } from './lib/spend-stop.mjs';
+import { leadTitle } from './lib/session-title-guard.mjs';
+import { appRoot, appSessions } from './lib/app-record.mjs';
 
 export const USAGE = [
   'Usage: js-harness spend (<session id> | <transcript .jsonl> | --self) [--json]',
   '       js-harness spend --self --line <tokens>',
+  '       js-harness spend <whole session id> --line <tokens> --raise    (the lead only)',
   '',
   'What one session spent, from its transcript: the main chain\'s calls, cache-read, input, output and cache-write',
   'tokens, the context of its last call and of its first (the fixed context it opened with), and its sub-agents apart',
@@ -24,16 +27,22 @@ export const USAGE = [
   'line, as a session still writing leaves, is counted as unreadable and in no figure.',
   '--self --line records the stop line in cache-read tokens (20000000, 20M or 500K) for the session that runs it, beside',
   'its pause state under the harness home: from then on js-harness guard refuses its next step once its cache-read, main',
-  'chain and sub-agents, reaches the line, but for a Read, Write or Edit of a .md file, a lone notify and a lone loop stop. A line can',
-  'be lowered, never raised. The plain form then names the line recorded.',
+  'chain and sub-agents, reaches the line, but for the steps that close the work (a state file or feature document, cd,',
+  'git add, commit and push, gh pr create|edit|ready, notify, loop stop). A line is recorded once: the same line again',
+  "changes nothing, any other is refused. --raise moves another session's line, run from a session whose app record",
+  "carries a lead's title. A prompt that names \"Stop at <N> cache-read\" records the line once by itself, through",
+  'the rules turn hook. The plain form then names the line recorded.',
   'Exit 0 printed or recorded; 1 the transcript could not be found or read, or a line above the one recorded; 2 a usage error.',
 ].join('\n');
 
 class SpendArgError extends Error {}
 
+// A session's whole id, as the host writes it: a raise names the session it moves whole, never by its start.
+const WHOLE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** `{ json, self, given }` from the command line; a usage error throws `SpendArgError`. */
 function parseArgs(argv) {
-  const parsed = { json: false, self: false, given: undefined, line: undefined };
+  const parsed = { json: false, self: false, given: undefined, line: undefined, raise: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--json') parsed.json = true;
@@ -43,12 +52,14 @@ function parseArgs(argv) {
       i += 1;
     }
     else if (arg === '--self') parsed.self = true;
+    else if (arg === '--raise') parsed.raise = true;
     else if (arg.startsWith('--')) throw new SpendArgError(`unknown argument: ${arg}`);
     else if (parsed.given !== undefined) throw new SpendArgError(`one session at a time, not ${parsed.given} and ${arg}`);
     else parsed.given = arg;
   }
   if (parsed.self && parsed.given !== undefined) throw new SpendArgError('--self or a session, not both');
-  if (parsed.line !== undefined && (!parsed.self || parsed.json)) throw new SpendArgError('--line records the line of the session that runs it: --self --line <tokens>, without --json');
+  if (parsed.raise && (parsed.line === undefined || parsed.self || parsed.json || !WHOLE_ID.test(parsed.given ?? ''))) throw new SpendArgError("--raise moves another session's line: <whole session id> --line <tokens> --raise");
+  if (!parsed.raise && parsed.line !== undefined && (!parsed.self || parsed.json)) throw new SpendArgError('--line records the line of the session that runs it: --self --line <tokens>, without --json');
   return parsed;
 }
 
@@ -74,6 +85,8 @@ export function spendMain(
     projectDirs = defaultProjectDirs,
     readFile = (file) => fs.readFileSync(file, 'utf8'),
     readdir = (dir) => fs.readdirSync(dir),
+    homedir = os.homedir,
+    readApp,
   } = {},
 ) {
   const usage = (why) => {
@@ -87,7 +100,7 @@ export function spendMain(
     if (err instanceof SpendArgError) return usage(err.message);
     throw err;
   }
-  const { json, self, line } = parsed;
+  const { json, self, line, raise } = parsed;
   let { given } = parsed;
   if (self) {
     given = env.CLAUDE_CODE_SESSION_ID || undefined;
@@ -96,10 +109,28 @@ export function spendMain(
   if (given === undefined) return usage('name a session, its transcript, or --self');
   const home = harnessHome({ env, cwd });
   if (line !== undefined) {
-    // Only the id the host sets: a line recorded on a guessed session would stop one that never asked for it.
+    // Only the id the host sets, or the lead's raise of a session it names whole: a line recorded on a guessed session
+    // would stop one that never asked for it.
+    if (raise) {
+      const caller = env.CLAUDE_CODE_SESSION_ID;
+      let record = null;
+      try {
+        const read = readApp ?? (() => {
+          const app = appRoot(env, process.platform, homedir());
+          return app === null ? new Map() : appSessions(app);
+        });
+        record = typeof caller === 'string' && caller !== '' ? read().get(caller) ?? null : null;
+      } catch {
+        record = null;
+      }
+      if (record === null || !leadTitle(record.title ?? '')) {
+        stderr(`js-harness spend: only the lead (a session titled "<code> ORQ · <purpose>" in its app record) moves a recorded line, and ${record === null ? 'no app record names the session that runs this' : `this session is titled ${JSON.stringify(record.title ?? '')}`}`);
+        return 1;
+      }
+    }
     try {
-      const { previous } = recordStopLine({ home, sessionId: given, line });
-      stdout(`js-harness spend: stop line ${number(line)} cache-read recorded for session ${given}${previous === null || previous === line ? '' : `, lowered from ${number(previous)}`}; js-harness guard refuses its next step once its cache-read reaches it: then write your state and stop`);
+      const { previous } = recordStopLine({ home, sessionId: given, line, raise });
+      stdout(`js-harness spend: stop line ${number(line)} cache-read recorded for session ${given}${previous === null || previous === line ? '' : `, moved from ${number(previous)} by the lead`}; js-harness guard refuses its next step once its cache-read reaches it: then write your state and stop`);
       return 0;
     } catch (err) {
       if (!(err instanceof StopLineError) && !(err instanceof TypeError)) throw err;
