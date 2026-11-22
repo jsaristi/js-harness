@@ -6,12 +6,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { holdsPhrase, parseRegister, summarize, weeklyCounts } from './lib/failures.mjs';
+import { closingCount, holdsPhrase, parseRegister, summarize, weeklyCounts } from './lib/failures.mjs';
 import { gitTopLevel } from './lib/project.mjs';
 import { formatRow } from './lib/next-step.mjs';
 
 const REGISTER = 'docs/FAILURES.md';
-export const USAGE = 'Usage: js-harness failures | failures <id> | failures check [--settled] | failures weeks';
+export const USAGE = 'Usage: js-harness failures | failures <id> | failures check [--settled] | failures weeks | failures closing [--json]';
 
 // The end of the row's detail at every gate: how a session learns the register exists, at no token
 // per turn.
@@ -110,16 +110,20 @@ export function checkFailures(cwd, { readFile = readText } = {}) {
 function parseArgs(argv) {
   const words = [];
   let settled = false;
+  let json = false;
   for (const token of argv) {
     if (token === '--settled') settled = true;
+    else if (token === '--json') json = true;
     else if (token.startsWith('-')) throw new FailuresArgError(`unknown argument: ${token}`);
     else words.push(token);
   }
   if (words.length > 1) throw new FailuresArgError(`unknown argument: ${words[1]}`);
   const check = words[0] === 'check';
   const weeks = words[0] === 'weeks';
+  const closing = words[0] === 'closing';
   if (settled && !check) throw new FailuresArgError('--settled goes with check');
-  return { check, weeks, settled, id: check || weeks ? undefined : words[0] };
+  if (json && !closing) throw new FailuresArgError('--json goes with closing');
+  return { check, weeks, closing, settled, json, id: check || weeks || closing ? undefined : words[0] };
 }
 
 /** The lines of `js-harness failures`: the totals, the entries and sightings of each class in the
@@ -167,10 +171,29 @@ function renderWeeks(weeks) {
   ];
 }
 
+/** The lines of `failures closing`: each closing class with its open entries and its host-caused ones, then the total
+ * open and what counts settled with no control built. */
+function renderClosing(rows) {
+  const lines = [];
+  for (const row of rows) {
+    if (!row.declared) {
+      lines.push(`${row.class}  not a class of ${REGISTER}`);
+      continue;
+    }
+    lines.push(`${row.class}  ${row.open.length} open, ${row.host.length} host-caused`);
+    for (const entry of row.open) lines.push(`  open: ${entry.id} (${entry.state})`);
+    for (const entry of row.host) lines.push(`  host-caused: ${entry.id} (${entry.state}): ${entry.upstream}`);
+  }
+  const sum = (key) => rows.reduce((total, row) => total + row[key].length, 0);
+  lines.push(`${sum('open')} open in the closing classes; settled with no control built: ${sum('once')} once, ${sum('owed')} owed`);
+  return lines;
+}
+
 /** `js-harness failures` prints the totals and one line per entry; `failures <id>` prints one entry
  * whole, with its state; `failures check` runs the gate's row alone and, with `--settled`, also
  * refuses while an entry is not settled, which is how a contract's "Done when" carries the register;
- * `failures weeks` prints the sightings by week (`weeklyCounts`), so he sees whether the mistakes go down.
+ * `failures weeks` prints the sightings by week (`weeklyCounts`), so he sees whether the mistakes go down;
+ * `failures closing` prints S8's closing count of the classes it closes (`closingCount`), `--json` as data.
  * Exit 0; 1 when the register is refused, an id is not in it or `--settled` finds an entry that is
  * not settled; 2, with usage on stderr and no file read, for an argument it does not know. With no
  * `docs/FAILURES.md` nothing is recorded, so nothing is refused: it says so and exits 0. The register is
@@ -201,6 +224,15 @@ export async function failuresMain(argv, { cwd = process.cwd(), stdout = console
     if (!parsed.settled || counts.unsettled === 0) return 0;
     stdout(`not settled: ${counts.unsettled} of ${count(counts.entries, 'failure')}`);
     return 1;
+  }
+
+  // S8's closing count (odd/tasks/f8-s8-certification.md, T4): exit 1 while a closing class holds an open entry that
+  // names no upstream issue.
+  if (parsed.closing) {
+    const rows = closingCount(register, holdsUnder(path.resolve(gitTopLevel(cwd, spawn) ?? cwd), readFile));
+    if (parsed.json) stdout(JSON.stringify(rows, null, 2));
+    else for (const line of renderClosing(rows)) stdout(line);
+    return rows.some((row) => row.open.length > 0) ? 1 : 0;
   }
 
   if (parsed.weeks) {

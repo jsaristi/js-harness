@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { STATES, entryState, holdsPhrase, isSettled, parseRegister, sightings, summarize, weeklyCounts } from './failures.mjs';
+import { CLOSING_CLASSES, STATES, closingCount, entryState, holdsPhrase, isSettled, parseRegister, sightings, summarize, weeklyCounts } from './failures.mjs';
 
 const CLASSES = [
   '## Classes',
@@ -272,7 +272,7 @@ test('a date that is no date is refused, in a sighting and in a control', () => 
 });
 
 test('a field it does not know is refused, and the fields are named', () => {
-  refusedOnce(faults(entry('odd-field', '- Class: machine', SEEN, '- State: repeated')), /^entry "odd-field": field "State" is not known.*Class, Aka, Seen, Control, Proof and Was/);
+  refusedOnce(faults(entry('odd-field', '- Class: machine', SEEN, '- State: repeated')), /^entry "odd-field": field "State" is not known.*Class, Aka, Seen, Control, Proof, Upstream and Was/);
 });
 
 test('a Seen line without its two long dashes is refused, and told how it is written', () => {
@@ -292,7 +292,7 @@ test('a Class field with nothing after its name is one fault, not also an entry 
 test('a list item of the text that opens with a capitalised word and a colon is read as a field, and refused', () => {
   refusedOnce(
     faults(entry('noted-entry', '- Note: the gate was slow that day', '- Class: machine', SEEN)),
-    /^entry "noted-entry": field "Note" is not known.*Class, Aka, Seen, Control, Proof and Was/,
+    /^entry "noted-entry": field "Note" is not known.*Class, Aka, Seen, Control, Proof, Upstream and Was/,
   );
   assert.deepEqual(faults(entry('noted-entry', '- note: the gate was slow that day', '- Class: machine', SEEN)), []);
 });
@@ -764,4 +764,35 @@ test('weeklyCounts groups the sightings by ISO week, Monday first, and counts th
 
 test('weeklyCounts of a register with no sighting is no week', () => {
   assert.deepEqual(weeklyCounts({ classes: ['machine'], entries: [] }, new Date('2026-10-30T00:00:00Z')), []);
+});
+
+// ── S8's closing count (odd/tasks/f8-s8-certification.md, T4; R2) ────────────────────────────────────────────────
+
+const UPSTREAM = '- Upstream: https://github.com/anthropics/claude-code/issues/123 — the host cancels the hooks of PostToolUse';
+
+test('an Upstream line names the host issue behind an entry: one, and a link first', () => {
+  assert.deepEqual(only(entry('host-cancel', '- Class: tool', SEEN, UPSTREAM)).upstream, ['https://github.com/anthropics/claude-code/issues/123 — the host cancels the hooks of PostToolUse']);
+  assert.deepEqual(only(entry('ours', '- Class: tool', SEEN)).upstream, []);
+  const faults = (lines) => parseRegister(register(lines)).errors;
+  assert.match(faults(entry('no-link', '- Class: tool', SEEN, '- Upstream: the host did it')).join('\n'), /Upstream.*starts with its issue's https:\/\/ link/);
+  assert.match(faults(entry('two', '- Class: tool', SEEN, UPSTREAM, UPSTREAM)).join('\n'), /has 2 Upstream fields/);
+});
+
+test('closingCount gives each closing class its open entries by id, the host-caused apart with their issue, and what counts settled with no control', () => {
+  const read = parseRegister(register(
+    entry('host-twice', '- Class: tool', SEEN, EARLIER, UPSTREAM),
+    entry('one-sighting', '- Class: machine', SEEN),
+    entry('promised', '- Class: machine', SEEN, '- Control: owed — odd/tasks/x.md — "the reply check, its hook"'),
+    entry('settled-host', '- Class: machine', SEEN, UPSTREAM),
+    entry('twice', '- Class: tool', SEEN, EARLIER),
+  ));
+  assert.deepEqual(read.errors, []);
+  const holds = () => true;
+  const count = closingCount(read, holds);
+  assert.deepEqual(CLOSING_CLASSES, ['tool', 'machine', 'unseen-state']);
+  assert.deepEqual(count, [
+    { class: 'tool', declared: true, open: [{ id: 'twice', state: 'repeated' }], host: [{ id: 'host-twice', state: 'repeated', upstream: 'https://github.com/anthropics/claude-code/issues/123 — the host cancels the hooks of PostToolUse' }], once: [], owed: [] },
+    { class: 'machine', declared: true, open: [], host: [], once: ['one-sighting', 'settled-host'], owed: ['promised'] },
+    { class: 'unseen-state', declared: false, open: [], host: [], once: [], owed: [] },
+  ]);
 });

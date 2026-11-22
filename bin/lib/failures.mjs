@@ -23,7 +23,7 @@ export const STATES = [
 ];
 const SETTLED = new Set(['once', 'owed', 'measured', 'controlled']);
 
-const FIELDS = ['Class', 'Aka', 'Seen', 'Control', 'Proof', 'Was'];
+const FIELDS = ['Class', 'Aka', 'Seen', 'Control', 'Proof', 'Upstream', 'Was'];
 const FIELD_LIST = `${FIELDS.slice(0, -1).join(', ')} and ${FIELDS.at(-1)}`;
 // The three levels of the placement rule a control in place sits at.
 const LEVELS = ['check', 'line', 'protocol'];
@@ -162,6 +162,7 @@ function readEntry(draft, classes, fault) {
     seen: [],
     control: null,
     proof: [],
+    upstream: [],
     was: [],
     source: draft.lines.join('\n').trimEnd(),
   };
@@ -204,6 +205,12 @@ function readEntry(draft, classes, fault) {
 
   entry.aka = values.get('Aka');
   entry.proof = values.get('Proof');
+  // A host-caused entry (docs/proposals/harness-diet.md:958-960) names its upstream issue, a link first.
+  entry.upstream = values.get('Upstream');
+  if (entry.upstream.length > 1) fault(`has ${entry.upstream.length} Upstream fields: an entry names one upstream issue`);
+  for (const value of entry.upstream) {
+    if (!/^https:\/\/\S+/.test(value)) fault(`the Upstream "${value}" names no issue: it starts with its issue's https:// link, then a note after a long dash`);
+  }
   entry.was = values.get('Was');
   if (draft.stray !== null) {
     fault(`cannot read the line "${draft.stray}": after the first field an entry holds only fields ("- Name: value") and their indented continuation lines`);
@@ -434,4 +441,28 @@ export function summarize({ classes, entries }, holds) {
     byControl: controlClasses(entries),
     rows,
   };
+}
+
+/** The classes S8 closes (docs/proposals/harness-diet.md:943-960; odd/tasks/f8-s8-certification.md, spec 4). */
+export const CLOSING_CLASSES = Object.freeze(['tool', 'machine', 'unseen-state']);
+
+/** S8's closing count (odd/tasks/f8-s8-certification.md, T4; R2): for each of `classes`, `{ class, declared, open,
+ * host, once, owed }`. `open` is each entry not settled, `{ id, state }`; `host` each such entry that names its
+ * upstream issue, `{ id, state, upstream }`, an open one the host causes and none of ours can control, listed by id
+ * and not counted open. `once` and `owed` are the ids settled with no control built (`isSettled` counts them),
+ * said so that a closed class is not read as controlled. `declared` is false for a class the register does not
+ * declare, which then holds nothing. */
+export function closingCount({ classes: declared, entries }, holds, classes = CLOSING_CLASSES) {
+  return classes.map((name) => {
+    const rows = entries.filter((entry) => entry.class === name).map((entry) => ({ entry, state: entryState(entry, holds) }));
+    const unsettled = rows.filter((row) => !isSettled(row.state));
+    return {
+      class: name,
+      declared: declared.includes(name),
+      open: unsettled.filter((row) => row.entry.upstream.length === 0).map((row) => ({ id: row.entry.id, state: row.state })),
+      host: unsettled.filter((row) => row.entry.upstream.length > 0).map((row) => ({ id: row.entry.id, state: row.state, upstream: row.entry.upstream[0] })),
+      once: rows.filter((row) => row.state === 'once').map((row) => row.entry.id),
+      owed: rows.filter((row) => row.state === 'owed').map((row) => row.entry.id),
+    };
+  });
 }
