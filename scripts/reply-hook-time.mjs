@@ -205,6 +205,8 @@ export async function profile(payload, { repo = REPO_ROOT, env = process.env, ho
   const shellParse = (...args) => timed('the shell parser', () => parser(...args));
   const checks = [
     ['wake', () => modules.wake.wakeWarning(payload, state, io)],
+    // The lead's own wake, which the hook's wake check asks when the work session's says nothing (JH 294).
+    ['lead', () => modules.back.leadWakeWarning(payload, state, io)],
     ['stale', () => modules.stale.staleBoardWarning(payload, state, io, now())],
     ['return', () => modules.back.returnReportWarning(payload, state, io)],
     // Last, as in the hook, so its deadline holds the other checks' time too.

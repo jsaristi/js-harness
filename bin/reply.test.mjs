@@ -372,7 +372,9 @@ test('the lead answering his return after a long absence without the status page
   assert.match(lead.answer.reason, /js-harness report --mark --html <file> --notes <file>/);
   assert.equal(lead.err, '');
   const soon = await wakeHook({ payload: { session_id: 'lead' }, record: [handed('2026-10-17T01:30:00.000Z')], transcript: [his('2026-10-17T00:30:00.000Z'), his('2026-10-17T01:00:00.000Z')] });
-  assert.deepEqual(soon.answer, {}, 'a short gap is no return');
+  assert.equal(RETURNED.test(soon.answer.reason ?? ''), false, 'a short gap is no return');
+  // The lead's own wake (JH 294) reaches the hook: this lead stops bare, and by the clock he wrote long ago.
+  assert.match(soon.answer.reason, /nothing will wake the lead/);
   const work = await wakeHook({ transcript: [titled('JH 26 · canal'), ...away], record: [] });
   assert.deepEqual(work.answer, {}, 'a work session is never told');
 });

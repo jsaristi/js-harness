@@ -38,7 +38,8 @@ const USAGE = 'Usage: js-harness reply --hook\n'
   + '  reads a Stop payload on standard input; where the nearest harness.json holds a "reply" key, turns the stop back\n'
   + '  when the reply does not close with exactly one state (working, decision, question, cut, finished, in the labels\n'
   + '  the key names) and what that state needs, and, once, when a work session ends its turn holding handed work with\n'
-  + '  nothing in its background to wake it, and, once, when the lead of a project with a live board ends its turn\n'
+  + '  nothing in its background to wake it, and, once, when the lead ends its turn so while work sessions run or the\n'
+  + '  user has been away long, and, once, when the lead of a project with a live board ends its turn\n'
   + '  while the board\'s rows waited longer than one check, or notices did since board/summary was last written with\n'
   + '  now or status, and, once, when the lead\'s replies since the user\'s\n'
   + '  message after a long absence link no status page of report --html, and, once, when that absence had no\n'
@@ -156,7 +157,11 @@ async function wakeOf(payload, state, io, stderr) {
   try {
     // Loaded only where the reply check is on: the board's module is large, and every project pays the hook.
     const { wakeWarning } = await import('./lib/stop-wake.mjs');
-    return wakeWarning(payload, state, io);
+    const work = wakeWarning(payload, state, io);
+    if (work !== null) return work;
+    // The lead is asked too (JH 294): it rested bare after a compaction on 2026-11-22 while work sessions ran.
+    const { leadWakeWarning } = await import('./lib/return-report.mjs');
+    return leadWakeWarning(payload, state, io);
   } catch (err) {
     stderr(`js-harness reply: ${err?.message ?? err}; the wake check did not run\n`);
     return null;

@@ -23,7 +23,8 @@ import { linesHolding, personLinesIn, personTimesIn, personTimesOf } from './per
 import { comparable, mainCheckout, parseTranscript, projectSlug, questionCallsOf } from './sessions.mjs';
 import { isLeadSession } from './stale-board.mjs';
 import { pageTarget } from './template-gate.mjs';
-import { lastLineWith } from './stop-wake.mjs';
+import { lastLineWith, transcriptMarks } from './stop-wake.mjs';
+import { workNumber } from './stall.mjs';
 import { eventsOf, stretchFile } from './stretch.mjs';
 import { RENDERED_SCHEMA, readRecord, renderedFile } from './template-record.mjs';
 
@@ -354,4 +355,79 @@ export function departureLine({ before, away, heldSince }) {
   }
   return `${head}: open one now for the hours left, \`js-harness stretch open --plan <file> --html <file>\`, so their return has an estimate to measure against. `
     + 'Told once for this absence.';
+}
+
+// ---- the lead's own wake (JH 294; docs/FAILURES.md, away-hours-no-work, 2026-11-22) ----------------------------------
+//
+// The wake check of bin/lib/stop-wake.mjs turns back a work session that stops holding work with nothing to wake it;
+// the lead was never asked. On 2026-11-22 its last wait ended on a notice at 07:09:51Z, the host compacted it, and at
+// 07:14:40Z it closed "Sigo solo" with nothing in its background while JH 291 still held work: the hook let it through,
+// no AWAY line could fire, and it slept until 18:03Z while he was away (its transcript d6383aea, lines 30539 to 31377).
+
+/** The words only this warning has, by which an earlier one is found in the transcript. */
+export const LEAD_WAKE_MARKER = 'nothing will wake the lead';
+
+/** How far back a work session's notice counts it as running. */
+const RUNNING_WINDOW_MS = 24 * 3600_000;
+
+/** The numbers of the work sessions that run by `notices` at `now`: each whose newest notice within a day, sent by it
+ * or handed to it, is not one that gives its work back. A brief sent by message leaves no notice, so a session counts
+ * from its first notice; the openings are not read, as the lead stops far more often than a work session. */
+function runningWork(notices, now) {
+  const newest = new Map();
+  for (const notice of notices) {
+    const at = Date.parse(notice.at ?? '');
+    if (Number.isNaN(at) || at < now - RUNNING_WINDOW_MS) continue;
+    const sent = workNumber(notice.from?.title);
+    const number = sent ?? (notice.to?.role === 'work' && Number.isSafeInteger(notice.to.number) ? notice.to.number : null);
+    if (number === null) continue;
+    const back = sent !== null && (notice.kind === 'closed' || notice.kind === 'relieved');
+    if (!newest.has(number) || newest.get(number).at <= at) newest.set(number, { at, back });
+  }
+  return [...newest].filter(([, one]) => !one.back).map(([number]) => number).sort((a, b) => a - b);
+}
+
+/** The warning for a lead's stop of `payload` whose reply closes with `state`, or `null` when none is due: nothing
+ * runs in its background, no cron of its own, it asks him nothing, and work sessions run or he has been away longer
+ * than `ABSENCE_MS`. Said once, until a background task launched after the warning (a wait armed since, and ended).
+ * The cheap gates come first: the transcript is searched only for a bare lead's stop. */
+export function leadWakeWarning(payload, state, io) {
+  if (!Array.isArray(payload?.background_tasks)) return null;
+  if (payload.background_tasks.some((task) => task?.status === 'running')) return null;
+  if (Array.isArray(payload.session_crons) && payload.session_crons.length > 0) return null;
+  if (state === 'decision' || state === 'question') return null;
+  if (typeof payload.session_id !== 'string' || payload.session_id === '') return null;
+  if (typeof payload.transcript_path !== 'string' || payload.transcript_path === '') return null;
+
+  const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();
+  const home = harnessHome({ env: io.env, homedir: io.homedir });
+  const slug = projectSlug(io.mainCheckout?.(cwd) ?? mainCheckout(io.run, cwd));
+  const record = (io.readNotices ?? readNotices)(home, slug, { readFile: io.readFile });
+  if (record.unavailable !== undefined) throw new Error(`the record of notices (${record.path}): ${record.unavailable}`);
+  if (!isLeadSession(record.notices, payload.session_id)) return null;
+
+  const now = io.now?.() ?? Date.now();
+  const text = io.readFile(payload.transcript_path);
+  const running = runningWork(record.notices, now);
+  let why;
+  if (running.length > 0) {
+    why = `work sessions run (number ${running.join(", ")}, by their notices of the last day)`;
+  } else {
+    const before = personTimesIn(text).at(-1);
+    const away = before === undefined ? 0 : now - Date.parse(before);
+    if (!(away > ABSENCE_MS)) return null;
+    why = `he last wrote at ${localHour(before)} local time (${localZone(before)}), ${(away / 3600_000).toFixed(1)} hours ago`;
+  }
+
+  const warning = lastLineWith(text, LEAD_WAKE_MARKER, (entry) => entry.type === 'attachment'
+    && entry.attachment?.type === 'hook_blocking_error'
+    && entry.attachment.hookEvent === 'Stop'
+    && String(entry.attachment.blockingError?.blockingError ?? '').includes(LEAD_WAKE_MARKER));
+  if (warning !== null) {
+    const { launchPos } = transcriptMarks(text);
+    if (!(launchPos !== null && launchPos > warning.start)) return null;
+  }
+  return `js-harness reply: you lead, ${why}, and nothing runs in your background, so ${LEAD_WAKE_MARKER} when a notice comes or he stays away. `
+    + 'Arm your wait in the background, `js-harness wait --notice-to orchestrator` (it ends on a notice to the lead, or with the AWAY line), '
+    + 'then end the turn. This is said once until a wait you arm ends.';
 }
