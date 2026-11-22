@@ -252,25 +252,70 @@ function workspaceTypeScript(project) {
   }
 }
 
-/** The typescript-language-server package on `env`'s PATH, or null: the shim's own folder holds it under
- * `node_modules` (npm on Windows), `../lib/node_modules` (npm elsewhere), or the shim is a link into it. The PATH is
- * this machine's, so it splits on this machine's delimiter whatever `platform` the lines are shown for. */
-function languageServerPackage(env, platform) {
+// A shim larger than this is no package manager's shim, and is not read.
+const SHIM_MAX_BYTES = 64 * 1024;
+
+/** The package folder of `pkg` that the shim `shim` runs, from the script path it names relative to its own folder
+ * (`%dp0%\node_modules\<pkg>\…` from npm on Windows, `%~dp0\..\global\…\node_modules\<pkg>\…` or
+ * `$basedir/../global/…/node_modules/<pkg>/…` from pnpm), or null. */
+function shimScriptPackage(shim, pkg) {
+  let text;
+  try {
+    if (fs.statSync(shim).size > SHIM_MAX_BYTES) return null;
+    text = fs.readFileSync(shim, 'utf8');
+  } catch {
+    return null;
+  }
+  const sep = '[\\\\/]';
+  const name = pkg.split('/').map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join(sep);
+  const match = new RegExp(`(?:%~dp0|%dp0%|\\$basedir)${sep}?((?:[^"'%$\\s]*?${sep})?node_modules${sep}${name})(?=${sep})`, 'i').exec(text);
+  return match ? path.resolve(path.dirname(shim), match[1].replace(/[\\/]/g, path.sep)) : null;
+}
+
+/** The package `pkg` whose `bin` shim comes first on `env`'s PATH, as `{ found, packageDir }`: `found` when a shim is
+ * there, `packageDir` null when its package cannot be told. The shim's own folder holds it under `node_modules` (npm
+ * on Windows), `../lib/node_modules` (npm elsewhere), the shim names it as the script it runs (pnpm on Windows), or the
+ * shim is a link into it. `runs`, only the last two: a package that merely sits beside the shim is not taken as the one
+ * it runs. The PATH is this machine's, so it splits on this machine's delimiter whatever `platform` the lines are shown
+ * for. */
+function packageOnPath(bin, pkg, env, platform, { runs = false } = {}) {
   const pathValue = env.PATH ?? env.Path ?? '';
-  const names = platform === 'win32' ? [`${TYPESCRIPT_LSP_SERVER}.cmd`, `${TYPESCRIPT_LSP_SERVER}.exe`, TYPESCRIPT_LSP_SERVER] : [TYPESCRIPT_LSP_SERVER];
+  const names = platform === 'win32' ? [`${bin}.cmd`, `${bin}.exe`, bin] : [bin];
   for (const dir of pathValue.split(path.delimiter).filter(Boolean)) {
     const shim = names.map((name) => path.join(dir, name)).find((file) => fs.existsSync(file));
     if (!shim) continue;
-    const candidates = [path.join(dir, 'node_modules', TYPESCRIPT_LSP_SERVER), path.join(dir, '..', 'lib', 'node_modules', TYPESCRIPT_LSP_SERVER)];
+    const beside = runs ? [] : [path.join(dir, 'node_modules', pkg), path.join(dir, '..', 'lib', 'node_modules', pkg)];
+    const candidates = [...beside, shimScriptPackage(shim, pkg)].filter(Boolean);
     try {
       for (let up = path.dirname(fs.realpathSync(shim)); path.dirname(up) !== up; up = path.dirname(up)) candidates.push(up);
     } catch {
       // An unreadable link: the folders beside it are still worth a look.
     }
-    const found = candidates.find((candidate) => readJsonFile(path.join(candidate, 'package.json')).data?.name === TYPESCRIPT_LSP_SERVER);
+    const found = candidates.find((candidate) => readJsonFile(path.join(candidate, 'package.json')).data?.name === pkg);
     return { found: true, packageDir: found ?? null };
   }
   return { found: false, packageDir: null };
+}
+
+/** The typescript-language-server package on `env`'s PATH (`packageOnPath`). */
+function languageServerPackage(env, platform) {
+  return packageOnPath(TYPESCRIPT_LSP_SERVER, TYPESCRIPT_LSP_SERVER, env, platform);
+}
+
+/** The installed version of the CLI `bin`, published as the package `pkg`, probed with `bin <args>`. Outside the
+ * interactive report it is read from the package.json of the package the shim first on `deps.env`'s PATH runs, read
+ * again on every call, so an upgrade shows at once and nothing is spawned: `doctor --hook` timed out in 14 of 26
+ * session starts, and each of these probes is a shell and a Node start, about 600 ms (odd/tasks/hook-timeouts.md).
+ * Only a shim that runs a package of that name counts; a native binary, no `env`, or a package that cannot be read
+ * spawns the probe as before. The interactive report always spawns it, so a binary that does not run is told there. */
+function cliVersion(bin, pkg, args, deps) {
+  if (!deps.interactive && deps.env) {
+    const { packageDir } = packageOnPath(bin, pkg, deps.env, deps.platform ?? process.platform, { runs: true });
+    const version = packageDir ? readJsonFile(path.join(packageDir, 'package.json')).data?.version : undefined;
+    const match = typeof version === 'string' ? SEMVER_RE.exec(version) : null;
+    if (match) return { state: 'ok', version: match[1] };
+  }
+  return probeVersionCommand(bin, args, deps);
 }
 
 /** Whether the plugin's server can start for `project`, read from files only and never started: it needs a TypeScript
@@ -395,7 +440,7 @@ export const tools = [
   },
   {
     id: 'codegraph',
-    installed: (deps) => probeVersionCommand('codegraph', ['--version'], deps),
+    installed: (deps) => cliVersion('codegraph', '@colbymchenry/codegraph', ['--version'], deps),
     configured: (deps) => ({
       claude: claudeJsonMcpServer(deps.home, 'codegraph', deps.project).state,
       codex: hasCodexMcpServer(codexHomeOf(deps), 'codegraph') ? 'ok' : 'missing',
@@ -465,10 +510,10 @@ export const tools = [
     // The Codex CLI itself (the Codex plugin row is gone): `installed` is its version, `codex` is "logged in".
     // Shown only while the project's codexReview switch is not off; a switch that did not resolve shows it.
     id: 'codex',
-    installed: (deps) => probeVersionCommand('codex', ['--version'], deps),
+    installed: (deps) => cliVersion('codex', '@openai/codex', ['--version'], deps),
     when: (deps) => deps.functions?.codexReview?.value !== 'off',
     // A missing CLI has no login to ask about: `n/a`, and `codex login status` is never spawned.
-    configured: (deps, installed = probeVersionCommand('codex', ['--version'], deps)) => ({
+    configured: (deps, installed = cliVersion('codex', '@openai/codex', ['--version'], deps)) => ({
       claude: 'n/a',
       codex: installed.state === 'missing' ? 'n/a' : codexLoginState(deps),
     }),

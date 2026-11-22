@@ -4,9 +4,11 @@ Locator: `odd/tasks/hook-timeouts.md` · Branch: `claude/jh296-hook-timeouts`, f
 Delivery: one draft pull request per unit · Test runner: `node --test`
 
 ## State
-U1, the diagnosis, is written below (`## Diagnosis`). Next: U2, the one slow js-harness hook whose files are free,
-`doctor --hook`, through `bin/lib/stack.mjs`. Open: `resume --pause`, the likely source of the PostToolUse cancels,
-lives in files open pull requests edit (968, 950), so it is said here and left.
+U1, the diagnosis, is below (`## Diagnosis`, PR 974). U2 is done: outside the interactive report, `doctor --hook`
+reads the codegraph and codex versions from files. On a fake home it went from 2,595–2,662 ms to 1,666–1,961 ms.
+Open: `resume --pause`, the likely source of the PostToolUse cancels, lives in files that open pull requests edit
+(968, 950), so it is said here and left. `doctor --hook` still spawns `codex login status` (about 575 ms) and the
+remote server's PowerShell snapshot (about 718 ms).
 
 ## Goal
 Each js-harness hook finishes inside its timeout on this machine, and the hooks that do not are named with their
@@ -115,7 +117,7 @@ process snapshot (718 ms). U2 is there.
 
 ## Tasks
 - [x] T1 (kind: verify) the diagnosis — spec 1; inline; this commit
-- [ ] T2 (kind: build) `doctor --hook` spawns less in `bin/lib/stack.mjs`, test first — spec 2; inline
+- [x] T2 (kind: build) `doctor --hook` spawns less in `bin/lib/stack.mjs`, test first — spec 2; inline; the U2 commit
 
 ## Log
 - L1. 2026-11-22, his request: "sigue llenando las horas con más sesiones" (0cdab702 line 12702); the lead's brief
@@ -123,3 +125,10 @@ process snapshot (718 ms). U2 is there.
 - L2. 2026-11-22, the probes of this diagnosis ran two `js-harness doctor --hook` against the real home with session
   id `jh296-probe`, and three `resume --pause` with ids `jh296-probe-1..3`; no state file of those ids was found under
   `~/.js-harness` afterwards (`grep -rl jh296-probe`).
+- L3. 2026-11-22, U2 test first: the five new tests in `bin/lib/stack.test.mjs` were run before the change. Three
+  failed, the read with no spawn among them: codex gave `missing` with no `codex --version` answer. After the change,
+  `node --test bin/lib/stack.test.mjs bin/doctor.test.mjs bin/stack.test.mjs bin/doctor-hook.test.mjs` passed 265 of
+  265. Read from files on this machine: codegraph 1.6.4 and codex 0.171.0, the same as `codegraph --version` and
+  `codex --version`. Measure, `doctor --hook --home <empty folder> --cwd D:/js-harness`, three runs each: the
+  installed 0.97.0 took 2,595, 2,662 and 2,654 ms; the branch took 1,961, 1,691 and 1,666 ms. A package that only
+  sits beside the shim is not taken (`runs`), because it may not be what the shim runs.
