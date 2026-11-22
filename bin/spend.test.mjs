@@ -71,3 +71,28 @@ test('a session that cannot be found, or no session named, is said and never pri
   assert.equal(run([ID, '--self'], {}).code, 2);
   assert.equal(run(['--bogus'], {}).code, 2);
 });
+
+test('--self --line records the stop line of the session that runs it, lowers it, never raises it, and the plain form names it', (t) => {
+  const { root, project } = scratch(t);
+  const env = { CLAUDE_CODE_SESSION_ID: ID, JS_HARNESS_HOME: path.join(root, 'home') };
+  const recorded = run(['--self', '--line', '20M'], { env });
+  assert.equal(recorded.code, 0);
+  assert.match(recorded.out, /stop line 20,000,000 cache-read recorded for session/);
+  assert.equal(run(['--self', '--line', '15M'], { env }).code, 0);
+  const raised = run(['--self', '--line', '30M'], { env });
+  assert.equal(raised.code, 1);
+  assert.match(raised.err, /can be lowered, never raised/);
+  const shown = run(['--self'], { env, projectDirs: () => [project] });
+  assert.match(shown.out, /stop line: 15,000,000 cache-read, recorded with --self --line; spent 80,000 of it/);
+});
+
+test('--line takes --self and a token count, and refuses a session not named by the host', (t) => {
+  const { root } = scratch(t);
+  const home = path.join(root, 'home');
+  assert.equal(run([ID, '--line', '20M'], { env: { JS_HARNESS_HOME: home } }).code, 2);
+  assert.equal(run(['--self', '--line', 'lots'], { env: { CLAUDE_CODE_SESSION_ID: ID, JS_HARNESS_HOME: home } }).code, 2);
+  assert.equal(run(['--self', '--line'], { env: { CLAUDE_CODE_SESSION_ID: ID, JS_HARNESS_HOME: home } }).code, 2);
+  assert.equal(run(['--self', '--line', '20M'], { env: { JS_HARNESS_HOME: home } }).code, 2);
+  assert.equal(run(['--self', '--line', '20M'], { env: { CLAUDE_CODE_SESSION_ID: '../escape', JS_HARNESS_HOME: home } }).code, 1);
+  assert.equal(fs.existsSync(path.join(home, '.js-harness')), false);
+});

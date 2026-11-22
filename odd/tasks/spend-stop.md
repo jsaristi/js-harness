@@ -54,7 +54,7 @@ Nothing in this slice: the brief and his words cover it.
    trabaja y termina todo para que no vuelva a quedar a tope".
 
 ## Tasks
-- [ ] T1 (kind: build) spec 1: `spend --self --line <N>` records the line; `guard --hook` refuses past it; route JH 287
+- [x] T1 (kind: build) spec 1: `spend --self --line <N>` records the line; `guard --hook` refuses past it; route JH 287
 
 ## Log
 - L1 His request, typed (0cdab702 line 9744): "incluye primero que todo las mejoras para que nos nos vuelva a fallar y

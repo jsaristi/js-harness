@@ -381,6 +381,10 @@ export const COVERAGE = {
       "d040f5b3e611",
       "61d4053f44ed",
       "c2766d62b95e",
+      {
+        "hash": "b859f8a8ed87",
+        "context": "where new work goes: a routing step of the lead with no rule of its own, since the growth limit that held it was retired on 2026-11-15"
+      },
       "e007182d082f",
       "46a073ebf76c",
       "764a9864c861",
@@ -485,11 +489,7 @@ export const COVERAGE = {
       "fa7469f92751",
       "0947d5b8b82d",
       "ddcf7db81c92",
-      "d77576d7b195",
-      {
-        "hash": "b859f8a8ed87",
-        "context": "where new work goes: a routing step of the lead with no rule of its own, since the growth limit that held it was retired on 2026-11-15"
-      }
+      "d77576d7b195"
     ],
     "output-style": [
       "753c849de149",
@@ -634,10 +634,6 @@ export const COVERAGE = {
       "757feab56c1e"
     ],
     "skill": [
-      {
-        "hash": "b6acf1b1d244",
-        "context": "the skill's line for js-harness spend: what the command prints and why a sum over lines is wrong, a fact of the command (bin/spend.test.mjs), no obligation"
-      },
       "753c849de149",
       "bfc0ccffc746",
       "9934aa64351b",
@@ -657,8 +653,12 @@ export const COVERAGE = {
       "d3261928bbbc",
       "a440cb5134de",
       "0796f9f55a1d",
+      {
+        "hash": "ab7b7c27d7a0",
+        "context": "the skill's line for js-harness spend: what the command prints, why a sum over lines is wrong and that --self --line records the stop line the guard holds, facts of the command (bin/spend.test.mjs, bin/lib/spend-stop.test.mjs), no obligation"
+      },
       "3380c3e633c3",
-      "7b5e679cf345",
+      "cacfab898e4b",
       "bb7c472cb9cf",
       "38a703685b7a",
       "4eee354ceae4",

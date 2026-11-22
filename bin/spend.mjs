@@ -9,10 +9,12 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { transcriptOf } from './lib/channel.mjs';
 import { mainCheckout, projectDirsOf } from './lib/sessions.mjs';
-import { spendOf } from './lib/transcript-requests.mjs';
+import { harnessHome } from './lib/home.mjs';
+import { StopLineError, parseStopLine, readStopLine, recordStopLine, sessionSpend } from './lib/spend-stop.mjs';
 
 export const USAGE = [
   'Usage: js-harness spend (<session id> | <transcript .jsonl> | --self) [--json]',
+  '       js-harness spend --self --line <tokens>',
   '',
   'What one session spent, from its transcript: the main chain\'s calls, cache-read, input, output and cache-write',
   'tokens, the context of its last call and of its first (the fixed context it opened with), and its sub-agents apart',
@@ -20,22 +22,33 @@ export const USAGE = [
   'A session id (whole, or its first eight characters or more) is looked for in this project\'s sessions folders and',
   'its worktrees\'; --self (a flag) reads the session that runs the command, by CLAUDE_CODE_SESSION_ID. A cut last',
   'line, as a session still writing leaves, is counted as unreadable and in no figure.',
-  'Exit 0 printed; 1 the transcript could not be found or read; 2 a usage error.',
+  '--self --line records the stop line in cache-read tokens (20000000, 20M or 500K) for the session that runs it, beside',
+  'its pause state under the harness home: from then on js-harness guard refuses its next step once its cache-read, main',
+  'chain and sub-agents, reaches the line, but for a Write or Edit of a .md file and a lone js-harness notify. A line can',
+  'be lowered, never raised. The plain form then names the line recorded.',
+  'Exit 0 printed or recorded; 1 the transcript could not be found or read, or a line above the one recorded; 2 a usage error.',
 ].join('\n');
 
 class SpendArgError extends Error {}
 
 /** `{ json, self, given }` from the command line; a usage error throws `SpendArgError`. */
 function parseArgs(argv) {
-  const parsed = { json: false, self: false, given: undefined };
-  for (const arg of argv) {
+  const parsed = { json: false, self: false, given: undefined, line: undefined };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
     if (arg === '--json') parsed.json = true;
+    else if (arg === '--line') {
+      parsed.line = parseStopLine(argv[i + 1]);
+      if (parsed.line === null) throw new SpendArgError('--line takes a token count: digits, or with a K or M suffix (20M)');
+      i += 1;
+    }
     else if (arg === '--self') parsed.self = true;
     else if (arg.startsWith('--')) throw new SpendArgError(`unknown argument: ${arg}`);
     else if (parsed.given !== undefined) throw new SpendArgError(`one session at a time, not ${parsed.given} and ${arg}`);
     else parsed.given = arg;
   }
   if (parsed.self && parsed.given !== undefined) throw new SpendArgError('--self or a session, not both');
+  if (parsed.line !== undefined && (!parsed.self || parsed.json)) throw new SpendArgError('--line records the line of the session that runs it: --self --line <tokens>, without --json');
   return parsed;
 }
 
@@ -74,13 +87,26 @@ export function spendMain(
     if (err instanceof SpendArgError) return usage(err.message);
     throw err;
   }
-  const { json, self } = parsed;
+  const { json, self, line } = parsed;
   let { given } = parsed;
   if (self) {
     given = env.CLAUDE_CODE_SESSION_ID || undefined;
     if (given === undefined) return usage('--self reads CLAUDE_CODE_SESSION_ID, which is not set here: name the session or its transcript');
   }
   if (given === undefined) return usage('name a session, its transcript, or --self');
+  const home = harnessHome({ env, cwd });
+  if (line !== undefined) {
+    // Only the id the host sets: a line recorded on a guessed session would stop one that never asked for it.
+    try {
+      const { previous } = recordStopLine({ home, sessionId: given, line });
+      stdout(`js-harness spend: stop line ${number(line)} cache-read recorded for session ${given}${previous === null || previous === line ? '' : `, lowered from ${number(previous)}`}; js-harness guard refuses its next step once its cache-read reaches it: then write your state and stop`);
+      return 0;
+    } catch (err) {
+      if (!(err instanceof StopLineError) && !(err instanceof TypeError)) throw err;
+      stderr(`js-harness spend: ${err.message}`);
+      return 1;
+    }
+  }
 
   let found;
   if (given.endsWith('.jsonl')) {
@@ -94,31 +120,15 @@ export function spendMain(
     }
   }
 
-  let mainText;
+  let read;
   try {
-    mainText = readFile(found.file);
+    read = sessionSpend({ file: found.file, id: found.id, readFile, readdir });
   } catch (err) {
     stderr(`js-harness spend: could not read ${found.file} (${err.code ?? err.message})`);
     return 1;
   }
-  // A sub-agent's file that cannot be read is left out and counted, so a short sum says why.
-  const subagentDir = path.join(path.dirname(found.file), found.id, 'subagents');
-  let names = [];
-  try {
-    names = readdir(subagentDir).filter((name) => /^agent-.+\.jsonl$/.test(name)).sort();
-  } catch {
-    // No sub-agent folder: the session started none.
-  }
-  const subagentTexts = [];
-  let unreadSubagentFiles = 0;
-  for (const name of names) {
-    try {
-      subagentTexts.push(readFile(path.join(subagentDir, name)));
-    } catch {
-      unreadSubagentFiles += 1;
-    }
-  }
-  const spend = { id: found.id, file: found.file, ...spendOf(mainText, subagentTexts), subagentFiles: subagentTexts.length, unreadSubagentFiles };
+  const spend = { id: found.id, file: found.file, ...read, stopLine: readStopLine(home, found.id) };
+  const { unreadSubagentFiles } = spend;
 
   if (json) {
     stdout(JSON.stringify(spend, null, 2));
@@ -131,6 +141,7 @@ export function spendMain(
     `context: last call ${number(main.lastContext)}; first call ${number(main.firstContext)} (the fixed context it opened with)`,
     `sub-agents (${plural(spend.subagentFiles, 'file')}): ${plural(subagents.calls, 'call')}; cache-read ${number(subagents.cacheReadTokens)}; input ${number(subagents.inputTokens)}; output ${number(subagents.outputTokens)}; cache-write ${number(subagents.cacheWriteTokens)}`,
   ];
+  if (spend.stopLine !== null) lines.push(`stop line: ${number(spend.stopLine)} cache-read, recorded with --self --line; spent ${number(main.cacheReadTokens + subagents.cacheReadTokens)} of it`);
   if (spend.unreadableLines > 0) lines.push(`unreadable: ${plural(spend.unreadableLines, 'line')}, in no figure (a session still writing ends on a cut line)`);
   if (unreadSubagentFiles > 0) lines.push(`not read: ${plural(unreadSubagentFiles, 'sub-agent file')}, left out of the sub-agents' sums`);
   lines.push('Each API message is one call, however many transcript lines repeat its usage.');

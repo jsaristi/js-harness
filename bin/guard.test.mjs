@@ -858,3 +858,28 @@ test('a Bash step that launches a background session is denied, and a command th
   const terminal = await hook({ tool_name: 'mcp__terminal__run_in_terminal', cwd: 'D:/project', tool_input: { command: 'js-harness sessions start --resume 0db8bc5e', note: 'resume it' } });
   assert.match(denied(terminal).permissionDecisionReason, /in the background.*rule sessions-open-in-sidebar/s);
 });
+
+// A session's stop line (odd/tasks/spend-stop.md): the guard refuses a step past it, never blocks a session with no
+// line, lets the call run when the transcript cannot be read, and keeps its other refusals for a call the line lets by.
+test('the stop line: no line never blocks, an unreadable transcript fails open, past it a step is refused', async (t) => {
+  const { recordStopLine } = await import('./lib/spend-stop.mjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-guard-stop-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const id = '0cdab702-72bd-48e7-8a8e-0c38d4aca9c9';
+  const transcript = path.join(root, `${id}.jsonl`);
+  const usage = { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 5000, cache_creation_input_tokens: 0 };
+  fs.writeFileSync(transcript, `${JSON.stringify({ type: 'assistant', message: { id: 'm1', model: 'claude-opus-5-5', usage } })}\n`);
+  const step = (tool_name, tool_input, transcript_path = transcript) => ({ session_id: id, transcript_path, tool_name, cwd: 'D:/project', tool_input });
+  const run = (payload) => hook(payload, { home: root, exists: fs.existsSync });
+  const status = step('Bash', { command: 'git status' });
+
+  assert.deepEqual(await run(status), { code: 0, out: '', err: '' }, 'no line recorded: nothing refused');
+  recordStopLine({ home: root, sessionId: id, line: 4000 });
+  const refused = JSON.parse((await run(status)).out);
+  assert.equal(refused.hookSpecificOutput.permissionDecision, 'deny');
+  assert.match(refused.hookSpecificOutput.permissionDecisionReason, /spent 5,000 cache-read .*stop line 4,000 .*write your state and stop/);
+  assert.deepEqual(await run(step('Bash', { command: 'git status' }, path.join(root, 'gone.jsonl'))), { code: 0, out: '', err: '' }, 'an unreadable transcript lets the call run');
+  assert.deepEqual(await run(step('Write', { file_path: path.join(root, 'state.md'), content: 'x' })), { code: 0, out: '', err: '' }, 'the state is written');
+  const secret = JSON.parse((await run(step('Write', { file_path: 'C:/Users/u/.ssh/notes.md', content: 'x' }))).out);
+  assert.match(secret.hookSpecificOutput.permissionDecisionReason, /a place of secrets/, 'a .md the line lets by still meets the secrets denies');
+});
