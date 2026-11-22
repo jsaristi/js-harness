@@ -160,17 +160,32 @@ function messageOf(body) {
 const nextRung = (url) =>
   `Next rung: open ${url} in the built-in browser and read it with get_page_text; if the text comes back empty, wait a few seconds and read it again.`;
 
+/** A bad command line: its message, when it has one, is printed above the usage, and the exit is 2. */
+class FetchArgError extends Error {}
+
+/** The one url of `argv`; throws a `FetchArgError` for anything else. */
+function parse(argv) {
+  if (argv.length !== 1 || argv[0].startsWith('-')) {
+    const option = argv.find((token) => token.startsWith('-'));
+    throw new FetchArgError(option === undefined ? '' : `unknown argument: ${option}`);
+  }
+  return argv[0];
+}
+
 export async function fetchMain(argv, { stdout = (text) => process.stdout.write(`${text}\n`), stderr = console.error, fetch = globalThis.fetch } = {}) {
   if (argv.length === 1 && (argv[0] === '--help' || argv[0] === '-h')) {
     stdout(USAGE);
     return 0;
   }
-  if (argv.length !== 1 || argv[0].startsWith('-')) {
-    if (argv.length > 0 && argv.some((token) => token.startsWith('-'))) stderr(`unknown argument: ${argv.find((token) => token.startsWith('-'))}`);
+  let url;
+  try {
+    url = parse(argv);
+  } catch (err) {
+    if (!(err instanceof FetchArgError)) throw err;
+    if (err.message !== '') stderr(err.message);
     stderr(USAGE);
     return 2;
   }
-  const url = argv[0];
   const why = notPublic(url);
   if (why !== null) {
     stderr(`js-harness fetch: ${url} is not read: ${why}. r.jina.ai is a third party, so only a public page goes to it.`);
