@@ -1063,7 +1063,7 @@ test('stop keeps the state and fails when the kill cannot be confirmed afterward
 function fakeProcesses(rows) {
   // The table holds this process under its real pid, which `pids()` leaves out, and a Windows pid is a multiple of 4:
   // a fake pid that is one can be this process's on some machine, and its row then vanishes from `pids()` (seen in
-  // GitHub run 45057389675, pid 905). So a fake pid is never a multiple of 4, but System's own 4.
+  // GitHub run 45057389675, pid 900). So a fake pid is never a multiple of 4, but System's own 4.
   const real = rows.filter((row) => row.pid !== 4 && row.pid % 4 === 0).map((row) => row.pid);
   if (real.length > 0) throw new Error(`fake pids ${real.join(', ')} can be a real Windows pid: use an odd one`);
   const table = [{ pid: process.pid, ppid: 4, createdAt: OWN_CREATED }, ...rows].map((row) => ({ name: 'node.exe', ...row }));
