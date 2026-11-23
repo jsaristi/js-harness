@@ -15,7 +15,8 @@ a machine that holds a user-scope installation, even disabled (L11, re-run); T6 
 alone; Codex stays out of scope; the fixed cost is about 448 tokens, both skills. Before T2 (2026-11-18): the design
 and its plan, three double reviews that did not converge (L8, L9, L10); the text of T3 to T7 is still provisional and
 not yet corrected for L11. Next: the senior pass over T3 to T7 with L11 in hand, which the lead places. Open: his
-decisions under "Ask me before", none asked yet, each through the lead; T3 needs his spend and his home decision.
+decisions under "Ask me before", none asked yet, each through the lead; T3 needs his spend and his home decision; its price and rule are proposed under "T3: its price and its decision
+rule" (JH 301, L12).
 
 ## Goal
 A project turns Modern Web Guidance on with one switch in `harness.json`, read by every command that reports or
@@ -134,6 +135,46 @@ before he decides where, if anywhere, it is on by default.
 - S4. "Modren web guidance de google nos ayudaria para este proyecto mejor que context7 osea recuerda que este es un
   harness para varias cosas pero sobretodo para programar" (2026-11-17): answered no, it does another job; context7
   stays required and nothing is replaced.
+
+## T3: its price and its decision rule (a proposal for the senior pass and his answer, JH 301, 2026-11-22)
+Nothing here ran. Marks: [c] checked with the command named; [i] an estimate.
+
+Why `--plan` cannot price the batch yet: `evals/plan.mjs` estimates each cell from recorded trials of the same task,
+config and effort on the same model, and calls a cell no results file holds "unknown", never borrowed
+(`evals/plan.mjs:5-7`). T3's two tasks do not exist yet, so every cell of the batch is unknown [c: `ls evals/tasks`,
+no web task]. The price below is a band from the nearest recorded tasks, and a pilot buys the cells `--plan` then
+prices from.
+
+The band [i]: the recorded build tasks on `claude-opus-5-5` cost, per trial, `lost-updates` $1.00, `spec-drift`
+$1.02 and `format-v2` $2.27 on average, `format-v2` $3.98 at most (means over every results file of that model, a
+node one-liner over `evals/results/*.json`, 2026-11-22). A web page or application with browser and accessibility
+checks is at least that size, so a trial is priced $1.00 / $2.27 / $3.98. The plugin's skills add about 448 tokens
+always and 6.5k and 2.2k when invoked (L11), cents a trial.
+
+| Step | Trials | Low | Mid | High |
+|---|---|---|---|---|
+| Pilot: each task × each of the 3 arms, once | 6 | $6 | $14 | $24 |
+| Batch: 2 tasks × 3 arms × 5 trials, the pilot's 6 counted in | 24 more | $24 | $54 | $96 |
+| **Total** | 30 | **$30** | **$68** | **$120** |
+
+The decision rule, written before any trial, as T3 asks:
+1. Trials: 5 per task and arm, so 10 per arm over the two tasks. A trial passes when every hidden check of its
+   grader passes (score 1, as `evals/incident-score.mjs:2-4` counts).
+2. Least gain that justifies a default: the arm "with it named in `AGENTS.md`" or the arm "with it" passes at least
+   3 more of 10 than "without", and in that arm neither task is worse than "without" by 2 or more of 5. A difference
+   of 1 or 2 is read as chance, by the same floor of 3 the diet sets for the incident set
+   (`docs/proposals/harness-diet.md:490-493`), here on 10 trials, where chance is wider [i].
+3. Anything else, an inconclusive result or a regression, keeps the default off. A gain speaks only for Astro pages
+   and Next.js applications (Constraints).
+4. Cost cap: $5 a trial (above the highest recorded build trial, $3.98) and a batch cap he names; the one proposed
+   is **$70**, the mid band with a small margin. After the pilot, `node evals/suite.mjs ... --plan` prices the
+   remaining 24 from the pilot's own cells; if that price would pass the cap, the batch stops and is asked again.
+5. Not priced here: building the two tasks (a writer session on his plan, no list cost) and their two reviews, which
+   wait for Codex's weekly reset (2026-11-23 23:45).
+
+His yes in one line: "Sí, correr T3 de Modern Web Guidance: piloto de 6 y lote de 30 en total, tope $5 por prueba y
+$70 en total, con la regla escrita antes". The plugin arm's home (a template of its own, or his real home with its
+undo) is a separate answer, under "Ask me before".
 
 ## Tasks
 - [ ] T1 (kind: design) S1, S3: the design and its double reviews (L7 to L10); not converged, so its close is the senior pass after T2. Route: this session, then the senior session. Commit: documents alone.
@@ -321,3 +362,7 @@ touch nine modules of `bin` that other features also change, so the lead places 
     clone's local file, and a value of his there is kept and reported; the Constraint's "holds" stands for a synced
     clone and "shows" for a clone with a committed `true`; Codex, out; the cost line in Constraints reads about 448
     tokens.
+- L12 (2026-11-22, JH 301, the lead's message as written): "Web guidance T3 priced and its decision rule written
+  (odd/tasks/web-guidance.md T3 and L11; trials per arm, least gain, cost cap, by evals/plan.mjs --plan where it can
+  price; nothing run), so his yes is one line." Written as "T3: its price and its decision rule", a proposal the
+  senior pass may change; `--plan` cannot price cells that no results file holds, so a pilot comes first.
