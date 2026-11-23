@@ -845,8 +845,9 @@ built in rule 1's pull request.
   PRs 912 and 924). T8 ran on `0c28d083` for $45.38 of $74; the long-session grading, by his answer to question 363,
   gave both setups 11 of 25 moments (44%), C1.2, C1.3, C1.5 and C2.4 missing. Open in T8: C5.1 by hand, R3.
   Written since, beside it in `odd/tasks/f8-s8-designs/` (documents only, nothing run or paid): T5's and T7's designs
-  (2026-11-19), and the paid rerun priced row by row and the eval home's Codex login page (2026-11-22), each waiting
-  on his decisions.
+  (2026-11-19); the paid rerun priced row by row, C1.1 after PR 977 and the long-session rows after PR 930 and the C'
+  build (`rerun-pricing.md`, `eval-codex-login.md`, PR 1008), and the misses by cause, file and open fix (`misses.md`,
+  PR 973) (2026-11-22); each waits on his decisions.
 
 ### Beside F8
 - **The long-session eval**, built in a session of its own (`odd/tasks/f8-s0-baseline.md`, its build
@@ -932,8 +933,8 @@ Each step's state is under [F8 plan](#f8-plan).
 of the first version.
 
 - [ ] The task-progress page made by hand (https://claude.ai/artifact/EUJsxQcNpLEoqgut5sqmpz) becomes a rendered
-  page. Its home is spec 8 of `odd/tasks/stretch-protocol.md`, held; its state is on the pushed branch
-  `docs/stretch-state-after-879`. Owner: the next stretch-protocol session, JH 201 having closed (2026-11-14, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
+  page. Its home is spec 8 of `odd/tasks/stretch-protocol.md`, held; its state is in that document since PR 891
+  (2026-11-22), and the branch `docs/stretch-state-after-879` holds nothing main lacks. Owner: the next stretch-protocol session, JH 201 having closed (2026-11-14, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
 - [ ] The plan review with a verifier pass, run on Opus because the guard refused Fable for sub-agents: if it
   proves useful, it becomes a plan-review command. Owner: this entry, until a session takes it (2026-11-14, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`).
 - [ ] `sessions start` takes a base: the lead made JH 207's worktree by hand on PR 883's head
