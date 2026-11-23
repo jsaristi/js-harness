@@ -3413,6 +3413,9 @@ test('the orchestrator skill says what every recap carries and how a block waits
     'Where a session waits on it: a card of the permit relay, answer through the relay with the option taken, `js-harness permit allow <id>` or `js-harness permit deny <id> --reason "<the option taken>"`',
     // The work session's own text expects an answer naming his line; the note says what it is instead.
     '`js-harness notify --to <n> --kind note "question <q>: the lead\'s direction while the user is away, not their answer: <the option taken>"`',
+    // notify never sends a message, and an idle session reads no record until it is rung (the lead's round of
+    // 2026-11-23 on PR 1045): the lead rings it at the address that command prints.
+    'not their answer: <the option taken>"`, then ring that session at the address it prints, by `SendMessage` to its title, so an idle one wakes to it.',
     'a card it never covers you deny with `js-harness permit deny <id> --reason "waits for the user\'s return: <what>"`, so that session goes on without it',
     'a recorded question, close it with `js-harness notify --to orchestrator --kind withdrawn --question <q> "<the option taken>"` and send that session the option',
   ]) assert.ok(text.includes(line), line);
