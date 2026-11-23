@@ -608,7 +608,7 @@ const EXPECTED_INSIDE = [
  * value holds the sandbox's unique name, which survives every spelling of a path (Git Bash's `/c/Users/...`,
  * 8.3 short names, slashes). Informational: an `outside` is a warning, not a failure, because a shell may
  * legitimately rewrite a variable of its own (`TMPDIR=/tmp`) and the leak scan is what fails the probe. */
-function inspectEnv(toolResults, token) {
+export function inspectEnv(toolResults, token) {
   const parsed = toolResults.map((result) => parseEnvLines(result.text)).find((env) => 'OAUTH_TOKEN_SET' in env);
   if (!parsed) return { envLines: null, envChecks: {}, engramEnv: null };
   const envChecks = {};
