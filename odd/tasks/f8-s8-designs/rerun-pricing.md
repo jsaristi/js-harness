@@ -59,7 +59,7 @@ document). The low end held; the long session's high end was never approached.
 
 One decision comes before it and is not a spend: whether the eval home gets a Codex login for the long session
 (current-2 held its release on a review it could not get). It touches credentials, so it is the lead's to put to him;
-without it the long-session rows, about $70 of the $85, can repeat that miss. The line below assumes it is settled.
+without it the long-session rows, about $70 of the $85, can repeat that miss. The line below assumes it is settled; its ways are in `eval-codex-login.md`, this folder.
 
 His yes in one line, for the core: "Sí, correr S8 de nuevo con tope $12 por corrida y $85 en total, cuando aterricen
 PR 977 y PR 930". C1.5 at 10 runs (+$38 at high) and R1 (+$16) are each one more figure on that line.

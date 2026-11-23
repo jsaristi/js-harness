@@ -204,7 +204,7 @@ The steps:
    `say ok`. All four start within minutes of each other, so the app version and the engram state are the same, and
    all four the same way, so the host's "started from another session" block is in each. The app may show him a
    trust card for each new folder: that click is his, and with the yes it is all he does.
-3. When the four have answered, the session reads the first assistant entry of each transcript, under
+3. When the four have answered, a work session reads the first assistant entry of each transcript, under
    `~/.claude/projects/<folder slug>/<session id>.jsonl`, with this reader (tested 2026-11-22 on JH 301's own
    transcript: 79,136, model `claude-opus-5-5`, version 2.1.330):
    saved as `first-call.mjs` in the running session's scratchpad and run as `node first-call.mjs <transcript>...`:
@@ -219,7 +219,7 @@ The steps:
      console.log(`${file}: input ${u.input_tokens} creation ${u.cache_creation_input_tokens} read ${u.cache_read_input_tokens} total ${total} model ${entry?.message?.model} version ${entry?.version}`);
    }
    ```
-4. It checks the four share model and version, notes engram's block per transcript, computes each drop against
+4. That work session checks the four share model and version, notes engram's block per transcript, computes each drop against
    plain, and writes the table's measured column here.
 5. Undo, in this order: the transcripts are read first; then the four folders are deleted; the four sessions are
    archived (deleting them is his call). It writes nothing in `~/.claude/settings.json`, in any project's settings

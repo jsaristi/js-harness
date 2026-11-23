@@ -145,35 +145,37 @@ config and effort on the same model, and calls a cell no results file holds "unk
 no web task]. The price below is a band from the nearest recorded tasks, and a pilot buys the cells `--plan` then
 prices from.
 
-The band [i]: the recorded build tasks on `claude-opus-5-5` cost, per trial, `lost-updates` $1.00, `spec-drift`
-$1.02 and `format-v2` $2.27 on average, `format-v2` $3.98 at most (means over every results file of that model, a
-node one-liner over `evals/results/*.json`, 2026-11-22). A web page or application with browser and accessibility
-checks is at least that size, so a trial is priced $1.00 / $2.27 / $3.98. The plugin's skills add about 448 tokens
-always and 6.5k and 2.2k when invoked (L11), cents a trial.
+The band [i]: the recorded build tasks on `claude-opus-5-5`, arm `current` at effort `high` (the arm T3's three
+arms build on), cost per trial `spec-drift` $1.45, `lost-updates` $1.73 and `format-v2` $3.53 on average, `format-v2`
+$3.98 at most (3 trials each; a node one-liner over `evals/results/*.json` grouped by task, config and effort,
+2026-11-22). A web page or application with browser and accessibility checks is at least that size, so a trial is
+priced $1.45 / $2.24 (the mean of the three) / $3.98. The plugin's skills add about 448 tokens always and 6.5k and
+2.2k when invoked (L11), cents a trial.
 
 | Step | Trials | Low | Mid | High |
 |---|---|---|---|---|
-| Pilot: each task × each of the 3 arms, once | 6 | $6 | $14 | $24 |
-| Batch: 2 tasks × 3 arms × 5 trials, the pilot's 6 counted in | 24 more | $24 | $54 | $96 |
-| **Total** | 30 | **$30** | **$68** | **$120** |
+| Pilot: each task × each of the 3 arms, once | 6 | $8.70 | $13.44 | $23.88 |
+| Batch: 2 tasks × 3 arms × 5 trials, the pilot's 6 counted in | 24 more | $34.80 | $53.76 | $95.52 |
+| **Total** | 30 | **$43.50** | **$67.20** | **$119.40** |
 
 The decision rule, written before any trial, as T3 asks:
 1. Trials: 5 per task and arm, so 10 per arm over the two tasks. A trial passes when every hidden check of its
    grader passes (score 1, as `evals/incident-score.mjs:2-4` counts).
-2. Least gain that justifies a default: the arm "with it named in `AGENTS.md`" or the arm "with it" passes at least
-   3 more of 10 than "without", and in that arm neither task is worse than "without" by 2 or more of 5. A difference
-   of 1 or 2 is read as chance, by the same floor of 3 the diet sets for the incident set
-   (`docs/proposals/harness-diet.md:490-493`), here on 10 trials, where chance is wider [i].
+2. Least gain that justifies a default, on one arm named now: "with it named in `AGENTS.md`", the arm the publisher's
+   own figures favour (L2). It passes at least 4 more of 10 than "without", and neither task is worse than "without"
+   by 2 or more of 5. With no real effect, a gap of 3 or more of 10 comes by chance 11% to 13% of the time at pass
+   rates of 30% to 70%, and a gap of 4 or more 4.2% to 5.8% (exact binomial, computed here); either arm qualifying would
+   about double those, so the second arm is reported, never decisive.
 3. Anything else, an inconclusive result or a regression, keeps the default off. A gain speaks only for Astro pages
    and Next.js applications (Constraints).
-4. Cost cap: $5 a trial (above the highest recorded build trial, $3.98) and a batch cap he names; the one proposed
-   is **$70**, the mid band with a small margin. After the pilot, `node evals/suite.mjs ... --plan` prices the
-   remaining 24 from the pilot's own cells; if that price would pass the cap, the batch stops and is asked again.
+4. Cost cap: the suite has no cap flag (`grep -i cap evals/suite.mjs`: none), so the cap is the batch's, held by the
+   session: the pilot first, then the remaining 24 in parts of `--repeats`, each priced by `--plan` from the cells
+   the pilot recorded, stopping before a part that would pass the cap. Proposed **$70**, which covers the mid band
+   only: at the high band the batch stops near trial 17 and is asked again.
 5. Not priced here: building the two tasks (a writer session on his plan, no list cost) and their two reviews, which
    wait for Codex's weekly reset (2026-11-23 23:45).
 
-His yes in one line: "Sí, correr T3 de Modern Web Guidance: piloto de 6 y lote de 30 en total, tope $5 por prueba y
-$70 en total, con la regla escrita antes". The plugin arm's home (a template of its own, or his real home with its
+His yes in one line: "Sí, correr T3 de Modern Web Guidance: piloto de 6 y lote de 30 en total, tope de $70 en total (cubre el valor medio, no el alto), con la regla escrita antes". The plugin arm's home (a template of its own, or his real home with its
 undo) is a separate answer, under "Ask me before".
 
 ## Tasks
