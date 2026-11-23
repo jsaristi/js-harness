@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { scriptOf } from './script.mjs';
-import { codexReviewOff, driveBatch, driveRun, estimateRun, planBatch, runMain } from './run.mjs';
+import { codexReviewOff, currentSeed, driveBatch, driveRun, estimateRun, planBatch, runMain } from './run.mjs';
 
 function scratch(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'long-session-run-'));
@@ -372,4 +372,20 @@ test('the current arm\'s seed refuses a workspace where init wrote no harness.js
   await assert.rejects(codexReviewOff(async () => {})(context), /harness\.json/);
   fs.writeFileSync(path.join(workspace, 'harness.json'), '{ not json');
   await assert.rejects(codexReviewOff(async () => {})(context), /harness\.json/);
+});
+
+test('the current arm is seeded from the template, init included, and then has the Codex review off', async (t) => {
+  const workspace = scratch(t);
+  const asked = [];
+  // seedFromTemplate's seed copies the home and runs js-harness init, which writes harness.json.
+  const seedOf = (templateDir) => {
+    asked.push(templateDir);
+    return async ({ workspace: at }) => fs.writeFileSync(path.join(at, 'harness.json'), `${JSON.stringify({ version: '0.97.0', reply: true }, null, 2)}\n`);
+  };
+  await currentSeed('the-template', { seedOf })({ home: scratch(t), workspace, engramPort: 1 });
+  assert.deepEqual(asked, ['the-template']);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(workspace, 'harness.json'), 'utf8')).functions, { codexReview: 'off' });
+  // runMain builds the current arm with this seed: a test of runMain itself would need a real home template.
+  const source = fs.readFileSync(new URL('./run.mjs', import.meta.url), 'utf8');
+  assert.match(source, /currentConfig\(\{ \.\.\.options, seed: currentSeed\(templateDir\) \}\)/);
 });

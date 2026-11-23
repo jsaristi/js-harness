@@ -53,6 +53,12 @@ export function codexReviewOff(seed) {
   };
 }
 
+/** The seed of the `current` arm from the home template `templateDir`: `seedFromTemplate`'s, which copies the home and
+ * runs `js-harness init` in the workspace, then `codexReviewOff`. `seedOf` is injectable, so a test runs no init. */
+export function currentSeed(templateDir, { seedOf = seedFromTemplate } = {}) {
+  return codexReviewOff(seedOf(templateDir));
+}
+
 /** How a turn's `total_cost_usd` is read: `per-turn` (each process reports its own spend) or `cumulative` (a resumed
  * process reports the session's total). The docs say totals are restored on resume, which suggests cumulative; no run
  * has shown it, so a real run names it and the calibration session settles it. */
@@ -462,7 +468,7 @@ export async function runMain(argv, env = process.env, deps = {}) {
     const built = buildTemplate({ realHome, templateDir });
     for (const warning of built.warnings) stderr.write(`home template: ${warning}\n`);
     const options = { command: args.claude, model: args.model, permissionMode: PERMISSION_MODE };
-    const configs = args.arms.map((arm) => withToken(arm === 'current' ? currentConfig({ ...options, seed: codexReviewOff(seedFromTemplate(templateDir)) }) : minimalCommandsConfig(options), token));
+    const configs = args.arms.map((arm) => withToken(arm === 'current' ? currentConfig({ ...options, seed: currentSeed(templateDir) }) : minimalCommandsConfig(options), token));
     const turns = args.calibrate ? calibrationScript() : scriptOf(args.turns);
     const doc = { format: 1, kind: KIND, name: args.name, createdAt: new Date().toISOString(), calibration: args.calibrate, model: args.model, effort: args.effort, turns: turns.length, costReading: args.costReading, runCapUsd: args.runCap, batchCapUsd: args.batchCap, jobs: args.jobs, setup: built.fingerprint, runs: [] };
     fs.mkdirSync(path.dirname(file), { recursive: true });
