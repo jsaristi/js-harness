@@ -663,6 +663,8 @@ test('gate errors with usage on stderr, exits 2 and runs nothing for arguments i
     [['--max', '--', 'x'], '--max requires a value'],
     [['--max', 'long', '--', 'x'], '--max takes a number of minutes above zero, not "long"'],
     [['--max', '0', '--', 'x'], '--max takes a number of minutes above zero, not "0"'],
+    // A bound a Node timer cannot hold would fire after 1 ms, and the start record would say it held (Codex on 51ba272d).
+    [['--max', '36000', '--', 'x'], '--max takes at most 35791 minutes, what a Node timer can hold, not "36000"'],
     [['--max', '1', '--max', '2', '--', 'x'], '--max given twice'],
     [['--home', '--', 'x'], '--home requires a value'],
     [['--cwd', '--', 'x'], '--cwd requires a value'],

@@ -44,6 +44,9 @@ export { GATE_NOT_RUN };
  * `gate-max` (bin/lib/rules-data.mjs). */
 export const GATE_MAX_MINUTES = ruleValue('gate-max', 'minutes');
 
+/** The longest delay a Node timer holds, in ms: what `--max` may come to. */
+const TIMER_MAX_MS = 2 ** 31 - 1;
+
 /** How often a gate that waits for the machine's lock asks again whether a push has become due (C-b-29). Each ask runs
  * git, and gh when commits wait to be pushed, so it is not asked at every poll of the lock. */
 export const PUSH_RECHECK_MS = 30_000;
@@ -147,6 +150,8 @@ function parseArgs(argv, env, defaultCwd) {
     const value = own[i + 1];
     if (value === undefined || value.startsWith('--')) throw new GateArgError(`${token} requires a value`);
     if (token === '--max' && !(/^\d+(\.\d+)?$/.test(value) && Number(value) > 0)) throw new GateArgError(`--max takes a number of minutes above zero, not "${value}"`);
+    // A longer bound fires at once: `setTimeout` takes a delay over 2^31 - 1 ms as 1 ms (as `contract` refuses it).
+    if (token === '--max' && Number(value) * 60_000 > TIMER_MAX_MS) throw new GateArgError(`--max takes at most ${Math.floor(TIMER_MAX_MS / 60_000)} minutes, what a Node timer can hold, not "${value}"`);
     if (token !== '--wait') paths[token.slice(2)] = value;
     i += 1; // consume the value too, so it is never re-read as its own token
   }
