@@ -1,19 +1,21 @@
 # Modern Web Guidance as a switch a project turns on
 
 Locator: `odd/tasks/web-guidance.md` · Engram mirror: `odd/web-guidance/tasks` · Branch:
-`docs/web-guidance-design`, in the worktree `D:\js-harness\.claude\worktrees\roadmap-modern-web-guidance`, cut from
-`origin/main` at `15f74d8d` · Session: `Google web guidance para el proyecto`, a work session; the lead is
-`JH ORQ · orquestador F8` · Runner: `node --test` · Delivery: ask-on-risk
+`claude/jh300-web-guidance-t2`, in the worktree `D:\js-harness\.claude\worktrees\session-roles-v4-0bc4d1`, cut from
+`origin/main` at `14f0b8cc` (the design's own branch, `docs/web-guidance-design`, was cut at `15f74d8d`) · Session:
+`JH 300`, a work session that took this document over on 2026-11-22 from `Google web guidance para el proyecto`; the
+lead is `JH ORQ · orquestador F8` · Runner: `node --test` · Delivery: ask-on-risk
 
 ## State
-2026-11-18, this session: the design and its plan are written and no code is. Nothing is installed. Done: the
-source read (L2), the harness's own mechanism read (L3), the refutation run (Depth pass, item 4), the row's class
-settled (L7), three double reviews, 17, 15 and 16 findings (L8, L9, L10). The plan did not converge: the third
-review still found real failures, 3 of them high, so by `rule:double-review` it goes to him as a problem and to the
-senior session the lead opens (`rule:senior-model`). What holds: the order (T2's install trial first, then the
-design of T3 to T7) and what is out of scope. What is provisional: the text of T3 to T7, corrected for L10's
-findings only where L10 says so and not reviewed since. Next: the lead places T2 and the senior pass. Open: his
-decisions under "Ask me before", none asked yet, each through the lead.
+2026-11-22, JH 300: T2 is done on a scratch home, its findings in L11; nothing was installed in his real home and the
+scratch home is deleted. What T2 changed in the design: the install the row names becomes `-s user` followed by
+`disable -s user`, so the plugin is off on the machine and a clone turns it on with `enabledPlugins` in its own
+`.claude/settings.local.json`; `-s project` is never named, since its committed key turns the plugin on in any clone on
+a machine that holds an installation; T6 writes `true` where the switch is on and `false` elsewhere, not `false`
+alone; Codex stays out of scope; the fixed cost is about 448 tokens, both skills. Before T2 (2026-11-18): the design
+and its plan, three double reviews that did not converge (L8, L9, L10); the text of T3 to T7 is still provisional and
+not yet corrected for L11. Next: the senior pass over T3 to T7 with L11 in hand, which the lead places. Open: his
+decisions under "Ask me before", none asked yet, each through the lead; T3 needs his spend and his home decision.
 
 ## Goal
 A project turns Modern Web Guidance on with one switch in `harness.json`, read by every command that reports or
@@ -135,7 +137,7 @@ before he decides where, if anywhere, it is on by default.
 
 ## Tasks
 - [ ] T1 (kind: design) S1, S3: the design and its double reviews (L7 to L10); not converged, so its close is the senior pass after T2. Route: this session, then the senior session. Commit: documents alone.
-- [ ] T2 (kind: verify) S1: after his yes, on a scratch home, for Claude Code: what each of `-s user`, `project` and `local` writes; which of them, or which settings key, keeps the skill out of a project that has not turned it on and loads it in one that has, read from the session's loaded skills; every skill the install loads and the fixed cost by `claude plugin details`; a second project never touched and a clone never synced, after the install; a plugin already installed for the whole machine, and off after on with that state inherited; each scope's install run before `js-harness sync`, then the switch turned off, with what each step reports and undoes, since a `local` install may write the file the harness manages (`bin/lib/project-apply.mjs:10-12`); a conflicting value he wrote himself. For Codex: whether a plugin can be held out of one project. From the host's settings documentation, no install needed: whether it reads `DISABLE_TELEMETRY`. Route: inline. Commit: the Log.
+- [x] T2 (kind: verify) S1: after his yes, on a scratch home, for Claude Code: what each of `-s user`, `project` and `local` writes; which of them, or which settings key, keeps the skill out of a project that has not turned it on and loads it in one that has, read from the session's loaded skills; every skill the install loads and the fixed cost by `claude plugin details`; a second project never touched and a clone never synced, after the install; a plugin already installed for the whole machine, and off after on with that state inherited; each scope's install run before `js-harness sync`, then the switch turned off, with what each step reports and undoes, since a `local` install may write the file the harness manages (`bin/lib/project-apply.mjs:10-12`); a conflicting value he wrote himself. For Codex: whether a plugin can be held out of one project. From the host's settings documentation, no install needed: whether it reads `DISABLE_TELEMETRY`. Route: inline. Commit: the Log. Done 2026-11-22 by JH 300, evidence in L11.
 - [ ] T3 (kind: build) S2: two eval tasks with a web interface, one Astro and one Next.js (fixture, reference, hidden checks of function, of the browser and of accessibility), and three arms: without the plugin, with it, and with it named in the project's `AGENTS.md`. Written in the Log before pricing: the trials per arm, the least gain that justifies a default, the cost limit, that an inconclusive result or a regression keeps the default off, and that a gain speaks only for Astro pages and Next.js applications. The skill's text stays as shipped, so one version of the `npx` package is held by what T3's first step proves works without touching it: that version fetched into the trial's package cache and run offline, or a resolver in the trial's PATH that serves it; the version each call ran is checked and a drift fails the trial. Each trial sets `DISABLE_TELEMETRY=1` and records the versions of the plugin, the CLI and the host. The plugin arm's home comes from a template of its own, or from an install in his real home with its undo recorded, as he decides. Route: a writer. Commit: the tasks, then their report.
 - [ ] T4 (kind: build) S1: the switch `webGuidance` in `SWITCHES` (`auto`, `on`, `off`; strict `off`); `auto` is off over a tree that cannot be read, off until he answers, and then as he answers, the rule proposed being a web framework's configuration at the project's root; the custom preset's choice (`bin/init.mjs`), the fixed presets declaring nothing; the switch's own command and its test, which lists every switch (`bin/functions.mjs`, `bin/functions.test.mjs:254`). Route: inline. Commit: with its tests.
 - [ ] T5 (kind: build) S1, S4: the row in `tools`, shown while the switch is on and also wherever the plugin is on for this clone with the switch not on, where it is a gap whose fix turns it off. Its `installed` cell reads the installation that serves this project, not the first on the machine; its `claude` cell reads the clone's effective state, not the user file alone; its `project` cell is a gap where the project's `AGENTS.md` does not name the skill, and its fix prints the lines to add: that the skill is used for interface work and that the project's own components win over it. Fixes: `claude plugin marketplace add GoogleChrome/modern-web-guidance` then `claude plugin install modern-web-guidance@googlechrome` with the scope T2 proves leaves it off outside the project, and no fix is named before T2; the undo is the uninstall of that scope and `claude plugin marketplace remove googlechrome`. `planStack` keeps its machine gaps in `optional`, as L7 classes the row, and `optional` gains an `undo` field, since `manual` would make `js-harness stack` exit 1 over an optional plugin (`bin/stack.mjs:117-120`, `:173`); the undo removes only what this step added, the marketplace only where no other installation uses it. Its `upToDate` cell and update fix are named as the other plugin rows' are (`bin/lib/latest.mjs`). Tested: two projects with different states, that the plan carries the undo, and that `stack` exits 0 with this row's gap alone. Route: inline. Commit: with its tests.
@@ -243,3 +245,75 @@ touch nine modules of `bin` that other features also change, so the lead places 
   no `doctor` test nor eval test is in "Done when", nor a line for the hand to the lead (claude 7, claude 10).
   Why three reviews did not close it, this session's reading: each round judged a design of host behaviour that only
   T2's install can show, so the design of T3 to T7 is written after T2, not before.
+- L11 (2026-11-22, his yes and T2's evidence, JH 300). His words: "haz la prueba de Modern Web Guidance" (transcript
+  `0cdab702-72bd-48e7-8a8e-0c38d4aca9c9`, line 13918, 2026-11-23T00:18:00Z, by `js-harness sessions --quote`). What
+  he had in front of him, read by the lead: a yes covers an install on a scratch home, never his real home (T3), any
+  spend, or where it is on. How it ran: a scratch home in the session's scratchpad, every call under
+  `sandboxEnv` of `evals/configs.mjs` (HOME, USERPROFILE, CLAUDE_CONFIG_DIR and the rest pointed at it, no token
+  passed, `CLAUDE_CODE_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` removed), from scratch projects inside it, Claude Code
+  2.1.330. The probe came back empty: `claude plugin list` "No plugins installed", the marketplaces only the built-in
+  directory, so his plugins were not seen. Fetched: only `claude plugin marketplace add GoogleChrome/modern-web-guidance`,
+  commit `64a6d708f5a43f2cd3fde5d4d7db3905ba1bdf65` ("Release v1.0.1", 2026-11-16), 3.8M with its `.git`, 2.9M
+  without; the scratch home was 9.8M at the end. No skill of the plugin and no `npx` ran. Loaded skills were read from
+  the `init` event of `claude -p --output-format stream-json`, started with a dummy key and `ANTHROPIC_BASE_URL` at
+  `127.0.0.1:9`, where nothing listens: no model was reached, every result was an error with `total_cost_usd` 0. The
+  method's control: the project with the plugin enabled showed `modern-web-guidance:chrome-extensions` and
+  `modern-web-guidance:modern-web-guidance`; an absence below is read against that.
+  - What each scope writes. `marketplace add`: `extraKnownMarketplaces.googlechrome` in the user `settings.json` and
+    `known_marketplaces.json`, whatever scope follows. `-s project`: `enabledPlugins[id]: true` in the project's
+    tracked `.claude/settings.json`, and an `installed_plugins.json` entry with `scope: project` and that folder's
+    `projectPath`. `-s local`: the same key in `.claude/settings.local.json`, the file the harness manages
+    (`SETTINGS_FILE`, `bin/lib/project-apply.mjs:12`), an entry with `scope: local`, and the line
+    `**/.claude/settings.local.json` in the home's `~/.config/git/ignore`, a write outside the project. `-s user`: the
+    key in the user `settings.json` and an entry with no `projectPath`. The cache is one copy per version,
+    `plugins/cache/googlechrome/modern-web-guidance/1.0.1`.
+  - Where it loads. `project` and `local`: in their own project and in no other (a folder never touched, with or
+    without git: no skill). A local `git clone` of the `project` one, its committed key `true`: no skill while that
+    folder's install was the only one on the machine, yet `claude plugin list` there said "enabled"; once a `user`
+    installation existed, even disabled, the clone loaded both skills and the host wrote an `installed_plugins.json`
+    entry for the clone by itself, as it did for a folder holding only a local `true`. So a committed key turns the
+    plugin on in every clone on a machine with any installation of it, unseen: the harness never names `-s project`.
+    `user`: in every project, the untouched folder among them.
+  - What holds it off and on, per clone. Under a `user` install enabled: `enabledPlugins[id]: false` in the project's
+    `.claude/settings.json` or in its `.claude/settings.local.json` loads no skill. A local `false` beats a committed
+    `true` of a `project` install. A local `true` beats a project `false` (his conflicting value: the nearer file wins).
+    Off after on: `plugin disable -s project` wrote `false` into the tracked `.claude/settings.json`, and `disable -s
+    user` the user file's key to `false`; after the latter, folders with no key load nothing while a folder whose own
+    file says `true` still loads it. That is the mechanism T6 needs: the machine's install off at user scope, and the
+    clone's `.claude/settings.local.json` `true` where the switch is on and `false` elsewhere, the `false` guarding a
+    later `enable -s user`.
+  - Before `sync`, then off. `js-harness init` (0.97.0, the installed one) in the `local` project kept the plugin's
+    `true` beside its own keys and reported only its own; `sync` then printed "up to date"; `plugin uninstall -s
+    local` removed the plugin's key alone and kept the harness's four (`outputStyle`, `permissions.deny`, `env`,
+    `typescript-lsp`). A `project` install before `init`: the harness never touches the tracked file, so only the
+    clone's local `false` holds it off, which was checked. The `webGuidance` switch does not exist yet: its `off` was
+    simulated by writing the key by hand, not run.
+  - Cost: `claude plugin details` lists 2 skills (`chrome-extensions`, `modern-web-guidance`), no agents, hooks, MCP
+    servers or language servers; always-on about 448 tokens, about 220 each, where L2 has the publisher's 205 and 175;
+    on invoke about 6.5k and 2.2k. Both load; no supported way to load one alone was found (not searched beyond
+    `details` and the install's help).
+  - Codex (0.171.0), from `codex plugin --help` and `add --help` only, no install: no scope option; a plugin's state is
+    a `[plugins."<id>"]` table with `enabled` in `~/.codex/config.toml`, and `-c` overrides it per invocation. Whether
+    a project's own `.codex/config.toml` can hold one out is not known; only an install shows it, outside this yes. The
+    plugin ships `.codex-plugin/plugin.json` with `"skills": "./skills/"`, so a Codex install loads both skills too.
+    Codex stays out of scope.
+  - `DISABLE_TELEMETRY`, from https://code.claude.com/docs/en/env-vars, read through a fetch whose row came from a
+    summary of the page, not verbatim: listed, any non-empty value opts out of Claude Code's telemetry, `0` included.
+    It is not on the list of telemetry variables ignored in a project's `env`
+    (https://code.claude.com/docs/en/settings-reference#variables-claude-code-ignores-in-env, also from a summary), so
+    a clone's `.claude/settings.local.json` `env` would set it, and it would turn the host's own telemetry off in that
+    clone. Not checked: that the plugin's `npx` child, run through the Bash tool, inherits it.
+  - His real home, the same narrow search before and after (`grep` for `modern-web-guidance|googlechrome` in
+    `.claude/settings.json`, `.claude.json`, `.codex/config.toml`, the two plugin state files and, recursively,
+    `.claude/plugins` and `.codex` without sessions and logs): no hit in a settings or state file either time; the same
+    six catalog and readme files both times (the official marketplace's `marketplace.json`,
+    `plugin-directory-cache-v2.json`, engram's README in both hosts, two Codex catalog caches), which list the plugin
+    without installing it; no `googlechrome` folder under `plugins/cache` or `plugins/marketplaces`. His
+    `~/.config/git/ignore` already held the line, dated 2026-05-23, unchanged. Undo: the scratch home was deleted at
+    the end; nothing else was written outside this repository.
+  - What it changes in T3 to T7, for the senior pass: T5's fix is `-s user` then `disable -s user`, with its undo the
+    user uninstall and the marketplace removal; T5's `claude` cell reads the clone's effective state, since `plugin
+    list` reports "enabled" where nothing loads and one row per installation; T6 writes `true` and `false` in the
+    clone's local file, and a value of his there is kept and reported; the Constraint's "holds" stands for a synced
+    clone and "shows" for a clone with a committed `true`; Codex, out; the cost line in Constraints reads about 448
+    tokens.
