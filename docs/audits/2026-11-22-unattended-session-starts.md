@@ -45,7 +45,8 @@ itself, where the lead and the Plan run, is left out) modified that day. A minut
 has an entry in it, and the minutes between two entries of the same transcript count too when the entries are 5
 minutes apart or less. The day is the local day (UTC-5), 00:00 to 21:33 when counted. Script: a node reader of each
 entry's `timestamp`, kept as `idle.mjs` in JH 301's shared notes folder (`side-session-notes/local_f536332a-81c1-489b-9669-68384563ffe9`). The channel record (`~/.js-harness/channel/D--js-harness.jsonl`)
-was not used: a notice marks a step, not the time between steps.
+does not count the minutes, since a notice marks a step, not the time between steps; it is read below only as a
+cross-check that holds when a transcript is gone.
 
 Result: 15 work-session transcripts; of 1,293 minutes, **759 with no work session running** (12 h 39 min) and 534
 busy. Spells of 15 minutes or more: 00:00-00:26 (26); 02:12-09:53 (461); 10:06-12:51 (165); 15:06-15:40 (34);
@@ -74,14 +75,17 @@ the method.
 
 The other three spells, checked the same way, plus every transcript open across a spell (an entry before it and the
 next after it, which a tool call running through the spell would show), in every folder under `~/.claude/projects`:
-- 00:00-00:26 (05:00-05:26Z): no work session wrote. JH 287 was open across it, idle: its next entry is the lead's
-  message at 00:46 that woke it.
+- 00:00-00:26 (05:00-05:26Z): no work session wrote. JH 287 was open across it and wrote nothing; its next entry
+  is the lead's message at 00:46 telling it to stop its background tasks. What it had running in the spell was not
+  read (its entry before the spell is a compaction summary written at 00:47 with an older stamp).
 - 02:12-09:53 (07:12-14:53Z): no work session wrote. JH 291 was open across it: it ended its turn at 02:02 with a
   `js-harness wait` of 480 minutes in the background, and that wait timing out woke it at 09:53. So it waited, with
   no work, as the Limits below say.
 - 10:06-12:51 (15:06-17:51Z): no work session wrote, and none was open across it.
-In all three only the lead and the Plan wrote (the Plan at 02:14-08:02 inside the night spell). So no work ran in
-any spell of the table.
+In all three only the lead and the Plan wrote (the Plan at 02:14-08:02 inside the night spell). A session whose transcript was later deleted would not show here,
+so the channel record was read too: in the five spells its only notices are from the lead (a question and its
+withdrawal, 10:06-12:51) and the Plan (a note in the night spell, and one reading record). So no work session wrote
+in any spell of the table.
 
 Limits: a session waiting on a declared `js-harness wait` writes nothing and counts as idle here, which is right for
 "no work running" and wrong for "no session open". A sub-agent's transcript, in a `subagents` folder, was not read,
