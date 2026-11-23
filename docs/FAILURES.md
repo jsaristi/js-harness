@@ -2143,6 +2143,9 @@ after it was made: nothing measured the spend against the figure while the work 
   JH 301 measured 68.3M tokens, its transcript b1e24e4d's usage summed over 315 calls (its cache-read alone 69.7M by 322 calls, read just after), against
   its 50M line, noticed only at a unit's end; late because after its compaction it reported a stale estimate of about
   30M and read its spend at no unit boundary until the advisor asked
+- Seen: 2026-11-22 — the channel record, lines 4018 and 4020 (JH 303's closing notice at 00:05 local on 2026-11-23;
+  its own) — JH 303 measured 33.8M tokens against its 25M line before the lead raised it to 40M, and 37.0M at the
+  end; its notices had given about 16M, as estimates
 
 ### stack-update-moved-hooks
 A tool of the stack was updated on purpose without the hook count read after it, so a hook entry the update added was

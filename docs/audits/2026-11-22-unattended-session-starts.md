@@ -75,6 +75,52 @@ Read in the lead's transcript, `d6383aea-8901-43a8-9261-fdcbd501d370` (`~/.claud
 So the instruction came from a copy older than the installed file, re-attached to the lead's context, not from the
 installed skill. Not checked: when the lead first invoked the skill, so how old that copy was.
 
+## Why every start shows a card (2026-11-23)
+**Verdict: supported in part, not proved. Three causes, not one, and no app log can tell which tripped.** Two
+read-only explorers for JH ORQ, at his order (`0cdab702`, line 15805, 2026-11-23T04:46:04Z), read the app's bundle
+(Claude Desktop 6.28899.6, offsets from the start of app.asar) and claude.exe 2.1.330; their notes are in JH ORQ's
+shared notes folder (`side-session-notes/local_41e31b68-c8b2-4729-8c54-b1e701bb5a40`, `start-prompt-cause-2026-11-23.md`
+and `deep-link-import-2026-11-23.md`). [c] checked, by whom; [e] the explorer's claim, not re-checked by the lead.
+
+The app's decision: [e] a start is allowed with no card only when its bypass verdict stands down as "bypass" and its
+`Ce()` returns false (~22079874). [e] `Ce()` is true when an ask rule or a non-built-in PreToolUse hook covers the
+tool (plugin hooks count), and it skips the hooks entirely when `server_policy_ask_only` is true (~22076224).
+1. [c] (read for this section) The harness's PreToolUse matchers, `~/.claude/settings.json` lines 82 (guard), 92
+   (template gate) and 102 (advisor gate), are regex form `^(...)$`. [e] By the app's matcher `K9r` (app.asar byte
+   14409996, [c] by the lead) any regex character makes a matcher cover every tool, so line 92 covers `start_session`
+   though it does not name it; line 102 names it outright.
+2. [c] (the lead) engram 0.1.23's own PreToolUse matcher (its `hooks.json`, line 6) is regex form too, so a plugin
+   the harness does not write covers the start as well.
+3. [e] The harness's PermissionRequest hook (`js-harness permit --hook`, [c] present in the user settings by the
+   lead; written by `bin/lib/hook-entries.mjs:88-90`): in claude.exe (~358271066) any PermissionRequest hook turns
+   `server_policy_ask_only` off, so the short cut past the hooks is never taken.
+
+Not known: whether the other exits of the bypass verdict (a pending mode change, org approval, cost,
+server_unconfirmed) ever trip. No app log is on disk (Claude-Data logs empty; verdicts go to telemetry only), and
+every accepted start since 2026-11-15 took 6.8 s or more, so latency cannot tell an untapped start from a quick tap.
+A trial that removes the PermissionRequest entry for one session decides it; changing the PreToolUse matchers alone
+does not, while engram's matcher and the permit hook stay.
+
+**A start on a turn he did not type is refused, not carded.** [c] (read for this section) In JH PLAN's
+transcript, `0cdab702`: the turn opened at line 11353 (2026-11-22T05:36:11Z) with JH ORQ's cross-session message
+asking for two held sessions, not with his words (a `RemoteControlInput` record sits beside the calls at 11360-11377
+too). Two `user_asked` starts (JH 292, JH 293), called at 05:36Z, came back as errors at lines 11375 and 11377
+(06:12:23Z and 06:12:25Z): the tool starts sessions only on the user's own words there and says to propose instead
+(`initiation` "own_initiative"). A proposal is the card he taps, as finding 2 above says. Our reading, not checked:
+on an untyped turn the card is the tool's own limit, so no change to the hooks removes it there.
+
+**The deep link, and why it stays out.** [c] (the lead) app.asar holds "Resume deep link: importing CLI session" at
+byte 15079656; `claude://code/resume` occurs 0 times. [e] The link is `claude://resume?session=<full transcript
+uuid>`: it adopts a CLI transcript as an idle sidebar row with no dialog or sender check, trusts an untrusted folder
+silently, has no check that a CLI job is still writing the transcript, and turns Bypass into AcceptEdits. It is
+outside `rule:sessions-open-in-sidebar` as written: its only source of a session to adopt is a CLI session, which
+that rule refuses (`js-harness sessions start`, `claude --bg`), and it would skip the card the rule keeps on an
+untyped turn. Using it would need a change to that rule, which is his.
+
+The trial and the fix are tracked in draft PR 1023 (`odd/tasks/start-without-card.md`, branch
+`claude/jh302-start-without-card`); both touch his user settings and the guard, so they wait for his word and for
+Codex.
+
 ## The minutes with no work session running, 2026-11-22
 Method: every transcript under `~/.claude/projects/D--js-harness-*` (the worktrees' sessions; `D--js-harness`
 itself, where the lead and the Plan run, is left out) modified that day. A minute counts as busy when a transcript
