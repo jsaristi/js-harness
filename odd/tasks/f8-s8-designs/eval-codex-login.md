@@ -36,7 +36,8 @@ moments the long session grades do not depend on the review. What a yes to C cov
 review off, through both reviews, before the rerun. What it does not cover: any credential, any change to
 `evals/home.mjs`, or the rerun's spend (`rerun-pricing.md`). That the fixture's agent then routes its release through
 the Claude lens instead, as his answer to question 104 set for a project with the Codex review off (`docs/ROADMAP.md:162`), is assumed [a]
-and is checked by one free dry turn before the batch.
+and is checked before the batch by the long session's calibration script (`run.mjs --calibrate`), priced by its
+`--plan` first: a model call, not free.
 
 The other option, if he wants the Codex path inside the measure: A, after a verify step proving a refresh inside a
 copy leaves his real login valid.
