@@ -1414,7 +1414,7 @@ push read only that last record, so a finding was never rechecked.
   the merge read from main with no guard. Found by T2's verifier before any such push was seen. The
   check that would have caught it: a test at the push row's level that a merge-own record leaves the
   debt of the record at its first parent owed
-- Control: check — bin/codex-review.test.mjs — "gap below a merge: a gap that starts where a review owing a correction ended is its recheck, and the merge follows once it leaves nothing open" — since 2026-11-15
+- Control: check — bin/codex-review.test.mjs — "a correction owed below a merge: two turns, a rerun at the same HEAD starts no session, records nothing, and the push row says the correction is owed" — since 2026-11-15
 - Was: owed — odd/tasks/codex-spend.md — "T2 (kind: build) spec 2" — replaced on 2026-11-22: T2 landed in PR 883
   (main c7afe0be, 2026-11-15) with that test, read by JH 302
 
