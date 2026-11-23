@@ -82,7 +82,7 @@ words, not to run the block and give the corrected one. Doctor's gate does preve
 - [x] T3 (kind: build) S2 — the host review file and the `--host-reviewed` gate; test first; Codex and lenses; PR 2 (L9)
 - [x] T4 (kind: build) S1 — command blocks in the reply check; test first on real excerpts; the replay; Codex and
   lenses; PR 3
-- [ ] T5 (kind: verify) `npm run check`, ready notices, summary
+- [x] T5 (kind: verify) `npm run check`, ready notices, summary (L18 to L20)
 - [x] T6 (kind: docs) F4 of `docs/audits/2026-10-30-cleanup-inventory.md`, by the lead's note (L6): the six failures
   not settled. `two-blocks-out-of-order` done in PR 1 (its line moved to CLAUDE.md); the five others need a control
   that holds, each a finding of its own: read after T4, and what each needs is reported to the lead
@@ -312,6 +312,14 @@ step. `--stack-reviewed` is unchanged. The research that fills the file is JH 10
   was stopped (`js-harness gate log`: 1803 s, timed out, no FAIL row, MsMpEng 1,690 CPU s), so it is not proved. Not
   checked by it: the linux `bash -n` path and the replay over transcript 0f71b2c6. Observation: the Constraints'
   "The hook keeps its 5 seconds" is superseded by question 138 (15 s, `odd/tasks/reply-hook-timeout.md`).
+- L20 (2026-11-23, T5 ticked): `npm run check` passes on main `6dc46522`, which is `04664ab6`, the main the verifier
+  read (L19), plus docs-only merges: `git diff --stat 04664ab6 6dc46522` touches only `docs/FAILURES.md` and four
+  `odd/tasks/` documents. The lead ran `js-harness gate --max 60 -- npm run check`, exit 0; `js-harness gate log
+  --last 2` shows "11-23 02:46:50 1837 s pass ... D:\js-harness", and the lead reports the output ends "PASS check 23
+  rows passed". That was the only item L19 left open; the ready notices and the summary are in L18 and L19. The
+  closed notice the Next step names was sent: line 1811 of `C:\Users\Oficina\.js-harness\channel\D--js-harness.jsonl`
+  (`"kind":"closed"`, JH 106, 2026-10-30T19:34:18Z). Still not checked, as L19 says: the linux `bash -n` path and the
+  replay over transcript 0f71b2c6.
 
 ## Next step
 State (2026-10-30): PRs 707 (T2) and 710 (T3) are merged; T4 is PR 714 (`ccd7e3f9` to `19348fd4`), every code commit

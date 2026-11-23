@@ -54,9 +54,9 @@ Nothing beyond the brief: the field's shape and the exit code are decided here (
 - [x] T2 (kind: build) spec 1: the refusal in the refresh, a planted open question that turns it red, then green.
 - [x] T3 (kind: build) spec 2: the waiting lines of the resume, a planted waiting notice that turns it red, then green.
 - [x] T4 (kind: docs) spec 3: the two `- Seen:` lines with their controls.
-- [ ] T5 (kind: verify) Codex, the Claude lenses and an independent verifier over each code slice; PR; ready notice.
-  Codex L8; lenses, the verifier over 962c7396 and the ready notice L12; PR 736 merged (6bee9e5b). Open: the
-  `npm run check` that `## State for a resume` plans before T5 is marked is not proved (L12).
+- [x] T5 (kind: verify) Codex, the Claude lenses and an independent verifier over each code slice; PR; ready notice.
+  Codex L8; lenses, the verifier over 962c7396 and the ready notice L12; PR 736 merged (6bee9e5b); the `npm run
+  check` that `## State for a resume` plans before T5 passed on main `6dc46522` (L13).
 
 ## State for a resume
 Done: every code commit has a Codex record and a lens record (L8, L9). Pushed; PR 736 open; ready notice recorded
@@ -173,3 +173,10 @@ lead's land. Left: L9's verified "No".
   closes the question) stays as designed. T5 stays open (the lead, 2026-11-23, unticking it): `## State for a resume`
   plans `npm run check` on main before T5 is marked, and that check is unproved, as it is for f8-lead-rigor T5 and
   departure-stretch T4.
+- L13 (2026-11-23, T5 ticked): `npm run check` passes on main `6dc46522`, which is `04664ab6`, the main the verifier
+  read (L12), plus docs-only merges: `git diff --stat 04664ab6 6dc46522` touches only `docs/FAILURES.md` and four
+  `odd/tasks/` documents. The lead ran `js-harness gate --max 60 -- npm run check`, exit 0; `js-harness gate log
+  --last 2` shows "11-23 02:46:50 1837 s pass ... D:\js-harness", and the lead reports the output ends "PASS check 23
+  rows passed". That was the only item L12 left open. The closed notice that `## State for a resume` plans after T5
+  was already sent: line 1910 of `C:\Users\Oficina\.js-harness\channel\D--js-harness.jsonl` (`"kind":"closed"`, JH
+  121, 2026-10-31T09:05:32Z). L9's Left (a verified "No" closes the question) stays as designed.

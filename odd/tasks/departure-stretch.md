@@ -112,7 +112,7 @@ Nothing here is his: the brief carries his decision ("Sí, ábrela"). A finding 
 - [x] T8 (kind: build) spec 9: the step chain on the status report's map, tests first — commits: `8be755d2`, `a4ecfc3c`
 - [x] T9 (kind: build) spec 9: each proposal's estimate, compared by the next report — commits: `8be755d2`
 - [x] T10 (kind: docs) spec 10: the search for a draft plan; not built, written as the next task (L18) — commits: this document's
-- [ ] T4 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice — PR 739; the verifier passed `718858fd` (L29); spec 6's `npm run check` not proved (L29)
+- [x] T4 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice — PR 739; the verifier passed `718858fd` (L29); spec 6's `npm run check` passed on main `6dc46522` (L30)
 - [x] T5 (kind: docs) spec 6: the summary under `docs/sessions/` and the closed notice — L26, L28
 
 ## Log
@@ -356,6 +356,12 @@ Nothing here is his: the brief carries his decision ("Sí, ábrela"). A finding 
   above. `contract check` over this document: PASS. T4 stays open: spec 6 needs `npm run check`, and on `04664ab6`
   it ran past the gate's 30-minute bound and was stopped (`js-harness gate log`: 1803 s, timed out, no FAIL row,
   MsMpEng 1,690 CPU s), so it is not proved.
+- L30 (2026-11-23, T4 ticked): `npm run check` passes on main `6dc46522`, which is `04664ab6`, the main the verifier
+  read (L29), plus docs-only merges: `git diff --stat 04664ab6 6dc46522` touches only `docs/FAILURES.md` and four
+  `odd/tasks/` documents. The lead ran `js-harness gate --max 60 -- npm run check`, exit 0; `js-harness gate log
+  --last 2` shows "11-23 02:46:50 1837 s pass ... D:\js-harness", and the lead reports the output ends "PASS check 23
+  rows passed". That was the only item of spec 6 L29 left open. Still not checked, as L29 says, and outside T4 (spec
+  4, T2's): the Stop hook's budget tests in WSL and a redone false-positive count.
 
 ## Next step
 Push, open the PR, `notify --kind ready --pr <n>`, tell the lead it can land before JH 124. Was: commit the
