@@ -105,8 +105,8 @@ test('the line names the allowance, how it was reached and the changed lines it 
   assert.equal(lines.inside, `${head}10 changed lines it reads. Its estimate, about 250,000, is inside it.`);
   assert.equal(lines.margin, `${head}1 changed line it reads. Its estimate, about 310,000, is over it by no more than the 5 percent that counts as inside.`);
   assert.equal(lines.over, `${head}10 changed lines it reads. Its estimate, about 320,000, is over it by more than the 5 percent that counts as inside: ` +
-    'a review over its allowance is the lead\'s call, said with its cost, while Codex\'s weekly meter is above rule:codex-weekly-floor, ' +
-    'and this command refuses nothing for its cost.');
+    'a review over its allowance is the lead\'s call, said with its cost, while Codex\'s weekly meter is above rule:codex-weekly-floor; ' +
+    'that call is of the allowance alone and no leave for a second run after a review fell, and this command refuses nothing for its cost.');
   assert.equal(lines.none, `${head}10 changed lines it reads. The plan has no estimate, so it cannot say whether the review is inside it.`);
   // The literals above are today's rules: a change of one of them is a change of this test, and the three
   // figures are held to their declarations here so that the reason is on the screen.

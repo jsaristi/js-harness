@@ -3407,9 +3407,11 @@ test('the orchestrator skill says what every recap carries and how a block waits
     // f39cf32..567f226).
     'Nor does the standing fork waive a review or a gate: the double review and the merge rules above hold as written.',
     // A card and a question it decides reach the session that waits on them (Codex on f39cf32..567f226).
-    'answer it through the relay with the option taken, `js-harness permit allow <id>` or `js-harness permit deny <id> --reason "<the option taken>"`',
+    'Where a session waits on it: a card of the permit relay, answer through the relay with the option taken, `js-harness permit allow <id>` or `js-harness permit deny <id> --reason "<the option taken>"`',
+    // The work session's own text expects an answer naming his line; the note says what it is instead.
+    '`js-harness notify --to <n> --kind note "question <q>: the lead\'s direction while the user is away, not their answer: <the option taken>"`',
     'a card it never covers you deny with `js-harness permit deny <id> --reason "waits for the user\'s return: <what>"`, so that session goes on without it',
-    'close its question with `js-harness notify --to orchestrator --kind withdrawn --question <q> "<the option taken>"` and send that session the option as your direction, not their answer, with `js-harness notify --to <n> --kind note "<the option taken>"`',
+    'a recorded question, close it with `js-harness notify --to orchestrator --kind withdrawn --question <q> "<the option taken>"` and send that session the option',
   ]) assert.ok(text.includes(line), line);
   assert.doesNotMatch(text, /Nor does it waive a review or a gate: `rule:double-review`/);
   assert.ok(text.includes('(while they are away, `rule:away-autonomy` says what you decide alone, through the relay, and what waits)'));

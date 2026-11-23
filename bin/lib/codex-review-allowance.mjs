@@ -103,7 +103,8 @@ export function allowanceLine(said) {
     inside: `${estimate} is inside it.`,
     margin: `${estimate} is over it by no more than ${counted}.`,
     over: `${estimate} is over it by more than ${counted}: a review over its allowance is the lead's call, said with its cost, ` +
-      "while Codex's weekly meter is above rule:codex-weekly-floor, and this command refuses nothing for its cost.",
+      "while Codex's weekly meter is above rule:codex-weekly-floor; that call is of the allowance alone and no leave for a second run " +
+      'after a review fell, and this command refuses nothing for its cost.',
   }[verdict];
   const higher = highOver ? ` Its higher figure, ${thousands(inputTokensHigh)}, is over it by more than ${counted}.` : '';
   return `${head} ${sentence}${higher}`;
