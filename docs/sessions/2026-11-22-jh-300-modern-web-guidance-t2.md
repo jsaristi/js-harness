@@ -11,8 +11,8 @@ The brief was JH ORQ's `brief-300-web-guidance-t2.md`, with its amendments, in t
 2026-11-23T00:18:00Z, quoted with `js-harness sessions --quote`).
 
 ## Delivered
-- Branch `claude/jh300-web-guidance-t2`, cut from `origin/main` at `14f0b8cc`. One docs-only commit: T2 ticked, log
-  line L11, the State line and the header of `odd/tasks/web-guidance.md`, and this file. The pull request is ready, not
+- Branch `claude/jh300-web-guidance-t2`, cut from `origin/main` at `14f0b8cc`. Two docs-only commits, `624414e7` and the correction after the re-run: T2 ticked, log
+  line L11, the State line and the header of `odd/tasks/web-guidance.md`, and this file. jsaristi/js-harness#995 is ready, not
   a draft, as the lead's amendment asks for a docs-only change.
 - Checks: `js-harness contract check odd/tasks/web-guidance.md` and `npm run check` (their output is in the PR body).
 
@@ -25,6 +25,8 @@ The brief was JH ORQ's `brief-300-web-guidance-t2.md`, with its amendments, in t
   brief fetches only the Claude marketplace.
 
 ## Failures and lessons
+- The first commit claimed the off-then-on order without running it in that order; the advisor caught it, and a
+  re-run in a second scratch home confirmed it (L11).
 - Two shell lines joined steps with `;` (the first probe, and one `plugin disable` line), against the brief's
   "`&&` only". Neither changed anything outside the scratch home. The lesson: write every chain with `&&` and put a
   check that may fail last.

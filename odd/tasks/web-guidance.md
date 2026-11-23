@@ -11,7 +11,7 @@ lead is `JH ORQ · orquestador F8` · Runner: `node --test` · Delivery: ask-on-
 scratch home is deleted. What T2 changed in the design: the install the row names becomes `-s user` followed by
 `disable -s user`, so the plugin is off on the machine and a clone turns it on with `enabledPlugins` in its own
 `.claude/settings.local.json`; `-s project` is never named, since its committed key turns the plugin on in any clone on
-a machine that holds an installation; T6 writes `true` where the switch is on and `false` elsewhere, not `false`
+a machine that holds a user-scope installation, even disabled (L11, re-run); T6 writes `true` where the switch is on and `false` elsewhere, not `false`
 alone; Codex stays out of scope; the fixed cost is about 448 tokens, both skills. Before T2 (2026-11-18): the design
 and its plan, three double reviews that did not converge (L8, L9, L10); the text of T3 to T7 is still provisional and
 not yet corrected for L11. Next: the senior pass over T3 to T7 with L11 in hand, which the lead places. Open: his
@@ -270,9 +270,9 @@ touch nine modules of `bin` that other features also change, so the lead places 
   - Where it loads. `project` and `local`: in their own project and in no other (a folder never touched, with or
     without git: no skill). A local `git clone` of the `project` one, its committed key `true`: no skill while that
     folder's install was the only one on the machine, yet `claude plugin list` there said "enabled"; once a `user`
-    installation existed, even disabled, the clone loaded both skills and the host wrote an `installed_plugins.json`
-    entry for the clone by itself, as it did for a folder holding only a local `true`. So a committed key turns the
-    plugin on in every clone on a machine with any installation of it, unseen: the harness never names `-s project`.
+    installation existed, the clone loaded both skills and the host wrote an `installed_plugins.json` entry for it by
+    itself, as it did for the folder holding a project `false` and a local `true`. So a committed key turns the plugin
+    on in every clone on a machine with a user-scope installation, unseen: the harness never names `-s project`.
     `user`: in every project, the untouched folder among them.
   - What holds it off and on, per clone. Under a `user` install enabled: `enabledPlugins[id]: false` in the project's
     `.claude/settings.json` or in its `.claude/settings.local.json` loads no skill. A local `false` beats a committed
@@ -281,7 +281,9 @@ touch nine modules of `bin` that other features also change, so the lead places 
     user` the user file's key to `false`; after the latter, folders with no key load nothing while a folder whose own
     file says `true` still loads it. That is the mechanism T6 needs: the machine's install off at user scope, and the
     clone's `.claude/settings.local.json` `true` where the switch is on and `false` elsewhere, the `false` guarding a
-    later `enable -s user`.
+    later `enable -s user`. Re-run in a second scratch home, in that order (`install -s user`, `disable -s user`, then
+    three new git folders): the one with a local `true` loaded both skills and the host wrote a `local` record for it;
+    the one with a committed `true` loaded them too, with no record written; the one with no key loaded nothing.
   - Before `sync`, then off. `js-harness init` (0.97.0, the installed one) in the `local` project kept the plugin's
     `true` beside its own keys and reported only its own; `sync` then printed "up to date"; `plugin uninstall -s
     local` removed the plugin's key alone and kept the harness's four (`outputStyle`, `permissions.deny`, `env`,
@@ -292,8 +294,9 @@ touch nine modules of `bin` that other features also change, so the lead places 
     servers or language servers; always-on about 448 tokens, about 220 each, where L2 has the publisher's 205 and 175;
     on invoke about 6.5k and 2.2k. Both load; no supported way to load one alone was found (not searched beyond
     `details` and the install's help).
-  - Codex (0.171.0), from `codex plugin --help` and `add --help` only, no install: no scope option; a plugin's state is
-    a `[plugins."<id>"]` table with `enabled` in `~/.codex/config.toml`, and `-c` overrides it per invocation. Whether
+  - Codex (0.171.0), no install: `codex plugin --help` and `add --help` show no scope option; his real
+    `~/.codex/config.toml`, read for its shape, keeps a plugin's state as a `[plugins."<id>"]` table with `enabled`;
+    that `-c` could override it per invocation is inferred from the help, not run. Whether
     a project's own `.codex/config.toml` can hold one out is not known; only an install shows it, outside this yes. The
     plugin ships `.codex-plugin/plugin.json` with `"skills": "./skills/"`, so a Codex install loads both skills too.
     Codex stays out of scope.
@@ -309,8 +312,9 @@ touch nine modules of `bin` that other features also change, so the lead places 
     six catalog and readme files both times (the official marketplace's `marketplace.json`,
     `plugin-directory-cache-v2.json`, engram's README in both hosts, two Codex catalog caches), which list the plugin
     without installing it; no `googlechrome` folder under `plugins/cache` or `plugins/marketplaces`. His
-    `~/.config/git/ignore` already held the line, dated 2026-05-23, unchanged. Undo: the scratch home was deleted at
-    the end; nothing else was written outside this repository.
+    `~/.config/git/ignore` already held the line, dated 2026-05-23, unchanged. The same search after the re-run: no hit
+    in a settings or state file, no `googlechrome` folder. Undo: both scratch homes were deleted; outside this
+    repository only the session's scratchpad keeps the runner scripts and the captured output.
   - What it changes in T3 to T7, for the senior pass: T5's fix is `-s user` then `disable -s user`, with its undo the
     user uninstall and the marketplace removal; T5's `claude` cell reads the clone's effective state, since `plugin
     list` reports "enabled" where nothing loads and one row per installation; T6 writes `true` and `false` in the
