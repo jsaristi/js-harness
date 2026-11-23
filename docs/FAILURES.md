@@ -280,8 +280,13 @@ check said or before its answer was read.
   and then in read-only reads, two audit appends joined by a line break (the first appended nothing), and a
   `git push` followed by `;` and a read; each step did what it should, so nothing ran on a wrong answer. Fix named:
   every chain with `&&`, read-only calls included (the lead, 2026-11-22)
-- Control: check — bin/lib/chained-step-guard.test.mjs — "a push, a commit, a pull request, a land or a notice after a ;, a
-  line break, || or & is refused, naming the step and the joiner" — since 2026-10-31
+- Control: owed — odd/tasks/guard-shell-joins.md — "T4 (kind: build) the `;` and line-break refusal in the scope T2
+  fixed"
+- Was: check — bin/lib/chained-step-guard.test.mjs — "a push, a commit, a pull request, a land or a notice after a ;, a
+  line break, || or & is refused, naming the step and the joiner" — since 2026-10-31; replaced on 2026-11-23: the
+  2026-11-22 sightings joined read-only steps, which that check does not reach by design; the owed task's scope is
+  the one its T2 fixes from the 2,847 of 8,913 measure (`odd/tasks/guard-shell-joins.md`, Depth pass), and the check
+  stands for the guarded steps
 - Was: protocol — bin/lib/protocols-skill.mjs — "Two steps share one command only when the second is conditional on
   the first" — replaced on 2026-10-31: the guard refuses the step where the rule `chained-steps` is declared
   (odd/tasks/guard-chained-steps.md), and the protocol line stays as the rule's prose
@@ -603,8 +608,12 @@ commit can break a test, pass its own gate, and fail the next gate with code in 
   its own pre-commit check (9a9d448d) and turned the merge queue's candidate red twice, on
   `bin/conventions-model-home.test.mjs`, which reads `docs/ROADMAP.md`; the sensors of documents do not
   run the convention tests that read the documents a commit changes, and the writer had not run them
-- Control: check — bin/check.test.mjs — "a commit of documents alone runs the sensors of documents,
-  in their order and with a bound of two minutes" — since 2026-10-12
+- Control: owed — odd/tasks/document-sensors-conventions.md — "T2 (kind: build) spec 2: a convention test holds the
+  document tests to the tests that read declared documents"
+- Was: check — bin/check.test.mjs — "a commit of documents alone runs the sensors of documents,
+  in their order and with a bound of two minutes" — since 2026-10-12; replaced on 2026-11-23: the sensors ran as it
+  holds on 2026-11-17, and the miss was their hand-kept list in `harness.json`, which left out
+  `bin/conventions-model-home.test.mjs`; the owed task holds that list to the tests that read declared documents
 
 ### documents-merge-runs-gate
 A merge of `main` into a pull request of documents alone staged `main`'s code, so its hook ran a whole
@@ -661,7 +670,11 @@ command substitution before the program saw them, so the program ran with other 
 - Seen: 2026-11-21 — the lead's notes, lsp-starts-state.md, "Slips to place" (JH 272's own) — a bash double-quoted
   `node -e` with backticks ran `claude plugin install`, `enable` and `update` with a literal id in place of the
   plugin's; all three failed and nothing changed
-- Control: check — bin/guard.test.mjs — "a Bash command with backticks inside double quotes is denied; in single quotes or as $(...) it passes" — since 2026-10-14
+- Control: owed — odd/tasks/guard-shell-joins.md — "T5 (kind: build) the backslash-run refusal in a sibling module of
+  `bin/lib/guard.mjs`"
+- Was: check — bin/guard.test.mjs — "a Bash command with backticks inside double quotes is denied; in single quotes or as $(...) it passes" — since 2026-10-14; replaced on 2026-11-23: JH 272's backticks followed a run of three
+  backslashes, which the guard reads as escaped while the host's Bash tool hands bash one backslash fewer
+  (`odd/tasks/guard-shell-joins.md`, Depth pass, E1), so that check passed the command; it stands for a plain backtick
 
 ### edit-during-review
 A tracked file was edited in the worktree while Codex reviewed it, so the run read a tree that was
@@ -2484,8 +2497,16 @@ it waits runs nothing").
   script left the script's loop alive (bash pid 8696); it went on checking out heads in the worktree a second run
   used, so some of that run's plans were of another pull request's head; found when the plans named other heads,
   killed with `taskkill /T` by pid, the process list empty after
-- Control: check — bin/loop.test.mjs — "a real loop: run in the background, status sees it alive,
-  stop leaves no process of it" — since 2026-10-15
+- Seen: 2026-11-23 — the lead's brief to the C2 docs writer of night plan 2 (claimed; the lead's own) — a docs
+  writer's `TaskStop` of a background `npm run check` left its process tree alive (sh, pnpm, cmd and `node
+  bin/check.mjs`, pid 14012); it ran as a plain background task, not under `js-harness loop`, and was killed by hand
+  with `taskkill /T`
+- Control: owed — odd/tasks/taskstop-process-tree.md — "T2 (kind: build) spec 1: `js-harness loop sweep --task
+  <id>`"
+- Was: check — bin/loop.test.mjs — "a real loop: run in the background, status sees it alive,
+  stop leaves no process of it" — since 2026-10-15; replaced on 2026-11-23: the three newest sightings were plain
+  background tasks stopped with `TaskStop`, which `js-harness loop` never started, so its stop did not reach them;
+  the owed sweep finds by pid and creation time what such a stop left
 
 ### temp-folders-left
 A test run killed at the gate's bound never removes its temporary folders; 2,357 of them were on his
@@ -2724,7 +2745,12 @@ process ran where the host did not track it.
   lead started `js-harness wait --notice-to orchestrator` with a trailing `&` (pid 5296), which would never have
   woken it; seen at once, the process stopped and the wait started again as a background run. The guard refuses
   `&` only after push, commit, gh pr or notify, not before a wait
-- Control: owed — docs/ROADMAP.md — "The guard refuses a Bash command ending in `&`"
+- Control: owed — odd/tasks/guard-shell-joins.md — "T3 (kind: build) the background `&` refusal in
+  `bin/lib/chained-step-guard.mjs`"
+- Was: owed — docs/ROADMAP.md — "The guard refuses a Bash command ending in `&`" — replaced on 2026-11-23: the
+  2026-11-22 launch (lead transcript d6383aea, line 34597) put the `&` before a line break and an `echo`, so the
+  command did not end in `&` and that wording would have missed it (`odd/tasks/guard-shell-joins.md`, Depth pass);
+  the owed task refuses a `&` that backgrounds a step wherever it stands
 
 ### wait-blind-to-notices
 A session waited with `js-harness wait` on one event, and the lead's notices to it did not end the
