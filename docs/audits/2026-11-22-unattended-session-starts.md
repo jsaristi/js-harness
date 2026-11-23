@@ -33,6 +33,18 @@ Result: 15 work-session transcripts; of 1,293 minutes, **759 with no work sessio
 busy. Spells of 15 minutes or more: 00:00-00:26 (26); 02:12-09:53 (461); 10:06-12:51 (165); 15:06-15:40 (34);
 19:48-20:50 (62).
 
+Where the 759 come from, by stretch (local UTC-5, then UTC, so a window can be checked against the transcripts):
+
+| Stretch | Local | UTC | Minutes |
+|---|---|---|---|
+| Just after midnight | 00:00-00:26 | 05:00-05:26Z | 26 |
+| The night away | 02:12-09:53 | 07:12-14:53Z | 461 |
+| Late morning | 10:06-12:51 | 15:06-17:51Z | 165 |
+| Afternoon | 15:06-15:40 | 20:06-20:40Z | 34 |
+| The evening gap (the lead's 19:50-20:47) | 19:48-20:50 | 00:48-01:50Z, 2026-11-23 | 62 |
+| Gaps under 15 minutes, spread over the day | — | — | 11 |
+| **Total** | | | **759** |
+
 Of the 759 minutes, 748 sit in the five spells above, so the 5-minute threshold moves the total by 11 at most. A tool call or a turn that writes nothing for more than 5 minutes reads as idle, so the figure is an upper bound.
 
 Limits: a session waiting on a declared `js-harness wait` writes nothing and counts as idle here, which is right for

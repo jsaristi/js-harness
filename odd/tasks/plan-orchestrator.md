@@ -507,6 +507,6 @@ while the next task's design is read. The board is checked before each task star
   transcript `0cdab702-72bd-48e7-8a8e-0c38d4aca9c9`, each read with `js-harness sessions --quote`: line 7148,
   2026-11-21T09:22:08Z, "no me pidas permiso para abrir las sesiones"; line 14462, 2026-11-23T01:50:29Z (2026-11-22
   20:50 local, queued while the session worked), "necesito que puedas abrir las sesiones tu solo sin pedir
-  permiso, investiga bien como hacemos para que tu las abras las que necesites sin pedir permiso". So the session he wrote to opens the sessions it needs without asking him each time; that this is the Plan is the lead's reading, the addressee of `0cdab702` not checked here. What the app allows is in
+  permiso, investiga bien como hacemos para que tu las abras las que necesites sin pedir permiso". His words say that sessions open without asking him each time; "the Plan opens them" is the lead's and JH PLAN's reading of them, not his words, and the addressee of `0cdab702` was not checked here. What the app allows is in
   `docs/audits/2026-11-22-unattended-session-starts.md`: a start only on a turn he typed, a card otherwise. Open PR
   899 also edits this document; this entry only appends to the Log.
