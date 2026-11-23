@@ -8,7 +8,7 @@ Written 2026-11-22 by JH 301, documents only, nothing installed or downloaded; i
 and changed nothing. Owed first: this document's double review (`rule:double-review`), whose Codex reader is held
 until the weekly reset of 2026-11-23 23:45; nothing is built or installed before it. Next: his decisions under `## Ask me
 before`, through the lead (card 6 of `return-decisions-2026-11-22.md`: "El ensayo en Hyper-V: instala algo en tu
-máquina"). Open: all of T1 to T4.
+máquina"). Open: all of T1 to T4; T1's step list is drafted under `## DRAFT: T1 steps` (2026-11-23), unreviewed.
 
 ## Goal
 Prove, in a fresh Windows VM on his machine, that the backup and the reinstall protocol bring back a working harness
@@ -108,9 +108,97 @@ borrar las memorias o me toca que reinstalar el sistema operativo voy a perder t
 - [ ] T4 (kind: verify) the VM and its disk deleted, D:'s free space read back, Hyper-V left as he chose — spec 1;
   inline
 
+## DRAFT: T1 steps
+Written 2026-11-23 by a docs writer for the lead, before his five answers under `## Ask me before` and before this
+document's double review; nothing here was run, and every Hyper-V or in-VM command is `[a]`, not tried. T1 stays
+unticked until both reviews read it. "He" is Sebastián's hands; "host session" is a Claude session on his machine;
+"VM session" is Claude inside the VM, which starts only after step 16 reads the backup hook absent, so every in-VM
+step before it is his, in a terminal. "Goes with
+the VM" means T4's deletion undoes it. `<backup-repo>` stands for his private memory backup repository; no name from
+his config is written here.
+
+1. Read D:'s free space and stop under 5 GB (Constraints). Host session:
+   `powershell -NoProfile -Command "[math]::Round((Get-PSDrive D).Free/1GB,1)"`. Undo: none, it reads.
+2. Name the expected engram observation before the run (check 2 of `## Done when`): one observation id and a search
+   term that finds it, read from the host's engram and written in `## Log`, named by its title or a distinctive
+   phrase, with its id only a hint, since an id may change through export and import [a]. Host session:
+   `engram search "<term>"` [a]. Undo: delete the Log line.
+3. Turn Hyper-V on (decision 1), administrator PowerShell, then restart. He:
+   `Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All`. Undo (decision 4 chooses whether it
+   runs in T4): `Disable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All` and a restart; WSL2's own
+   platform (`VirtualMachinePlatform`) is a separate feature and stays.
+4. Download the image (decision 2). He, from Microsoft's evaluation centre, into a folder on D: such as
+   `D:\hyperv-rehearsal\`. Decision 2 changes this step: an LTSC 2021 evaluation image if one is offered [?], else a
+   Windows 11 Enterprise evaluation, which needs a generation 2 VM with Secure Boot and a virtual TPM (step 5) and
+   whose minimum disk (64 GB [a]) is above decision 3's proposed 60 GB cap, so a Windows 11 answer raises the cap.
+   Undo: delete the ISO.
+5. Create the VM (decision 3), administrator PowerShell. He, or the host session if he runs it elevated [a]:
+   `New-VM -Name js-rehearsal -Generation 2 -MemoryStartupBytes 8GB -NewVHDPath D:\hyperv-rehearsal\js-rehearsal.vhdx
+   -NewVHDSizeBytes 60GB -SwitchName "Default Switch"`, then `Set-VMProcessor js-rehearsal -Count 4`,
+   `Add-VMDvdDrive js-rehearsal -Path <iso>`, and for Windows 11 `Set-VMKeyProtector js-rehearsal -NewLocalKeyProtector;
+   Enable-VMTPM js-rehearsal`. Decision 3 changes the memory, processors and size; a `-NewVHDPath` on D: keeps the disk
+   off C:. Undo: `Remove-VM js-rehearsal -Force` and delete `js-rehearsal.vhdx` (T4).
+6. Expose nested virtualization while the VM is off, since WSL2 inside it needs it [a]. He or host session:
+   `Set-VMProcessor js-rehearsal -ExposeVirtualizationExtensions $true`. Undo: goes with the VM.
+7. Install Windows from the ISO (`Start-VM js-rehearsal`, then `vmconnect localhost js-rehearsal`), with a local
+   account and no Microsoft sign-in. He. Undo: goes with the VM.
+8. winget. He, in the VM: `winget --version`. Decision 2 changes this step: Windows 11 ships it; LTSC 2021 may not
+   ship the App Installer [?], and then he installs `Microsoft.DesktopAppInstaller` from its GitHub release (an
+   msixbundle with its dependencies) [a]. Undo: goes with the VM.
+9. WSL2. He, in the VM, administrator: `wsl --install --no-distribution`, then a restart, then `wsl --status`. A
+   failure here is the nested-virtualization gap (step 6) and is logged as a gap, not worked around. Undo: goes with
+   the VM.
+10. Node, git and gh. He, in the VM: `winget install OpenJS.NodeJS.LTS Git.Git GitHub.cli`, then a new terminal and
+    `node -v && git --version && gh --version`. The reinstall list names Node through nvm; the rehearsal logs which it
+    used. Undo: goes with the VM.
+11. Sign in to GitHub (decision 5), first, as the protocol's step 5 says. He, in the VM: `gh auth login`, pasting a
+    read-only fine-grained token for `<backup-repo>` (yes to the token), or his usual browser sign-in (the other
+    answer); then `gh auth setup-git`, so git can clone a private repository with that sign-in [a]. Undo:
+    `gh auth logout`, and he revokes the token on GitHub (T4).
+12. Claude. He, in the VM: Claude Desktop (or Claude Code) by its installer, and his own Claude sign-in, starting no
+    session yet; no credentials file is copied (Constraints). Undo: goes with the VM; he signs the VM out of his
+    Claude account's devices if it lists them.
+13. js-harness. He, in a VM terminal: `npm i -g --allow-git=all github:jsaristi/js-harness && js-harness install`
+    (`README.md`, "Install"). Undo: `js-harness uninstall`, or goes with the VM.
+14. engram, the step `js-harness stack` names as the user's own: engram's own install, then
+    `engram setup claude-code`. He, in a VM terminal [a]. Undo: goes with the VM.
+15. Remove the backup hook (Constraints), under both answers of decision 5: required with his usual sign-in, a second
+    guard with the token. He, in the VM: delete the `Stop` entry whose command is `js-harness backup --hook || exit 0`
+    (`bin/lib/hook-entries.mjs:135`) from `~/.claude/settings.json` with an editor. Undo: goes with the VM.
+16. Check the hook absent before any session. He: `(Select-String -Path $HOME\.claude\settings.json -Pattern
+    "backup --hook").Count` in PowerShell, or `grep -c "backup --hook" ~/.claude/settings.json` in Git Bash, reads 0.
+    The VM session starts only after this; it is told to push nothing, and each clone below gets
+    `git remote set-url --push origin no-push` [a], so even his usual sign-in cannot push by mistake. Undo: none.
+17. Clone the private backup repository once, outside `~/.js-harness`. VM session:
+    `git clone https://github.com/<backup-repo>.git C:\rehearsal\backup`, then read its `RESTORE.md`, which
+    `backup init` wrote there (`bin/backup.mjs:1036`). Undo: goes with the VM.
+18. Clone each bundled repository as `RESTORE.md`'s step 3 says, into the path it had (`D:\js-harness` among them),
+    since the Claude memory folder is named after that path. A fresh VM has only C:, so decision 3 adds here: either
+    step 5 also attaches a second dynamic VHDX from the host's D: as the VM's D: (`Add-VMHardDiskDrive`) [a], or the
+    clone goes to `C:\js-harness` and step 19 adds `--map D:\js-harness=C:\js-harness`. VM session. Undo: goes with
+    the VM.
+19. Restore. VM session: `js-harness backup restore --from C:\rehearsal\backup`, with step 18's `--map` when it
+    chose C:. Undo: goes with the VM; it writes the VM's home only, and never over a live file.
+20. Check 3: `js-harness backup verify --from C:\rehearsal\backup`. VM session. Undo: none, it restores into a scratch
+    home it removes.
+21. Check 1: `js-harness doctor` exits 0. VM session. Undo: none, it reads.
+22. Check 2: an engram search for step 2's term returns step 2's observation, matched by its title or phrase. VM
+    session: `engram search "<term>"` [a]. Undo: none.
+23. Check 4: a new session started in the restored `D:\js-harness` clone reads its roadmap (`docs/ROADMAP.md`) and
+    names its next unit. He starts it; it answers. Undo: none.
+24. Write `- Rehearsal result:` in `## Log` with each check's output and every gap. The VM pushes nothing, so he
+    copies the outputs out (the VM's clipboard through `vmconnect`, or a text file he copies to the host) and the
+    host session writes the line. Undo: git.
+25. T4: `Stop-VM js-rehearsal -TurnOff; Remove-VM js-rehearsal -Force`, delete the VHDX files and the ISO, read D:'s
+    free space back (step 1's command), revoke the token, and run step 3's undo only if decision 4 says off. He for
+    the elevated parts. Undo: none, it is the undo.
+
 ## Log
 - L1 (2026-11-22, JH 301, the lead's brief as written): "The next roadmap units (`js-harness progress`,
   `docs/ROADMAP.md`): for the next 2-3 units with no feature document yet, write `odd/tasks/<feature>.md` with its
   task contract and `## Depth pass` ... docs only, so Codex day starts with builds ready."
 - L2: the roadmap is left untouched because open PRs 888, 934 and 935 edit `docs/ROADMAP.md`; the lead links this
   document from the box when it lands.
+- L3 (2026-11-23, a docs writer for the lead, on his line 16936 of session 0cdab702 at 06:06:12Z, "avanza el harness y
+  las tareas p3endientes solo"): `## DRAFT: T1 steps` written, 25 steps, before his five answers and the double
+  review; nothing run, T1 unticked until Codex reads it after the 2026-11-23 23:45 reset.
