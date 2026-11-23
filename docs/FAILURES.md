@@ -273,6 +273,11 @@ check said or before its answer was read.
   here) — JH 300 joined steps with `;` twice (its first probe, and one `plugin disable` line) against its brief's
   "`&&` only"; neither was a push, commit, pull request, land or notice, so the guard's list did not cover them,
   and neither changed anything outside its scratch home
+- Seen: 2026-11-22 — JH 302's own transcript, its notices to the lead at 20:56, 21:03 and 21:31 local (read here) —
+  JH 302, briefed "`&&` only", joined steps with `;` or a line break: twice before `gh pr`, which the guard refused,
+  and then in read-only reads, two audit appends joined by a line break (the first appended nothing), and a
+  `git push` followed by `;` and a read; each step did what it should, so nothing ran on a wrong answer. Fix named:
+  every chain with `&&`, read-only calls included (the lead, 2026-11-22)
 - Control: check — bin/lib/chained-step-guard.test.mjs — "a push, a commit, a pull request, a land or a notice after a ;, a
   line break, || or & is refused, naming the step and the joiner" — since 2026-10-31
 - Was: protocol — bin/lib/protocols-skill.mjs — "Two steps share one command only when the second is conditional on

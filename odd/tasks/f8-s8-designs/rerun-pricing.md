@@ -48,8 +48,8 @@ document). The low end held; the long session's high end was never approached.
 
 ## The decision rule (a proposal for his answer, not a decision)
 1. A row runs only once its blocker has landed on main, since a rerun before the fix buys a known miss again: C1.1
-   after PR 977; the long-session rows after PR 930 and an answer on the eval home's Codex login. The free rows run
-   first, on the candidate, at no cost.
+   after PR 977; the long-session rows after PR 930 and the C' build (below). The free rows run first, on the
+   candidate, at no cost.
 2. Caps as on 2026-11-19 (question 350's "tope $12 y $74"): $12 a run, which covers the highest single run priced
    here ($10.72, the smoke at high), with the cache kept across turns: a `current` run that misses the cache every
    turn is priced $10.43 at mid, so at high it could pass $12 and stop. A batch cap he names. For the core, the cap that covers its high is **$85**.
@@ -57,12 +57,16 @@ document). The low end held; the long session's high end was never approached.
    read (`CLAUDE.md`, "Running what costs, and review": "One try: when it fails, read why before anything runs
    again").
 
-One decision comes before it and is not a spend: whether the eval home gets a Codex login for the long session
-(current-2 held its release on a review it could not get). It touches credentials, so it is the lead's to put to him;
-without it the long-session rows, about $70 of the $85, can repeat that miss. The line below assumes it is settled; its ways are in `eval-codex-login.md`, this folder.
+A blocker comes before the long-session rows, and it is a build, not a login answer: C' (`eval-codex-login.md`,
+"Recommendation: C'", this folder; PR 1005). current-2 held its release on a Codex review it could not get; C' has the
+long session's `current` arm set `"functions": {"codexReview": "off"}` in the `harness.json` that `init` wrote, before
+the first turn. It is eval code, so it is built with its test and both reviews after Codex's reset, and its first
+check is one run whose release turn is read for a lens-review hold, priced by `--plan` first. Until C' lands, the
+long-session rows, about $70 of the $85, can repeat that miss. C' has its own yes in that file; the line below is
+the spend once C' and the two PRs have landed.
 
 His yes in one line, for the core: "Sí, correr S8 de nuevo con tope $12 por corrida y $85 en total, cuando aterricen
-PR 977 y PR 930". C1.5 at 10 runs (+$38 at high) and R1 (+$16) are each one more figure on that line.
+PR 977, PR 930 y la construcción de C'". C1.5 at 10 runs (+$38 at high) and R1 (+$16) are each one more figure on that line.
 
 ## Log
 - L1 (2026-11-22, JH 301, the brief as the lead wrote it): "S8 paid rerun, priced row by row
