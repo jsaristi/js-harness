@@ -142,3 +142,8 @@ lead's land. Left: L9's verified "No".
   merge of origin/main into this branch, `node --test bin/reply-budget.test.mjs` on Windows passed: p90 873 ms (the
   lead's stop) and 1037 ms (a work session's), budget 2500. Not measured: the same in WSL (the worktree guard refuses
   `wsl`), and main alone against this branch. The trial merge was aborted; the branch is as reviewed.
+- L11 (2026-11-23, T5 read for closing, left open): PR 736 is merged (`gh pr view 736 --json state,mergeCommit`:
+  MERGED, 6bee9e5b, 2026-10-31T09:00:25Z) and the Log shows Codex (L8) and the verifier over `3d02efbf` (L9). Not in
+  the Log (searched for "lens" and "ready"): the two lens runs and the ready notice of 2026-10-31T08:41:28Z, which
+  are recorded only in `## State for a resume` (commits 814f03dc and b075b607); and no verifier read the fix commit
+  962c7396 that took its defects. T5 stays open until the Log records them.

@@ -502,3 +502,8 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
   applicability "unrelated"), so nothing was started. The independent verifier read the code before the redesign
   (L23); the redesign and its fixes went through Codex twice and the lenses three times, not through a second
   verifier. origin/main at 09:20 held nothing the branch lacks: JH 123 had not landed, so no merge.
+- L26 (2026-11-23, T6 read for closing, left open): PR 738 is merged (`gh pr view 738 --json state,mergeCommit`:
+  MERGED, 48164753, 2026-10-31T15:26:47Z; PR 737 closed unmerged). The Log shows Codex and the lenses over every
+  range (L22 to L25) and the verifier before the redesign (L23). Missing from the Log: a verifier over the redesign
+  and its fixes (L25 says none ran), and the ready notice (searched for "ready": the Log ends at L25 before the push,
+  and `## State for a resume` only plans it). T6 stays open until both are recorded.

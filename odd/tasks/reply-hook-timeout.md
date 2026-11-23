@@ -83,6 +83,11 @@ Any timeout other than the reply hook's.
 - L8 (2026-10-31, T3, reviews of `af847c22..1ffe7d02`, the verifier's fixes, comments only): Codex correct (0.99), no
   finding, 32,217 input tokens; the Claude lens readability 0 findings; gentle-ai (lineage `review-15705bd6ae8edb04`,
   lens reliability) approved with no finding, acknowledged. Every code commit of the branch is covered by both records.
+- L9 (2026-11-23, T3 read for closing, left open): PR 733 is merged (`gh pr view 733 --json state,mergeCommit`:
+  MERGED, 5548ba2c, 2026-10-31T07:46:50Z) and the Log shows Codex and the lenses on both code commits (L6, L8) and
+  the verifier on `af847c22` (L7). Missing from the Log: the verifier over `1ffe7d02` (the task line says so), and
+  the ready notice (searched the document for "ready": `## Next step` only plans it). T3 stays open until both are
+  recorded.
 
 ## Reviews
 - gentle-ai: `af847c22` (lineage `review-61bd159f2559ffe5`), approved, acknowledged.
