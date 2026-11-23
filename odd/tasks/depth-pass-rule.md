@@ -224,7 +224,8 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
 - [x] T7 (kind: docs) spec 5, after his yes to (a): `docs/ROADMAP.md` gains the rule as an F8 step with its proof
       (the eval, or its owed date) and the next feature, "harness alignment to the depth pass", opened by the lead
       after this lands. Route: inline. L21.
-- [ ] T6 (kind: verify) Codex, the Claude lenses and an independent verifier over each code slice; PR; ready notice.
+- [x] T6 (kind: verify) Codex, the Claude lenses and an independent verifier over each code slice; PR; ready notice.
+      Codex and lenses L22 to L25; the verifier L23 and, over the redesign, L27; PR 738 (48164753); ready notice L27.
 - [x] T8 (kind: verify) Codex's two findings its recheck of c1e482b..6b10846 left open (the verdict trail across
       renames; the reading at the command's edge), fixed in ff8c61a: Codex over them from e2d46f3, `--again`. L24.
 
@@ -507,3 +508,19 @@ Beside it, his request rewritten next to his words, never replacing them. Its co
   range (L22 to L25) and the verifier before the redesign (L23). Missing from the Log: a verifier over the redesign
   and its fixes (L25 says none ran), and the ready notice (searched for "ready": the Log ends at L25 before the push,
   and `## State for a resume` only plans it). T6 stays open until both are recorded.
+- L27 (2026-11-23, T6 ticked: an independent verifier, read-only, over the redesign and its fixes, `e2d46f3f`,
+  `ff8c61aa`, `e972fecf` and the earlier `999d36ba` (`git log 48164753^1..48164753^2`), on main `04664ab6`; its notes
+  `verifier-five-2026-11-23.md`, section 3): passes. Spec 1 met: `CLAUDE.md:3` holds rule 1's line and
+  `bin/lib/project.mjs:398` the same pointer at the head of `claudeBlock`; `node --test
+  bin/lib/protocols-skill.test.mjs` 18 of 18, `bin/lib/template-block.test.mjs` 9 of 9. Spec 2: left out by this
+  document (Depth pass, item 3). Spec 3 met: section 9 (`bin/lib/protocols-skill.mjs:134-150`) holds v3's five items
+  in order with L21's and L23's two changes; `node --test bin/lib/depth-pass.test.mjs` 34 of 34,
+  `bin/lib/contract.test.mjs` 45 of 45, `bin/contract.test.mjs` 43 of 43; its probe in scratch repos with `contract
+  check`: document and code in one commit FAIL, exit 1; document then code PASS; a later rename PASS; a depth-1 clone
+  PASS; `Verdict: refutes` with code FAIL, and with `answered: question 9` PASS; item 2 deleted FAIL. Spec 4 met: `node
+  bin/js-harness.mjs rules depth-pass` exits 0, `rules check` PASS, 82 rules. Spec 5 met: `docs/ROADMAP.md:21`,
+  `:163` (F8 step 6), `:776`. `contract check` over this document: PASS. The ready notice of PR 738 is line 1937 of
+  `C:\Users\Oficina\.js-harness\channel\D--js-harness.jsonl` (`"kind":"ready"`, `"pr":738`, 2026-10-31T14:15:21Z).
+  Not checked by it: depth itself (the control reads form and order only) and the eval owed by 2026-11-30. Not
+  proved: `npm run check` on `04664ab6` ran past the gate's 30-minute bound and was stopped (1803 s, MsMpEng 1,690
+  CPU s), so that Done when line stays unproved; T6's text does not name it.

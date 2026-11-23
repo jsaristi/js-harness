@@ -40,8 +40,9 @@ Any timeout other than the reply hook's.
 ## Tasks
 - [x] T1 (kind: build) spec 1: the entry's test at 15 and the upgrade test, red; then `replyHookEntry` at 15, green.
 - [x] T2 (kind: build) spec 1: the budget held at 2500 ms apart from the timeout; the 0.97.0 Codex entry frozen at 5.
-- [ ] T3 (kind: verify) Codex, the Claude lenses and an independent verifier over the code slice; PR; ready notice. PR 733 merged
-  (5548ba2c) and both code commits have Codex and lens records, but the verifier (L7) read only af847c22, not 1ffe7d02.
+- [x] T3 (kind: verify) Codex, the Claude lenses and an independent verifier over the code slice; PR; ready notice. PR 733 merged
+  (5548ba2c); both code commits have Codex and lens records (L6, L8); the verifier read af847c22 (L7) and 1ffe7d02 (L10);
+  the ready notice is channel line 1896 (L10).
 
 ## Log
 - L1 (2026-10-31, his request: the lead's brief `C:\Users\Oficina\.js-harness\background\briefs\2026-10-31T06-23-14-249Z-33f1ddcd.md`,
@@ -88,6 +89,20 @@ Any timeout other than the reply hook's.
   the verifier on `af847c22` (L7). Missing from the Log: the verifier over `1ffe7d02` (the task line says so), and
   the ready notice (searched the document for "ready": `## Next step` only plans it). T3 stays open until both are
   recorded.
+- L10 (2026-11-23, T3 ticked: an independent verifier, read-only, over `1ffe7d02` on main `04664ab6`; its notes
+  `verifier-five-2026-11-23.md`, section 1): passes. `1ffe7d02` is comments only (`git show --stat 1ffe7d02`) and
+  `git merge-base --is-ancestor 1ffe7d02 origin/main` exits 0. Spec 1 met: `bin/lib/hook-entries.mjs:129` writes
+  `timeout: 15`; `node --test bin/lib/manifest.test.mjs` 220 of 220, among them the entry at 15 (`:1514`) and the
+  upgrade from the 5 s entry (`:1519`); `node --test bin/reply-budget.test.mjs` 6 of 6, CPU p90 1043 ms (the lead)
+  and 835 ms (a work session) against `BUDGET_MS = 2500`, its own constant (`:50`); his `~/.claude/settings.json`
+  `hooks.Stop` reply entry reads `"timeout":15`; `bin/lib/reply-commands.mjs:309-311` no longer ties the 4000 ms to
+  the 5 s (`grep -rn "5 seconds\|five seconds" bin --include=*.mjs`: only `backup-fallback.mjs:6` and a
+  `stack.test.mjs` fixture). `contract check` over this document: PASS. The ready notice of PR 733 is line 1896 of
+  `C:\Users\Oficina\.js-harness\channel\D--js-harness.jsonl` (`"kind":"ready"`, `"pr":733`, 2026-10-31T06:52:59Z).
+  Not proved: `npm run check` on `04664ab6` ran past the gate's 30-minute bound and was stopped (`js-harness gate
+  log`: 1803 s, timed out, MsMpEng 1,690 CPU s), so that Done when line stays unproved; T3's text does not name it.
+  Observation, not a fail: the backup hook's comment (`bin/lib/hook-entries.mjs:140`) still says "as the other Stop
+  entries", now inexact; outside this scope.
 
 ## Reviews
 - gentle-ai: `af847c22` (lineage `review-61bd159f2559ffe5`), approved, acknowledged.
