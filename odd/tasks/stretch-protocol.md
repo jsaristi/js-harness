@@ -332,8 +332,12 @@ itself is not limited to an absence: the skill text names it for any stretch.
 
 ## Next step
 NOW (2026-11-14, JH 201, worktree `D:\js-harness\.claude\worktrees\f8-plan-block`, branch `feat/stretch-plan-block`):
-NOW (L15): PR 879 reviewed whole and pushed; left: the advisor gate and `notify --kind ready --pr 879`; then spec 8
-(T10) on a new branch from main once 879 lands, an optional `doc` field per plan item.
+NOW (2026-11-15, after L15): the ready notice for PR 879 was recorded at 01:45Z; the lead reported 879 landing.
+Spec 8 (T10) is held by the lead: its lane goes to a full-audit session he asked for, and spec 8 resumes after it, on
+a new branch from main, with an optional `doc` field per plan item. The FAILURES Seen line of the lost Codex run is
+codex-review-edited-during-run; the lead says PR 878's snapshot fix is installed. Still owed, none blocking, for
+spec 8's first docs commit: drop the old paragraph below, correct L11 (one `stretch show` at main's code wrote a line
+to his real record), and the PR body's Checked section stops at 728daf57. A `js-harness wait --notice-to 201` runs.
 T9 built and reviewed (L10 to L13), pushed, PR 879 open. The advisor's last consult left, in order: (1) the claim
 that `progress` under-counted is unproven (progress does not read `planOf`): fix the PR body (`gh pr edit 879`) and
 the FAILURES entry plan-state-dated-dropped; (2) the return/status line "El tramo pronosticaba cerrar: S8 (después
