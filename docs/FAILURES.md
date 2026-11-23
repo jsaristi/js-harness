@@ -1124,6 +1124,11 @@ Hours written in the relief file were not read from a clock.
 - Seen: 2026-11-17 — relief file, lines 3178 to 3180, and the note at line 3181 (the lead's own) — three relief
   lines written after 21:14 local open with "2026-11-17 16:24 local", "16:45 local" and "16:50 local": five hours
   were taken off a clock that already read local time, so each reads five hours early
+- Seen: 2026-11-22 — the lead's message to JH 302 after PR 999 merged at 21:07:30 (claimed, the lead's own); the merge times
+  checked here with `git log --merges` — the lead wrote relief-file stamps 21:00, 21:04, 21:07 and 21:11 and a
+  board line "21:10" by hand, ahead of the clock (its date reads were 20:54, then 21:02), and told JH PLAN a refill
+  was "at 21:07"; the merges it stood for were 21:00:26 (PR 996) and 21:00:31 (PR 997). Fix named: a stamp only
+  from `$(date)` in the same command
 - Control: check — bin/notify.test.mjs — "a notice whose text stamps an hour more than a minute off
   the clock is refused, with the right hour, and not recorded" — since 2026-10-16
 - Proof: messages to another session: bin/guard.test.mjs:54, "a message to another session, by
@@ -1409,7 +1414,9 @@ push read only that last record, so a finding was never rechecked.
   the merge read from main with no guard. Found by T2's verifier before any such push was seen. The
   check that would have caught it: a test at the push row's level that a merge-own record leaves the
   debt of the record at its first parent owed
-- Control: owed — odd/tasks/codex-spend.md — "T2 (kind: build) spec 2"
+- Control: check — bin/codex-review.test.mjs — "a correction owed below a merge: two turns, a rerun at the same HEAD starts no session, records nothing, and the push row says the correction is owed" — since 2026-11-15
+- Was: owed — odd/tasks/codex-spend.md — "T2 (kind: build) spec 2" — replaced on 2026-11-22: T2 landed in PR 883
+  (main c7afe0be, 2026-11-15) with that test, read by JH 302
 
 ### opening-pasted-no-line
 The opening of a session reached it as pasted text with no typed line of his, so the session waited

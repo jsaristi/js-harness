@@ -465,7 +465,7 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **Cost:** no eval.
 - **His decisions:** the row enters the plan by his answer to question 123 (lead transcript
   0f71b2c6, line 32757): "Sí, agrégala".
-- **State:** built, PR 704 (`feat/codex-daemon-row`, `odd/tasks/codex-daemon-row.md`).
+- **State:** built, PR 704 merged 2026-10-30 (`odd/tasks/codex-daemon-row.md`, no task open).
 
 ### The desktop plan, steps 2 to 5 (JH 107, beside the Host row)
 - **Changes:** steps 2 to 5 of [the desktop proposal's plan](proposals/claude-app-native-sessions.md#12-plan-in-order):
@@ -477,8 +477,8 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **His decisions:** the plan's order and these four steps by his answer to question 128 (lead transcript
   0f71b2c6, line 34672): "Sí, arranca el plan (Recomendada)"; stopping the orphaned status-line processes by his
   answer "Elimina todo lo de ccstatusline, completamente y a profundidad" (channel, 2026-10-30T18:47:25Z).
-- **State:** PRs 708 (step 2), 709 (step 5) merged; 711 (the probe's scratch PR) merged; 712 (step 3) and this
-  record ready. No skill line was removed: rows 3 and 4 wait for R1.
+- **State:** PRs 708 (step 2), 709 (step 5), 711 (the probe's scratch PR) and 712 (step 3) merged, 712 on
+  2026-10-30. No skill line was removed: rows 3 and 4 wait for R1.
 
 ### S5c-a Directive coverage, the mechanism
 - **Changes:** every source the harness ships or sends to an agent is listed by a test; each source
