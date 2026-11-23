@@ -206,6 +206,7 @@ for every code commit while gentle-ai reviews (until F8's S2).
   document needed"; the merge door then refused PR 636, and JH 72 added per-slice gentle-ai reviews
   afterwards. The prevention: a lead's brief for code work never waives the feature document's
   gentle-ai lines before S2
+- Control: measured — docs/audits/2026-11-22-failures-without-a-check.md — "on 2026-11-22 no door asks for the lines a brief could waive, and no command can judge a brief's prose" — since 2026-11-22
 
 ### broken-wait-script
 A private script written to wait or to check was broken, kept running, and reported a state that was
@@ -561,6 +562,8 @@ machine for nothing.
   failure; the name of the failing test is on the gate's `✖ failing tests:` lines, read from the first run
 - Seen: 2026-10-30 — odd/tasks/f8-lead-rigor.md, L13 (JH 106) — in small: eight test files run twice through
   `js-harness gate`, about four minutes, because a `grep | head` of the first run kept help lines and cut its summary
+- Control: measured — docs/audits/2026-11-22-failures-without-a-check.md — "on 2026-11-22 no
+  command can tell a run started to read a failure from a run that was needed" — since 2026-11-22
 
 ### doctor-lock-mtime-ms
 A test of `bin/doctor.test.mjs`, "doctorMain shows the pnpm-lock row stale for a global bin lock left over
@@ -1307,6 +1310,8 @@ one, and the first text was lost.
   last paragraph — written by another session at about 19:57 and overwritten by JH 7 a moment
   later; what is there is JH 7's rewrite, and the rule's fuller record is the note
   `questions-with-buttons`, untouched
+- Control: measured — docs/audits/2026-11-22-failures-without-a-check.md — "on 2026-11-22 no check in this repository can see a memory note written over another
+  session's" — since 2026-11-22
 
 ### merge-review-covers-main
 A merge of the default branch in which somebody wrote a few lines became a code commit whose
@@ -1364,6 +1369,8 @@ A session started waiting on him between two runs of the watch, and neither run 
 - Class: unseen-state
 - Seen: 2026-10-09 — relief file, line 37 — 50 minutes unreported; cause at line 39; also
   odd/tasks/session-board.md:1293-1305
+- Control: measured — docs/audits/2026-11-22-failures-without-a-check.md — "on 2026-11-22
+  no check in this repository can see a session start waiting on him between two looks of a watch" — since 2026-11-22
 
 ### node-switch-shims-shadowed
 Files left in a node folder by an earlier install shadowed the tool the switch expected, and the switch compared only
@@ -1999,6 +2006,7 @@ an open quote.
   It returns after about 27 more starts of one session, since the hook,
   `plugins/cache/openai-codex/codex/1.0.6/scripts/session-lifecycle-hook.mjs:39`, appends with no
   check
+- Control: check — bin/lib/session-env.test.mjs — "a start trims a file past the threshold, after a backup and a record that undo it exactly" — since 2026-11-04
 
 ### session-never-woken
 Sessions told to start after an event armed no wait for it, so nothing woke them when it came.
@@ -2691,6 +2699,7 @@ blocked it.
 - Class: tool
 - Seen: 2026-10-10 — relief file, line 96 — the wait of JH 2 would end only when two other branches
   moved; a second paste of his undid it (line 97); also odd/tasks/session-board.md:1461-1463
+- Control: check — bin/wait.test.mjs — "the time runs out after --for minutes, with a last check at the deadline" — since 2026-10-14
 
 ### wake-with-no-news
 The watch returns on changes that ask nothing of anybody, and each return costs the orchestrator
