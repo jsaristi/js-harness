@@ -948,6 +948,11 @@ of the first version.
 - [ ] `notify --kind ready --pr` accepts a head that is not the session's HEAD (PR 886). Owner: the next notify session (2026-11-15, the lead).
 - [ ] A stretch item names nothing that closes it (0 of 3). Owner: the next stretch-protocol session (2026-11-15, the lead).
 - [ ] `merge-queue --refresh-copy` refuses (exit 75) while a gate runs, with no queue. Owner: the next merge-queue session (2026-11-15, the lead).
+- [ ] A refresh leaves running waits alone: open PR 1009. Owner: the lead (2026-11-23).
+- [ ] A worktree whose last session ended is not another session's. Owner: the next guard session (2026-11-23).
+- [ ] The lead plans the stretch's next units before it rests. Owner: the lead (2026-11-23).
+- [ ] An unpushed `rule/` branch holding the open rule change shows. Owner: the next rules session (2026-11-23).
+- [ ] The guard refuses a Bash command ending in `&`. Owner: the next guard session (2026-11-23).
 - [ ] A refused refresh of the installed copy wakes nobody. Owner: the next merge-queue session (2026-11-15, the lead).
 - [ ] A question whose yes becomes a rule change says a typed line is needed: `rules change` refuses a tap, so Q296 and Q297 could not land. Owner: the next questions session (2026-11-15, JH 209).
 - [ ] A stretch's lost time counts only failed gates: the 2026-11-15 return showed 0.16 h lost while JH 199 and

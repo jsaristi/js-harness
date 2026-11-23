@@ -74,6 +74,7 @@ then refused every `cd` back into it as another session's, so the steps that run
   `loving-pascal-568299` to `D:\js-harness`, and the guard refused its `cd` back as "another session's worktree";
   JH 236 (transcript 37723703) had used that folder until 23:34Z, eight minutes before JH 241 started in it. A
   worktree an ended session used is taken as that session's; JH 241 went on from where it stood
+- Control: owed — docs/ROADMAP.md — "A worktree whose last session ended is not another session's"
 
 ### asked-yes-not-his
 A session stopped and asked him for a yes on a step that was not one of the things that are his.
@@ -139,6 +140,7 @@ is away, and nothing made the sessions take more work once the briefs they held 
   while token-only documents work existed (two owed Seen lines, prose controls, the project.mjs split plan, briefed
   to JH 302 at 20:52). He asked: "tenemos que estar a toda hora trabajando con las horas llena y con lo siguiente a
   trabajar". What stops it: the lead keeps documents work queued for the hours Codex is held
+- Control: owed — docs/ROADMAP.md — "The lead plans the stretch's next units before it rests"
 
 ### block-read-as-task
 A block meant to hold his answer was worded as an instruction and he read it as a task for him to
@@ -1766,13 +1768,14 @@ stood.
 ### refresh-kills-wait
 `merge-queue --refresh-copy` replaced the installed copy under running `js-harness wait` processes, which exited 127
 and stopped watching, with nothing that said the wait was gone. The follow-up: JH 284 builds the fix in `bin/` (the
-lead's notes, brief-refresh-waits.md); its test becomes this entry's control when it lands.
+lead's notes, brief-refresh-waits.md), in open PR 1009; its test becomes this entry's control when it lands.
 - Class: tool
 - Seen: 2026-11-21 — relief file, lines 3659-3660 — the refresh to 301974c at 07:15 local ended the lead's notice wait
   with exit 127 right after its start line; the lead restarted it by hand; JH 267's wait died too (the lead's brief
   for JH 283, claimed)
 - Seen: 2026-11-21 — relief file, lines 3667-3668 — the refresh to 85e45a1 at 08:22 local ended the lead's wait with
   exit 127 the same way; line 3668: JH 267 confirms a refresh kills running waits (claimed)
+- Control: owed — docs/ROADMAP.md — "A refresh leaves running waits alone: open PR 1009"
 
 ### refresh-wait-false-way-out
 `merge-queue --land --refresh-copy`, when sessions were still at work after its wait, said that the
@@ -1909,6 +1912,7 @@ another session's `rules change` was refused.
 - Seen: 2026-11-19 — relief file, line 3466; plan-2026-11-18-away.state.md, the entry of 17:40 — JH 233's dry run of
   the review-effort rule change was refused at 16:45 local by the same branch (18 commits unpushed, `500afaa7`), which
   became question 379: park it as `parked/plan-pre-prompt` or wait for the senior's task 3 after the reset
+- Control: owed — docs/ROADMAP.md — "An unpushed `rule/` branch holding the open rule change shows"
 
 ### rule-only-in-memory
 A rule lived only in an agent's memory note, so he repeated it and sessions already open did not get
@@ -2706,7 +2710,7 @@ process ran where the host did not track it.
   lead started `js-harness wait --notice-to orchestrator` with a trailing `&` (pid 5296), which would never have
   woken it; seen at once, the process stopped and the wait started again as a background run. The guard refuses
   `&` only after push, commit, gh pr or notify, not before a wait
-- Control: owed — the lead's notes, return-block-3.md — "the guard hook refuses a Bash command ending in `&`; who builds: a small rule/guard session after the report pages"
+- Control: owed — docs/ROADMAP.md — "The guard refuses a Bash command ending in `&`"
 
 ### wait-blind-to-notices
 A session waited with `js-harness wait` on one event, and the lead's notices to it did not end the
