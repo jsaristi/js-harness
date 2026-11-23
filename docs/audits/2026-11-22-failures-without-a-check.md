@@ -46,3 +46,36 @@ harness sees neither. What holds it: a session whose turn was stopped or refused
 needs (`bin/lib/manifest.mjs`, the line "When the user refuses a tool call of yours or stops your turn"), and the
 orchestrator knows whether he refused. Measured: on 2026-11-22 no check in this repository can tell a stopped turn
 from his refusal.
+
+## Added the same evening (JH 302)
+
+Four more entries of the day's list, read on 2026-11-22 against origin/main 6d6a5d85. In the same pass two entries
+were found held by tests already on main, so they take a `check` control and are not here: `session-env-file-cut`
+(`bin/lib/session-env.test.mjs`, since 2026-11-04, which trims the file at each start; the doctor row named above is
+no longer needed) and `wait-tied-to-commit` (`bin/wait.test.mjs`, since 2026-10-14: every wait ends at its bound).
+
+## brief-waived-review-lines
+The lines that brief waived were gentle-ai's, which the merge door asked for until gentle-ai left at F8's S2
+(`AGENTS.md`); no door asks for them now. The reviews that stand in their place are recorded by command and refused
+at push whatever a brief says (`bin/check-codex-reviews.test.mjs`, "an uncovered code commit fails"), so a brief
+that waives them changes nothing. What is left, a brief that says something wrong, is prose a command cannot judge.
+Measured: on 2026-11-22 no door asks for the lines a brief could waive, and no command can judge a brief's prose.
+
+## diagnostic-whole-gate
+A run started to read a failure and a run that was needed are the same command; whether the first run's output was
+enough is a judgement. What holds it: node's test runner names each failing test under `✖ failing tests:`, and the
+gate reads that list (`bin/lib/ci-gate.mjs`), so the first run already names the failure. Measured: on 2026-11-22 no
+command can tell a run started to read a failure from a run that was needed.
+
+## memory-note-overwritten
+Memory notes are the host's files and engram's store, not this repository's, and the harness writes neither. What
+holds it: the host's memory instructions ask a session to look for an existing note before it saves one, and a
+committed document is canonical while a note only mirrors it (`rule:documents-canonical`), so an overwritten note
+loses no record. Measured: on 2026-11-22 no check in this repository can see a memory note written over another
+session's.
+
+## missed-wake
+A watch that looks at intervals cannot see what started between two looks; the host tells the harness nothing when
+a session starts waiting on him. What holds it: a session that waits on him says so itself with a `waiting` notice
+(`js-harness notify --kind waiting`), so the lead does not depend on the watch to find it. Measured: on 2026-11-22
+no check in this repository can see a session start waiting on him between two looks of a watch.
