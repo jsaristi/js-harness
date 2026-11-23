@@ -564,3 +564,11 @@ test('a branch cut from a commit no other branch holds is read whole', (t) => {
   stackedBranch(root, { drop: true });
   assert.deepEqual(errorsOf(root), ['code was committed before the pass\'s verdict: bin/b.mjs']);
 });
+
+// odd/tasks/folder-instructions.md: the folder's instruction file is no feature document, so it owes no contract.
+test('depthPassJudge leaves odd/tasks/CLAUDE.md alone', async () => {
+  const { depthPassJudge } = await import('./depth-pass.mjs');
+  const judge = depthPassJudge({ since: '2026-11-01', today: '2026-11-21', opened: new Map(), branch: [], staged: [], onTrunk: () => null, trail: () => [], version: () => null });
+  assert.deepEqual(judge('odd/tasks/CLAUDE.md', '# odd/tasks\n'), []);
+  assert.notDeepEqual(judge('odd/tasks/other.md', '# other\n'), []);
+});

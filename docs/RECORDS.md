@@ -58,6 +58,14 @@ where an auditor checks them, since no schema holds the fields and nothing check
 - `@AGENTS.md`: the import line. `addImport` puts it, plus an empty line, at the top of an existing file. It does so only where git can give the file back byte for byte, and keeps the file's line ends and any UTF-8 byte-order mark. `bin/lib/claude-import.mjs` `importsAgents` recognises the import as a line of its own outside a code fence.
 - The marked block, as in `AGENTS.md`, holding `claudeBlock` once the project has the split. `bin/lib/claude-md-budget.mjs` holds the file to `rule:claude-md-budget`.
 
+## The folder instructions
+
+`odd/tasks/CLAUDE.md`, `bin/CLAUDE.md`, `docs/CLAUDE.md` and `evals/CLAUDE.md` are written by hand and kept in git, so git undoes them. The host loads one the first time a session reads or writes a file in its folder; `evals/folder-load-probe.mjs` measured that load as `nested_memory` in the transcript.
+
+- `# <folder>: <what lives there>`, a line that says when the host loads the file, then bullets bound to that folder.
+- Each bullet names the rule it rests on as `rule:<id>` and repeats no rule's text.
+- `bin/lib/claude-md-budget.mjs` `checkFolderInstructions` holds each file to `FOLDER_INSTRUCTIONS_LINES` lines in `check`; `bin/rules.mjs` reads all four whole for `rules check`, and `progress` and the depth-pass judge leave them out of the features.
+
 ## The project's own rules
 
 `docs/rules.json` is a project's own list of rules, written by hand and never by the harness. `bin/lib/project-rules.mjs` `parseProjectRules` reads it, and `checkProjectRules` (through `bin/lib/project-rules-read.mjs` `readProjectRules`) holds it to its homes, its sensors, `docs/FAILURES.md` and its own state at `HEAD`. The fields of each rule are checked by `bin/lib/rules.mjs` `readRules` with `project: true`.
