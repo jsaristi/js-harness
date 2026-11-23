@@ -47,7 +47,7 @@ Deleting or retyping any memory note: one question, sent through the lead.
   roadmap row "First version's scope", and every quotation of a note to delete in "Moved out of memory".
 - [x] T3 (verify) S2: the check is right about the fact notes; no code change (see "The fact notes").
 - [ ] T4 (docs) S1: the question to the lead, one notice; then, after his yes, the backup, the memory pass and its verify (the 17 pointers and the retype done, L5; the 5 placed notes after this branch lands).
-- [ ] T5 (docs) the summary under `docs/sessions/`, the ready notice with the pull request.
+- [x] T5 (docs) the summary under `docs/sessions/`, the ready notice with the pull request (L6).
 
 ## Classification
 
@@ -227,3 +227,8 @@ recordaras todo y ahi si solucionaremos lo demas".
   Found after the pass: restart-announce-caps.md's quotation of 2026-10-20 ("Recuerdame avisarme ...") is in no home on
   main either (`rule:restart-announce` quotes his words of 2026-10-24), so until this branch lands its copies are this
   document, the backup of 15:0xZ and the pass's snapshot (`memory undo 20261030T150050643Z`).
+- L6 (2026-11-23, T5 ticked, read by the docs writer of the lead's night plan, unit 2): the summary
+  `docs/sessions/2026-10-30-jh-100-memory-place-the-23-notes-doctor-flags.md` is on main, added by `7f8fd492`; PR 700
+  merged 2026-10-30T15:16:23Z (`gh pr view 700`); in `C:\Users\Oficina\.js-harness\channel\D--js-harness.jsonl`
+  the ready notice with `"pr":700` is line 1747 (15:06:21Z) and JH 100's closed notice line 1754 (15:21:32Z, "PR 700
+  in main"). T4 stays open, as the lead's brief says.
