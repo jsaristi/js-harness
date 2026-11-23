@@ -989,8 +989,8 @@ test('gate writes a start after the sample and before the command, and an end af
     // The end is written with the lock still in hand, where the gate has one.
     assert.deepEqual([code, order], [7, [['sample', holder], ['start', holder], 'command', ['end', holder]]], lock);
     const [start, end] = log.events;
-    assert.deepEqual(fieldsOf(log.events), ['v event id at cwd command pid lock waitedSeconds waitedFor load home', 'v event id at seconds result home'], lock);
-    assert.deepEqual({ ...start, id: '', at: '', waitedSeconds: Math.floor(start.waitedSeconds) }, { v: 1, event: 'start', id: '', at: '', cwd: path.resolve(dir), command: 'gate -- node --test', pid: process.pid, lock, waitedSeconds: 0, waitedFor: [], load: QUIET_LOAD, home }, lock);
+    assert.deepEqual(fieldsOf(log.events), ['v event id at cwd command pid lock waitedSeconds waitedFor maxMinutes load home', 'v event id at seconds result home'], lock);
+    assert.deepEqual({ ...start, id: '', at: '', waitedSeconds: Math.floor(start.waitedSeconds) }, { v: 1, event: 'start', id: '', at: '', cwd: path.resolve(dir), command: 'gate -- node --test', pid: process.pid, lock, waitedSeconds: 0, waitedFor: [], maxMinutes: GATE_MAX_MINUTES, load: QUIET_LOAD, home }, lock);
     assert.deepEqual([end.v, end.event, end.id, end.result, end.home], [1, 'end', start.id, 'exit 7', home], lock);
     assert.ok(isIsoTime(start.at) && isIsoTime(end.at) && start.at <= end.at && end.seconds >= 0 && end.seconds < 60, JSON.stringify(end));
   }
@@ -999,7 +999,13 @@ test('gate writes a start after the sample and before the command, and an end af
   // With the sample of the load switched off there is no load to write.
   const unsampled = capturedLog();
   await runGate(argv, { JS_HARNESS_GATE_LOAD: 'off' }, { spawn: ranWith(0), ...unsampled.deps });
-  assert.deepEqual(fieldsOf(unsampled.events), ['v event id at cwd command pid lock waitedSeconds waitedFor home', 'v event id at seconds result home']);
+  assert.deepEqual(fieldsOf(unsampled.events), ['v event id at cwd command pid lock waitedSeconds waitedFor maxMinutes home', 'v event id at seconds result home']);
+
+  // The bound it was given, so that a reader of a running gate knows when it will be stopped (the 40-minute
+  // gate of 2026-11-22 had been passed `--max 40` and its start did not say so).
+  const bounded = capturedLog();
+  await runGate(['--max', '40', ...argv], { JS_HARNESS_GATE_LOAD: 'off' }, { spawn: ranWith(0), ...bounded.deps });
+  assert.equal(bounded.events[0].maxMinutes, 40);
 }));
 
 test('the end of a gate says how its command ended: its exit code, killed, or an error of the gate itself, a thrown one included', withHome(async (home, dir) => {
@@ -1155,7 +1161,7 @@ test('gate keeps who spent the processor over its command: watched from its star
     assert.deepEqual(kept.get(start.id).busiest.map(({ name, script, cpuSeconds }) => [name, script, cpuSeconds]), [['MsMpEng', undefined, 412.3], ['svchost', undefined, 380], ['node', 'check.mjs', 2100.4]], lock);
     assert.equal(kept.get(start.id).seconds, 700.2);
     // The log's own lines hold nothing new.
-    assert.deepEqual(fieldsOf([start, end]), ['v event id at cwd command pid lock waitedSeconds waitedFor load', 'v event id at seconds result'], lock);
+    assert.deepEqual(fieldsOf([start, end]), ['v event id at cwd command pid lock waitedSeconds waitedFor maxMinutes load', 'v event id at seconds result'], lock);
   }
 }));
 
@@ -1572,7 +1578,7 @@ test('a real gate leaves its two lines in the log of its home, and a real gate l
   assert.deepEqual(rest, ['']);
   const began = JSON.parse(start);
   // No load: these gates are started with the sample switched off.
-  assert.deepEqual({ ...began, id: '', at: '', pid: 0, waitedSeconds: Math.floor(began.waitedSeconds) }, { v: 1, event: 'start', id: '', at: '', cwd: dir, command: 'gate -- node three.cjs', pid: 0, session: 'a-session', lock: 'own', waitedSeconds: 0, waitedFor: [] });
+  assert.deepEqual({ ...began, id: '', at: '', pid: 0, waitedSeconds: Math.floor(began.waitedSeconds) }, { v: 1, event: 'start', id: '', at: '', cwd: dir, command: 'gate -- node three.cjs', pid: 0, session: 'a-session', lock: 'own', waitedSeconds: 0, waitedFor: [], maxMinutes: GATE_MAX_MINUTES });
   assert.ok(Number.isInteger(began.pid) && began.pid !== process.pid, String(began.pid));
   const ended = JSON.parse(end);
   assert.deepEqual({ ...ended, at: '', seconds: 0 }, { v: 1, event: 'end', id: began.id, at: '', seconds: 0, result: 'exit 3' });

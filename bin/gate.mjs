@@ -462,7 +462,8 @@ export async function gateMain(argv, env = process.env, deps = {}) {
       record?.refused({ reason: 'not ready', waitedMs: turn.waitedMs, waitedFor: turn.waitedFor });
       return GATE_NOT_RUN;
     }
-    record?.start({ ...turn, load });
+    // The bound, the default included: what a reader of a running gate needs to know when it will be stopped.
+    record?.start({ ...turn, maxMinutes, load });
     // Who spends the processor over the command, as `check` keeps it over its sensors (`watchRun`): not
     // waited for before the command, and nothing read with the sample of the load switched off.
     const keepBusiest = loadSwitchedOff(env) ? null : watchRun(record, deps.watchBusiest);
