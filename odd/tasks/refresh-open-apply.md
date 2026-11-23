@@ -54,8 +54,9 @@ Nothing beyond the brief: the field's shape and the exit code are decided here (
 - [x] T2 (kind: build) spec 1: the refusal in the refresh, a planted open question that turns it red, then green.
 - [x] T3 (kind: build) spec 2: the waiting lines of the resume, a planted waiting notice that turns it red, then green.
 - [x] T4 (kind: docs) spec 3: the two `- Seen:` lines with their controls.
-- [x] T5 (kind: verify) Codex, the Claude lenses and an independent verifier over each code slice; PR; ready notice.
-  Codex L8; lenses, the verifier over 962c7396 and the ready notice L12; PR 736 merged (6bee9e5b).
+- [ ] T5 (kind: verify) Codex, the Claude lenses and an independent verifier over each code slice; PR; ready notice.
+  Codex L8; lenses, the verifier over 962c7396 and the ready notice L12; PR 736 merged (6bee9e5b). Open: the
+  `npm run check` that `## State for a resume` plans before T5 is marked is not proved (L12).
 
 ## State for a resume
 Done: every code commit has a Codex record and a lens record (L8, L9). Pushed; PR 736 open; ready notice recorded
@@ -148,7 +149,7 @@ lead's land. Left: L9's verified "No".
   the Log (searched for "lens" and "ready"): the two lens runs and the ready notice of 2026-10-31T08:41:28Z, which
   are recorded only in `## State for a resume` (commits 814f03dc and b075b607); and no verifier read the fix commit
   962c7396 that took its defects. T5 stays open until the Log records them.
-- L12 (2026-11-23, T5 ticked: an independent verifier, read-only, over the fix commit `962c7396` on main `04664ab6`;
+- L12 (2026-11-23, T5 left open: an independent verifier, read-only, over the fix commit `962c7396` on main `04664ab6`;
   its notes `verifier-five-2026-11-23.md`, section 2): passes. `962c7396` is an ancestor of origin/main;
   `refresh-consent.mjs` and `resume-record.mjs` are unchanged since (`git diff --stat 962c7396 origin/main -- ...`),
   and `merge-queue-refresh.mjs` changed only in 7f918a92, its try/catch around `unanswered(sha)` in `refreshNow` kept
@@ -169,4 +170,6 @@ lead's land. Left: L9's verified "No".
   check` that `## State for a resume` plans before T5, stay unproved; T5's text does not name it. Observations, not
   fails: `refreshAfterLand` (`bin/lib/merge-queue-refresh.mjs:108`) has no catch of its own around `unanswered(sha)`,
   so a throw on the land path exits REFRESH_FAILED, not 77 (nothing installs either way); L9's Left (a verified "No"
-  closes the question) stays as designed.
+  closes the question) stays as designed. T5 stays open (the lead, 2026-11-23, unticking it): `## State for a resume`
+  plans `npm run check` on main before T5 is marked, and that check is unproved, as it is for f8-lead-rigor T5 and
+  departure-stretch T4.
