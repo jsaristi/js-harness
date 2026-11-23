@@ -231,7 +231,7 @@ export function hostUpdateRow(versions, reviewed, now = () => new Date(), projec
       remoteControlStep(projectData),
       'report to the user a full summary in everyday words: what improved, what changed and what was fixed; for each, how it helps or hurts the harness and the way the user works; and what the harness should change to work better, or must change; a version the changelog has no entry for is reported as having none',
       `write that account to ${reviewFileOf(versions.desktop)} in the project that keeps the host reviews: ${versions.code ? `the line "Code tab CLI: ${versions.code}", ` : ''}a table of Change, Decision (adopt, adapt or ignore) and Reason, one row a change the update brings, and a "## Sources" list of what was read, the changelogs above among it, each with its span "(<from> to <to>)"`,
-      'then, once that file is on the main branch, pull it into the checkout doctor runs in (git pull), and record the review: js-harness doctor --host-reviewed, which reads the file there and refuses while it lacks any of it',
+      'then, once that file is on the main branch, record the review from the main checkout of the project that keeps the host reviews, never a worktree, whose git pull updates its own branch: git pull there, then js-harness doctor --host-reviewed there, which reads the file and refuses while it lacks any of it',
     ];
   }
   if (versions.staged && compareSemver(versions.staged, versions.desktop) > 0) {
