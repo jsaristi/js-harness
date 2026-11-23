@@ -5,7 +5,7 @@ Design only, no code. Version 3, read three times (reads 2a17bbe1, 5eed176c, b88
 findings are taken (L9, L10); the third's 21 are open in L11 and told to him as problems on the page
 (https://claude.ai/artifact/1ppv1NAxbrfv3THX96Gt7b), with no fourth round. Everything from L12 on was added after
 the last read and no reader has read it: Spec 8 (L12), his line on the advisor and the swarms (L14), his four
-answers (L15, L16: the lead opens the work sessions, superseded by L18: the Plan opens them; Fable 5.2 at high; sub-agents inside each session; his
+answers (L15, L16: the lead opens the work sessions, superseded by L18: his words ask that sessions open without asking him, read by the lead and JH PLAN as the Plan opening them; Fable 5.2 at high; sub-agents inside each session; his
 questions only in the Plan, by a tap, the typed line still owed), T11 and Spec 9. On 2026-11-16 he typed yes to
 starting phase 0 with those problems said (L17, question 315), so PR 894 (branch `claude/dreamy-nash-50fa03`,
 worktree `rule-lead-effort-split-aac740`) goes ready and the lead lands it. Left: the lead stores the Plan's

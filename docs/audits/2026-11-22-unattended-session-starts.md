@@ -18,7 +18,7 @@ His words that ask for it: transcript `0cdab702-72bd-48e7-8a8e-0c38d4aca9c9`, li
    `js-harness sessions start`, scheduled tasks and cloud sessions. Each could start a session with nobody there,
    and each would open it where he does not see it.
 
-So, today, the Plan opens sessions without asking only on a turn he typed. "Sin pedir permiso" (line 14462) is met as
+So, today, a session opens others without asking him only on a turn he typed; that the Plan is that session is the lead's and JH PLAN's reading of his words (L18), not his words. "Sin pedir permiso" (line 14462) is met as
 far as the host allows. The rest waits on the exception's test or on the host.
 
 ## The minutes with no work session running, 2026-11-22
@@ -26,7 +26,7 @@ Method: every transcript under `~/.claude/projects/D--js-harness-*` (the worktre
 itself, where the lead and the Plan run, is left out) modified that day. A minute counts as busy when a transcript
 has an entry in it, and the minutes between two entries of the same transcript count too when the entries are 5
 minutes apart or less. The day is the local day (UTC-5), 00:00 to 21:33 when counted. Script: a node reader of each
-entry's `timestamp`, kept in JH 301's scratchpad. The channel record (`~/.js-harness/channel/D--js-harness.jsonl`)
+entry's `timestamp`, kept as `idle.mjs` in JH 301's shared notes folder (`side-session-notes/local_f536332a-81c1-489b-9669-68384563ffe9`). The channel record (`~/.js-harness/channel/D--js-harness.jsonl`)
 was not used: a notice marks a step, not the time between steps.
 
 Result: 15 work-session transcripts; of 1,293 minutes, **759 with no work session running** (12 h 39 min) and 534
