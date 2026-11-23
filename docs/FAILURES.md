@@ -1037,8 +1037,11 @@ nothing said so: the scheduled task went on running the product's `loop heartbea
   `bin/lib/manifest.mjs:148` and `:152` and the orchestrator skill direct. Control fired unread: the ticks hook
   (`ticks --hook`, `.claude/settings.json:9`) said so at 146 session starts from 2026-11-12T13:40Z, and named the
   product loop on 2026-11-13, but only as a `systemMessage`, which reaches him and not the model (claimed in K2, not
-  tested), and no lead's text reads it. windows-daily and host-watch stayed stale until the lead started the
-  workshop heartbeat on 2026-11-23 (claimed; the lead's own): here `ticks` still printed both STALE, last read
+  tested), and no lead's text reads it. windows-daily and host-watch are still stale: the lead started
+  `js-harness loop run heartbeat -- node workshop/js-harness-workshop.mjs loop heartbeat` at 2026-11-23T08:26Z, and
+  it ended at once, exit 0, before any tick, on lines already standing: "already stalled" JH 301, JH 302 and JH 287,
+  a DUE throughput review and a CUT line (claimed; the lead's own report, its output in the lead's scratchpad). A
+  heartbeat that ends on standing lines cannot run its ticks; here `ticks` still printed both STALE, last read
   2026-11-11T21:21Z, and `loop status` recorded no loop, at 08:30Z
 - Control: check — workshop/bin/ticks.test.mjs — "a stale row against a home whose newest snapshot is two days old:
   the hook exits 0 and says it" — since 2026-11-10
