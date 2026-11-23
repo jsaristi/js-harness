@@ -195,11 +195,16 @@ The steps:
 1. A work session makes the four folders under `%LOCALAPPDATA%\Temp\jh-desktop-probe\` (not git repositories, so the
    app cuts no worktree), each with `.claude\settings.local.json` holding `{"permissions": {"deny": [...]}}` as the
    table says (`{}` for plain). Nothing else goes in them.
-2. The same session starts four sessions with `start_session`, one per folder (`cwd`), "fresh", same model, effort
-   and permission mode, each with the same prompt, `say ok`, within ten minutes, so the app version and the engram
-   state are the same. All four started the same way, so the host's "started from another session" block is in each.
-   The app may show him a trust card for each new folder: that click is his, and is the only step that is.
-3. When the four have answered, the session reads the first assistant entry of each transcript, under
+2. The lead starts the four sessions, on the turn where he types his yes in the lead's chat: the app refuses a
+   `start_session` outside a turn he typed and leaves a card instead, so a work session cannot do it, and a later
+   turn of the lead's cannot either. On that turn the lead calls `start_session` four times, `initiation`
+   "user_asked", "fresh", one per folder (`cwd`, the place his yes names), each titled by `rule:session-title` with
+   the next free numbers and the arm as its purpose (`JH <n> · probe plain`, `· probe control`, `· probe artifact`,
+   `· probe mcp`), at `rule:session-model` and `rule:session-effort`, the same permission mode, and the same prompt,
+   `say ok`. All four start within minutes of each other, so the app version and the engram state are the same, and
+   all four the same way, so the host's "started from another session" block is in each. The app may show him a
+   trust card for each new folder: that click is his, and with the yes it is all he does.
+3. When the four have answered, a work session reads the first assistant entry of each transcript, under
    `~/.claude/projects/<folder slug>/<session id>.jsonl`, with this reader (tested 2026-11-22 on JH 301's own
    transcript: 79,136, model `claude-opus-5-5`, version 2.1.330):
    saved as `first-call.mjs` in the running session's scratchpad and run as `node first-call.mjs <transcript>...`:
@@ -214,7 +219,7 @@ The steps:
      console.log(`${file}: input ${u.input_tokens} creation ${u.cache_creation_input_tokens} read ${u.cache_read_input_tokens} total ${total} model ${entry?.message?.model} version ${entry?.version}`);
    }
    ```
-4. It checks the four share model and version, notes engram's block per transcript, computes each drop against
+4. That work session checks the four share model and version, notes engram's block per transcript, computes each drop against
    plain, and writes the table's measured column here.
 5. Undo, in this order: the transcripts are read first; then the four folders are deleted; the four sessions are
    archived (deleting them is his call). It writes nothing in `~/.claude/settings.json`, in any project's settings
@@ -229,16 +234,19 @@ scratch folders; a deny for work sessions would sit in this project's `settings.
 already cut, and whether the lead's session gets it, are not checked. Card 3 of the lead's decision cards says a yes
 covers work sessions only, never his or the lead's, so that question comes before any deny is applied.
 
-His yes in one line: "Sí, correr la prueba de escritorio de la dieta de contexto (4 sesiones de 'say ok', unos 0,32M
-tokens del plan, carpetas temporales que se borran después)".
+His yes in one line, typed in the lead's chat, which names the place the four start in: "Sí, correr la prueba de
+escritorio de la dieta de contexto (4 sesiones de 'say ok' en %LOCALAPPDATA%\Temp\jh-desktop-probe, unos 0,32M tokens
+del plan, carpetas que se borran después)". A work session makes the folders (step 1) before the lead asks, so that
+the four can start on that same turn.
 
 ## Tasks
 - [x] T1 (kind: verify) measure the fixed context and propose; spec 1; route: inline, read-only scripts in the
   scratchpad; commit: this document alone.
 - [x] T2 (kind: verify) C1 probe: does a deny drop a tool's schema; spec 1; route: inline, three `claude -p` runs in
   JH 289's scratchpad, no settings file; commit: this document and one `docs/FAILURES.md` line (PR 952).
-- [ ] T3 (kind: verify) the desktop probe of "Desktop probe: the steps", on his yes; spec 1; route: a work session,
-  four `start_session` sessions in scratch folders; commit: this document's measured column and Log.
+- [ ] T3 (kind: verify) the desktop probe of "Desktop probe: the steps", on his yes; spec 1; route: a work session
+  makes the folders, the lead starts the four sessions on the turn of his yes, a work session reads and records;
+  commit: this document's measured column and Log.
 
 ## Log
 - L1 His request, typed (0cdab702 line 9413): "solucionemos todos esos errores y dime cuanto nos podemos ahorrar y
@@ -256,3 +264,7 @@ tokens del plan, carpetas temporales que se borran después)".
   arms with a positive control, after an advisor read that a zero from one combined arm could not tell a desktop
   ignoring the file from one ignoring a deny on its own tools. Nothing run; the reader was tested on JH 301's own
   transcript only.
+- L7 The lead (JH ORQ to JH 301, 2026-11-22, after PR 998 merged as `376a5bf3`): "step 2 ... has a work session start
+  the four sessions with start_session, but the app refuses a start outside a turn he typed (it leaves a card);
+  rewrite step 2 so the lead starts the four on the turn where he types his yes in the lead's chat, within the
+  guard's title, model and effort rules." Step 2, the yes line and T3 rewritten so.
