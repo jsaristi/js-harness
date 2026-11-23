@@ -34,19 +34,38 @@ None of the long session's five moments is the review itself (`rule`, `spanish`,
 `evals/long-session/grade.mjs:17`) [c], so any of A to C measures the same moments; they differ in what the run must
 get through to reach them.
 
-## Recommendation: C, after two reads
-C is the only way with no credential and no change near the guard C4.4 holds. It rests on two things not read: that
-the fixture's `harness.json` reaches the run unchanged, and what the release then waits on and costs (the lens
-record). Both are code reads, free, one short unit before he answers. If the lens record would hold the release
-the same way, D with its recurrence named is the honest fallback, and A only after a verify step proving a refresh
-inside a copy leaves his real login valid. The long session's calibration script does not reach the release
-(`evals/long-session/script.mjs:79-82`: its first three turns, the compaction and the resume), so it cannot check C.
+## The two reads (JH 301, 2026-11-22, read-only, on `origin/main` after PR 1004)
+1. **Does a fixture `harness.json` reach the run? Yes, and it costs the arm its project layer.** The `current` arm
+   builds its workspace with `js-harness init` (`evals/home.mjs:456-475`, `initWorkspace`). `initProject` checks for
+   a `harness.json` first and, when one is there, takes the already-initialized path
+   (`bin/lib/project.mjs:1032-1034`), which with no manifest returns "exit 0, nothing written"
+   (`bin/lib/project.mjs:946-953` and `:993`). So a `harness.json` committed in the fixture would keep `init` from
+   writing `AGENTS.md`, the pre-commit gate and the clone's settings: the `current` arm would no longer be the
+   harness. C as written breaks the arm [c].
+2. **With the Codex review off, what does a release wait on?** The Codex row asks for nothing: "the Codex review is
+   off at the pushed commit ..., so no record is asked for" (`bin/lib/codex-review-rows.mjs:276-281`) [c]. The lens
+   review stays on unless `lensReview` is off too (`bin/lib/functions.mjs:21`), and the push and the merge door ask
+   for its record (question 104, `docs/ROADMAP.md:162`) [c]. Whether the agent inside the trial can run
+   `js-harness lens-review`, a Claude run nested in the trial, and at what list cost, was not read [?].
 
-His yes in one line, once the two reads hold: "Sí, opción C: el fixture de la sesión larga declara la revisión de
-Codex apagada".
+## Recommendation: C', the switch written after `init`
+The only way left with no credential and no change near the guard C4.4 holds: the long session's `current` arm runs
+`init` as now, then sets `"functions": {"codexReview": "off"}` in the `harness.json` that `init` wrote, before the
+first turn. That is a change to eval code (`evals/long-session/run.mjs` or the arm's seed), so a build with its test
+and both reviews, after Codex's reset. It removes the Codex hold; the release still asks for a lens record, so the
+build's first check is one run whose release turn is read for a lens-review hold, priced by `--plan` first. If the
+lens record holds the release the same way, D with its recurrence named is the fallback, and A only after a verify
+step proving a refresh inside a copy leaves his real login valid. The calibration script cannot check any of this:
+it does not reach the release (`evals/long-session/script.mjs:79-82`).
+
+His yes in one line: "Sí, opción C': la sesión larga apaga la revisión de Codex en el harness.json que escribe init,
+con su prueba y sus dos revisiones".
 
 ## Log
 - L1 (2026-11-22, the lead to JH 301, as written): "The eval home's Codex login: one page stating what it writes, its
   undo and what it unblocks (S8 long-session rows), for his decision."
 - L2: an advisor read of the first draft found C's lens-record hold, the missing "leave it" option and three claims
   not read; each is now marked or added.
+- L3 (2026-11-22, the lead to JH 301): "The login page's two free code reads, as you suggest, read-only, folded into
+  that page". Done under "The two reads": the first refutes C as written (a fixture `harness.json` stops `init`
+  writing the arm's project layer), so the recommendation becomes C', the switch written after `init`.
