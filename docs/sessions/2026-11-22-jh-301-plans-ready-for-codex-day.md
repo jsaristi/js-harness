@@ -17,12 +17,17 @@ que estar a toda hora trabajando con las horas llena y con lo siguiente a trabaj
   `--plan` (core $42.91 / $63.40 / $83.88).
 - PR 998, merged (`376a5bf3`): `odd/tasks/context-diet.md`, the desktop probe's steps (four arms, a positive
   control, a reader tested on a real transcript: 79,136).
-- PR 1001, ready (head `6a55e2f9`): `odd/tasks/resume-legacy-shorten.md` and `odd/tasks/hyperv-rehearsal.md`,
+- PR 1001, merged (`8a8847fb`): `odd/tasks/resume-legacy-shorten.md` and `odd/tasks/hyperv-rehearsal.md`,
   contract and depth pass each; both States owe the double review first.
-- PR 1004, merged: probe step 2 started by the lead on the turn of his yes; web-guidance T3 priced ($43.50 /
+- PR 1004, merged (`f62b4207`): probe step 2 started by the lead on the turn of his yes; web-guidance T3 priced ($43.50 /
   $67.20 / $119.40, least gain 4 of 10 on one arm, cap $70 mid only); `eval-codex-login.md`, four ways.
-- PR 1005, ready: the login page's two code reads; C as written breaks the arm (`bin/lib/project.mjs:1032-1034`,
-  `:993`), recommendation C'. This summary.
+- PR 1005, merged (`3ac6f393`): the login page's two code reads; C as written breaks the arm
+  (`bin/lib/project.mjs:1032-1034`, `:993`), recommendation C'. This summary.
+- After this summary's closed notice the lane took more units, all merged (read with `gh pr view` on 2026-11-22, local,
+  when JH 303 refreshed this summary at the lead's word): PRs 1007 (`a1929ecd`), 1011 (`2e653bd1`), 1015
+  (`d801d269`), 1016 (`bcca95d0`), 1017 (`745f76f6`), 1019 (`4438b6f9`), 1020 (`5a2c4185`) and 1021 (`9d7f1c47`).
+  Their decisions and costs are not written here: JH 301 stopped near the end of its line without a summary of
+  them (its note to the lead, 2026-11-23 04:39Z).
 
 ## Decisions
 - This session: S8 pricing beside the S8 document, not in it, because PRs 967 and 930 edit it (rerun-pricing L2).
@@ -41,7 +46,7 @@ que estar a toda hora trabajando con las horas llena y con lo siguiente a trabaj
   with `\r?\n` patterns work.
 
 ## Left
-- His decisions: the S8 rerun's cap and the Codex login way (C'), the desktop probe's yes, web-guidance T3's spend,
+- His decisions: the S8 rerun's cap and his yes on C' (the Codex login way, since built as draft PR 1012), the desktop probe's yes, web-guidance T3's spend,
   the Hyper-V rehearsal's five decisions, whether to take the resume shortening now. The lead holds them.
 - Double reviews of PR 1001's two documents, after Codex's reset. The lead places them.
 - Not read: whether a lens review can run inside a long-session trial and its cost.
@@ -49,5 +54,5 @@ que estar a toda hora trabajando con las horas llena y con lo siguiente a trabaj
 ## Cost
 - Time: first notice 20:57 local (PR 997 ready), closed notice 21:31 local, 2026-11-22.
 - Spend: 26.8M input tokens over 132 calls (sum of input, cache creation and cache read per message id in this
-  session's transcript), of the 30M line.
+  session's transcript), of the 30M line, at the closed notice of 21:31; the later units are not counted here.
 - Reviews: none run; documents only. Gate: `npm run check` in the pre-commit hook on every commit, all green.
