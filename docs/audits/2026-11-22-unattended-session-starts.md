@@ -12,14 +12,33 @@ His words that ask for it: transcript `0cdab702-72bd-48e7-8a8e-0c38d4aca9c9`, li
    wake, a background task's end) it refuses the start and leaves a card he must tap. That is the host's limit, not
    ours.
 3. One exception to test: a start on a `<side-sessions-event>` turn that follows his typed turn, which the host's
-   own text says may start a step he asked to have in its own session. Not tested yet; the test is one start on
-   such a turn, recorded with its result.
+   own text says may start a step he asked to have in its own session. Tested on 2026-11-22: it started one (below).
 4. Out by `rule:sessions-open-in-sidebar` (sessions open in the sidebar, through `start_session`): `claude --bg`,
    `js-harness sessions start`, scheduled tasks and cloud sessions. Each could start a session with nobody there,
    and each would open it where he does not see it.
 
 So, today, a session opens others without asking him only on a turn he typed; that the Plan is that session is the lead's and JH PLAN's reading of his words (L18), not his words. "Sin pedir permiso" (line 14462) is met as
 far as the host allows. The rest waits on the exception's test or on the host.
+
+## Checked: the start test, a start on a side-sessions-event turn (JH 301, 2026-11-22)
+Read in JH PLAN's transcript, `0cdab702-72bd-48e7-8a8e-0c38d4aca9c9` (`~/.claude/projects/D--js-harness`); times UTC,
+local 23:08-23:11.
+- Line 14915, 04:08:11Z, origin human, his typed words (`js-harness sessions --quote` prints two system reminders
+  first; his text follows them): "haz la prueba de abrir una sesión tú solo".
+- Lines 14965-14967, 04:08:53Z-04:10:14Z: in that turn, one `start_session` (`user_asked`, opus 5.5, medium)
+  started JH 304, held and nested under JH PLAN (`local_4816e189-628d-4cd4-8f0e-232324b1adf6`).
+- Line 14982, 04:10:23Z, origin human, typed: "no abrio sola". JH PLAN's turn on it ends at line 15028 (04:11:00Z).
+- Line 15033, 04:11:03Z, no human origin: the app opened a `<side-sessions-event>` turn when JH 304's turn ended.
+- Line 15049, 04:11:13Z: in that turn, one `start_session` (`user_asked`, opus 5.5, medium, title "JH 305 · held,
+  waits for the lead's brief"). Line 15051, 04:11:20Z, the result: "Started session" with session id
+  `local_d6d76a61-4a5f-4aa8-a56b-c407121a4436`. No guard refusal appears between the call and its result.
+- Lines 15058-15071: both sessions detached. That they were then archived unused (clean worktrees, 0 commits) is the
+  lead's report, not checked here.
+
+So a session can open another with nobody typing, on a `<side-sessions-event>` turn that comes right after a turn
+he typed (here line 14982's, not 14915's). Not proven: whether it holds on a turn opened by a lead's message or a task
+notification, and how long a chain of such turns lasts with none of his. Using it as routine touches the reading of
+`rule:sessions-open-in-sidebar`, which stays the lead's, after Codex's reset, with his lines 14462 and 14915.
 
 ## Checked: the lead was told to use `sessions start`, and the guard refused it (JH 301)
 Read in the lead's transcript, `d6383aea-8901-43a8-9261-fdcbd501d370` (`~/.claude/projects/D--js-harness`):
