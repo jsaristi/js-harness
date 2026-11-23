@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { GATE_WSL_ENV, NODE_MARK, nodeOf, SYNCED_MARK, TIMED_OUT_MARK, gateWslPath, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand } from './gate-wsl.mjs';
+import { GATE_WSL_ENV, NODE_MARK, nodeVersionOf, SYNCED_MARK, TIMED_OUT_MARK, gateWslPath, innerSeconds, leftPaths, mirrorName, readGateWsl, runnerScript, syncedMs, toWslPath, wslCommand } from './gate-wsl.mjs';
 
 const tempHome = () => fs.mkdtempSync(path.join(os.tmpdir(), 'gate-wsl-home-'));
 const writeSwitch = (home, text) => {
@@ -69,11 +69,27 @@ test('the runner prints the node it runs, and the version is read from its mark'
   const script = runnerScript({ source: '/mnt/d/p', mirror: 'p', node: '/home/u/.local/node/bin', command: 'npm test', held: false, heldVariable: 'H', seconds: 60 });
   // Asked on the PATH the command runs on, so the version is of the node the command finds first (reliability lens).
   const runPath = "PATH='/home/u/.local/node/bin'':/usr/local/bin:/usr/bin:/bin'";
-  assert.ok(script.includes(`echo "${NODE_MARK}$(env -i ${runPath} node -v 2>/dev/null)" >&2`), script);
+  assert.ok(script.includes(`echo "${NODE_MARK}$(timeout -k 1 5 env -i HOME="$home" ${runPath} node -v 2>/dev/null)" >&2`), script);
   assert.ok(script.includes(` ${runPath} \\\n`), 'the command runs on that same PATH');
-  assert.equal(nodeOf(`noise\n${NODE_MARK}v24.15.0\nmore`), 'v24.15.0');
-  assert.equal(nodeOf(`${NODE_MARK}\n`), null, 'a node that said nothing');
-  assert.equal(nodeOf('no mark'), null);
+  assert.equal(nodeVersionOf(`noise\n${NODE_MARK}v24.15.0\nmore`), 'v24.15.0');
+  assert.equal(nodeVersionOf(`${NODE_MARK}\n`), null, 'a node that said nothing');
+  assert.equal(nodeVersionOf('no mark'), null);
+});
+
+// Codex on bad8fc3c (P2, gate-wsl.mjs:129-130, check.mjs:1096): the probe runs where and as the command runs (the mirror,
+// its HOME, its PATH), with a bound of its own and before the command's clock starts, and the version is read from the
+// runner's whole line on stderr only.
+test('the runner asks node in the mirror, as the command will, under a bound, and the version is its own whole line', () => {
+  const script = runnerScript({ source: '/mnt/d/p', mirror: 'p', node: '/home/u/.local/node/bin', command: 'npm test', held: false, heldVariable: 'H', seconds: 60 });
+  const lines = script.split('\n');
+  const probe = lines.findIndex((line) => line.includes(NODE_MARK));
+  assert.ok(probe > lines.indexOf('cd "$mirror" || exit 1'), 'asked in the mirror');
+  assert.ok(probe < lines.indexOf('ran=$(date +%s%N)'), 'its bound is not counted as the command\'s time');
+  assert.match(lines[probe], /timeout -k 1 5 env -i HOME="\$home" /, 'under its own bound, with the command\'s HOME');
+  assert.equal(nodeVersionOf(`${NODE_MARK}v24.15.0\n`), 'v24.15.0');
+  assert.equal(nodeVersionOf(`a sample says ${NODE_MARK}v1.0.0\n${NODE_MARK}v24.15.0\n`), 'v24.15.0', 'a mark inside another line is no mark');
+  assert.equal(nodeVersionOf(`${NODE_MARK}v24.15.0 extra\n`), null, 'a version line holds the version alone');
+  assert.equal(nodeVersionOf(`${NODE_MARK}v24.15.0\r\n${NODE_MARK}v1.0.0\n`), 'v24.15.0', 'the runner\'s line comes first; the sensor writes after it');
 });
 
 test('the sync is read from the mark, and no mark is a mirror never reached', () => {

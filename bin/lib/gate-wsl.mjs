@@ -15,7 +15,8 @@ export const GATE_WSL_ENV = 'JS_HARNESS_GATE_WSL';
  * command never reached the mirror (no distro, no `wsl.exe`, a sync that failed), and the gate then
  * runs that sensor on Windows: a gate that skipped its suite would be worse than a slow one. */
 export const SYNCED_MARK = 'js-harness-gate-wsl: synced in ';
-// The line that names the node the sensor runs under, so a pass says which (gate-pass-on-other-node, docs/FAILURES.md).
+// The line that names the node of the PATH the sensor runs with, so a pass says which (gate-pass-on-other-node,
+// docs/FAILURES.md).
 export const NODE_MARK = 'js-harness-gate-wsl: node ';
 
 /** What the runner prints when it stopped the command at its bound: `timeout` exits 124 then, and so may a
@@ -126,10 +127,11 @@ export function runnerScript({ source, mirror, node, command, held, heldVariable
     'mkdir -p "$mirror" || exit 97',
     `${sync} --checksum "$source/" "$mirror/" || exit 97`,
     `echo "${SYNCED_MARK}$(( ($(date +%s%N) - started) / 1000000 )) ms" >&2`,
-    // Asked on the PATH the command runs on, so it is the node the command finds first.
-    `echo "${NODE_MARK}$(env -i ${runPath} node -v 2>/dev/null)" >&2`,
     'home=$(mktemp -d) || exit 1',
     'cd "$mirror" || exit 1',
+    // Asked where and as the command runs (the mirror, its HOME, its PATH), so it is the node the command finds first
+    // unless it names another; bounded on its own, so a node that hangs leaves the version unset, not the sensor stopped.
+    `echo "${NODE_MARK}$(timeout -k 1 5 env -i HOME="$home" ${runPath} node -v 2>/dev/null)" >&2`,
     'ran=$(date +%s%N)',
     `env -i HOME="$home" ${Object.entries(RUNNER_ENV).map(([key, value]) => `${key}=${value}`).join(' ')} ${runPath} \\`,
     `  JS_HARNESS_CHECK_INNER=1 ${held ? `${heldVariable}=1 ` : ''}${traced}npm_config_cache="$home/.npm-cache" \\`,
@@ -168,13 +170,15 @@ export function wslNodeVersion(distro, node, { spawnSync = childProcess.spawnSyn
   return asked.status === 0 && said ? said[0] : null;
 }
 
-/** The version of the node the runner ran under, such as `v24.15.0`, from its mark, or `null` where it printed none
- * or the node said nothing. */
-export function nodeOf(output) {
-  const at = output.indexOf(NODE_MARK);
-  if (at === -1) return null;
-  const said = /^v\d+\.\d+\.\d+\S*/.exec(output.slice(at + NODE_MARK.length));
-  return said ? said[0] : null;
+/** The version of the node the runner's PATH finds, such as `v24.15.0`, from the runner's own line on standard error
+ * (`stderr`): the first line that is `NODE_MARK` and the version alone, so a line that only quotes the mark is not it,
+ * and the runner's comes before anything the sensor writes. `null` where it printed none, or the node said nothing
+ * within the probe's bound. It is the node of the PATH the command runs with, not always the one it runs: a command
+ * can name another. */
+export function nodeVersionOf(stderr) {
+  const mark = NODE_MARK.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const said = new RegExp(`^${mark}(v\\d+\\.\\d+\\.\\d+\\S*)\\r?$`, 'm').exec(String(stderr ?? ''));
+  return said ? said[1] : null;
 }
 
 /** The milliseconds of the sync the runner printed, or `null` where it printed no mark: the sensor never

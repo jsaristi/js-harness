@@ -101,6 +101,18 @@ test('the one line carries the verdict of the review row, which a commit shows s
   assert.equal(passLine([rows[0], inner]), 'PASS  check  2 rows passed, 1 of them INFO; --verbose prints each; sensors: none ran, an inner check (JS_HARNESS_CHECK_INNER=1)');
 });
 
+// Codex on bad8fc3c (P2, check.mjs:1131): a gate whose tests ran in WSL2 says, in its one line, the node of the PATH
+// they ran with there, so a pass under the gate's own node is not taken for one of the sensors' (gate-pass-on-other-node).
+test('the one line names the node of the PATH a sensor ran with in WSL2', () => {
+  const rows = [
+    { name: 'budget', pass: true, detail: '10 estimated tokens (budget 1500)' },
+    { name: 'tests', pass: true, detail: 'npm test passed in WSL2', ranIn: 'wsl', node: 'v24.15.0' },
+    { name: 'docs', pass: true, detail: 'npm run docs passed in WSL2', ranIn: 'wsl', node: 'v24.15.0' },
+  ];
+  assert.equal(passLine(rows), 'PASS  check  3 rows passed; --verbose prints each; WSL2 PATH node v24.15.0');
+  assert.equal(passLine(rows.slice(0, 1)), 'PASS  check  1 row passed; --verbose prints each');
+});
+
 // G-2 of the full audit of 2026-11-14: "`check`'s quiet line hides the Codex debt; make it show both debts".
 test('G-2: the one line carries the Codex review debt beside the lens one', () => {
   const rows = [

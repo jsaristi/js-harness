@@ -32,7 +32,7 @@ import { addedLines, checkedOff, checkedTasks, resolveCitations, resolveTicks, t
 import { flakyTestsOf, selectTests, testFilesOf } from './lib/select-tests.mjs';
 import { checkLedger, failedTestFiles, failingTests, judgeRerun, ledgerEntries, localDay, rerunNext } from './lib/flaky.mjs';
 import { TRACE_PRELOAD, readTraces, stateOf, traceEnv, traceEnvOf } from './lib/trace-reads.mjs';
-import { RUNNER_ENV, TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, nodeOf, readGateWsl, runnerScript, syncedMs, toWslPath, word as bashWord, wslCommand, wslNodeVersion } from './lib/gate-wsl.mjs';
+import { RUNNER_ENV, TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, nodeVersionOf, readGateWsl, runnerScript, syncedMs, toWslPath, word as bashWord, wslCommand, wslNodeVersion } from './lib/gate-wsl.mjs';
 import { functionsOf, harnessOfTree } from './lib/project-functions.mjs';
 import { clonePending } from './lib/project.mjs';
 import { readProjectRules as readRulesData } from './lib/codex-review-allowance.mjs';
@@ -1093,7 +1093,7 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
       result = await spawn(route.command, { cwd, env, timeout: sensorTimeout, silence: sensorSilence });
       const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
       const synced = syncedMs(output);
-      if (synced !== null) ranIn = { distro: wsl.distro, synced, node: nodeOf(output) };
+      if (synced !== null) ranIn = { distro: wsl.distro, synced, node: nodeVersionOf(result.stderr) };
       // A bound that ran out before the mark is a mirror never reached, like any other: the suite never ran.
       else if (result.error?.code === 'ETIMEDOUT') fellBack = result.error.silent ? `it wrote nothing for ${sensorSilence / 1000} s before the mirror was synced` : 'its time ran out before the mirror was synced';
       else fellBack = notReached(output, result);
@@ -1128,7 +1128,7 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   else if (result.error) detail = `${command} could not run: ${result.error.message}`;
   else if (result.status === null && result.signal) detail = `${command} was killed by ${result.signal}`;
   else if (!pass) detail = `${command} exited ${result.status}`;
-  if (ranIn) detail += pass && ranIn.synced !== null ? ` in WSL2 (${ranIn.distro}${ranIn.node ? `, node ${ranIn.node}` : ''}, its mirror synced in ${(ranIn.synced / 1000).toFixed(1)} s)` : ` in WSL2 (${ranIn.distro})`;
+  if (ranIn) detail += pass && ranIn.synced !== null ? ` in WSL2 (${ranIn.distro}${ranIn.node ? `, PATH node ${ranIn.node}` : ''}, its mirror synced in ${(ranIn.synced / 1000).toFixed(1)} s)` : ` in WSL2 (${ranIn.distro})`;
   else if (fellBack) detail += ` on Windows: WSL2 did not run it (${fellBack})`;
   else if (wsl?.windows && platform === 'win32') detail += ` on Windows (${wsl.windows}=0), its temporary files under ${os.tmpdir()}`;
   // The verdict is the command's own; a leftover that could not be stopped is said, not hidden, and does not fail it.
@@ -1797,13 +1797,13 @@ export const VERBOSE_ENV = 'JS_HARNESS_CHECK_VERBOSE';
  * commit printed dozens of lines, the name of every contract among them (finding 5 of JH 43,
  * odd/tasks/quiet-gate.md). It counts the rows, says how many only inform, and carries the verdict of the
  * `review` and `codex-review` rows, which a commit shows so nobody has to ask (both debts: G-2), and says when an inner check
- * ran no sensor, so a `JS_HARNESS_CHECK_INNER` left set in a shell never passes for a gate. */
+ * ran no sensor, so a `JS_HARNESS_CHECK_INNER` left set in a shell never passes for a gate; and the node of the PATH sensors ran with in WSL2. */
 export function passLine(rows) {
   const info = rows.filter((row) => row.info).length;
   const debts = ['review', 'codex-review'].map((name) => rows.find((row) => row.name === name)).filter(Boolean);
   const inner = rows.find((row) => row.inner === true);
   const counted = `${rows.length} row${rows.length === 1 ? '' : 's'} passed${info > 0 ? `, ${info} of them INFO` : ''}`;
-  return `PASS  check  ${counted}; --verbose prints each${debts.map((row) => `; ${row.name}: ${row.detail}`).join('')}${inner ? `; sensors: ${inner.detail}` : ''}`;
+  return `PASS  check  ${counted}; --verbose prints each${debts.map((row) => `; ${row.name}: ${row.detail}`).join('')}${inner ? `; sensors: ${inner.detail}` : ''}${[...new Set(rows.filter((row) => row.ranIn === 'wsl' && row.node).map((row) => row.node))].map((node, i) => `${i === 0 ? '; WSL2 PATH node' : ','} ${node}`).join('')}`;
 }
 
 /** Runs all check rows and prints them; returns the process exit code. Exits 2, printing usage to
