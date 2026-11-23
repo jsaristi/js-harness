@@ -87,7 +87,7 @@ request 999 controls. The proposed test names are drafts; the builder writes the
   `✖ failing tests:` a `test at a.test.mjs:3:1` line, then `✖ <absolute path of the file>` and the hook's error.
   `failingTests` (`bin/lib/flaky.mjs:220`), which the gate log keeps, returns that path as the failing test's name;
   `failedTestFiles` (`bin/lib/flaky.mjs:20`) returns `a.test.mjs`, the file the flaky rerun runs again; and
-  `failedLog` (`bin/lib/ci-gate.mjs:52`) prints a CI log from that summary. The sighting of 2026-10-13 named the
+  `failedLog` (`bin/lib/ci-gate.mjs:51`) prints a CI log from that summary. The sighting of 2026-10-13 named the
   file too, with no test of it red; the node version of that run is not known.
 - `short-name-judged-outside`: `isWithinBase` (`bin/lib/project.mjs:203`) folds case but not Windows 8.3 short
   names; resolving both paths with `fs.realpathSync.native` first would. It waits for the split planned in
