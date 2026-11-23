@@ -3132,6 +3132,9 @@ test('the orchestrator skill says how a question reaches the user: recorded, ask
   assert.ok(text.includes('When the user writes "hazme la pregunta N", they ask for question N now: build its card with `js-harness template ask N` and ask it through the question tool.'));
   assert.ok(text.includes('- Ask the user nothing while an orchestrator holds its role'));
   assert.ok(text.includes('`js-harness sessions --quote <transcript> <line>`'));
+  // His order of 2026-11-23 (JH PLAN transcript, line 18192), read at line 18244 as covering the questions that need
+  // a written line of his: while he is away the lead's note in its place is the answer the session goes on with.
+  assert.ok(text.includes('While the user is away, a note from the lead that answers your question in its place, naming the question and saying it is the lead\'s direction, is your answer: go on with it, and say in your next notice that the lead took it.'));
   // odd/tasks/held-sessions.md, S5: a card the host holds in a session's window reaches him here, not there.
   assert.ok(text.includes("- A session the host holds on a card (the board's line that a call has had no result and the host may be holding it for approval, or a session the host marks as needing the user) is brought to the user in the orchestrator's chat in that same turn, through the question tool: which session, what its card asks, read from its transcript's last call, and what you recommend. The card itself is answered by the user in that session's window; never stop the session to get around it, and never leave it for them to find."));
   // odd/tasks/held-sessions.md, S8 and T7: the lead holds the permit relay and judges each card it brings.
@@ -3140,7 +3143,7 @@ test('the orchestrator skill says how a question reaches the user: recorded, ask
   assert.ok(text.includes('`js-harness permit lease` at your start; `js-harness wait --notice-to orchestrator` renews it on each tick while you hold it'));
   assert.ok(text.includes('`js-harness permit deny <id> --reason "<why>"` when it is obsolete or unsafe'));
   // odd/tasks/held-sessions.md, S9: a card that is his is brought to him with a recommendation; he chooses.
-  assert.ok(text.includes('A card that touches what is the user\'s (`rule:owner-decisions`), or is important enough to be their call, you never decide alone (while they are away, `rule:away-autonomy` says what waits and the spend that is yours): bring it to them in the orchestrator\'s chat that turn, through the question tool'));
+  assert.ok(text.includes('A card that touches what is the user\'s (`rule:owner-decisions`), or is important enough to be their call, you never decide alone (while they are away, `rule:away-autonomy` says what you decide alone, through the relay, and what waits): bring it to them in the orchestrator\'s chat that turn, through the question tool'));
   assert.ok(text.includes('then apply their choice with `js-harness permit allow <id>` or `js-harness permit deny <id> --reason'));
   assert.ok(text.includes('`js-harness permit lease --off`'));
   // The double review (odd/tasks/rule-hierarchy.md, T18): a proposal in a question has passed its readers.
@@ -3195,7 +3198,11 @@ test('the orchestrator skill describes the lead and its charter, not a watchman'
   const text = components[1].content('0.1.0');
   assert.ok(text.includes('\n## The lead\n'));
   assert.ok(text.includes('What you do alone and what stays the user\'s is the charter the user approved'));
-  assert.ok(text.includes('- You never implement, never commit, never write in a worktree and never answer a question for the user'));
+  // The limits on the lead's own work hold whether the user is here or away (Codex on f39cf32..567f226): only the
+  // question for the user changes while they are away, said with the charter, so an eval arm without
+  // rule:away-autonomy keeps the limits.
+  assert.ok(text.includes('- You never implement, never commit and never write in a worktree, here or away (`rule:lead-charter`). Reading code, running tests'));
+  assert.ok(text.includes('update the installed command. You never answer a question for the user while they are here'));
   assert.ok(text.includes('Otherwise keep the work moving'));
   // The watchman's lines (sweep A1 1, A2 4, CD 6).
   assert.doesNotMatch(text, /- You read\./);
@@ -3390,8 +3397,33 @@ test('the orchestrator skill says what every recap carries and how a block waits
     '- when a stretch or a session ends, that it ended and which session to return to.',
     '- While the user is away, a block that waits for them is given once and held until they say they are back or are seen to have written.',
     '- When the user says they leave you alone or will be away, ask nothing and seek no permission, in that reply or until they are back',
-    'a step the charter does not name, waits for their return with no question; a work session\'s question that is theirs is recorded and held, never answered for them',
   ]) assert.ok(text.includes(line), line);
+  // His order of 2026-11-23 (lines 18192 and 18250): a case of his is decided alone while he is away, with the
+  // option the lead would recommend, and reported at his return; only the never-list still waits for him.
+  for (const line of [
+    'and a step the charter does not name, you decide alone with the option you would recommend (the standing fork): write it to your relief file with the option taken and why',
+    'write it to your relief file with the option taken and why, and report every one at their return.',
+    'The standing fork never covers spend outside the plan, anything irreversible or deleted, anything published or reported outside the project, a credential, a sign-in, a security or system setting, anything installed or changed on a machine, or a change of a protocol: each waits for their return with no question, and that session gets the next step that does not wait on it;',
+    'a question that is theirs goes to your relief file, and waits for their return only where neither the standing fork nor a fork they approved answers it.',
+    // The reading he accepted (line 18244) left out code landing without Codex's review. It names the double review
+    // in words, not by its id, so an eval arm without rule:double-review does not cut this bullet (Codex on
+    // f39cf32..567f226).
+    'Nor does the standing fork waive a review or a gate: the double review and the merge rules above hold as written.',
+    // A card and a question it decides reach the session that waits on them (Codex on f39cf32..567f226).
+    'Where a session waits on it: a card of the permit relay, answer through the relay with the option taken, `js-harness permit allow <id>` or `js-harness permit deny <id> --reason "<the option taken>"`',
+    // The work session's own text expects an answer naming his line; the note says what it is instead.
+    '`js-harness notify --to <n> --kind note "question <q>: the lead\'s direction while the user is away, not their answer: <the option taken>"`',
+    // notify never sends a message, and an idle session reads no record until it is rung (the lead's round of
+    // 2026-11-23 on PR 1045): the lead rings it at the address that command prints.
+    'not their answer: <the option taken>"`, then ring that session at the address it prints, by `SendMessage` to its title, so an idle one wakes to it.',
+    'a card it never covers you deny with `js-harness permit deny <id> --reason "waits for the user\'s return: <what>"`, so that session goes on without it',
+    'a recorded question, close it with `js-harness notify --to orchestrator --kind withdrawn --question <q> "<the option taken>"` and send that session the option',
+  ]) assert.ok(text.includes(line), line);
+  assert.doesNotMatch(text, /Nor does it waive a review or a gate: `rule:double-review`/);
+  assert.ok(text.includes('(while they are away, `rule:away-autonomy` says what you decide alone, through the relay, and what waits)'));
+  assert.doesNotMatch(text, /a step the charter does not name, waits for their return with no question/);
+  assert.doesNotMatch(text, /the one exception to holding what is theirs/);
+  assert.doesNotMatch(text, /waits for their return like any other case of theirs/);
   // His additions of 2026-10-28: the stretch shown before he leaves, and checked against its goals when he is back.
   for (const line of [
     'what only they can give that the stretch will need. Before they leave, open a stretch (`js-harness stretch open --plan <file> --html <file>`; `js-harness stretch status` exits 1 when none is open) and show its departure in that reply',
@@ -3401,7 +3433,10 @@ test('the orchestrator skill says what every recap carries and how a block waits
     'the shares against the departure\'s forecast',
     'The chat\'s visual tool takes the file\'s HTML whole; where the host has none, publish the file as an Artifact and give the link.',
   ]) assert.ok(text.includes(line), line);
-  assert.ok(text.includes('ask before anything it does not name; while the user is away it waits instead, as `rule:away-autonomy` says.'));
+  // His order of 2026-11-23 (line 18192, accepted at 18250): while he is away the standing fork decides, not a wait.
+  assert.ok(text.includes('ask before anything it does not name; while the user is away, `rule:away-autonomy` says what you decide alone and what waits.'));
+  assert.ok(text.includes('never answer a question for the user while they are here: you ask it, and carry their answer; while they are away, `rule:away-autonomy`\'s standing fork answers it, where it covers it.'));
+  assert.doesNotMatch(text, /while the user is away it waits instead/);
   // rule:ask-before-away is retired: its ask before he leaves is the permission he declined.
   assert.doesNotMatch(text, /ask in that reply for everything the stretch will need/);
 });

@@ -1,6 +1,7 @@
 // The plan of a Codex review against its allowance: what `codex-review --plan` says after the plan itself.
 //
-// Why. Three rules of Sebastián's bound what a review may cost without asking him: a floor a review, a rate
+// Why. Three rules of Sebastián's bound what a review may cost before it is a call to make, the lead's since his
+// words of 2026-11-23 (rule codex-review-rate): a floor a review, a rate
 // a changed line, and a margin over the larger of the two that still counts as inside
 // (`codex-review-floor`, `codex-review-rate`, `codex-review-margin` in ./rules-data.mjs). Nothing read them:
 // each session took a figure of the plan and did the sum by hand, and not every session did the same sum.
@@ -101,8 +102,9 @@ export function allowanceLine(said) {
     none: 'The plan has no estimate, so it cannot say whether the review is inside it.',
     inside: `${estimate} is inside it.`,
     margin: `${estimate} is over it by no more than ${counted}.`,
-    over: `${estimate} is over it by more than ${counted}: a review over its allowance is asked of the owner of these rules before it runs, ` +
-      'and this command refuses nothing for its cost.',
+    over: `${estimate} is over it by more than ${counted}: a review over its allowance is the lead's call, said with its cost, ` +
+      "while Codex's weekly meter is above rule:codex-weekly-floor; that call is of the allowance alone and no leave for a second run " +
+      'after a review fell, and this command refuses nothing for its cost.',
   }[verdict];
   const higher = highOver ? ` Its higher figure, ${thousands(inputTokensHigh)}, is over it by more than ${counted}.` : '';
   return `${head} ${sentence}${higher}`;

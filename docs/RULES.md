@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `41acc56f64de`. In force: 73 (45 of Sebastián, 28 of the project). Retired: 9.
+Hash `485d3e8ae396`. In force: 73 (45 of Sebastián, 28 of the project). Retired: 9.
 
 ## Sebastián's
 
@@ -19,9 +19,9 @@ A session says when it finished and where to return, watches its context, and a 
 - Since 2026-10-22. Row: reports. Source: his words of 2026-09-28, 2026-10-07, 2026-10-07, 2026-10-10, 2026-10-10, 2026-10-11, 2026-10-12, checked by the command on 2026-10-22.
 
 ### away-autonomy
-Once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once; before he leaves it shows the stretch's departure, led by the migration's share now and the share expected at the return, with its goals and the few forks it pre-decides, cases of his it answers alone once he approves or corrects them at once in his own words before he leaves, an unapproved one waiting like any other, no other case of his and no spend or publishing by them, and when he is back its return checked against them; while he is away a reply closes in the working state, or once in the cut that gives his block, and a question of his waits in the relief file for his return: "- When the user says they leave you alone or will be away, ask nothing and seek no permission, in that reply or until they are back, and write to your relief file that they are away, with the time."
+Once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back: a case of his, and a step the charter does not name, it decides alone with the option it would recommend, written to the relief file and reported at his return (the standing fork), and only spend outside the plan, the irreversible or deleted, anything published or reported outside the project, a credential, a sign-in, a security or system setting, an install or change on a machine and a change of a protocol wait for him with no question, a block that waits for him given once; before he leaves it shows the stretch's departure, led by the migration's share now and the share expected at the return, with its goals and the few forks it pre-decides, which he approves or corrects at once in his own words before he leaves and which answer their cases in place of the standing fork, an unapproved one going by the standing fork and none authorizing spend or publishing, and when he is back its return checked against them; while he is away a reply closes in the working state, or once in the cut that gives his block, and a question of his goes to the relief file, waiting for his return only where neither fork answers it: "- When the user says they leave you alone or will be away, ask nothing and seek no permission, in that reply or until they are back, and write to your relief file that they are away, with the time."
 - Home: `bin/lib/manifest.mjs`.
-- Since 2026-11-15. Row: reports. Source: his words of 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-29, 2026-10-29, 2026-10-29, 2026-11-15, 2026-11-16, checked by the command on 2026-11-16.
+- Since 2026-11-23. Row: reports. Source: his words of 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-29, 2026-10-29, 2026-10-29, 2026-11-15, 2026-11-16, 2026-11-21, 2026-11-23, 2026-11-23, checked by the command on 2026-11-23.
 
 ### background-task-declared
 A background task says what it is for and what ends it, and is stopped when its condition resolves: "A background task a session starts (a wait, a watch, a timer) says in its description what it is for and what ends it, and the session writes it to its state with who stops it; when its condition resolves another way, it is stopped in that same step."
@@ -41,10 +41,10 @@ How far over its allowance the plan of a Codex review may read and still count a
 - Since 2026-10-12. Row: reports. Source: his words of 2026-10-12, checked by a session on 2026-10-12.
 
 ### codex-review-rate
-The most input tokens a Codex review may cost for each changed line of its slice, when that is more than the floor: 1,200 input tokens a changed line.
+The most input tokens a Codex review may cost for each changed line of its slice, when that is more than the floor (a review over its allowance is the lead's call, said with its cost, while Codex's weekly meter is above rule:codex-weekly-floor): 1,200 input tokens a changed line.
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: `bin/lib/codex-review-allowance.mjs`.
-- Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
+- Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, 2026-11-23, 2026-11-23, checked by the command on 2026-11-23.
 
 ### codex-weekly-floor
 The share of Codex's weekly limit left at or under which a Codex review starts nothing and the user decides on the reset: 2 percent of the weekly limit left.
@@ -73,9 +73,9 @@ The fixed load of a session at its first turn, the median of its latest sessions
 - Since 2026-10-24. Row: reports. Source: his words of 2026-10-15, checked by the command on 2026-10-24.
 
 ### lead-charter
-What the lead does alone and tells him after, and what stays his, asked one at a time: "Within it you open the next feature's work session, send plan steps and notices to work sessions (\`js-harness notify\`), merge pull requests by the rules below, remove the worktrees of merged features and update the installed command."
+What the lead does alone and tells him after, and what stays his, asked one at a time while he is here; while he is away rule:away-autonomy says what it decides alone and what waits: "Within it you open the next feature's work session, send plan steps and notices to work sessions (\`js-harness notify\`), merge pull requests by the rules below, remove the worktrees of merged features and update the installed command."
 - Home: `bin/lib/manifest.mjs`.
-- Since 2026-10-22. Row: reports. Source: his words of 2026-10-09, 2026-10-11, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-10, 2026-10-15, 2026-10-15, 2026-10-24, checked by the command on 2026-10-22.
+- Since 2026-11-23. Row: reports. Source: his words of 2026-10-09, 2026-10-11, 2026-10-09, 2026-10-09, 2026-10-10, 2026-10-10, 2026-10-15, 2026-10-15, 2026-10-24, 2026-11-23, 2026-11-23, checked by the command on 2026-11-23.
 
 ### lead-effort
 The effort the lead's session runs at: high.
@@ -116,9 +116,9 @@ Every question to the user opens with what it is for: the work it serves and wha
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-22, checked by the command on 2026-10-22.
 
 ### questions-one-place
-Every question of the project reaches the user in the orchestrator's chat, through the host's question tool with options, recorded before it is asked: "## Questions to the user Every question of the project reaches the user in one place: the orchestrator's chat, through the host's question tool, one question a call, the recommended option first."
+Every question of the project reaches the user in the orchestrator's chat, through the host's question tool with options, recorded before it is asked; while he is away, a note from the lead that answers a session's question in its place is that session's answer: "## Questions to the user Every question of the project reaches the user in one place: the orchestrator's chat, through the host's question tool, one question a call, the recommended option first."
 - Home: `bin/lib/manifest.mjs`.
-- Since 2026-11-17. Row: reports. Source: his words of 2026-10-13, 2026-10-13, 2026-11-17, 2026-11-17, 2026-11-17, checked by the command on 2026-11-17.
+- Since 2026-11-23. Row: reports. Source: his words of 2026-10-13, 2026-10-13, 2026-11-17, 2026-11-17, 2026-11-17, 2026-11-23, 2026-11-23, checked by the command on 2026-11-23.
 
 ### recap-effort-line
 The lead's recap names each session's effort mode for its kind of work, and why: "## The recap Each reply that closes a stretch of work carries: - one line a session: its state, the effort mode its kind of work calls for and why; - by title, the sessions to archive and the ones stopped, with what each waits for; a session a scheduled task opened is named as a routine; - the Codex meter, read at that moment, when the project reviews with Codex; - what waits for the user in a session, said only after reading that session at that moment; - when a stretch or a session ends, that it ended and which session to return to."
