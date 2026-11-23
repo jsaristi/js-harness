@@ -219,7 +219,7 @@ const STAMP = /^(?:From\b[^.:\n]{0,90}?[,(]\s*|[A-Z][A-Za-z]{0,3} ?\d{1,3}(?: ·
 const HOUR_FIRST = /^((?:[01]?\d|2[0-3]):[0-5]\d)\s+(?=[A-Z])/;
 
 // A sender's label, "<sender> to <session or lead>" or a session's title, then the hour in parentheses ending the opening ("Lead to JH 302 (22:20):", FAILURES.md hours-guessed); "The gate finished (14:20):" is an event (Codex on 7a02fb17).
-const PAREN_OPENING = /^(?:(?:[A-Z][A-Za-z]{0,3} ?\d{1,3}|[A-Z]{2,4} [A-Z]{2,4}|[A-Z][a-z]+) to (?:the )?(?:lead|[A-Z]{2,4}(?: ?\d{1,3}| [A-Z]{2,4}))|[A-Z][A-Za-z]{0,3} ?\d{1,3})(?: ·[^:()\n]{0,40}?)?\s*\((?:about\s+)?((?:[01]?\d|2[0-3]):[0-5]\d)(?:\s+local)?\)\s*:/;
+const PAREN_OPENING = /^(?:(?:[A-Z][A-Za-z]{0,3} ?\d{1,3}|[A-Z]{2,4} [A-Z]{2,4}|[A-Z][a-z]+) to (?:the lead|lead|all|[A-Z]{2,4}(?: ?\d{1,3}| [A-Z]{2,4}))(?:(?:,| and) (?:the lead|lead|[A-Z]{2,4}(?: ?\d{1,3}| [A-Z]{2,4})))*|[A-Z][A-Za-z]{0,3} ?\d{1,3}|[A-Z]{2,4} [A-Z]{2,4})(?: ·[^:()\n]{0,40}?)?\s*\((?:about\s+)?((?:[01]?\d|2[0-3]):[0-5]\d)(?:\s+local)?\)\s*:/;
 
 const pad = (n) => String(n).padStart(2, '0');
 

@@ -562,6 +562,9 @@ test('an hour in parentheses at the opening is read after a sender label only, n
     'Writer to lead (about 09:05): done.': '09:05',
     'JH 302 (14:20 local): the gate passed.': '14:20',
     'JH ORQ to JH 5 (07:40): go on.': '07:40',
+    'JH ORQ (22:20): noted.': '22:20',
+    'JH ORQ to all (22:20): stop.': '22:20',
+    'Lead to JH 302 and JH 303 (22:20): go on.': '22:20',
   })) assert.equal(stampedHour(text), hour, text);
   for (const text of [
     'The gate finished (14:20): all checks passed.',
