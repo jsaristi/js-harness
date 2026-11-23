@@ -31,6 +31,28 @@ const KIND = 'long-session';
  * harness; `minimal-commands` is the minimal arm with `/compact` allowed (`minimalCommandsConfig`). */
 export const ARMS = { current: { basis: 'current' }, 'minimal-commands': { basis: 'minimal' } };
 
+/** The `current` arm's seed `seed`, then the Codex review turned off in the `harness.json` that `js-harness init` wrote
+ * in the workspace, before the first turn: the trial home holds no Codex login by design (`evals/home.mjs`, its
+ * credentials guard), and S8's run current-2 held its release on a Codex review it could not get
+ * (`odd/tasks/f8-s8-designs/eval-codex-login.md`, "Recommendation: C'"). The switch is written after `init` and not
+ * in the fixture, since a fixture `harness.json` stops `init` writing the arm's project layer. The rest of the file is
+ * kept, and written as `init` writes it; a workspace with no readable `harness.json` is refused, since the arm would
+ * then not be the harness. */
+export function codexReviewOff(seed) {
+  return async (context) => {
+    await seed(context);
+    const file = path.join(context.workspace, 'harness.json');
+    let harness;
+    try {
+      harness = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (error) {
+      throw new Error(`the current arm's harness.json could not be read after js-harness init (${file}): ${error.message}`);
+    }
+    harness.functions = { ...harness.functions, codexReview: 'off' };
+    fs.writeFileSync(file, `${JSON.stringify(harness, null, 2)}\n`);
+  };
+}
+
 /** How a turn's `total_cost_usd` is read: `per-turn` (each process reports its own spend) or `cumulative` (a resumed
  * process reports the session's total). The docs say totals are restored on resume, which suggests cumulative; no run
  * has shown it, so a real run names it and the calibration session settles it. */
@@ -440,7 +462,7 @@ export async function runMain(argv, env = process.env, deps = {}) {
     const built = buildTemplate({ realHome, templateDir });
     for (const warning of built.warnings) stderr.write(`home template: ${warning}\n`);
     const options = { command: args.claude, model: args.model, permissionMode: PERMISSION_MODE };
-    const configs = args.arms.map((arm) => withToken(arm === 'current' ? currentConfig({ ...options, seed: seedFromTemplate(templateDir) }) : minimalCommandsConfig(options), token));
+    const configs = args.arms.map((arm) => withToken(arm === 'current' ? currentConfig({ ...options, seed: codexReviewOff(seedFromTemplate(templateDir)) }) : minimalCommandsConfig(options), token));
     const turns = args.calibrate ? calibrationScript() : scriptOf(args.turns);
     const doc = { format: 1, kind: KIND, name: args.name, createdAt: new Date().toISOString(), calibration: args.calibrate, model: args.model, effort: args.effort, turns: turns.length, costReading: args.costReading, runCapUsd: args.runCap, batchCapUsd: args.batchCap, jobs: args.jobs, setup: built.fingerprint, runs: [] };
     fs.mkdirSync(path.dirname(file), { recursive: true });
