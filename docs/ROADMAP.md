@@ -845,9 +845,9 @@ built in rule 1's pull request.
   PRs 912 and 924). T8 ran on `0c28d083` for $45.38 of $74; the long-session grading, by his answer to question 363,
   gave both setups 11 of 25 moments (44%), C1.2, C1.3, C1.5 and C2.4 missing. Open in T8: C5.1 by hand, R3.
   Written since, beside it in `odd/tasks/f8-s8-designs/` (documents only, nothing run or paid): T5's and T7's designs
-  (2026-11-19); the paid rerun priced row by row, whose long-session rows now wait on the C' build of the eval home's
-  Codex login page as well as PRs 977 and 930 (`rerun-pricing.md`, PR 1008), and the misses by cause, file and open
-  fix (`misses.md`, PR 973) (2026-11-22); the rerun and C' each wait on his yes.
+  (2026-11-19); the paid rerun priced row by row, C1.1 after PR 977 and the long-session rows after PR 930 and the C'
+  build (`rerun-pricing.md`, `eval-codex-login.md`, PR 1008), and the misses by cause, file and open fix (`misses.md`,
+  PR 973) (2026-11-22); each waits on his decisions.
 
 ### Beside F8
 - **The long-session eval**, built in a session of its own (`odd/tasks/f8-s0-baseline.md`, its build
