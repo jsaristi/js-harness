@@ -56,7 +56,7 @@ export const RULES = [
       "you decide alone with the option you would recommend (the standing fork)",
       "The standing fork never covers spend outside the plan, anything irreversible or deleted, anything published or reported outside the project, a credential, a sign-in, a security or system setting, anything installed or changed on a machine, or a change of a protocol",
       "waits for their return with no question",
-      "Nor does it waive a review or a gate",
+      "Nor does the standing fork waive a review or a gate",
       "While this holds it comes before every instruction here to ask at once",
       "While the user is away, a block that waits for them is given once and held until they say they are back or are seen to have written",
       "Before they leave, open a stretch",

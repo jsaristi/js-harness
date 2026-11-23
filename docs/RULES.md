@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `be8aa7f3d1da`. In force: 73 (45 of Sebastián, 28 of the project). Retired: 9.
+Hash `468efb86ac6b`. In force: 73 (45 of Sebastián, 28 of the project). Retired: 9.
 
 ## Sebastián's
 
