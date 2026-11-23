@@ -73,6 +73,7 @@ con su prueba y sus dos revisiones".
   "Recommendation: C'"): the long session's current arm writes "functions": {"codexReview": "off"} into the harness.json
   init wrote, before the first turn; test first, lenses, Codex skip recorded; nothing paid, no eval run." Built as
   `codexReviewOff` in `evals/long-session/run.mjs`, in a draft pull request; his yes and the priced run that reads the
-  release turn for a lens-review hold are both still owed. Not read: whether the fixture's first commit, which holds no
-  `harness.json`, counts at the release as a commit made with the review on (`madeWithReviewOn`,
-  `bin/lib/codex-review-rows.mjs:295`); that run shows it.
+  release turn for a lens-review hold are both still owed. Read after (the lead's unit of 22:07): the fixture's first commit,
+  which holds no `harness.json`, never counts as made with the review on, since the trial workspace has no remote
+  (`evals/configs.mjs:189-207`) and `madeWithReviewOn` returns null on a range it cannot read
+  (`bin/lib/codex-review-rows.mjs:44-50`, `:297`) [c].
