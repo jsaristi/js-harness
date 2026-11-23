@@ -47,13 +47,16 @@ export const RULES = [
   },
   {
     "id": "away-autonomy",
-    "subject": "once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once; before he leaves it shows the stretch's departure, led by the migration's share now and the share expected at the return, with its goals and the few forks it pre-decides, cases of his it answers alone once he approves or corrects them at once in his own words before he leaves, an unapproved one waiting like any other, no other case of his and no spend or publishing by them, and when he is back its return checked against them; while he is away a reply closes in the working state, or once in the cut that gives his block, and a question of his waits in the relief file for his return",
+    "subject": "once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back: a case of his, and a step the charter does not name, it decides alone with the option it would recommend, written to the relief file and reported at his return (the standing fork), and only spend outside the plan, the irreversible or deleted, anything published or reported outside the project, a credential, a sign-in, a security or system setting, an install or change on a machine and a change of a protocol wait for him with no question, a block that waits for him given once; before he leaves it shows the stretch's departure, led by the migration's share now and the share expected at the return, with its goals and the few forks it pre-decides, which he approves or corrects at once in his own words before he leaves and which answer their cases in place of the standing fork, an unapproved one going by the standing fork and none authorizing spend or publishing, and when he is back its return checked against them; while he is away a reply closes in the working state, or once in the cut that gives his block, and a question of his goes to the relief file, waiting for his return only where neither fork answers it",
     "owner": "sebastian",
-    "since": "2026-11-15",
+    "since": "2026-11-23",
     "path": "bin/lib/manifest.mjs",
     "phrases": [
       "When the user says they leave you alone or will be away, ask nothing and seek no permission",
+      "you decide alone with the option you would recommend (the standing fork)",
+      "The standing fork never covers spend outside the plan, anything irreversible or deleted, anything published or reported outside the project, a credential, a sign-in, a security or system setting, anything installed or changed on a machine, or a change of a protocol",
       "waits for their return with no question",
+      "Nor does it waive a review or a gate",
       "While this holds it comes before every instruction here to ask at once",
       "While the user is away, a block that waits for them is given once and held until they say they are back or are seen to have written",
       "Before they leave, open a stretch",
@@ -63,8 +66,9 @@ export const RULES = [
       "Both are shown as a visual page in the chat, never drawn by hand",
       "a reply closes in the working state, saying what wakes you, or once in the cut that gives that block",
       "first the migration's share now and the share expected at the return",
-      "The plan also carries 2 to 4 forks, each a case that would otherwise wait for their return and the answer you propose",
-      "you answer the approved cases, the one exception to holding what is theirs, and no other case of theirs; the forks authorize no spend and no publishing"
+      "The plan also carries 2 to 4 forks, each a case of theirs and the answer you propose for it",
+      "an approved fork answers its case in place of the standing fork, and never a case the standing fork does not cover; the forks authorize no spend and no publishing",
+      "waits for their return only where neither the standing fork nor a fork they approved answers it"
     ]
   },
   {

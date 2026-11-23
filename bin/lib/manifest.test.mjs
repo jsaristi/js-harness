@@ -3390,8 +3390,20 @@ test('the orchestrator skill says what every recap carries and how a block waits
     '- when a stretch or a session ends, that it ended and which session to return to.',
     '- While the user is away, a block that waits for them is given once and held until they say they are back or are seen to have written.',
     '- When the user says they leave you alone or will be away, ask nothing and seek no permission, in that reply or until they are back',
-    'a step the charter does not name, waits for their return with no question; a work session\'s question that is theirs is recorded and held, never answered for them',
   ]) assert.ok(text.includes(line), line);
+  // His order of 2026-11-23 (lines 18192 and 18250): a case of his is decided alone while he is away, with the
+  // option the lead would recommend, and reported at his return; only the never-list still waits for him.
+  for (const line of [
+    'and a step the charter does not name, you decide alone with the option you would recommend (the standing fork): write it to your relief file with the option taken and why',
+    'naming that option, and report every one at their return.',
+    'The standing fork never covers spend outside the plan, anything irreversible or deleted, anything published or reported outside the project, a credential, a sign-in, a security or system setting, anything installed or changed on a machine, or a change of a protocol: each waits for their return with no question, and that session gets the next step that does not wait on it.',
+    'a question that is theirs goes to your relief file, and waits for their return only where neither the standing fork nor a fork they approved answers it.',
+    // The reading he accepted (line 18244) left out code landing without Codex's review.
+    'Nor does it waive a review or a gate: `rule:double-review` and the merge rules above hold as written.',
+  ]) assert.ok(text.includes(line), line);
+  assert.doesNotMatch(text, /a step the charter does not name, waits for their return with no question/);
+  assert.doesNotMatch(text, /the one exception to holding what is theirs/);
+  assert.doesNotMatch(text, /waits for their return like any other case of theirs/);
   // His additions of 2026-10-28: the stretch shown before he leaves, and checked against its goals when he is back.
   for (const line of [
     'what only they can give that the stretch will need. Before they leave, open a stretch (`js-harness stretch open --plan <file> --html <file>`; `js-harness stretch status` exits 1 when none is open) and show its departure in that reply',
