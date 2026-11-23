@@ -358,3 +358,29 @@ The Decided row as it stood until his retirement of the rule on 2026-11-15:
 
 - [x] `merge-queue --dry-run` passed on a stale installed copy while `--land` refused it (the 882 land, 2026-11-15
   06:29 local): the dry-run checks copy == origin/main's bin too. Owner: the next merge-queue session (2026-11-15, a manual workaround owed a follow-up by `rule:rules-live-in-the-harness`; `odd/tasks/cement-workarounds.md`). Done: PR 922 (`d7b98f92`).
+
+## Moved on 2026-11-22
+
+Moved to make room in the `read surface` row for the six follow-ups of PR 888 (JH 209, 2026-11-15), each settled
+as said under it.
+
+- [x] Stalled-session detection: the board, the lead's watch and its heartbeat name a work session that holds
+  handed work and has made no commit, notice or gate for an hour. On 2026-10-16 three sessions sat five to six
+  hours before anyone noticed. Done: `odd/tasks/stalled-sessions.md`, PR 865.
+
+### The Decided row "Stack" as it stood until S2 and S11 closed its change
+
+Its "Changing" is done: S11 on 2026-10-28 and 29 (PRs 627, 628, 629, 632; `odd/tasks/f8-s11-complements.md`), and
+S2 on 2026-11-06 (`odd/tasks/f8-s2-removal.md`). The stack in force is the one `AGENTS.md` names.
+
+| Area | Decision |
+|------|----------|
+| Stack | gentle-ai 4 (ODD, RDD review, test-first by default), engram 3 (the binary, and its Claude plugin since `gentle-ai sync` installs it: hooks and one skill, no second MCP server), codegraph, context7, `typescript-lsp` plugin; graphify for non-code corpora only. **Changing** (Decided, "Direction"): gentle-ai leaves at F8's S2, and js-harness installs engram, codegraph and context7 itself from S11 |
+
+### The history three Decided rows kept after their decision
+
+Each sentence was moved word for word from its row, which keeps the decision in force.
+
+- From "CI" (CircleCI removed, `odd/tasks/drop-circleci.md`): CircleCI came in on 2026-10-14 to test the merge queue's candidates because the repository was private and a GitHub run spent minutes of an account with 2,000 a month and no card (`odd/tasks/merge-queue.md`, L3 and L5; `odd/tasks/drop-github-gate.md`, Why). That reason is gone since the repository went public (Name, home).
+- From "1.0.0 and gentle-ai #4036" (the 2026-10-17 answer it replaced, his tap of 2026-11-02): It replaces, kept as history: 1.0.0 waited for the three tasks that wait for gentle-ai to publish its issue #4036, though nobody knows whether it will; asked, between "No la espera (Recomendada)" and "Sí, la espera", he had tapped "Sí, la espera" (the lead's transcript `e152c9d8`, line 17535, 2026-10-17T01:22:06Z)
+- From "Releases before 1.0.0": Before it, kept as history, "verified" looked only inside the harness: its tests, reviews and evals.
