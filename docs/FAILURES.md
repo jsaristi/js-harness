@@ -2454,6 +2454,14 @@ it waits runs nothing").
   were stopped at about 14:50, their node waiters, pids 20948 and 19624, were still in the gate's
   queue; read in the process list by pid and stopped by pid. The fix owed is JH 8's: the gate refuses
   a turn whose starter is dead; until then every stop is confirmed in the process list
+- Seen: 2026-11-22 — the channel record, JH 301's note to the lead at 23:43 local (JH 301's own) — after its
+  background tasks were stopped with `TaskStop`, 12 `js-harness wait --notice-to 301` node processes, started 21:26
+  to 23:40, were still running; killed by pid, none left after (`Get-CimInstance` on node.exe matching
+  "notice-to 301"). `js-harness wait` runs outside `js-harness loop`, so the control below does not reach it
+- Seen: 2026-11-22 — JH 303's transcript c992d976 (its own) — a `TaskStop` of a background bash running a plan
+  script left the script's loop alive (bash pid 8696); it went on checking out heads in the worktree a second run
+  used, so some of that run's plans were of another pull request's head; found when the plans named other heads,
+  killed with `taskkill /T` by pid, the process list empty after
 - Control: check — bin/loop.test.mjs — "a real loop: run in the background, status sees it alive,
   stop leaves no process of it" — since 2026-10-15
 
