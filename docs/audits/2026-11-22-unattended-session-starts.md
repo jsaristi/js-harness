@@ -21,6 +21,24 @@ His words that ask for it: transcript `0cdab702-72bd-48e7-8a8e-0c38d4aca9c9`, li
 So, today, a session opens others without asking him only on a turn he typed; that the Plan is that session is the lead's and JH PLAN's reading of his words (L18), not his words. "Sin pedir permiso" (line 14462) is met as
 far as the host allows. The rest waits on the exception's test or on the host.
 
+## Checked: the lead was told to use `sessions start`, and the guard refused it (JH 301)
+Read in the lead's transcript, `d6383aea-8901-43a8-9261-fdcbd501d370` (`~/.claude/projects/D--js-harness`):
+- Line 35897, 2026-11-22T23:51:59Z: the host re-attached the skills the lead had invoked (`invoked_skills`). That
+  copy of the orchestrator skill says: on a turn he did not type, `start_session` leaves a card, "so there start it
+  with `js-harness sessions start --title "<title>" --brief <file>` instead".
+- Line 36299, 2026-11-23T00:20:46Z (19:20 local): the lead ran `js-harness sessions start --cwd D:/js-harness --title
+  "JH 300 · ..." --brief <file>`.
+- Line 36301, 00:20:47Z: the guard refused it: "js-harness sessions start opens a session in the background, where he
+  does not see it (rule sessions-open-in-sidebar)". The lead's relief note, written at 00:21Z, dates it "19:27 local";
+  the transcript says 19:20.
+- The installed file says the opposite: `~/.claude/skills/js-harness-orchestrator/SKILL.md` (v0.97.0, modified
+  2026-11-21 08:22 local), line 45, says the card "is the way there" and that "the guard refuses `js-harness sessions
+  start` and `claude --bg` wherever `rule:sessions-open-in-sidebar` is declared"; `grep -rn "sessions start"
+  ~/.claude/skills/` finds no line that tells a lead to start one.
+
+So the instruction came from a copy older than the installed file, re-attached to the lead's context, not from the
+installed skill. Not checked: when the lead first invoked the skill, so how old that copy was.
+
 ## The minutes with no work session running, 2026-11-22
 Method: every transcript under `~/.claude/projects/D--js-harness-*` (the worktrees' sessions; `D--js-harness`
 itself, where the lead and the Plan run, is left out) modified that day. A minute counts as busy when a transcript
@@ -46,6 +64,13 @@ Where the 759 come from, by stretch (local UTC-5, then UTC, so a window can be c
 | **Total** | | | **759** |
 
 Of the 759 minutes, 748 sit in the five spells above, so the 5-minute threshold moves the total by 11 at most. A tool call or a turn that writes nothing for more than 5 minutes reads as idle, so the figure is an upper bound.
+
+Checked against the lead's queue (`today-queue-2026-11-22.md`, its header "written 15:20 local", which lists JH
+296 and 297 as running): no overlap. Their transcripts' first entries are 2026-11-22T20:40:36Z and 20:40:48Z (15:40
+local), the end of the afternoon spell; the queue file was first written at 20:44:51Z (15:44 local, the lead's
+transcript, line 32698), after both had opened. In 15:06-17:51Z (10:06-12:51 local) and 20:06-20:40Z (15:06-15:40)
+no transcript under `D--js-harness-*`, sub-agents included, has an entry; only the lead's and the Plan's, left out by
+the method.
 
 Limits: a session waiting on a declared `js-harness wait` writes nothing and counts as idle here, which is right for
 "no work running" and wrong for "no session open". A sub-agent's transcript, in a `subagents` folder, was not read,
