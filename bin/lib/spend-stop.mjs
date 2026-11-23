@@ -98,30 +98,114 @@ export function stopLineIn(text, { brief = false } = {}) {
   return match === null ? null : parseStopLine(match[1] ?? match[2]);
 }
 
+// A cross-session message as the host hands it to the receiving session, closed or cut off at the end of the prompt.
+const MESSAGE = /<cross-session-message\b([^>]*)>[\s\S]*?(?:<\/cross-session-message>|(?![\s\S]))/g;
+const SENDER = /\bfrom-name="([^"]*)"/;
+
+/** The prompt `prompt` with every cross-session message whose sender `isLeadTitle` does not read as the lead's taken
+ * out: a brief one session relays to another (JH PLAN's draft sent to the lead) names the line of the session it is
+ * for, never the one that carries it (odd/tasks/spend-stop.md, L9). */
+function ownText(prompt, isLeadTitle) {
+  return String(prompt ?? '').replace(MESSAGE, (whole, attributes) => (isLeadTitle(SENDER.exec(attributes)?.[1] ?? '') ? whole : '\n'));
+}
+
 /** The line the UserPromptSubmit payload `payload` records for its session, or null where it records none: another
  * event, a sub-agent's prompt, no session id of the right shape, no literal in the prompt, or a line already recorded,
  * which a later prompt never moves. A start_session's first prompt and a cross-session message both reach this hook
- * (odd/tasks/spend-stop.md, L5), so a session's line is recorded with no step of its own. */
-export function recordPromptLine(payload, { home, now } = {}) {
+ * (odd/tasks/spend-stop.md, L5), so a session's line is recorded with no step of its own; a message counts only when
+ * `isLeadTitle` reads its sender's title as the lead's, and with no `isLeadTitle` none does. */
+export function recordPromptLine(payload, { home, now, isLeadTitle = () => false } = {}) {
   if (payload?.hook_event_name !== 'UserPromptSubmit' || !isSessionId(payload.session_id)) return null;
   if (typeof payload.agent_id === 'string' && payload.agent_id !== '') return null;
-  const line = stopLineIn(payload.prompt);
+  const line = stopLineIn(ownText(payload.prompt, isLeadTitle));
   if (line === null || readStopLine(home, payload.session_id) !== null) return null;
   recordStopLine({ home, sessionId: payload.session_id, line, ...(now ? { now } : {}) });
   return line;
 }
 
 const slashed = (text) => String(text ?? '').replace(/\\/g, '/').toLowerCase();
-// The spend folder named anywhere, or the home's folders above it named whole by a command that removes or moves.
+// The spend folder named anywhere, or the home's folders above it named whole.
 const NAMES_FOLDER = /\.js-harness\/+channel\/+spend(?:\/|\b)/;
-const REMOVES_ABOVE = /\b(?:rm|rmdir|mv|del|rd|move|remove-item|move-item|ren|rename-item)\b[^\n]*\.js-harness(?:\/+channel)?\/*(?=["'\s]|$)/m;
+const ABOVE_WHOLE = /\.js-harness(?:\/+channel)?\/*$/;
+// The programs that only read what they name, so a session may look at its line; and those that remove or move.
+// Not rg, whose --pre runs a program on each file, nor a pager, which can start a shell.
+const READERS = new Set(['cat', 'ls', 'dir', 'head', 'tail', 'wc', 'stat', 'file', 'grep', 'type', 'get-content', 'gc', 'get-childitem', 'gci', 'get-item', 'test-path']);
+// A word the shell expands (`$x`, `$_`, `$(`, a backtick, cmd's `%x%`): what it names is not read from the call.
+const EXPANDS = /\$|`|%\w+%/;
+// The programs that run their argument as a script, which the guard does not split.
+const SCRIPT_RUNNERS = new Set(['bash', 'sh', 'zsh', 'dash', 'pwsh', 'powershell', 'cmd', 'eval', 'xargs', 'wsl']);
+const WHOLE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** The simple commands of the split words `words`, each as `{ step, piped }`: its words, and the index of the
+ * pipeline it belongs to (steps joined by `|` share one). */
+function stepsOf(words) {
+  const steps = [];
+  let start = 0;
+  let pipeline = 0;
+  for (let at = 0; at <= words.length; at += 1) {
+    if (at < words.length && !words.operators.has(at)) continue;
+    if (at > start) steps.push({ step: words.slice(start, at), piped: pipeline });
+    if (at < words.length && words[at] !== '|') pipeline += 1;
+    start = at + 1;
+  }
+  return steps;
+}
+const REMOVERS = new Set(['rm', 'rmdir', 'mv', 'del', 'erase', 'rd', 'move', 'remove-item', 'ri', 'move-item', 'ren', 'rename-item']);
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const SHELL_TOOLS = new Set(['Bash', 'mcp__terminal__run_in_terminal']);
 
+/** Whether the shell command `command` (slashed and lower-cased) writes, removes or moves the spend folder. A command
+ * that names the folder passes only when every step of each pipeline that names it is a reader (`READERS`) and no
+ * word of it expands (`EXPANDS`: `rm "$_"` after an `ls` of the folder); a remover of a folder above it, or a
+ * redirection into it, is refused too. A command that cannot be split is read as one that does. */
+function shellTouches(command) {
+  if (!/\.js-harness/.test(command)) return false;
+  let words;
+  try {
+    words = shellWords(command, { groups: true, redirections: true });
+  } catch {
+    return true;
+  }
+  for (const at of words.redirections) if (NAMES_FOLDER.test(words[at + 1] ?? '') || ABOVE_WHOLE.test(words[at + 1] ?? '')) return true;
+  const steps = stepsOf(words);
+  const named = new Set(steps.filter(({ step }) => step.some((word) => NAMES_FOLDER.test(word))).map(({ piped }) => piped));
+  if (named.size > 0 && (EXPANDS.test(command) || /<\(|>\(/.test(command))) return true;
+  for (const { step, piped } of steps) {
+    const { program } = programOf(step);
+    if (named.has(piped) && !READERS.has(program)) return true;
+    if (REMOVERS.has(program) && step.some((word) => ABOVE_WHOLE.test(word))) return true;
+  }
+  return false;
+}
+
+/** Whether the shell command `command` (slashed and lower-cased) has a step `js-harness spend ... --raise` that does
+ * not name, as a literal whole id, a session other than `sessionId`, the one that runs it: the host sets the hook's
+ * `session_id`, which a worker cannot, so its own raise is refused here whatever it puts in CLAUDE_CODE_SESSION_ID or
+ * its title (odd/tasks/spend-stop.md, L9). A heredoc's text is no step; a raise handed to a shell or `eval` as a
+ * script (`bash -c '...'`) is not read, so it is refused whatever it names; a script file is not read at all. */
+function raisesOwnLine(command, sessionId) {
+  if (!/spend/.test(command) || !/--raise/.test(command)) return false;
+  let words;
+  try {
+    words = shellWords(command, { groups: true, redirections: true });
+  } catch {
+    return true;
+  }
+  return stepsOf(words).some(({ step }) => {
+    const { program, args } = programOf(step);
+    if (SCRIPT_RUNNERS.has(program)) return args.some((arg) => /spend/.test(arg) && /--raise/.test(arg)) || (args.some((arg) => /spend/.test(arg)) && args.includes('--raise'));
+    if (program !== 'js-harness' || args[0] !== 'spend' || !args.includes('--raise')) return false;
+    const named = args.slice(1).filter((arg, at, rest) => !arg.startsWith('-') && rest[at - 1] !== '--line');
+    return named.length !== 1 || !WHOLE_ID.test(named[0]) || named[0] === String(sessionId ?? '').toLowerCase() || step.some((word) => EXPANDS.test(word));
+  });
+}
+
 /** Why the PreToolUse call of `payload` is refused for touching the stop lines, or null: a Write, Edit, MultiEdit or
- * NotebookEdit of a file in the spend folder, or a Bash or terminal command that names that folder or removes the
- * folders above it, for every session, with or without a line, read from the call alone (odd/tasks/spend-stop.md,
- * T5). A path the shell computes (`$HOME`, a variable, `eval`, a `cd` then a relative path) is not read. */
+ * NotebookEdit of a file in the spend folder, a Bash or terminal command that writes, removes or moves that folder or
+ * removes the folders above it (`shellTouches`; a read passes), or one that raises the running session's own line
+ * (`raisesOwnLine`), for every session, with or without a line, read from the call alone (odd/tasks/spend-stop.md,
+ * T5, L9). A path the shell computes (`$HOME`, a variable, `eval`, a `cd` then a relative path) is not read, nor a
+ * script file a command runs. */
 export function lineFileRefusal(payload, { home } = {}) {
   const tool = payload?.tool_name;
   const input = payload?.tool_input;
@@ -132,9 +216,10 @@ export function lineFileRefusal(payload, { home } = {}) {
     touches = file.startsWith(`${folder}/`) || NAMES_FOLDER.test(file);
   } else if (SHELL_TOOLS.has(tool)) {
     const command = slashed(input?.command);
-    touches = NAMES_FOLDER.test(command) || REMOVES_ABOVE.test(command);
+    if (raisesOwnLine(command, payload?.session_id)) return 'js-harness guard: this step raises the stop line of the session that runs it, or of a session the shell computes: no session raises its own line; the lead raises it, naming the session whole (js-harness spend <session> --line <tokens> --raise)';
+    touches = shellTouches(command);
   }
-  return touches ? 'js-harness guard: this step writes or removes a session\'s stop line (the spend folder under the harness home), which no session touches: a line is recorded once, and only the lead moves it (js-harness spend <session> --line <tokens> --raise)' : null;
+  return touches ?'js-harness guard: this step writes or removes a session\'s stop line (the spend folder under the harness home), which no session touches: a line is recorded once, and only the lead moves it (js-harness spend <session> --line <tokens> --raise)' : null;
 }
 
 // The files a session past its line may still read and write: its state (`*state.md`) and a feature document.

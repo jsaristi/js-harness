@@ -262,7 +262,9 @@ export async function rulesHookMain(argv, {
   // Loaded only for a prompt that names the literal's last word, so a turn without one pays nothing.
   if (typeof input?.prompt === 'string' && /cache-read/i.test(input.prompt)) {
     try {
-      (await import('./spend-stop.mjs')).recordPromptLine(input, { home });
+      // The lead's title as the board reads it: an orchestrator's, or the arriving one of a handover.
+      const { isLeadTitle } = await import('./stale-board.mjs');
+      (await import('./spend-stop.mjs')).recordPromptLine(input, { home, isLeadTitle });
     } catch {
       // No line recorded: the turn runs as it would with none, and the rules' notice below is unchanged.
     }
