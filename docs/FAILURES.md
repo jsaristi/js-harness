@@ -2139,6 +2139,10 @@ after it was made: nothing measured the spend against the figure while the work 
 - Seen: 2026-11-21 — relief file, line 3665; the lead's notes, 934-fixes-2-state.md, line 19 (JH 277's own) — JH 277
   closed at about 15M cache-read (an estimate: about 130 calls, not measured) against its 8M stop line, which it did
   not track; its branch was left unpushed
+- Seen: 2026-11-22 — the channel record, JH 301's ready notice for pull request 1017 at 22:49 local (JH 301's own) —
+  JH 301 measured 68.3M tokens, its transcript b1e24e4d's usage summed over 315 calls (its cache-read alone 69.7M by 322 calls, read just after), against
+  its 50M line, noticed only at a unit's end; late because after its compaction it reported a stale estimate of about
+  30M and read its spend at no unit boundary until the advisor asked
 
 ### stack-update-moved-hooks
 A tool of the stack was updated on purpose without the hook count read after it, so a hook entry the update added was
