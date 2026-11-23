@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { checkLedger, failedTestFiles, judgeRerun, ledgerRow, localDay, parseLedger, rerunNext } from './flaky.mjs';
+import { checkLedger, failedTestFiles, failingTests, judgeRerun, ledgerRow, localDay, parseLedger, rerunNext } from './flaky.mjs';
 import { firstStep } from './next-step.mjs';
 
 const QUARANTINE = 'to quarantine each file above, give it an entry in docs/FLAKY.md: "### <file>" with "- Owner:", "- Expires: YYYY-MM-DD" and "- Failure: <id in docs/FAILURES.md>", and commit it (an expired entry is renewed in place)';
@@ -42,6 +42,34 @@ test('a red run that names no test file of the suite gives none, so nothing is r
 test('colours in the output do not hide a failed file', () => {
   const coloured = '\u001b[31m✖ failing tests:\u001b[39m\n\n\u001b[2mtest at bin/b.test.mjs:4:1\u001b[22m\n\u001b[31m✖ b (1ms)\u001b[39m\n';
   assert.deepEqual(failedTestFiles(coloured, FILES), ['bin/b.test.mjs']);
+});
+
+// As node 26.13.1's spec reporter ended a run, on 2026-11-23, of a file whose one test passed and whose after() hook
+// threw (the failure probe-end-hook-flake): the file itself is the failed test, located at its hook. The scratch root
+// the run printed is written D:\js-harness here, and the stack is cut to its first frame.
+const END_HOOK = [
+  '✔ passes (0.99ms)',
+  '✖ D:\\js-harness\\bin\\hook.test.mjs (0.2546ms)',
+  'ℹ tests 2',
+  'ℹ suites 0',
+  'ℹ pass 1',
+  'ℹ fail 1',
+  'ℹ cancelled 0',
+  'ℹ skipped 0',
+  'ℹ todo 0',
+  'ℹ duration_ms 127.7968',
+  '',
+  '✖ failing tests:',
+  '',
+  'test at bin\\hook.test.mjs:2:1',
+  '✖ D:\\js-harness\\bin\\hook.test.mjs (0.2546ms)',
+  '  Error: after hook failed',
+  '      at TestContext.<anonymous> (file:///D:/js-harness/bin/hook.test.mjs:2:21)',
+].join('\n');
+
+test('a file whose after() hook throws while every test passes is still named failing, so it is rerun (probe-end-hook-flake)', () => {
+  assert.deepEqual(failingTests(END_HOOK), ['D:\\js-harness\\bin\\hook.test.mjs']);
+  assert.deepEqual(failedTestFiles(END_HOOK, [...FILES, 'bin/hook.test.mjs']), ['bin/hook.test.mjs']);
 });
 
 // The ledger of odd/tasks/flaky-ledger.md (Design 3 to 5): docs/FLAKY.md, one `### <test file>` entry with
