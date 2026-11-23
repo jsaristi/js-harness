@@ -72,6 +72,17 @@ transcript, line 32698), after both had opened. In 15:06-17:51Z (10:06-12:51 loc
 no transcript under `D--js-harness-*`, sub-agents included, has an entry; only the lead's and the Plan's, left out by
 the method.
 
+The other three spells, checked the same way, plus every transcript open across a spell (an entry before it and the
+next after it, which a tool call running through the spell would show), in every folder under `~/.claude/projects`:
+- 00:00-00:26 (05:00-05:26Z): no work session wrote. JH 287 was open across it, idle: its next entry is the lead's
+  message at 00:46 that woke it.
+- 02:12-09:53 (07:12-14:53Z): no work session wrote. JH 291 was open across it: it ended its turn at 02:02 with a
+  `js-harness wait` of 480 minutes in the background, and that wait timing out woke it at 09:53. So it waited, with
+  no work, as the Limits below say.
+- 10:06-12:51 (15:06-17:51Z): no work session wrote, and none was open across it.
+In all three only the lead and the Plan wrote (the Plan at 02:14-08:02 inside the night spell). So no work ran in
+any spell of the table.
+
 Limits: a session waiting on a declared `js-harness wait` writes nothing and counts as idle here, which is right for
 "no work running" and wrong for "no session open". A sub-agent's transcript, in a `subagents` folder, was not read,
 and neither was the lead's or the Plan's own work.
