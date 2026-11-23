@@ -17,8 +17,8 @@ His words that ask for it: transcript `0cdab702-72bd-48e7-8a8e-0c38d4aca9c9`, li
    `js-harness sessions start`, scheduled tasks and cloud sessions. Each could start a session with nobody there,
    and each would open it where he does not see it.
 
-So, today, a session opens others without asking him only on a turn he typed; that the Plan is that session is the lead's and JH PLAN's reading of his words (L18), not his words. "Sin pedir permiso" (line 14462) is met as
-far as the host allows. The rest waits on the exception's test or on the host.
+So, today, a session opens others without asking him only on a turn he typed, or on a `<side-sessions-event>` turn right after one (the test below); that the Plan is that session is the lead's and JH PLAN's reading of his words (L18), not his words. "Sin pedir permiso" (line 14462) is met as
+far as the host allows. The rest waits on what the test left unproven, or on the host.
 
 ## Checked: the start test, a start on a side-sessions-event turn (JH 301, 2026-11-22)
 Read in JH PLAN's transcript, `0cdab702-72bd-48e7-8a8e-0c38d4aca9c9` (`~/.claude/projects/D--js-harness`); times UTC,
