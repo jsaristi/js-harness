@@ -226,10 +226,11 @@ talks with the owner, explains, understands and deduces; it asks only a few ques
   what it is, for whom, why now. The session logs that it said so, as a Log line marked `(session)`, and `## Setup`
   records `Teaching: on (L<n>)`.
 - **It guides** (S11: "me gusta mas que sea hablado y como guiado"). From what he says, the session follows the
-  thread, asks open questions in plain chat where something is missing ("¿quién lo va a usar primero?"), explains why
-  each thing matters for the plan, and says in a line, every so often, what it has understood and what comes next.
-  He can answer at any length, change his mind, ask back ("¿y por qué no X?") or think out loud; there are no
-  options to tap in this part.
+  thread, explains in chat why each thing matters for the plan, and says in a line, every so often, what it has
+  understood and what comes next. Where something is missing ("¿quién lo va a usar primero?") it asks through the
+  question tool, one question at a time, 2 to 4 options that give examples and the free answer in "Otro", each
+  recorded before it is asked (`rule:questions-one-place`; L47, L48). He can still answer at any length in "Otro", change his mind, ask back ("¿y por
+  qué no X?") or think out loud in chat.
 - **It deduces** (S12: "entender y descifrar lo que quiere el usuario"). It does not wait to be told what it can read
   from the conversation and the repository: the kind and the size, the developer's level in each layer (from how he
   talks about it, as L10 first proposed), the outcome, the constraints. Each deduction is written down with the words
@@ -618,8 +619,8 @@ conversation). Added after the readers of 9de068be.
   the change. An ADR is superseded only after `O3`.
 - **Accepted ADR**: one named by a checked area, neither superseded nor withdrawn, once `O3` is checked. That is what
   D5's `## Decided` and D6 mean by "accepted". An owner's own decision's status reads `decided by the owner (L<n>)`.
-- **Codex** has no question tool: the deepening questions and the approvals are asked in plain text, one at a time,
-  with numbered options and the recommended one first.
+- **A host with no question tool** (Codex, where it exposes none): the guided and deepening questions and the
+  approvals are written out, one at a time, with numbered options and the recommended one first (L48).
 - **Through a lead** (a project that already has one): the owner may only see the lead's chat. So the deepening
   questions and both approvals go through the lead. Each carries its explanation in its text, and an approval
   carries the area lines. Each answer is logged verbatim from the transcript (`js-harness sessions --quote`), never
@@ -1447,3 +1448,22 @@ ceiling.
 - Codex: `9cb4eb2..7892774` correct (0.89), recorded.
 - For JH 43's visa site, write `- Areas: +answer-engines (L9)` under `## Setup`, then paste again what
   `js-harness onboard profile --checklist advice` prints, and add `A:answer-engines` to Level.
+- L47 (2026-11-19) His answer to question 351 (JH PLAN transcript f5c3ee4d line 4083, 2026-11-19T00:15:41Z, tapped),
+  asked because S11's plain-chat questions contradicted `rule:questions-one-place` (2026-11-17): "A: con opciones
+  (Recomendada)". D3's guided questions now go through the question tool with 2 to 4 options that give examples and
+  the free answer in "Otro"; the explanation and his thread stay in chat. The `converse` and `summary` steps share
+  one phrase for how a question is put (`ASK` in `bin/lib/onboard.mjs`). The opening's invitation to tell the
+  project in his own words is not changed: his answer did not cover it.
+- L48 (2026-11-19) Reviews of `b972cb8`. Codex (incorrect, 0.97), three P2, all taken: a question is recorded with
+  `js-harness notify --to orchestrator --kind question` before it is asked, since the template gate refuses an
+  unrecorded one; it is written out with numbered options only where the host has no question tool, not "on Codex";
+  and the `kind` step's follow-ups (a kind or a size the thread leaves open) are put the same way. The lenses
+  (readability 0, reliability 1): the `summary` step's new wording had no test; it has one now.
+- L49 (2026-11-19) Codex's recheck of `2d3648f` (2 fixed, 1 not): recording was not enough, since the gate also
+  holds the tool's text and option labels to the record's (`bin/lib/template-question.mjs`, `admit`); the question
+  is now put to the owner as `js-harness template ask <n>` prints it, unchanged. Lenses: 0 findings, their one
+  earlier finding fixed.
+- L50 (2026-11-19) The lead's ruling on this session's scope reading: the `kind` and `summary` steps are part of the
+  guided interview, and his answer to question 351 covered every question it asks (its text: "La entrevista guiada
+  hace hoy sus preguntas abiertas en el chat ... ¿Cuál vale para la entrevista guiada?"). The "Codex has no question
+  tool" line of the hosts list now says a host with no question tool, as L48 took.

@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { RULES } from './rules-data.mjs';
 import { ruleHere, writeRules } from './rules.mjs';
-import { EFFORTS, menuLine } from './model-home.mjs';
+import { EFFORTS, menuLine, sameClaudeModel } from './model-home.mjs';
 import { agentEffortRefusal, allowedModels, denial, hourRefusal, openingRefusal, sessionStartHome, sessionStartRefusal, stampedHour, starterRefusal } from './guard.mjs';
 import { backtickRefusal, backticksInDoubleQuotes, driveRootRemovalRefusal, modelRefusal, onFirstParentLine, reviewBaseRefusal, terminalNoteRefusal } from './guard.mjs';
-import { RECORD_HANDLES, REVIEW_RECORD_FILES, reviewRecordOf, reviewRecordWriteRefusal } from './guard.mjs';
+import { RECORD_HANDLES, REVIEW_RECORD_FILES, reviewRecordOf, reviewRecordWriteRefusal, shellWords } from './guard.mjs';
 import { codexReviewsPath } from './codex-reviews.mjs';
 import { codexReviewRunsPath } from './codex-review-runs.mjs';
 import { LENS_REVIEW_RUNS_FILE, LENS_REVIEWS_FILE } from './lens-reviews.mjs';
@@ -204,14 +204,17 @@ test('the tools that do not open a session pass in this repository, whatever the
 });
 
 // odd/tasks/one-model-home.md, spec 5 (L13, Claude 2): the tool caps a start at the session that makes it, so a
-// starter off the home cannot start a session on it, whatever its call names.
-test('a start from a session whose own record holds another model, or a lower level than the start is held to, is refused with who corrects it', () => {
+// starter under the level a start is held to cannot start a session at it, whatever its call names. The starter's
+// own model is not held since his words of 2026-11-18 (odd/tasks/starter-model-check.md, spec 1).
+test('a start from a session whose own record holds a lower level than the start is held to is refused with who corrects it, and one on another model passes', () => {
+  // The refusal names no way around the cap: a card from the same starter is capped as a row is (lens on 9fc30a0..1e19075).
   const model = MODEL_RULES[0].value;
-  const next = model.replace(/\d+$/, (digits) => String(Number(digits) + 1));
+  const next = model.replace(/\d+/, (digits) => String(Number(digits) + 1));
+  // A date at the end is no other model (sameClaudeModel), so the first number of the id is the one changed.
+  assert.equal(sameClaudeModel(next, model), false, `${next} is another model than ${model}`);
   // The starter's own level is the higher of the two the home gives, so it is under neither whichever is above: a
   // switch may put the lead's level below the sessions', and a starter at the lead's would then be capped.
   const on = { model, effort: EFFORTS[Math.max(EFFORTS.indexOf(HELD), EFFORTS.indexOf(LEAD))], title: 'JH ORQ · orquestador' };
-  const way = ' Where a card is enough, js-harness sessions start starts one on the rules\' model and level, capped by no session.';
   assert.equal(starterRefusal(on, HERE), null);
   assert.equal(starterRefusal(on, HERE, { lead: true }), null);
   assert.equal(starterRefusal({ ...on, model: `${model}[1m]` }, HERE), null, 'a bracket aside is the same model');
@@ -220,21 +223,26 @@ test('a start from a session whose own record holds another model, or a lower le
   assert.equal(starterRefusal({ model: null, effort: null, title: null }, HERE), null, 'a record that names neither');
   assert.equal(starterRefusal({ ...on, effort: 'ultra' }, HERE), null, 'a word that is no level is not compared');
   assert.equal(starterRefusal({ ...on, model: next, effort: 'low' }, null), null, 'no rules here');
-  assert.equal(starterRefusal({ ...on, model: next, title: 'JH 7 · thing' }, HERE),
-    `js-harness guard: start_session is called from a session whose own record holds the model "${next}", not the one of the rule session-model: ${model}, and a start is capped at the session that makes it. The lead sets that session's with its session tools.${way}`);
+  // His words of 2026-11-18: a starter on another model than the home's starts a session, a work session's or a lead's.
+  assert.equal(starterRefusal({ ...on, model: next, title: 'JH 7 · thing' }, HERE), null, 'another model is not held');
+  assert.equal(starterRefusal({ ...on, model: next, title: 'JH 7 · thing' }, HERE, { lead: true }), null, 'nor for a new lead');
+  assert.equal(starterRefusal({ ...on, model: next }, HERE, { starterLead: true }), null, 'nor from a lead');
   // The level is the one the start is held to: the sessions' for a work session, the lead's for a new lead.
   const under = EFFORTS[EFFORTS.indexOf(HELD) - 1];
   if (under !== undefined) {
     assert.equal(starterRefusal({ ...on, effort: under, title: 'JH 7 · thing' }, HERE),
-      `js-harness guard: start_session is called from a session whose own record holds the level "${under}", under the one this start is held to (rule session-effort: ${HELD}), and a start is capped at the session that makes it. The lead sets that session's with its session tools.${way}`);
+      `js-harness guard: start_session is called from a session whose own record holds the level "${under}", under the one this start is held to (rule session-effort: ${HELD}), and a start is capped at the session that makes it. The lead sets that session's with its session tools.`);
   }
   if (EFFORTS.indexOf(HELD) < EFFORTS.indexOf(LEAD)) {
     assert.equal(starterRefusal({ ...on, effort: HELD }, HERE), null, 'a work session is started from the sessions\' level');
     assert.match(starterRefusal({ ...on, effort: HELD, title: 'JH 7 · thing' }, HERE, { lead: true }), new RegExp(`holds the level "${HELD}", under the one this start is held to \\(rule lead-effort: ${LEAD}\\)`));
   }
-  // A lead cannot be set by another session: the refusal carries the line for the user, with the lead's level.
-  assert.equal(starterRefusal({ ...on, model: next }, HERE, { starterLead: true }),
-    `js-harness guard: start_session is called from a session whose own record holds the model "${next}", not the one of the rule session-model: ${model}, and a start is capped at the session that makes it. Only the user changes a lead's own: ${menuLine({ model, effort: LEAD })}${way}`);
+  // A lead cannot be set by another session: the refusal carries the line for the user, with the home's model and
+  // the lead's level, whatever model the lead's own record holds.
+  if (under !== undefined) {
+    assert.equal(starterRefusal({ ...on, model: next, effort: under }, HERE, { starterLead: true }),
+      `js-harness guard: start_session is called from a session whose own record holds the level "${under}", under the one this start is held to (rule session-effort: ${HELD}), and a start is capped at the session that makes it. Only the user changes a lead's own: ${menuLine({ model, effort: LEAD })}`);
+  }
 });
 
 // odd/tasks/one-model-home.md, spec 5: what a start does not name is the home's, a lead's level for a lead.
@@ -1078,4 +1086,21 @@ test('reading a record, the commands that write one, and text that only names on
     `node -e "const t = fs.readFileSync('${RECORD}', 'utf8'); console.log(RegExp('rename').exec(t))"`,
     `node -e "const t = fs.readFileSync('${RECORD}', 'utf8'); console.log(new RegExp('writeFileSync', 'g').exec(t))"`,
   ]) assert.equal(reviewRecordWriteRefusal(command), null, command);
+});
+
+test('shellWords with redirections reads &> and &>> as a redirection, past comments and heredoc bodies', () => {
+  const read = (command) => {
+    const words = shellWords(command, { groups: true, redirections: true });
+    return { words: [...words], operators: [...words.operators], redirections: [...words.redirections] };
+  };
+  // The & of &> is the redirection's, not a separator (the verifier's passes on background-launch, 2026-11-17).
+  assert.deepEqual(read('a &>log b'), { words: ['a', '>', 'log', 'b'], operators: [], redirections: [1] });
+  assert.deepEqual(read('a &>> log'), { words: ['a', '>>', 'log'], operators: [], redirections: [1] });
+  // An & apart from the > separates, && stays one operator, and an &> in quotes or a comment is text.
+  assert.deepEqual(read('a & >log b'), { words: ['a', '&', '>', 'log', 'b'], operators: [1], redirections: [2] });
+  assert.deepEqual(read('a &&>log b'), { words: ['a', '&&', '>', 'log', 'b'], operators: [1], redirections: [2] });
+  assert.deepEqual(read('echo "&>" x'), { words: ['echo', '&>', 'x'], operators: [], redirections: [] });
+  assert.deepEqual(read("# it's &>\na &>log"), { words: [';', 'a', '>', 'log'], operators: [0], redirections: [2] });
+  // Without redirections the & is an operator, as every other caller has read it.
+  assert.deepEqual([...shellWords('a &>log b')], ['a', '&', '>log', 'b']);
 });

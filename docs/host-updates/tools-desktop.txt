@@ -1,6 +1,6 @@
 # surface: desktop
-# Claude Desktop 5.11492.2, Code tab CLI 2.1.321
-# recorded: 2026-11-13
+# Claude Desktop 6.28899.6, Code tab CLI 2.1.330
+# recorded: 2026-11-22
 # provenance: transcribed by the model from its tool definitions and its deferred-tool list; a removal is confirmed with ToolSearch select:<name> before a review claims it
 Agent
 Artifact
@@ -17,7 +17,6 @@ EnterPlanMode
 EnterWorktree
 ExitPlanMode
 ExitWorktree
-FetchInboxMessage
 Glob
 Grep
 LSP
@@ -31,7 +30,6 @@ PushNotification
 Read
 ReadMcpResourceDirTool
 ReadMcpResourceTool
-ReadNotifications
 RemoteTrigger
 ReportFindings
 ScheduleWakeup

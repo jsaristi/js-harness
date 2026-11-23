@@ -196,7 +196,9 @@ function stillHashes(cwd, rec, spawn) {
  * `beyondTip: false` is for the rows that refuse, the push's and the merge door's, and for the command whose record
  * they ask for: a record whose head lies past the tip then covers nothing, and is given back in `beyond`, as
  * `{ rec, covered }`, for a row to name. The door reads a pull request merged onto main, past which no head lies, so a
- * cut inside a reviewed range passed the push and was refused there (docs/FAILURES.md, door-covers-past-tip). */
+ * cut inside a reviewed range passed the push and was refused there (docs/FAILURES.md, door-covers-past-tip).
+ *
+ * `rangeIds` is every commit of `from..tip`, merges included, for a row that names only the records of its range. */
 export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read, isValid, beyondTip = true }) {
   // Every commit of the range, merges included: a record whose head is one is worth expanding.
   const inRange = gitOut(spawn, cwd, ['rev-list', `${from}..${tip}`]);
@@ -305,7 +307,7 @@ export function reviewCoverage(cwd, { from, tip, spawn = spawnSync, where, read,
     else (beyondTip || !outside(rec) ? covers : beyond).push({ rec, covered: leftMarkedFilesOut(rec) ? readAtHead(rec, covered) : covered });
   }
   const uncovered = codeCommits.filter((commit) => !covers.some(({ covered }) => covered.has(commit.id)));
-  return { codeCommits, covers, uncovered, invalid: records.length - valid.length, ignored, stale, ...(beyondTip ? {} : { beyond }), ...(codex?.where?.commonGitDir !== undefined ? { where: codex.where } : {}) };
+  return { codeCommits, covers, uncovered, invalid: records.length - valid.length, ignored, stale, rangeIds, ...(beyondTip ? {} : { beyond }), ...(codex?.where?.commonGitDir !== undefined ? { where: codex.where } : {}) };
 }
 
 /** The Codex review records of the repository at `cwd` and which of them are evidence, as `admittedLensReviews` says

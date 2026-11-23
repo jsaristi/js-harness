@@ -3,7 +3,7 @@
 Rendered by `js-harness rules render` from `bin/lib/rules-data.mjs` and `docs/rule-sources.json`: do not edit it. A rule is changed with `js-harness rules change <id>`, which writes its declaration (`odd/tasks/rule-hierarchy.md`, "How a rule is declared"), its source and this list together, and this is the one text that shows a value.
 The list holds no engine version and no date of a check: `js-harness rules applied` reads them from the session records.
 
-Hash `c5b6a8ded1f8`. In force: 73 (45 of Sebastián, 28 of the project). Retired: 9.
+Hash `41acc56f64de`. In force: 73 (45 of Sebastián, 28 of the project). Retired: 9.
 
 ## Sebastián's
 
@@ -19,9 +19,9 @@ A session says when it finished and where to return, watches its context, and a 
 - Since 2026-10-22. Row: reports. Source: his words of 2026-09-28, 2026-10-07, 2026-10-07, 2026-10-10, 2026-10-10, 2026-10-11, 2026-10-12, checked by the command on 2026-10-22.
 
 ### away-autonomy
-Once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once; before he leaves it shows the stretch's departure, led by the migration's share now and the share expected at the return, with its goals, and when he is back its return checked against them; while he is away a reply closes in the working state, or once in the cut that gives his block, and a question of his waits in the relief file for his return: "- When the user says they leave you alone or will be away, ask nothing and seek no permission, in that reply or until they are back, and write to your relief file that they are away, with the time."
+Once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once; before he leaves it shows the stretch's departure, led by the migration's share now and the share expected at the return, with its goals and the few forks it pre-decides, cases of his it answers alone once he approves or corrects them at once in his own words before he leaves, an unapproved one waiting like any other, no other case of his and no spend or publishing by them, and when he is back its return checked against them; while he is away a reply closes in the working state, or once in the cut that gives his block, and a question of his waits in the relief file for his return: "- When the user says they leave you alone or will be away, ask nothing and seek no permission, in that reply or until they are back, and write to your relief file that they are away, with the time."
 - Home: `bin/lib/manifest.mjs`.
-- Since 2026-10-29. Row: reports. Source: his words of 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-29, 2026-10-29, 2026-10-29, checked by the command on 2026-10-29.
+- Since 2026-11-15. Row: reports. Source: his words of 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-28, 2026-10-29, 2026-10-29, 2026-10-29, 2026-11-15, 2026-11-16, checked by the command on 2026-11-16.
 
 ### background-task-declared
 A background task says what it is for and what ends it, and is stopped when its condition resolves: "A background task a session starts (a wait, a watch, a timer) says in its description what it is for and what ends it, and the session writes it to its state with who stops it; when its condition resolves another way, it is stopped in that same step."
@@ -116,9 +116,9 @@ Every question to the user opens with what it is for: the work it serves and wha
 - Since 2026-10-22. Row: reports. Source: his words of 2026-10-22, checked by the command on 2026-10-22.
 
 ### questions-one-place
-Every question of the project reaches the user in the orchestrator's chat, through the host's question tool, recorded before it is asked: "## Questions to the user Every question of the project reaches the user in one place: the orchestrator's chat, through the host's question tool, one question a call, the recommended option first."
+Every question of the project reaches the user in the orchestrator's chat, through the host's question tool with options, recorded before it is asked: "## Questions to the user Every question of the project reaches the user in one place: the orchestrator's chat, through the host's question tool, one question a call, the recommended option first."
 - Home: `bin/lib/manifest.mjs`.
-- Since 2026-10-14. Row: reports. Source: his words of 2026-10-13, 2026-10-13, checked by a session on 2026-10-14.
+- Since 2026-11-17. Row: reports. Source: his words of 2026-10-13, 2026-10-13, 2026-11-17, 2026-11-17, 2026-11-17, checked by the command on 2026-11-17.
 
 ### recap-effort-line
 The lead's recap names each session's effort mode for its kind of work, and why: "## The recap Each reply that closes a stretch of work carries: - one line a session: its state, the effort mode its kind of work calls for and why; - by title, the sessions to archive and the ones stopped, with what each waits for; a session a scheduled task opened is named as a routine; - the Codex meter, read at that moment, when the project reviews with Codex; - what waits for the user in a session, said only after reading that session at that moment; - when a stretch or a session ends, that it ended and which session to return to."
@@ -134,7 +134,7 @@ Turning Remote Control back on in the orchestrator session after a restart of th
 ### reply-five-states
 A reply ends in one of five states, and a question is his decision alone, explained before it is asked: "- A reply ends in one of five states."
 - Home: `bin/lib/protocols-skill.mjs`.
-- Since 2026-10-24. Row: reports. Source: his words of 2026-10-07, 2026-10-03, 2026-10-03, 2026-10-07, 2026-10-10, 2026-10-08, 2026-10-08, 2026-10-11, 2026-10-20, checked by the command on 2026-10-24.
+- Since 2026-11-17. Row: reports. Source: his words of 2026-10-07, 2026-10-03, 2026-10-03, 2026-10-07, 2026-10-10, 2026-10-08, 2026-10-08, 2026-10-11, 2026-10-20, 2026-11-17, 2026-11-17, 2026-11-17, checked by the command on 2026-11-17.
 
 ### report-table
 When the user asks what was done, the lead's status report shows each section that holds items as a table: "- Show each section that holds items as a table: one row an item, with the columns that item needs (what it is, its state, what it gives the user)."
@@ -157,14 +157,16 @@ Before adding a command, an option, a function, a protocol, a rule or a document
 - Since 2026-10-24. Row: reports. Source: his words of 2026-10-23, checked by the command on 2026-10-24.
 
 ### review-effort
-The effort a Codex review runs at: medium.
+The effort a Codex review runs at: max.
+- Was: medium until 2026-11-18.
 - Read by: `bin/codex-review.mjs`, `bin/lib/model-home.mjs`.
-- Since 2026-10-12. Row: reports. Source: his words of 2026-10-08, 2026-10-12, checked by a session on 2026-10-12.
+- Since 2026-11-18. Row: reports. Source: his words of 2026-11-17, checked by the command on 2026-11-18.
 
 ### review-model
-The one model a Codex review runs on: gpt-6.1-sol.
+The one model a Codex review runs on: gpt-6.2-sol.
+- Was: gpt-6.1-sol until 2026-11-18.
 - Read by: `bin/codex-review.mjs`, `bin/lib/model-home.mjs`.
-- Since 2026-10-08. Row: reports. Source: his words of 2026-10-06, 2026-10-08, checked by a session on 2026-10-11.
+- Since 2026-11-18. Row: reports. Source: his words of 2026-11-17, checked by the command on 2026-11-18.
 
 ### reviewed-commit-lines
 About how many changed lines a commit that will be reviewed stays under, a file it renames counted by the lines it changes: 1,200 changed lines.
@@ -184,10 +186,10 @@ The effort a senior session runs at, titled <code> SR · <purpose>; its model is
 - Since 2026-11-12. Row: reports. Source: his words of 2026-11-11, 2026-11-12, checked by the command on 2026-11-12.
 
 ### senior-model
-The model a senior session runs on, titled <code> SR · <purpose>, which the lead starts with js-harness sessions start and sends tasks needing more intelligence or complexity: claude-fable-5-2.
+The model a senior session runs on, titled <code> SR · <purpose>, which the lead opens with start_session and sends tasks needing more intelligence or complexity: claude-fable-5-2.
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: `bin/lib/model-home.mjs`.
-- Since 2026-11-12. Row: reports. Source: his words of 2026-11-11, 2026-11-12, checked by the command on 2026-11-12.
+- Since 2026-11-12. Row: reports. Source: his words of 2026-11-11, 2026-11-12, checked by the command on 2026-11-17.
 
 ### session-effort
 The effort every work session and every sub-agent the harness starts runs at; the lead's session runs at rule:lead-effort, and the lenses and the double review's Claude reader at rule:lens-effort: medium.
@@ -221,10 +223,10 @@ The shape of the title of a session started with start_session: <code> is the pr
 - Since 2026-10-19. Row: reports. Source: his words of 2026-10-19, 2026-10-19, checked by the command on 2026-10-19.
 
 ### sessions-open-in-sidebar
-The way a session opens another in this repository, so that the user can see every session: start_session wherever it starts one, and js-harness sessions start where start_session would only leave a card; the tools that open one in the app's Routines or in the cloud are refused: start_session.
+The way a session opens another in this repository, so that the user can see every session: start_session, a row in his sidebar on a turn he typed and a card he taps on any other; js-harness sessions start, claude --bg and the tools that open one in the app's Routines or in the cloud are refused: start_session.
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: `bin/lib/guard.mjs`.
-- Since 2026-10-15. Row: reports, against the failure `session-opened-unseen`. Source: his words of 2026-10-24, 2026-11-14, checked by the command on 2026-11-14.
+- Since 2026-10-15. Row: reports, against the failure `session-opened-unseen`. Source: his words of 2026-11-15, 2026-11-15, checked by the command on 2026-11-17.
 
 ### status-report
 Asked how the work goes, the lead reports everything since the last report, in detail, and each step it proposes next with its why: "## The status report When the user asks how the work is going, how much is done, or what you have done, the answer is a report of everything since the last report, in detail: never a line that all goes well."

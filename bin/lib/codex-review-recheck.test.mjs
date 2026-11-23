@@ -11,6 +11,7 @@ import {
   recheckAnchor,
   recheckPrompt,
   recheckState,
+  spannedDebt,
   recheckThrough,
   runAnswerFindings,
   runsLogged,
@@ -222,7 +223,7 @@ const counted = (notFixed) => ({ findings: 1, fixed: 1 - notFixed, notFixed, fol
 
 test('a correction owed below a merge: where the merge\'s own review owes a correction too, the recheck after it carries the findings of both, and names the merge', () => {
   const records = [record(A, G, { run: 'r1' }), record(G, M, { run: 'r3', diff: 'remerge' })];
-  assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records, runs: bothRuns, changedBetween: never('a diff'), writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: [...lost, ...owing], at: M, merge: M });
+  assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records, runs: bothRuns, changedBetween: never('a diff'), writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: [...lost, ...owing], at: M, merge: M, joinedAt: [G] });
   // The gap's review owes nothing: the merge's findings alone, as before.
   const cleanBelow = [record(A, G, { run: 'r2' }), record(G, M, { run: 'r3', diff: 'remerge' })];
   assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records: cleanBelow, runs: bothRuns, changedBetween: never('a diff'), writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: lost, merge: M });
@@ -230,7 +231,7 @@ test('a correction owed below a merge: where the merge\'s own review owes a corr
   const [M2, S2] = ['5', '6'].map((digit) => digit.repeat(40));
   const rows = [[M2, M, S2], [S2, A], ...ROWS];
   const three = [...records, record(M, M2, { run: 'r2', diff: 'remerge' })];
-  assert.deepEqual(recheckThrough({ from: M2, rows, records: three, runs: bothRuns, changedBetween: () => ['s.js'], writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: [...lost, ...owing], at: M, merge: M2 });
+  assert.deepEqual(recheckThrough({ from: M2, rows, records: three, runs: bothRuns, changedBetween: () => ['s.js'], writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: [...lost, ...owing], at: M, merge: M2, joinedAt: [G] });
   // From the head of that recheck, once it left nothing open, a review as any other: the walk stops at its record.
   const C2 = '7'.repeat(40);
   const rechecked = [...records, record(M, C2, { run: 'r4', recheckOf: M })];
@@ -253,7 +254,7 @@ test('a correction owed below a merge: where the merge\'s own review owes over t
 });
 
 test('a correction owed below a merge: where the merge\'s own review owes over a second recheck due at G, the recheck after the merge carries both, as the third review of G\'s findings (codex-spend L26, W1)', () => {
-  assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records: secondDue, runs: secondDueRuns, changedBetween: never('a diff'), writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: [...lost, ...open], at: M, merge: M, thirdBelow: true });
+  assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records: secondDue, runs: secondDueRuns, changedBetween: never('a diff'), writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: [...lost, ...open], at: M, merge: M, joinedAt: [G], thirdBelow: true });
 });
 
 test('a correction owed below a merge: after that joined recheck left a finding open, the records alone tell it was the third review of G\'s findings, and the next range is refused as three reviews (codex-spend L26, W1)', () => {
@@ -300,7 +301,7 @@ test('a correction owed below a merge: a second merge of main above that joined 
   const atM3 = [...atC3, record(C3, M3, { run: 'r9', diff: 'remerge' })];
   const runsM3 = [...runsC3, runLine('r9', { answer: { findings: lost3, verdict: 'incorrect' } })];
   const third = recheckThrough({ from: M3, rows: [[M3, C3, S3], [S3, A], ...rows3], records: atM3, runs: runsM3, changedBetween: never('a diff'), writesNothing: never('what the merge writes') });
-  assert.deepEqual(third, { kind: 'recheck', of: M3, findings: [...lost3, ...open2], at: M3, merge: M3, thirdBelow: true });
+  assert.deepEqual(third, { kind: 'recheck', of: M3, findings: [...lost3, ...open2], at: M3, merge: M3, joinedAt: [C3], thirdBelow: true });
   assert.ok(!third.findings.some((one) => one.title.includes('Still drops a record')), 'G\'s finding is not reviewed a fifth time');
 });
 
@@ -483,4 +484,222 @@ test('runAnswerFindings tells an answer that found nothing from a line that kept
   assert.deepEqual(runAnswerFindings({ answer: { findings: [] } }), []);
   assert.equal(runAnswerFindings({ findings: { total: 0 } }), null);
   assert.equal(runAnswerFindings(undefined), null);
+});
+
+test('a later review at a head that owes settles it only where its base is at or before the owing one\'s; unknown keeps the debt (L71 A)', () => {
+  const found = [finding('[P2] Drops a record')];
+  const owes = record(A, D, { run: 'r1' });
+  const runs = [runLine('r1', { answer: { findings: found, verdict: 'incorrect' } }), runLine('r2', { answer: { findings: [], verdict: 'correct' } })];
+  const order = [A, B, C, D];
+  const atOrBefore = (older, newer) => order.indexOf(older) <= order.indexOf(newer);
+  // A clean --again over C..D, a part of A..D: the correction is still owed.
+  const narrow = [owes, record(C, D, { run: 'r2' })];
+  assert.deepEqual(recheckState({ from: D, records: narrow, runs, atOrBefore }), { kind: 'recheck', of: D, findings: found });
+  assert.deepEqual(recheckState({ from: D, records: narrow, runs, atOrBefore: () => null }), { kind: 'recheck', of: D, findings: found });
+  assert.deepEqual(recheckState({ from: D, records: narrow, runs }), { kind: 'recheck', of: D, findings: found }, 'no git: unknown');
+  // The same range again, or a wider one, reads all the owing review read: the later word decides.
+  for (const base of [A]) assert.deepEqual(recheckState({ from: D, records: [owes, record(base, D, { run: 'r2' })], runs, atOrBefore }), { kind: 'review' });
+  const wider = [record(B, D, { run: 'r1' }), record(A, D, { run: 'r2' })];
+  assert.deepEqual(recheckState({ from: D, records: wider, runs, atOrBefore }), { kind: 'review' });
+  // A later narrower review that owes, after a clean one, is the later word: nothing earlier is owed.
+  const later = [record(A, D, { run: 'r2' }), record(C, D, { run: 'r1' })];
+  assert.deepEqual(recheckState({ from: D, records: later, runs, atOrBefore }), { kind: 'recheck', of: D, findings: found });
+  // A narrower review that owes too, after one that owes: the recheck is of both (Codex's P2 on b78093fe).
+  const more = [finding('[P2] Loses a line', { start: 9, end: 9 })];
+  const both = [owes, record(C, D, { run: 'r3' })];
+  const withMore = [...runs, runLine('r3', { answer: { findings: more, verdict: 'incorrect' } })];
+  assert.deepEqual(recheckState({ from: D, records: both, runs: withMore, atOrBefore }), { kind: 'recheck', of: D, findings: [...found, ...more] });
+});
+
+test('a clean --again over part of the range of a recheck does not hide that a second recheck was its third review (L71 A)', () => {
+  const M = 'f'.repeat(40);
+  const order = [A, B, M, C, D];
+  const atOrBefore = (older, newer) => order.indexOf(older) <= order.indexOf(newer);
+  const open = finding('[not fixed] 1 Still drops the last line');
+  const counts = { findings: 1, fixed: 0, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 };
+  const records = [record(A, B, { run: 'r1' }), record(B, C, { run: 'r2', recheckOf: B }), record(M, C, { run: 'r3' }), record(C, D, { run: 'r4', recheckOf: C })];
+  const runs = [
+    runLine('r1', { answer: { findings: [finding('[P2] Drops the last line')], verdict: 'incorrect' } }),
+    runLine('r2', { answer: { findings: [open], verdict: 'incorrect' }, recheck: counts }),
+    runLine('r3', { answer: { findings: [], verdict: 'correct' } }),
+    runLine('r4', { answer: { findings: [open], verdict: 'incorrect' }, recheck: counts }),
+  ];
+  assert.deepEqual(recheckState({ from: D, records, runs, atOrBefore }), { kind: 'refused', of: D, open: 1, reviews: 3, findings: [open] });
+});
+
+test('a clean review at a merge from its second parent, after the record of what was written in the merge that owes, reads less: the merge still passes the debt below it on (L71 A)', () => {
+  // S, the merge's second parent, is not at or before G, its first: the clean record read less than the one that owes.
+  const atOrBefore = (older, newer) => older === newer || older === A;
+  const records = [record(A, G, { run: 'r1' }), record(G, M, { run: 'r3', diff: 'remerge' }), record(S, M, { run: 'r2' })];
+  assert.deepEqual(recheckThrough({ from: M, rows: ROWS, records, runs: bothRuns, atOrBefore, changedBetween: never('a diff'), writesNothing: never('what the merge writes') }), { kind: 'recheck', of: M, findings: [...lost, ...owing], at: M, merge: M, joinedAt: [G] });
+  // Above the joined recheck that left a finding open over a second recheck due at G, the cap still reads it as the third review.
+  const C2 = '7'.repeat(40);
+  const left = [finding('[not fixed] 2 Still drops a record')];
+  const joined = [...secondDue, record(S, M, { run: 'r2' }), record(M, C2, { run: 'r4', recheckOf: M })];
+  const joinedRuns = [...secondDueRuns, runLine('r4', { answer: { findings: left, verdict: 'incorrect' }, recheck: { of: M, findings: 2, fixed: 1, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 } })];
+  assert.deepEqual(recheckThrough({ from: C2, rows: [[C2, M], ...ROWS], records: joined, runs: joinedRuns, atOrBefore, changedBetween: never('a diff'), writesNothing: never('what the merge writes') }), { kind: 'refused', of: C2, open: 1, reviews: 3, findings: left, merge: M });
+});
+
+test('records whose rechecks name each other, or their own head, give a state, not a stack overflow (lens on 420b76c)', () => {
+  const open = finding('[not fixed] 1 Still drops the last line');
+  const counts = { findings: 1, fixed: 0, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 };
+  const runs = [runLine('r1', { answer: { findings: [open], verdict: 'incorrect' }, recheck: counts }), runLine('r2', { answer: { findings: [open], verdict: 'incorrect' }, recheck: counts })];
+  const self = [record(B, C, { run: 'r1', recheckOf: C })];
+  assert.doesNotThrow(() => recheckState({ from: C, records: self, runs }));
+  const pair = [record(B, C, { run: 'r1', recheckOf: D }), record(C, D, { run: 'r2', recheckOf: C })];
+  assert.doesNotThrow(() => recheckState({ from: D, records: pair, runs }));
+  assert.doesNotThrow(() => recheckState({ from: C, records: pair, runs }));
+});
+
+test('a narrower review that owes, after a recheck that left a finding open at the same head, is not dropped (verifier V1 on 7e5d6772)', () => {
+  const order = [A, B, C, D];
+  const atOrBefore = (older, newer) => order.indexOf(older) <= order.indexOf(newer);
+  const open = finding('[not fixed] 1 Still drops the last line');
+  const fresh = finding('[P2] Loses a line', { start: 9, end: 9 });
+  const counts = { findings: 1, fixed: 0, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 };
+  const records = [record(A, B, { run: 'r1' }), record(B, D, { run: 'r2', recheckOf: B }), record(C, D, { run: 'r3' })];
+  const runs = [
+    runLine('r1', { answer: { findings: [finding('[P2] Drops the last line')], verdict: 'incorrect' } }),
+    runLine('r2', { answer: { findings: [open], verdict: 'incorrect' }, recheck: counts }),
+    runLine('r3', { answer: { findings: [fresh], verdict: 'incorrect' } }),
+  ];
+  // The plain review that owes decides, and what the recheck left open joins it: neither is dropped (the lens on 3f177ce).
+  assert.deepEqual(recheckState({ from: D, records, runs, atOrBefore }), { kind: 'recheck', of: D, findings: [fresh, open] });
+  // The other order: a wide plain review that owes, then a narrower recheck at the same head that left a finding open.
+  const other = [record(A, B, { run: 'r1' }), record(A, D, { run: 'r3' }), record(B, D, { run: 'r2', recheckOf: B })];
+  assert.deepEqual(recheckState({ from: D, records: other, runs, atOrBefore }), { kind: 'recheck', of: D, findings: [fresh, open] });
+});
+
+test('a clean review from main side does not settle what the merge own record owes; a recheck at the merge does (the lead on question 320)', () => {
+  // P is the merge M's first parent, S its second; the merge's own record P..M owes. S..M can miss a resolution equal to
+  // main's text, so it reads less: the known refusal, whose remedy is the recheck at the merge.
+  const [P, S, M, N] = [A, B, C, D];
+  const atOrBefore = (older, newer) => older === newer || (older === P && newer === M) || (older === S && newer === M);
+  const fm = finding('[P2] The merge drops a line');
+  const records = [record(P, M, { run: 'r1', diff: 'remerge' }), record(S, M, { run: 'r2' })];
+  const runs = [
+    runLine('r1', { answer: { findings: [fm], verdict: 'incorrect' } }),
+    runLine('r2', { answer: { findings: [], verdict: 'correct' } }),
+    runLine('r3', { answer: { findings: [], verdict: 'correct' }, recheck: { of: M, findings: 1, fixed: 1, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } }),
+  ];
+  assert.deepEqual(recheckState({ from: M, records, runs, atOrBefore }), { kind: 'recheck', of: M, findings: [fm] });
+  const rechecked = [...records, record(M, N, { run: 'r3', recheckOf: M })];
+  assert.deepEqual(recheckState({ from: N, records: rechecked, runs, atOrBefore }), { kind: 'review' });
+});
+
+test('two rechecks at one head, the later reading less, both keep what they left open (Codex P2 on e741821)', () => {
+  const order = [A, B, C, D];
+  const atOrBefore = (older, newer) => order.indexOf(older) <= order.indexOf(newer);
+  const wide = finding('[not fixed] 1 Still drops the last line');
+  const narrow = finding('[not fixed] 1 Still loses a line', { start: 9, end: 9 });
+  const counts = { findings: 1, fixed: 0, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 };
+  const records = [record(A, B, { run: 'r1' }), record(B, D, { run: 'r2', recheckOf: B }), record(C, D, { run: 'r3', recheckOf: C }), record(A, C, { run: 'r4' })];
+  const runs = [
+    runLine('r1', { answer: { findings: [finding('[P2] Drops the last line')], verdict: 'incorrect' } }),
+    runLine('r4', { answer: { findings: [finding('[P2] Loses a line', { start: 9, end: 9 })], verdict: 'incorrect' } }),
+    runLine('r2', { answer: { findings: [wide], verdict: 'incorrect' }, recheck: counts }),
+    runLine('r3', { answer: { findings: [narrow], verdict: 'incorrect' }, recheck: counts }),
+  ];
+  const state = recheckState({ from: D, records, runs, atOrBefore });
+  // The last recheck decides: its second recheck, the third review, takes up what the wider one left open as well,
+  // so neither is dropped (the reliability lens on d445505 asked whether this was meant: it is, and fails closed).
+  assert.equal(state.kind, 'recheck', JSON.stringify(state));
+  assert.equal(state.second, true, JSON.stringify(state));
+  assert.deepEqual(new Set(state.findings.map((one) => one.title)), new Set([narrow.title, wide.title]));
+});
+
+test('a clean review that reads a joined narrower review settles its findings, not the wider debt (verifier V6)', () => {
+  const E = 'e'.repeat(40);
+  const order = [A, B, C, D, E];
+  const atOrBefore = (older, newer) => order.indexOf(older) <= order.indexOf(newer);
+  const f0 = finding('[P2] Drops the last line');
+  const fy = finding('[P2] Loses a line', { start: 9, end: 9 });
+  const records = [record(A, E, { run: 'r1' }), record(C, E, { run: 'r2' }), record(B, E, { run: 'r3' })];
+  const runs = [
+    runLine('r1', { answer: { findings: [f0], verdict: 'incorrect' } }),
+    runLine('r2', { answer: { findings: [fy], verdict: 'incorrect' } }),
+    runLine('r3', { answer: { findings: [], verdict: 'correct' } }),
+  ];
+  assert.deepEqual(recheckState({ from: E, records, runs, atOrBefore }), { kind: 'recheck', of: E, findings: [f0] });
+});
+
+test('a recheck of a head where a plain review decides and a recheck left a finding open is its third review: a fourth is refused (verifier q3, the lead on T6)', () => {
+  // H is B, F is C, F2 is D. fH: the review A..B (1), the recheck B..C (2), the joint recheck C..D (3).
+  const order = [A, B, C, D];
+  const atOrBefore = (older, newer) => order.indexOf(older) <= order.indexOf(newer);
+  const counts = { findings: 1, fixed: 0, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 };
+  const left = finding('[not fixed] 1 Still wrong field');
+  const leftAgain = finding('[not fixed] 2 Still wrong field');
+  const runs = [
+    runLine('r1', { answer: { findings: [finding('[P2] Wrong field')], verdict: 'incorrect' } }),
+    runLine('r2', { answer: { findings: [finding('[P2] Loses a record', { file: 'c.js' })], verdict: 'incorrect' } }),
+    runLine('r3', { answer: { findings: [left], verdict: 'incorrect' }, recheck: counts }),
+    runLine('r4', { answer: { findings: [leftAgain], verdict: 'incorrect' }, recheck: { ...counts, findings: 2, fixed: 1 } }),
+  ];
+  const refused = { kind: 'refused', of: D, open: 1, reviews: 3, findings: [leftAgain] };
+  // The order main reads: the recheck is the last record at C, so main stops the fourth review; the branch must too.
+  const mainOrder = [record(A, B, { run: 'r1' }), record(A, C, { run: 'r2' }), record(B, C, { run: 'r3', recheckOf: B }), record(C, D, { run: 'r4', recheckOf: C })];
+  assert.deepEqual(recheckState({ from: D, records: mainOrder, runs, atOrBefore }), refused);
+  // The recheck still stands but is not the last record at C: a narrower plain review X..C after it owes and decides.
+  // fH was still reviewed three times, so the branch refuses where main, reading the last record, would not.
+  const X = 'f'.repeat(40);
+  const narrowOrder = [A, B, X, C, D];
+  const narrowAtOrBefore = (older, newer) => narrowOrder.indexOf(older) <= narrowOrder.indexOf(newer);
+  const other = [record(A, B, { run: 'r1' }), record(B, C, { run: 'r3', recheckOf: B }), record(X, C, { run: 'r2' }), record(C, D, { run: 'r4', recheckOf: C })];
+  assert.deepEqual(recheckState({ from: D, records: other, runs, atOrBefore: narrowAtOrBefore }), refused);
+  // Where a wider plain review read all the recheck read, the recheck no longer stands: C..D is a first recheck of f0.
+  const wider = [record(A, B, { run: 'r1' }), record(B, C, { run: 'r3', recheckOf: B }), record(A, C, { run: 'r2' }), record(C, D, { run: 'r4', recheckOf: C })];
+  assert.equal(recheckState({ from: D, records: wider, runs, atOrBefore }).kind, 'recheck');
+});
+
+test('a head whose correction a record spanning it read only part of still owes it; one that read all, or a recheck of it, settles it (T5)', () => {
+  // base A, M = B, the owing head H = C, above it D and E.
+  const order = [A, B, C, D, E];
+  const atOrBefore = (older, newer) => order.indexOf(older) <= order.indexOf(newer);
+  const f0 = finding('[P2] Loses a record');
+  const runs = [
+    runLine('r1', { answer: { findings: [f0], verdict: 'incorrect' } }),
+    runLine('r2', { answer: { findings: [], verdict: 'correct' } }),
+    runLine('r3', { answer: { findings: [], verdict: 'correct' }, recheck: { findings: 1, fixed: 1, notFixed: 0, followUps: 0, blocking: 0, unmarked: 0 } }),
+  ];
+  const heads = [E, D, C, B];
+  const owes = record(A, C, { run: 'r1' });
+  const narrow = [owes, record(B, D, { run: 'r2' })];
+  assert.deepEqual(spannedDebt({ heads, records: narrow, runs, atOrBefore }), { at: C, state: { kind: 'recheck', of: C, findings: [f0] } });
+  // A chain of narrow ones still owes.
+  assert.equal(spannedDebt({ heads, records: [...narrow, record(D, E, { run: 'r2' })], runs, atOrBefore })?.at, C);
+  // One that read all of A..C, at a head above it, settles it, before or after the narrow one.
+  assert.equal(spannedDebt({ heads, records: [owes, record(A, E, { run: 'r2' }), record(B, E, { run: 'r2' })], runs, atOrBefore }), null);
+  assert.equal(spannedDebt({ heads, records: [...narrow, record(A, D, { run: 'r2' })], runs, atOrBefore }), null);
+  // A recheck that names C settles it, though a narrow review spans it too.
+  assert.equal(spannedDebt({ heads, records: [...narrow, record(C, E, { run: 'r3', recheckOf: C })], runs, atOrBefore }), null);
+  // A record that starts at C, or above it, spans nothing: the run from C is its recheck, and the push reads it there.
+  assert.equal(spannedDebt({ heads, records: [owes, record(C, E, { run: 'r2' })], runs, atOrBefore }), null);
+  // No record spans it: the push reads it where it covers the newest commit, as before.
+  assert.equal(spannedDebt({ heads, records: [owes], runs, atOrBefore }), null);
+});
+
+test('a spanning record settles a head only where it read what every standing record that owes there read, and only on the history checked (Codex on 2d0a5ee)', () => {
+  const order = [A, B, C, D, E];
+  const atOrBefore = (older, newer) => order.indexOf(older) <= order.indexOf(newer);
+  const f0 = finding('[P2] Loses a record');
+  const fy = finding('[P2] Drops a line', { start: 9, end: 9 });
+  const runs = [
+    runLine('r1', { answer: { findings: [f0], verdict: 'incorrect' } }),
+    runLine('r4', { answer: { findings: [fy], verdict: 'incorrect' } }),
+    runLine('r2', { answer: { findings: [], verdict: 'correct' } }),
+  ];
+  // A..C and the narrower B..C both owe at C; a clean B..E read what B..C read, not A..B.
+  const both = [record(A, C, { run: 'r1' }), record(B, C, { run: 'r4' }), record(B, E, { run: 'r2' })];
+  assert.equal(spannedDebt({ heads: [E, D, C, B], records: both, runs, atOrBefore })?.at, C);
+  // A..C owes and B..D spans it on the history checked; a clean A..S of another branch, whose head is not on it, settles
+  // nothing, and a record of that branch triggers nothing either.
+  const S = 'f'.repeat(40);
+  const sibling = (older, newer) => (newer === S ? older === A || older === B || older === C || older === S : atOrBefore(older, newer));
+  const records = [record(A, C, { run: 'r1' }), record(B, D, { run: 'r2' }), record(A, S, { run: 'r2' })];
+  assert.equal(spannedDebt({ heads: [D, C, B], records, runs, atOrBefore: sibling })?.at, C);
+  assert.equal(spannedDebt({ heads: [D, C, B], records: [record(A, C, { run: 'r1' }), record(B, S, { run: 'r2' })], runs, atOrBefore: sibling }), null);
+  // A clean recheck that names C but ends on that branch is not read either: C still owes (Codex on 6e4f892).
+  const offLine = [...records.slice(0, 2), record(C, S, { run: 'r2', recheckOf: C })];
+  assert.equal(spannedDebt({ heads: [D, C, B], records: offLine, runs, atOrBefore: sibling })?.at, C);
 });

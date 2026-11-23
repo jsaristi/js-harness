@@ -164,9 +164,9 @@
 //
 // What the comparison of the configurations varies (`evals/review/compare.mjs`) is not on the command line,
 // on purpose: the command fixes the model and the effort, and a person who runs it gets exactly the
-// session above. The comparison calls `codexReviewMain` with injected `deps` instead: `effort`, the effort
-// the command passes, in place of `REVIEW_EFFORT` (its cells were measured at `medium` and at `high`, and
-// stay what they measured); `extraCodexConfig`, more `-c` settings for the session (an MCP server);
+// session above. The comparison calls `codexReviewMain` with injected `deps` instead: `model` and `effort`,
+// in place of `REVIEW_MODEL` and `REVIEW_EFFORT` (its cells were measured on gpt-6.1-sol at `medium` and at
+// `high`, and stay what they measured); `extraCodexConfig`, more `-c` settings for the session (an MCP server);
 // `everyFile`, which makes the review read every file of the range, as every review did while the cells were
 // measured, so that none of them leaves a document out, is asked by its files, or starts later than its
 // range because a record covers part of it; and `onResult`, which hands back each attempt's run line and
@@ -368,7 +368,7 @@ const SANDBOX_CONFIG = ['sandbox_mode=read-only', 'approval_policy=never'];
  * over it (odd/tasks/codex-review-lean.md, "Model and effort", read from Codex's source). The session
  * ignores the configuration that could name one, and what it ran on is read back from its rollout file
  * (`ranOnAnother`): the two are passed here and checked there. */
-const modelFlags = (effort) => ['-m', REVIEW_MODEL, '-c', `model_reasoning_effort="${effort}"`];
+const modelFlags = (effort, model) => ['-m', model, '-c', `model_reasoning_effort="${effort}"`];
 
 // The Windows sandbox of the lean session. The command's own choice, as the model and the effort are, and
 // the one the user's config names: it needs no administrator, no setup step and, for a read-only session,
@@ -382,7 +382,7 @@ const LEAN_WINDOWS_SANDBOX = 'unelevated';
 // after the run, and only a session that is not ephemeral writes there the rollout files the tokens are
 // read from. `effort` is `REVIEW_EFFORT` for everyone but the comparison of the configurations, whose cells
 // stay at the effort they were measured with.
-export const leanFlags = (platform, effort) => [
+export const leanFlags = (platform, effort, model = REVIEW_MODEL) => [
   // Leaves out every key of `$CODEX_HOME/config.toml`: the MCP servers, the plugins, the model
   // instructions file, and the user's model and effort. Auth still uses the home.
   '--ignore-user-config',
@@ -394,7 +394,7 @@ export const leanFlags = (platform, effort) => [
   '--disable', 'apps',
   '--disable', 'hooks',
   // With the user's config ignored, nothing but the command names the model and the effort.
-  ...modelFlags(effort),
+  ...modelFlags(effort, model),
   ...SANDBOX_CONFIG.flatMap((setting) => ['-c', setting]),
   // On Windows alone. With approvals at `never`, a read-only sandbox and NO Windows sandbox configured,
   // Codex forbids every shell command, "rejected: blocked by policy" (`core/src/exec_policy.rs:789-806` at
@@ -418,18 +418,18 @@ export const leanFlags = (platform, effort) => [
  * list.
  *
  * The last argument is what the comparison of the configurations varies, each with today's value as its
- * default; no flag of the command sets either. `effort` is the effort the command passes. `extraConfig` is
- * more `key=value` settings, each handed over with `-c` after the session's own and before what is
- * reviewed. */
-export function codexArgs(base, platform = process.platform, prompt = PROMPTS[0], { effort = REVIEW_EFFORT, extraConfig = [] } = {}) {
+ * default; no flag of the command sets any. `model` and `effort` are what the command passes. `extraConfig`
+ * is more `key=value` settings, each handed over with `-c` after the session's own and before what is reviewed. */
+export function codexArgs(base, platform = process.platform, prompt = PROMPTS[0], { model = REVIEW_MODEL, effort = REVIEW_EFFORT, extraConfig = [] } = {}) {
   if (!PROMPTS.includes(prompt)) throw new Error(`Unknown prompt ${JSON.stringify(prompt)}: it must be \`codex\` or \`own\`.`);
   // Both end up inside one argument of a command line, the effort between the quotes of a TOML string.
+  if (typeof model !== 'string' || !/^[a-z0-9][a-z0-9._-]*$/i.test(model)) throw new Error(`The model of a review must be one name of letters, digits, dots, dashes and underscores, got ${JSON.stringify(model)}.`);
   if (typeof effort !== 'string' || !/^[a-z]+$/.test(effort)) throw new Error(`The effort of a review must be one lowercase word, got ${JSON.stringify(effort)}.`);
   if (!Array.isArray(extraConfig) || !extraConfig.every((setting) => typeof setting === 'string' && /^[^=\s][^=]*=/.test(setting))) {
     throw new Error(`Extra Codex configuration must be a list of \`key=value\` settings, got ${JSON.stringify(extraConfig)}.`);
   }
   const extra = extraConfig.flatMap((setting) => ['-c', setting]);
-  return ['exec', 'review', '--json', ...leanFlags(platform, effort), ...extra, ...(prompt === 'own' ? [PROMPT_ON_STDIN] : ['--base', base])];
+  return ['exec', 'review', '--json', ...leanFlags(platform, effort, model), ...extra, ...(prompt === 'own' ? [PROMPT_ON_STDIN] : ['--base', base])];
 }
 
 const isWindowsApps = (dir) => /\\microsoft\\windowsapps$/i.test(dir.trim().replace(/^"|"$/g, '').replace(/\//g, '\\').replace(/\\+$/, ''));
@@ -1059,10 +1059,10 @@ function leftByRecords(spawn, root, { from, head, given, where }) {
  * and for a run over a range that changes no file a review reads, which has nothing to review, starts
  * nothing, and records that when the range holds a commit.
  *
- * Four more `deps` are what the comparison of the configurations varies, and nothing on the command line
+ * Five more `deps` are what the comparison of the configurations varies, and nothing on the command line
  * reaches them (see the top of this file):
- *  - `effort`: the effort the command passes, in place of `REVIEW_EFFORT`; the run line says it, and it is
- *    the effort the session is then held to (`ranOnAnother`).
+ *  - `model` and `effort`: what the command passes, in place of `REVIEW_MODEL` and `REVIEW_EFFORT`; the run
+ *    line says them, and they are what the session is then held to (`ranOnAnother`).
  *  - `extraCodexConfig`: `key=value` settings added to the argv (`codexArgs`).
  *  - `everyFile`: `true` makes the review read every file of the range, the documents and what the project
  *    marks too (`rangeGroups`): nothing is left out, so a range of one part is reviewed whole, with Codex's
@@ -1091,7 +1091,7 @@ async function reviewRun(argv, env, deps, snapshot) {
   const { spawn = spawnSync, spawnAsync = spawnChild, now = () => new Date(), log = console.log, error = console.error, platform = process.platform } = deps;
   const { timeoutMs = REVIEW_TIMEOUT_MS, maxBuffer = REVIEW_MAX_BUFFER, signals = process, randomUUID = newUUID } = deps;
   const { monotonicNow = () => performance.now(), homedir = os.homedir, createLeanHome = makeLeanHome } = deps;
-  const { effort = REVIEW_EFFORT, extraCodexConfig = [], onResult = null, everyFile = false } = deps;
+  const { model = REVIEW_MODEL, effort = REVIEW_EFFORT, extraCodexConfig = [], onResult = null, everyFile = false } = deps;
   // A run of the turn at a merge below HEAD (`firstTurn`): the intent its parent already read, and that it must
   // be read as a merge at HEAD, or it would review what the merged branch brought in.
   const { turnIntent = null, mergeTurnOnly = false } = deps;
@@ -1250,7 +1250,7 @@ async function reviewRun(argv, env, deps, snapshot) {
     return runLog;
   };
   const planOf = ({ groups, leftOut }) =>
-    reviewPlan({ base, head, model: REVIEW_MODEL, effort, parts: groups, runs: readRunLog(), maxParts: args.maxParts, leftOut });
+    reviewPlan({ base, head, model, effort, parts: groups, runs: readRunLog(), maxParts: args.maxParts, leftOut });
   /** What a review of a range that starts at `from` is (./lib/codex-review-recheck.mjs): a review as any
    * other, a recheck of the findings of the review that ended at `of`, or a second recheck, refused. Decided
    * by the records, so that no flag skips it; a caller that measures every attempt (`onResult`, a
@@ -1325,7 +1325,7 @@ async function reviewRun(argv, env, deps, snapshot) {
   let turns = null;
   /** The plan of the review of `from..to`, a range of its own, from how its files group, `split` (`rangeGroups`). */
   const planBetween = (from, to, split) =>
-    reviewPlan({ base: from, head: to, model: REVIEW_MODEL, effort, parts: split.groups, runs: readRunLog(), maxParts: args.maxParts, leftOut: split.leftOut });
+    reviewPlan({ base: from, head: to, model, effort, parts: split.groups, runs: readRunLog(), maxParts: args.maxParts, leftOut: split.leftOut });
   /** The turns of a range the records leave from `left.start` (`leftByRecords`), cut at a merge of main below HEAD
    * (odd/tasks/merge-below-head.md) or at the gap below a merge of main at HEAD (odd/tasks/codex-spend.md, spec 2),
    * as `turnsAt` gives them, with `head`, their plans and the plan of the one review the run would be without the
@@ -1612,9 +1612,9 @@ async function reviewRun(argv, env, deps, snapshot) {
     }
     const expected = patchKeys(patch);
     // What the command passes to Codex (`modelFlags`): what the run line says was asked for, and what the
-    // session is held to. The effort is the injected one when the comparison asked for another, so a cell
-    // is held to the effort it was launched with, not to the constant.
-    const wanted = { model: REVIEW_MODEL, effort };
+    // session is held to. The model and the effort are the injected ones when the comparison asked for
+    // others, so a cell is held to what it was launched with, not to the rules.
+    const wanted = { model, effort };
     // How the files of the range group, its plan, and the parts a large range is reviewed in. All of it is
     // worked out before anything is probed, made or launched, so a range that cannot be split, or that is
     // more parts than a run starts, leaves nothing behind.
@@ -1757,7 +1757,7 @@ async function reviewRun(argv, env, deps, snapshot) {
       const planned = partPlanned(plan, part === null ? 1 : part.index);
       // What Codex is launched with, worked out before anything is made: an injected effort or setting that
       // cannot go on a command line is the caller's mistake, and leaves no home behind.
-      const codexArgv = codexArgs(from, platform, prompt, { effort, extraConfig: extraCodexConfig });
+      const codexArgv = codexArgs(from, platform, prompt, { model, effort, extraConfig: extraCodexConfig });
       // The key of what this part's session is sent. A part whose key is in the run log passed in an earlier
       // run that sent the very same thing, and is taken from there: nothing is launched and no line is written.
       // Only a part of a range reviewed in parts has one: the one session of a range that leaves files out, or
@@ -1846,7 +1846,7 @@ async function reviewRun(argv, env, deps, snapshot) {
       try {
         // The session, and the model and the effort it is handed: said before every launch, so that what
         // a review runs on is never something to look up afterwards.
-        const how = ` with the lean session (${REVIEW_MODEL}, ${effort})${ownPrompt ? ' and this command\'s own prompt' : ''}`;
+        const how = ` with the lean session (${model}, ${effort})${ownPrompt ? ' and this command\'s own prompt' : ''}`;
         const what = part === null ? range
           : part.of === 1 ? `${counted(part.files.length, 'file')} of ${range} (${counted(part.changedLines, 'changed line')})`
             : `part ${part.index} of ${part.of} of ${range} (${counted(part.files.length, 'file')}, ${counted(part.changedLines, 'changed line')})`;

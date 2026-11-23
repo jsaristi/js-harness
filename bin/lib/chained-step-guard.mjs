@@ -47,6 +47,21 @@ function pastOptions(segment, at, program) {
  * wrappers and their options, git's options before its verb, `node <path>/js-harness.mjs`, `npx` and
  * `js-harness gate --`. */
 function guardedStep(words) {
+  const { program, args } = programOf(words);
+  if (program === 'git') {
+    const verb = args[pastOptions(args, 0, 'git')];
+    return verb === 'push' || verb === 'commit' ? `git ${verb}` : null;
+  }
+  if (program === 'gh') return args[0] === 'pr' ? 'gh pr' : null;
+  if (program !== 'js-harness') return null;
+  if (args[0] === 'gate') return args.includes('--') ? guardedStep(args.slice(args.indexOf('--') + 1)) : null;
+  return args[0] === 'merge-queue' || args[0] === 'notify' ? `js-harness ${args[0]}` : null;
+}
+
+/** The program the words of one simple command run and its arguments, `{ program, args }`, the program's name taken
+ * off its folder, extension and npm version: it looks through assignments, redirections, wrappers and their options,
+ * `node <path>/js-harness.mjs`, `npx` and `pnpm exec`. */
+export function programOf(words) {
   const segment = [];
   for (let i = 0; i < words.length; i += 1) {
     const redirection = REDIRECTION.exec(words[i]);
@@ -60,7 +75,7 @@ function guardedStep(words) {
     const program = name(segment[at]);
     if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(segment[at])) at += 1;
     // After a wrapper, time is the program /usr/bin/time, with options (the reliability lens, on a1802693).
-    else if (WRAPPERS.has(segment[at]) || program === 'nice' || program === 'time') at = pastOptions(segment, at + 1, program);
+    else if (WRAPPERS.has(program) || program === 'nice' || program === 'time') at = pastOptions(segment, at + 1, program);
     // timeout runs the command after its options and its duration.
     else if (program === 'timeout') at = pastOptions(segment, at + 1, program) + 1;
     else if (program === 'npx') at = pastOptions(segment, at + 1, program);
@@ -68,16 +83,7 @@ function guardedStep(words) {
     else break;
   }
   if (name(segment[at]) === 'node' && name(segment[at + 1]) === 'js-harness') at += 1;
-  const program = name(segment[at]);
-  const args = segment.slice(at + 1);
-  if (program === 'git') {
-    const verb = args[pastOptions(args, 0, 'git')];
-    return verb === 'push' || verb === 'commit' ? `git ${verb}` : null;
-  }
-  if (program === 'gh') return args[0] === 'pr' ? 'gh pr' : null;
-  if (program !== 'js-harness') return null;
-  if (args[0] === 'gate') return args.includes('--') ? guardedStep(args.slice(args.indexOf('--') + 1)) : null;
-  return args[0] === 'merge-queue' || args[0] === 'notify' ? `js-harness ${args[0]}` : null;
+  return { program: name(segment[at]), args: segment.slice(at + 1) };
 }
 
 /** The first step of the shell command `command` whose check must be read before it runs, and that follows another

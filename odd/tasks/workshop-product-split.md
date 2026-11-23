@@ -594,8 +594,9 @@ The slices:
 - [x] T5 (kind: docs) the docs pull request (PR 769); question 190 to the orchestrator, answered (L11)
 - [ ] T6 (kind: build) spec 3 and spec 7: the build plan, reviewed by `claude-fable-5-1` (L12) and revised; then
   slices 1+2, 3 and 4, each with Codex, the lenses and an independent verifier
-- [ ] T8 (kind: verify) spec 7, slice D0: the hook-count row of `check` (from F8's S4a), written test first, and
-  `scripts/diet-measure.mjs`, which takes each cut's before figure on the release just before it (L12, finding 14)
+- [x] T8 (kind: verify) spec 7, slice D0: the hook-count row of `check` (from F8's S4a), written test first, and
+  `scripts/diet-measure.mjs`, which takes each cut's before figure on the release just before it (L12, finding 14);
+  PR 772 (92da9c99), Codex and lens records over both its commits, the reviews at L14
 - [ ] T9 (kind: build) spec 7: the diet's cuts, one commit each, measured after each against T8's baseline: the
   skill bodies at most 3k with the skill lint (from F8's S5), D8, and the candidates of section "The diet" whose
   saving passes their cost

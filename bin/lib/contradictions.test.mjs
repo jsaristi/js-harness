@@ -114,14 +114,15 @@ const PAIRS = [
   {
     pair: 9,
     sides: 'three ways to ask, against one place for every question',
-    // Answered A on 2026-11-08 (question 229, transcript 0f71b2c6 line 75080). The answer was tapped, and `rules
-    // change` takes only words he typed, so the precedence enters rule:questions-one-place once he types it; until
-    // then both sides hold as they stand, and this row says which wins.
-    closed: 'his decision: question 229, A: a decision with options goes through the question tool, an open question with none is written; wrap_up and the plain-text STOP are gone',
-    absent: [/wrap_up/],
+    // Answered A on 2026-11-08 (question 229, tapped), then superseded by his typed words of 2026-11-17 (transcript
+    // 699d7c29 lines 7609, 7752 and 8070), which rule:questions-one-place and rule:reply-five-states now quote: every
+    // question goes through the question tool with options, the written one answered in its Other.
+    closed: 'his decision: his typed words of 2026-11-17, every question goes through the question tool with 2 to 4 options; one he answers in writing gives examples and is answered in the tool\'s Other; wrap_up and the plain-text STOP are gone',
+    absent: [/wrap_up/, /not with buttons/],
     present: [
       ['orchestrator-skill', 'Only where the host has no question tool is a question written out'],
-      ['protocols-skill', 'Question: an open question of the conversation that the user answers in writing, not with buttons'],
+      ['orchestrator-skill', 'Every question carries 2 to 4 options, the written ones included'],
+      ['protocols-skill', 'Question: an open question that the user answers in writing, recorded with options that are examples of the answer'],
     ],
   },
   {

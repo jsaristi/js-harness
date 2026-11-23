@@ -151,7 +151,7 @@ test('closeFinished leaves the worktree while the job\'s process still runs or c
   assert.match(running.kept[0].why, /stays: the process of aaaa1111, pid 4242, still ran \d+ s after claude stop/);
   assert.match(running.kept[0].settle, /js-harness sessions stop --finished tries again/);
   assert.equal(running.kept[0].stopped, true);
-  assert.match(closedLines(running).join('\n'), /claude stop was sent to its job before that, which deletes nothing; js-harness sessions start --resume aaaa1111 resumes it/);
+  assert.match(closedLines(running).join('\n'), /claude stop was sent to its job before that, which deletes nothing; a message to it resumes aaaa1111/);
   world.refuse.stop = 'stop: made up';
   const refused = closeFinished({ ...given, alive: () => false, pause: () => {} });
   assert.match(refused.kept[0].why, /stays: claude stop aaaa1111: stop: made up/);

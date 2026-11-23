@@ -9,6 +9,7 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { failingTests, estimateTokens, checkBudget, checkContracts, checkPayload, discoverSensors, discoverDocuments, discoverDocumentSensors, discoverSameTree, DOCUMENT_SENSOR_TIMEOUT_MS, checkSensor, checkSensors, runSensor, takeGateTurn, claimOf, main } from './check.mjs';
 import { SENSOR_SILENCE_MS, SENSOR_TIMEOUT_MS, TOKEN_BUDGET, CLAUDE_MD_BUDGET, checkClaudeBudget } from './check.mjs';
+import { FOLDER_INSTRUCTIONS, FOLDER_INSTRUCTIONS_LINES, checkFolderInstructions } from './lib/claude-md-budget.mjs';
 import { RULES } from './lib/rules-data.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { killTree } from './lib/process-tree.mjs';
@@ -60,6 +61,48 @@ test('checkClaudeBudget gives no row where the project has no CLAUDE.md', () => 
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// odd/tasks/folder-instructions.md, spec 2: a row each for the four folder instruction files.
+test('checkFolderInstructions gives a row per folder file there, passing at its line budget and failing one line over', () => {
+  const dir = makeTmpDir();
+  try {
+    assert.deepEqual(checkFolderInstructions(dir), []);
+    fs.mkdirSync(path.join(dir, 'bin'));
+    const file = path.join(dir, 'bin', 'CLAUDE.md');
+    const body = (lines) => ['# bin', '', 'See `rule:reuse-first`.', ...Array(lines - 3).fill('x')].join('\n') + '\n';
+    fs.writeFileSync(file, body(FOLDER_INSTRUCTIONS_LINES).replace(/\n/g, '\r\n'));
+    assert.deepEqual(checkFolderInstructions(dir), [{ name: 'folder instructions bin/CLAUDE.md', pass: true, detail: `${FOLDER_INSTRUCTIONS_LINES} lines (budget ${FOLDER_INSTRUCTIONS_LINES}), names 1 rule` }]);
+    fs.writeFileSync(file, body(FOLDER_INSTRUCTIONS_LINES + 1));
+    const [over] = checkFolderInstructions(dir);
+    assert.equal(over.pass, false);
+    assert.match(over.detail, new RegExp(`^${FOLDER_INSTRUCTIONS_LINES + 1} lines `));
+    assert.ok(over.next);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('checkFolderInstructions fails a folder file that names no rule, or that holds a rule\'s phrase instead of naming it', () => {
+  const dir = makeTmpDir();
+  try {
+    fs.mkdirSync(path.join(dir, 'docs'));
+    const file = path.join(dir, 'docs', 'CLAUDE.md');
+    fs.writeFileSync(file, '# docs\n\nNothing named.\n');
+    assert.equal(checkFolderInstructions(dir)[0].pass, false);
+    assert.match(checkFolderInstructions(dir)[0].detail, /names no rule/);
+    const prose = RULES.find((rule) => !Object.hasOwn(rule, 'retired') && Array.isArray(rule.phrases));
+    fs.writeFileSync(file, `# docs\n\nSee \`rule:${prose.id}\`: ${prose.phrases[0]}\n`);
+    const [copy] = checkFolderInstructions(dir);
+    assert.equal(copy.pass, false);
+    assert.match(copy.detail, new RegExp(`repeats rule "${prose.id}"`));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the folder instruction files are the four of the layout', () => {
+  assert.deepEqual(FOLDER_INSTRUCTIONS, ['odd/tasks/CLAUDE.md', 'bin/CLAUDE.md', 'docs/CLAUDE.md', 'evals/CLAUDE.md']);
 });
 
 test('checkBudget passes at exactly the token limit', () => {

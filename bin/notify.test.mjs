@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { notifyMain, readyProblems, USAGE } from './notify.mjs';
 import { sessionsMain } from './sessions.mjs';
-import { channelDir, findOpenings, openingFileName, openingsDir, readNotices, recordPath, reliefPath, reliefStamp } from './lib/channel.mjs';
+import { channelDir, findOpenings, openingFileName, openingsDir, questionFieldsOf, readNotices, recordPath, reliefPath, reliefStamp } from './lib/channel.mjs';
 import { projectSlug } from './lib/sessions.mjs';
 import { summaryTemplate } from './lib/summary.mjs';
 
@@ -426,7 +426,7 @@ test('readyProblems gives pullRequestProblems\' words, and reads UNKNOWN mergeab
   const evidence = () => ({ pass: true, detail: 'covered' });
   assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, isDraft: true }).run, evidence }), ['PR 360 is a draft.']);
   assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, mergeable: 'UNKNOWN' }).run, evidence }), []);
-  assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, mergeable: 'CONFLICTING' }).run, evidence }), ['PR 360 is not mergeable (CONFLICTING).']);
+  assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, mergeable: 'CONFLICTING' }).run, evidence }), ['PR 360 is not mergeable (CONFLICTING): merge main into its branch and push it, since it conflicts with main itself.']);
 });
 
 test('readyProblems gives reviewEvidence\'s detail when the reviews do not cover the head', async () => {
@@ -926,7 +926,7 @@ test('a question reads its fields from standard input as UTF-8, and refuses a te
   assert.match(empty.err[0], /Usage: js-harness notify/);
   assert.equal(fs.existsSync(machine.home), false, 'nothing is written under the home');
 
-  const accented = JSON.stringify({ text: '¿Qué rama mergeamos primero?', options: [], waits: 'T3' });
+  const accented = JSON.stringify({ text: '¿Qué rama mergeamos primero?', options: [{ label: 'Sí' }, { label: 'No' }], waits: 'T3' });
   assert.equal((await askQuestion(machine, { readStdin: () => Buffer.from(accented, 'utf8') })).code, 0);
   assert.equal(recorded(machine).notices[0].text, '¿Qué rama mergeamos primero?');
 
@@ -1308,7 +1308,9 @@ test('the usage says what a question takes, what --question names, and that a ve
   const usage = err.join('\n');
   assert.match(usage, /--kind question/);
   assert.match(usage, /fields are one JSON object on standard input/);
-  assert.match(usage, /\{"text":"Which branch\?","options":\[\{"label":"main","description":"the default branch"\}\],"waits":"T3"\}/);
+  const example = /\{"text":"Which branch\?".*"waits":"T3"\}/.exec(usage);
+  assert.ok(example, 'the usage shows a question as JSON');
+  assert.equal(questionFieldsOf(example[0]).options.length, 2, 'the example is a question notify takes');
   assert.match(usage, /--question <n>/);
   assert.match(usage, /verified answer\s+is one read at its line of the transcript/);
 });

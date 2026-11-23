@@ -67,6 +67,11 @@ export const OPENING_TOOLS = Object.freeze([
   'RemoteTrigger',
 ]);
 
+/** The rule sessions-open-in-sidebar as the project whose rules file has the text `projectData` declares it, held
+ * behind a copy that declares it (`guardHeld`), or null: the one read of
+ * `openingRefusal` below and of the two refusals of ./background-launch.mjs. */
+export const sidebarRule = (projectData) => guardHeld('sessions-open-in-sidebar', ruleHere('sessions-open-in-sidebar', undefined, projectData));
+
 /** Why the call of the tool `toolName` is refused, or null. The four tools of `OPENING_TOOLS` are refused in the project
  * whose rules file has the text `projectData`, where the rule `sessions-open-in-sidebar` gives a value (his answers of
  * 2026-10-15: only where the rule is declared, and even when he asked for the session): the reason names the tool, the
@@ -75,7 +80,7 @@ export const OPENING_TOOLS = Object.freeze([
  * written out so that `rules check` lists this file as its reader. */
 export function openingRefusal(toolName, projectData) {
   if (!OPENING_TOOLS.includes(toolName)) return null;
-  const rule = guardHeld('sessions-open-in-sidebar', ruleHere('sessions-open-in-sidebar', undefined, projectData));
+  const rule = sidebarRule(projectData);
   if (rule === null) return null;
   return `js-harness guard: ${toolName} opens a session in the app's Routines or in the cloud, where he does not see it `
     + `(rule sessions-open-in-sidebar). Open it with ${rule.value}, a row in his sidebar, or tell the lead; `
@@ -128,19 +133,18 @@ export function sessionStartRefusal(toolInput, projectData, { cli = false, lead 
 
 /** Why a `start_session` from the session whose app record is `starter` (`{ model, effort }` as `appSessions` gives
  * it, or null when it has none or it could not be read) is refused, or null. The tool caps a start at the session
- * that makes it, so a starter on another model than the home's, or at a lower level than the one the start is held
- * to (the lead's for a new lead, `lead`), starts no session on the home whatever its call names
- * (odd/tasks/one-model-home.md, spec 5). The reason says who corrects the starter: the user for a lead
- * (`starterLead`), with the line to give him, and the lead for any other. A starter with no record passes. */
+ * that makes it, so a starter at a lower level than the one the start is held to (the lead's for a new lead, `lead`)
+ * starts no session at it whatever its call names (odd/tasks/one-model-home.md, spec 5). The starter's own model is
+ * not held: his words of 2026-11-18 removed that half (odd/tasks/starter-model-check.md, spec 1). The reason says who
+ * corrects the starter: the user for a lead (`starterLead`), with the line to give him, and the lead for any other.
+ * A starter with no record passes. */
 export function starterRefusal(starter, projectData, { lead = false, starterLead = false } = {}) {
   if (starter === null || typeof starter !== 'object') return null;
   const home = claudeHeld(projectData);
   const newLead = home.lead !== null && lead;
   const level = newLead ? home.lead : home.effort;
   let off = null;
-  if (home.model !== null && typeof starter.model === 'string' && !sameClaudeModel(starter.model, home.model.value)) {
-    off = `the model "${starter.model}", not the one of the rule ${CLAUDE_HOME.model}: ${home.model.value}`;
-  } else if (level !== null && EFFORTS.includes(starter.effort) && EFFORTS.indexOf(starter.effort) < EFFORTS.indexOf(level.value)) {
+  if (level !== null && EFFORTS.includes(starter.effort) && EFFORTS.indexOf(starter.effort) < EFFORTS.indexOf(level.value)) {
     off = `the level "${starter.effort}", under the one this start is held to (rule ${newLead ? CLAUDE_HOME.lead : CLAUDE_HOME.effort}: ${level.value})`;
   }
   if (off === null) return null;
@@ -148,7 +152,7 @@ export function starterRefusal(starter, projectData, { lead = false, starterLead
   const who = starterLead
     ? `Only the user changes a lead's own: ${menuLine({ model: home.model?.value ?? starter.model, effort: own?.value ?? starter.effort })}`
     : 'The lead sets that session\'s with its session tools.';
-  return `js-harness guard: start_session is called from a session whose own record holds ${off}, and a start is capped at the session that makes it. ${who} Where a card is enough, js-harness sessions start starts one on the rules' model and level, capped by no session.`;
+  return `js-harness guard: start_session is called from a session whose own record holds ${off}, and a start is capped at the session that makes it. ${who}`;
 }
 
 /** The model, the level and the advisor a start takes where its call names none, as `{ model, effort, advisor }`:
@@ -377,7 +381,7 @@ export function terminalNoteRefusal(command, projectData) {
  * `2>&1` stays in its word where `redirections` is off. `words.operators` holds the indexes of the words that are operators,
  * so a quoted `"&&"` is told from one. With `groups`, an unquoted `(` or `)` of a subshell is an operator too; one of
  * a `$(...)` stays in its word. With `redirections`, an unquoted `>`, `>>` or `>|` is a word of its own wherever it
- * stands, a descriptor before it (`2>`) taken in, and `words.redirections` holds their indexes. */
+ * stands, a descriptor before it (`2>`) or the `&` of `&>` taken in, and `words.redirections` holds their indexes. */
 export function shellWords(command, { groups = false, redirections = false } = {}) {
   const words = [];
   const operators = new Set();
@@ -447,6 +451,11 @@ export function shellWords(command, { groups = false, redirections = false } = {
     } else if (c === '&' && word !== null && !quoted && /[<>]$/.test(word)) {
       // The `&` of `2>&1` or `>&2` belongs to its redirection.
       word += c;
+    } else if (redirections && c === '&' && text[i + 1] === '>') {
+      // The `&` of `&>` and `&>>` is its redirection's, read with the `>` that follows: here, where quotes, comments and
+      // heredoc bodies are known (the verifier's third pass on background-launch, 2026-11-17).
+      if (word !== null) words.push(word);
+      word = null;
     } else if (c === ';' || c === '|' || c === '&') {
       if (word !== null) words.push(word);
       word = null;

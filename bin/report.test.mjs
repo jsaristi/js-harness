@@ -78,7 +78,7 @@ const FROM = { host: 'claude-code', id: 'aaaaaaaa-1111-4111-8111-111111111111', 
 
 test('with no report recorded, it reports the last 24 hours: the pull request merged in them, the notices, the questions and the map', withProject(async (project) => {
   appendNotice(project.home, project.slug, newNotice({ at: '2026-10-20T11:00:00.000Z', from: FROM, to: 'orchestrator', kind: 'closed', text: 'delivered the title fix', summary: 'docs/sessions/x.md' }));
-  appendNotice(project.home, project.slug, newNotice({ at: '2026-10-20T11:05:00.000Z', from: FROM, to: 'orchestrator', kind: 'question', id: 'q-1', text: 'Ship it today?', options: [], waits: 'the release' }));
+  appendNotice(project.home, project.slug, newNotice({ at: '2026-10-20T11:05:00.000Z', from: FROM, to: 'orchestrator', kind: 'question', id: 'q-1', text: 'Ship it today?', options: [{ label: 'Sí' }, { label: 'No' }], waits: 'the release' }));
   const { code, out, err } = await report([], project);
   assert.equal(err, '');
   assert.equal(code, 0);

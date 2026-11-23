@@ -1204,7 +1204,8 @@ and names both commands, so a project whose default is not `main` lands on its o
 Ready means the pull request is open, not a draft, mergeable, based on the default branch, has a Codex review record and a complete Claude lens record (no lens skip) for every code commit, and merges into the
 candidate so far with no conflict; one whose mergeability GitHub has not computed yet is decided by
 its merge into the candidate. Each pull request merged into the candidate passes main's rule rows
-first (`check --door`), and one that fails leaves the batch. `--dry-run` prints it and pushes nothing. `--land` tests it, the whole suite on
+first (`check --door`), and one that fails leaves the batch. `--dry-run` prints it and pushes nothing, and like `--land` stops first when the copy it runs from is not
+the default branch's `bin/`. `--land` tests it, the whole suite on
 this machine under the gate lock and, at the same time, on GitHub Actions (`.github/workflows/gate.yml`) on a
 `queue/*` branch pushed before the suite starts, so the run's checkout is the candidate, main as it would become, and when both are green moves the default branch to it by fast-forward, leased on the commit it was built from (odd/tasks/merge-queue.md).
 After a land, each open pull request whose base is a branch that land merged is retargeted to the default branch
@@ -1413,8 +1414,10 @@ figures are measured against `--context-window`, with the pause at `--context-pa
 
 `js-harness sessions start --title <title> --brief <file>` starts a work session in the background
 with `claude --bg`, from any turn: the desktop app's `start_session` starts one only on a turn the
-user typed, and leaves a card the user must tap on a turn a notice or a compaction started. The lead uses
-it only there, since a background session is not a row in the user's sidebar; Remote Control is off unless
+user typed, and leaves a card the user must tap on a turn a notice or a compaction started. Where
+`rule:sessions-open-in-sidebar` is declared, as in this repository, it refuses itself, a start or a resume, and the
+guard refuses a step that launches it or `claude --bg`, since a background session is not a row in the user's
+sidebar: `start_session` is the one way there. Remote Control is off unless
 `--remote-control` (a resume too, whatever its record holds): the user talks only to the lead, the
 sessions it tasks report by notices and messages, and one that ends with Remote Control on stays an
 offline row in the user's sidebar (his words of 2026-11-14); `--no-remote-control` is still taken. The session reads a copy of the
@@ -1774,9 +1777,9 @@ a scheduled-task or cloud tool that would open a session where he does not see i
 declares `sessions-open-in-sidebar`, the reason naming `start_session`, which opens it as a row in his
 sidebar, even when he asked for it; a `start_session` with a brief that names no effort, or another level than the
 rule `session-effort` where that rule is declared, or than `lead-effort` when its title is of a new lead (a fork included, since it cannot set its own), or that names a model other than the rule `session-model`; a `start_session` called from a session whose own app
-record holds another model than that rule, or a lower level than the one the start is held to, since the tool caps a
-start at the session that makes it (the reason says who corrects that session: the user for a lead, with the line to
-give him, and the lead for any other); a `start_session`
+record holds a lower level than the one the start is held to, since the tool caps a start at the session that makes
+it (the reason says who corrects that session: the user for a lead, with the line to give him, and the lead for any
+other; that session's model is not held, by his words of 2026-11-18); a `start_session`
 whose title is not `<code> <n> · <purpose>` (or `<code> ORQ · <purpose>` for a new lead) with the project's own code,
 harness.json `"code"` (`init` offers the initials of the project's name; this repository's is `JH`), where the rule
 `session-title` is declared, the reason naming the project's next free number, one past the highest of that code in
@@ -1872,8 +1875,10 @@ it acts only in a project whose nearest `harness.json` holds a `reply` key, and 
 everywhere else. There it reads the reply that ends the turn and turns the stop back, with the
 hooks contract's `decision: "block"` and the shape to follow, when the reply does not close with
 exactly one state line: working (with what wakes the session on that line), decision (never while
-a background task runs), question (an open question the user answers in writing, not with
-buttons, asked on that line and never while a background task runs), cut (one code block of what the user sends, under the three labels what
+a background task runs), question (an open question the user answers in writing, recorded
+with options that give examples of the answer, put through the question tool and answered in its
+Other, its number named on that line as `Pregunta <n>` and checked against the record, and never
+while a background task runs), cut (one code block of what the user sends, under the three labels what
 it is, where it goes and what sending it does, each once) or finished (with the session to return
 to on that line). A block under those labels in any other state is turned back too: a decision is
 asked with the question tool. A state line is a line that starts with a state's label once its
@@ -1921,7 +1926,7 @@ already on his screen, so the session tells him not to run it and gives the corr
 
 ```console
 $ js-harness reply --hook < stop.json
-{"decision":"block","reason":"js-harness reply: the reply has no state line. End the reply with one line that starts with one of: Sigo solo (say what wakes you), Necesito tu decisión (never while background work runs; the question itself goes through the question tool), Te pregunto (an open question the user answers in writing, asked on that line), Corte (one code block of only what the user sends, under the lines Qué es:, Dónde: and Qué pasa:), Terminado (name the session to return to). Your reply is already shown: write the close again in your next words."}
+{"decision":"block","reason":"js-harness reply: the reply has no state line. End the reply with one line that starts with one of: Sigo solo (say what wakes you), Necesito tu decisión (never while background work runs; the question itself goes through the question tool), Te pregunto (a question the user answers in writing: recorded with options that give examples, put to them through the question tool and answered in its Other; name it on that line), Corte (one code block of only what the user sends, under the lines Qué es:, Dónde: and Qué pasa:), Terminado (name the session to return to). Your reply is already shown: write the close again in your next words."}
 ```
 
 ### js-harness commit-msg

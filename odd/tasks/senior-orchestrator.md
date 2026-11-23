@@ -5,6 +5,13 @@ JH 192, slice 3 of the lead's brief. Delivery: this design, then one pull reques
 (`rules change` runs only on a `rule/` branch, `bin/lib/rules-change-run.mjs:170`). Runner: `node --test`.
 
 ## State
+Now (2026-11-18, JH 222, read with `gh`): T7 landed as PR 901 (9f54eb4d) and its apostrophe fix as PR 905 (6ab33641); T8
+landed as PR 895 (83252acb). Open: T2's probe, T3 and T4. The paragraphs below are the state before those lands.
+Before (2026-11-17 ~05:10Z): `rule/away-autonomy` landed (PR 897, main 9fc30a07) and is merged into T7's branch
+(15c9bd39). Both rule changes are committed: `sessions-open-in-sidebar` drops its exception (715f2ab2) and
+`senior-model`'s subject names start_session (ca8fba11). Next: Codex and lenses from ee0fb395 (the merge resolution and
+both rules), then the review fixes 1e190752, eb4d8e6b and 043ce46a, all reviewed (L11), and the provenance fixes 0976dcb1, 76fd3e63, c3066640 (L12). T7 is at PR 901; the lead held it for a verifier pass on the guard, done with its fixes (L13), and it is ready again. The paragraphs below are each task's record, T8's first.
+
 T8 (2026-11-16 ~03:00Z, JH 211), branch `feat/lead-held-high` from origin/main b3a73245, in worktree
 `tui-gentle-level-a6afd3`; T7 waits on branch `rule/sessions-visible-only` (its State is there; the second branch to land
 merges this State). Orientation: the lead's role comes only from `roleOfTitle` (`TITLE_SHAPE`, `bin/lib/sessions.mjs:1248`),
@@ -40,7 +47,66 @@ cb830c3e built it; Codex's review (7619fc9..25e7f82, verdict incorrect at 0.92) 
 task in it ran on the lead's model before `set_session_model`. The next commit holds the brief to `SENIOR_WAIT_BRIEF`
 (D11). Lenses: risk and reliability 0, resilience 1 warning, answered (D12). Codex recheck: fixed (0.98). The
 verifier's findings are fixed in a95fd076 (D13), reviewed clean (Codex 0.94, lenses 0); the background is held in
-the next commit (D14). Left: its reviews, the PR. Then T7 (question 306, yes), then T8.
+the next commit (D14). T6 is PR 893 at fba1966b (branch claude/senior-visible-72d504), every code commit reviewed
+clean, `ready` sent 2026-11-16 00:41Z; it lands after the lead opens JH SR visibly through it.
+T7 (next, branch `rule/sessions-visible-only` cut from fba1966b, stacked on PR 893; origin/main's rules files unchanged
+since cf5bd6fd): tests first for a guard refusal of `js-harness sessions start` (start and `--resume`) matched per
+step, not as a substring (plain, after `cd x &&`, `;`, newline, `node bin/js-harness.mjs sessions start`, absolute path,
+env prefix, behind `js-harness gate --` refused; grep, commit message, heredoc, `sessions stop`, `sessions --opening`, no
+rule pass); map other routes (TERMINAL_TOOL, `bin/lib/hook-entries.mjs` matcher, in-process callers of
+`bin/sessions-background.mjs`, raw `claude --bg`) and note the lead before widening; fix the texts that send to it
+(`bin/lib/guard.mjs:151`, `bin/lib/manifest.mjs:157`, `bin/lib/home-sessions.mjs:29`, `bin/lib/background-close.mjs:95`,
+the guard's header and usage); then `rules change sessions-open-in-sidebar --with ...` and `rules change senior-model`
+(subject drops `sessions start`), stdin shape from `bin/lib/rules-change-run.mjs:176`, quotes 699d7c29:402 and
+69918425:21275, the tap of 306 (699d7c29:505) in `accepted`, the reading saying his 2026-10-24 words are superseded;
+`--dry-run` first, one commit a rule. Check the background record for jobs a refused `--resume` strands; name them to
+the lead. Then gate, Codex and lenses (risk, reliability, readability), a verifier on the matcher, a stacked PR, a
+note (not `ready`) until T6 lands. Then T8.
+T7 in the worktree, uncommitted (2026-11-16 ~01:00Z), held while the lead lands PR 893 (its order: cut T7's branch
+from origin/main once 893 is there): `backgroundStartRefusal` in `bin/lib/guard.mjs` beside `openingRefusal`, called
+first in `sessionsStartMain` (`bin/sessions-background.mjs`), refuses start and `--resume` where the rule is declared;
+the test `sessions start and --resume refuse every title ...` (red, then green; 112 tests of that file and
+`bin/lib/guard.test.mjs` green); `makeWorld({ rules: true })` drops the rule, `rules: 'all'` keeps it. D15: the refusal
+sits in the command, its only entry (`bin/sessions.mjs:482`), so Bash, the terminal, the remote server and `node
+bin/js-harness.mjs` are all covered with no text matching; raw `claude --bg` stays open, to name to the lead. Next:
+re-cut on origin/main, the texts, the two `rules change`, reviews.
+2026-11-16 ~01:30Z: re-cut on origin/main b3a73245 (PR 893 landed), work reapplied uncommitted. The lead: the guard
+refuses raw `claude --bg` too (his line 402). Built, uncommitted: `backgroundLaunch` in `bin/lib/chained-step-guard.mjs`
+(`programOf` split out of `guardedStep`, `launchOf`), `backgroundLaunchRefusal` in `bin/lib/guard.mjs`, called in
+`bin/guard.mjs` for Bash and for the Terminal panel (before terminal-note); its test passes both ways. Texts changed:
+`bin/lib/manifest.mjs:157` (the card is the way; no background start), `bin/lib/guard.mjs` starter refusal tail,
+`bin/lib/home-sessions.mjs` resumeOf (a message resumes), `bin/lib/background-close.mjs:95`. Next: 8 tests pin the old
+texts (manifest x2, home-sessions x3-4, guard.test starter, background-close); fix them, gate, then the two
+`rules change` (dry-run first), commit, reviews, verifier, stacked-free PR from origin/main, note.
+~02:00Z: the 8 tests fixed, `sidebarRule` joins the three reads of the rule (the coverage break finds it once);
+498 tests of the ten touched files green, `rules check` PASS. Blocked: `rules change sessions-open-in-sidebar --dry-run`
+refuses while local branch `rule/away-autonomy` (JH 208) holds an open rule change; its input is ready in the
+scratchpad (`sidebar.json`: subject, quotes 69918425:21275 and 699d7c29:402, reading, accepted = the 306 tap). Paused once for the lead's refresh of the installed copy.
+~02:20Z, the lead: the copy is refreshed; commit T7's code apart from `rules change` if it stands alone and is green;
+the two rule changes wait for JH 208's `rule/away-autonomy` (never touch it; the lead says when). Before that commit
+(advisor): fix the size convention (`bin/conventions-structure.test.mjs`: a module over 1,000 lines grew, likely
+`bin/lib/guard.mjs` or `bin/lib/chained-step-guard.mjs`: move the three new exports out, update the coverage break path);
+match `--background` beside `--bg` (claude --help lists both); `time -p claude --bg` passes (fix); add passing heredoc
+cases (a commit `-F -` body and a `gh pr create --body-file -` body naming them); make `bin/lib/manifest.mjs:202` (never
+stop to restart) agree with the new `resumeOf` (stop once committed, reopen with start_session); update `bin/guard.mjs`
+header and usage and `START_USAGE`; coverage controls for the two refusals. Open, to log and tell the lead: `bash -c`,
+`powershell -Command`, `cmd /c` and `$(…)` hide a `claude --bg` from the guard. Then commit, codex-meter, Codex,
+lenses (risk, reliability, readability), verifier, a note (no PR or ready before the rule commit). T8 after, own
+branch from origin/main, orient then advisor.
+~03:00Z: T7 at 9696d60a (docs of the lens findings) plus the verifier's four spellings (D16), green in its three
+test files, committed as 9c7f3458; Codex correct 0.87, lenses risk and readability 0, reliability one (BSD xargs
+`-J -R -S`), fixed in 7929b5a5 (Codex correct 0.98, reliability recheck fixed). T7's code is reviewed to 7929b5a5. Next:
+the note to the lead; the two `rules change` when JH 208's `rule/away-autonomy` lands or is dropped (the lead says),
+then gate, the rule commits' reviews, PR, `ready`. Meanwhile T8 on its own branch from origin/main.
+~02:45Z, note sent to the lead (T7 reviewed, open items, waiting its word on rule/away-autonomy). T8 next, advisor's
+plan: `git switch -c feat/lead-held-high origin/main` here (origin/main's doc already has spec 6 and T8); before code,
+read the lead's original T8 message (what "start" means), the `sessions --address` resolver (`bin/lib/sessions.mjs` ~1295:
+does it resolve a title with no "·"?), what board/applied/doctor already say (board marks OFF THE HOME via
+`bin/lib/roster-home.mjs` `rowHome`), whether a `rules-data.mjs` text must change (held behind away-autonomy). Design:
+never loosen `TITLE_SHAPE`/`roleOfTitle` (42 callers, the handover's `ORQ nueva`/`relevada`); an additive detector of a
+drifted lead title (`<code> ORQ` with no "·", not the handover forms) that names it and judges its level; heartbeat says
+it once per value (a mark like `cuts`/`away`), in a module of its own; tests first with L6 as written. Write T8's
+orientation and depth pass here before the first code.
 
 ## Goal
 The lead starts a senior session, titled `<code> SR · <purpose>`, as a visible app session with `start_session`
@@ -154,10 +220,12 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
   advisor; an independent verifier after. Route: inline, then one verifier.
 - [ ] T4 (kind: build) (1, 2) The reporters' hold by role, and the texts of session-model, session-effort and
   advisor-model. Route: inline.
-- [ ] T5 (kind: docs) (2) `bin/lib/lead-protocols.mjs`: when and how the lead sends a senior a task. Route: inline.
-- [ ] T6 (kind: build) (3, 4) The lead starts the senior visibly with `start_session`; the guard holds the start and
-  the messages to it. Route: inline, then one verifier. Commits: cb830c3e, the D11 fix.
-- [ ] T7 (kind: build) (5) The guard refuses `js-harness sessions start` for every title; `rule:sessions-open-in-sidebar`
+- [x] T5 (kind: docs) (2) `bin/lib/lead-protocols.mjs`: when and how the lead sends a senior a task. Route: inline.
+  Commit 6e66d710, PR 876 (01f75889); rewritten for `start_session` in PR 893.
+- [x] T6 (kind: build) (3, 4) The lead starts the senior visibly with `start_session`; the guard holds the start and
+  the messages to it. Route: inline, then one verifier. Commits: cb830c3e, the D11 fix. PR 893 (b3a73245); the verifier
+  is D13.
+- [x] T7 (kind: build) (5) The guard refuses `js-harness sessions start` for every title; `rule:sessions-open-in-sidebar`
   drops its exception by `rules change`, his to approve. Route: inline.
 - [x] T8 (kind: build) (6) The lead held to `rule:lead-effort`: a lead whose title drifts off `<code> ORQ · …` keeps
   its role or is named (channel `--address orchestrator` still resolves it, `heldOfRole` does not), and the board,
@@ -230,9 +298,108 @@ this slice once its gate and both reviews pass, as the lead read it in its note 
 - D14 2026-11-16, the advisor before the PR: `start_session` requires a `background` of 80 characters for a fresh
   start, and it reaches the first turn as the brief does, yet the guard read only `prompt`. It is held the same way to
   one constant, `SENIOR_WAIT_BACKGROUND`, which the protocol prints beside the brief.
+- D15 2026-11-16, T7: the refusal sits in `sessions start` itself (its only entry, `bin/sessions.mjs:482`) and in the
+  guard for a Bash or Terminal step that launches `js-harness sessions start` or `claude --bg`/`--background`, read per
+  step (`backgroundLaunch`, `bin/lib/background-launch.mjs`, apart from `bin/lib/guard.mjs` at its size limit). Text that
+  only names one passes (quotes, heredoc bodies). Known: `claude --print "--bg"` is refused (quotes gone, kept); `bash
+  -c`, `powershell -Command`, `cmd /c` and `$(…)` hide a `claude --bg` from the guard (the command refuses itself for
+  `sessions start`). A background session off its home is corrected by closing it once committed and opening it with
+  `start_session` (`resumeOf`), which keeps `bin/lib/manifest.mjs:202` (never stop to restart by `sessions start`).
+  Not done: coverage controls for the two refusals.
+- L7 2026-11-16, T7's code committed as 5dc8d1ab. Codex (17626fd..5dc8d1a, incorrect 0.97) P2: the `--resume` refusal
+  reads the caller's cwd rules, not the resumed record's project (`bin/sessions-background.mjs:210-215`): fix by reading
+  the record's root for a resume. Lenses (b3a7324..5dc8d1a): risk 0; reliability and readability: `rules switch` still
+  prints "a resume starts a background session again on the home's model" (`bin/lib/rules-switch.mjs`, test line 234),
+  contradicting the new `resumeOf`; `bin/lib/guard.mjs:73-80` `sidebarRule` split `openingRefusal` from its doc, says
+  "three refusals below" (two are in background-launch.mjs), two stray blank lines; `bin/lib/home-sessions.mjs:28-31`
+  `resumeOf` name and doc say resume (rename to `correctionOf`, rewrite doc). Next: fix these test first, commit, Codex
+  recheck and lenses (reliability, readability) from 5dc8d1ab, then a verifier, then a note to the lead (no PR before
+  the rule-change commit).
+  Done since, uncommitted: `resumeStart` also refuses by the record's `entry.root` rules (`bin/sessions-background.mjs`,
+  before `const name`); its test is still to write (a world with no rule whose recorded entry's root declares it; see the
+  test at `bin/sessions-background.test.mjs:856` for how a record is made). Then the three lens fixes.
+  Also done, uncommitted: `rules switch` text (`bin/lib/rules-switch.mjs:362`, test line 234) and `resumeOf` renamed
+  `correctionOf` with its doc (`bin/lib/home-sessions.mjs`). Left: the resume-root test, the `sidebarRule` doc placement
+  in `bin/lib/guard.mjs:73-80` (move it above `openingRefusal`'s doc, say "the three refusals" live here and in
+  background-launch.mjs, drop the blank lines), gate the touched suites, commit, recheck from 5dc8d1ab.
+  Then: the resume-root test written (fails without the fix, passes with it), `sidebarRule` placed above
+  `openingRefusal`'s doc; 187 tests of the touched files green, `rules check` PASS. Committed next as the fix of L7;
+  then Codex recheck and lenses (reliability, readability) from 5dc8d1ab, the verifier, a note to the lead.
+- L8 2026-11-16, T7: 493378a2 fixed L7 (Codex recheck correct 0.96; reliability 0; readability left the blank lines and
+  `backgroundLaunchRefusal`'s doc pointer, fixed in 9696d60a with `sessionsOffHome`'s doc). An independent verifier
+  (read-only, about 130 probes of `backgroundLaunch`, `claude --help` of CLI 2.1.322) found nothing blocking. Open, told
+  to the lead: `Monitor` and `preview_start` run commands and are not in the guard's matcher (`bin/lib/hook-entries.mjs:82`),
+  so no Bash refusal reaches them; changing the installed matcher is its own change. `claude remote-control --spawn` is
+  his call (`bin/lib/remote.mjs:97` uses it); `claude -p ... &` is a scope question (the reviews use `-p`). `resumeStart`
+  lets a resume run when the recorded root is gone (0 of 159 records). A PowerShell tool was not seen. The subjects of
+  `sessions-open-in-sidebar` and `senior-model` (`bin/lib/rules-data.mjs:764`, `:656`) contradict the code until the two
+  `rules change` run. `bin/advisor-gate.mjs:47-57` keeps its own regex for `sessions start` (it gates the advisor, not the
+  launch; not shared). No background job is stranded: the two on the machine (JH 201, JH 203) are done and closed.
+- D16 2026-11-16, T7: the guard reads launches written out in an ordinary shape, never text the shell computes (`eval`,
+  `$C`, `${IFS}`, `bash -c`, backticks, `Start-Process`). Added from the verifier: a wrapper named by its path
+  (`/usr/bin/env`, in `programOf`, so the chained-step guard gains it too), `xargs` and its options, an option's value
+  after `=` (`--bg=true`), `claude respawn` and `claude --cloud` (refused as "in the cloud").
+- L9 2026-11-16, the lead: the app record of JH SR showed claude-fable-5-2 at high right after `set_session_model`, so the
+  record changes at the call, not at the next turn (the open point of D9/D11). T8 is at PR 895, which the lead lands; T7
+  waits only on JH 208's `rule/away-autonomy`, which JH 208 is bringing to a PR.
 - D17 2026-11-16, T8 (advisor): "is named", not "keeps its role": `roleOfTitle` has 42 callers and the handover
   needs `ORQ nueva`/`ORQ relevada` to hold no role, so loosening it is high risk. A title `<code> ORQ <words>` with no "·"
   that is not a handover form is a drifted lead: judged at `rule:lead-effort` and named with its fix (rename to
   `<code> ORQ · …`; his menu for the level). The harness does not set the level itself: no session changes its own, and
   only his menu changes a lead's (`home-sessions.mjs` `corrects: his menu`). "Start" is read as the lead's session
   start (the resume hook), since L6's case was a lead already running; the new lead's `start_session` is held already.
+- L10 2026-11-17, the lead: PR 897 landed at main 9fc30a0, so T7 is unblocked; reviews per slice; read codex-meter
+  before each Codex review (weekly near its floor; read at 0% after its reset). The two `rules change` ran from
+  scratchpad inputs: `sessions-open-in-sidebar` with his words of 2026-11-15 (the command dated both quotes that day,
+  so the reading says 2026-11-15 only) and his tap on question 306; `senior-model` keeps its two quotes and adds the
+  tap to `accepted`, its reading saying the lead opens the senior with start_session.
+- L11 2026-11-17, T7's reviews over main 9fc30a0. Codex (incorrect 0.97): a launch beside a redirection
+  (`claude --bg>log`) passed the guard, and the closing `sessions stop <id>` refuses a populated worktree; fixed in
+  1e190752 (recheck correct 0.95). Lenses: the closing ignored a project without the sidebar rule, where a resume runs;
+  the starter's cap refusal named a card the cap refuses; fixed in eb4d8e6b, and Codex's P2 on it (`ruleHere` is never
+  null) in 043ce46a (correct 0.99). Answered, not changed: `doctor` does not call `sessionsOffHome` (only `rules
+  applied` and `rules switch`); line 402 of 699d7c29 is `2026-11-16T00:10Z`, 2026-11-15 19:10 local, so the rule's
+  date holds; `rules switch` keeps the closing text, since it runs only in this checkout, which declares the rule.
+- L12 2026-11-17, before the PR (advisor): his tap on question 306 (699d7c29 line 505) is `2026-11-16T00:17Z`,
+  2026-11-15 19:17 local, so both rules' `accepted` date it 2026-11-15 by local day (0976dcb1, c3066640); senior-model's
+  first change had stored two short excerpts, and its source now keeps both quotes whole (c3066640). README and SPEC no
+  longer say the lead uses `sessions start` where start_session leaves a card (76fd3e63). Codex correct 0.97, lenses 0
+  findings on 6823af0..c306664. PR 901 opened.
+- L13 2026-11-17, the lead held PR 901 for one independent verifier pass on the guard (high risk), at cae9bd7e, read-only,
+  over refusals and false refusals. It found nothing blocking: the lead's list (a background `js-harness wait`,
+  `merge-queue --land --refresh-copy`, `quiet --wait`, `node --test` of several files, `git -C`, `gh pr` after `&&`)
+  passes through the whole guard, and the guard suites passed (background-launch 3, chained-step-guard 3, lib/guard 51,
+  guard 47, sessions-background 62). Fixed: a quoted `'>'` hid the `--bg` after it; a first fix (ef1bf49f) read every
+  word and Codex found it refused `claude -p x > --bg` and `exec -a --bg claude`; d27dd75f reads redirections by
+  position (`shellWords`' `redirections`) and claude's options after claude (Codex recheck correct 0.97). Named as the
+  reader's limits, not changed: `$( )` and backtick substitution, wrappers it does not know (`setsid`, `stdbuf`, `cmd
+  /c`, `powershell -Command`). Not changed: `sessions start --help` is refused; a `"$(cat <<'EOF' …)"` commit message
+  with a quoted separator inside reads as steps (`shellWords`, older than T7). Answered: the readability lens called the
+  `own` comment false; `programOf(['claude','-p','>','--bg','x'])` gives args `['-p','x']`, so it holds; reworded so it reads so.
+  A second verifier pass at d27dd75f (only the reader changed since cae9bd7e; chained-step-guard, guard and bin/guard
+  unchanged, `git diff --quiet`): the lead's list unchanged, no false refusal, the redirection forms (`2>&1`, `>&2`,
+  `&>`, `>>`, `>|`, before `&&` and `|`, PowerShell `2>$null` and `*>`) pass; two missed launches, `claude &>log
+  --bg` (shellWords gives the `&` of `&>` as an operator) and `claude.bat --bg`, fixed in 1a2806ea with tests.
+  Codex on 1a2806ea found it took a separate `&` (`echo ok & >log claude --bg`) for the one of `&>`; a count of `&>`
+  (7a7eb7cc) was not fixed, since it ignores position and quotes (Codex and both lenses); b54476e6 scans the text, quote
+  aware, and writes each unquoted `&>` as ` >` before `shellWords` reads it: Codex recheck correct 0.98, both lenses 0
+  findings, the earlier one fixed. The suites one file at a time: background-launch 3, lib/guard 51, guard 47 pass.
+  A third verifier pass at 640bdcc6 (read-only, opus; only the reader changed since d27dd75f): nothing blocking; the 12
+  commands that must pass pass through guardMain, the 7 launches are refused, the five suites pass (3, 3, 51, 47, 62).
+  Named as the reader's limits, not changed: one apostrophe in a `#` comment or a heredoc body throws the `&>` scan's
+  quote tracking, so a later `claude &>log --bg` is missed (never a false refusal); `
+…'` quoting and an escaped `>`.
+- L14 2026-11-17, after PR 901 landed the lead asked for the apostrophe fix as its own PR from 9f54eb4. cc31281d reads
+  the & of &> in shellWords, under its redirections option, where comments and heredoc bodies are known, and drops the
+  launch reader's own scan: the comment and heredoc apostrophe launches are refused, tests first. Codex correct 0.88, both
+  lenses 0 findings; the third verifier's lists rerun at cc31281d by this session (not independent) flip only those. Left as
+  limits: $'…' quoting and an escaped >. The PR stays a draft until an independent verifier runs.
+- L15 2026-11-17, his yes to question 333 (lead 699d7c29 line 11325): one independent verifier on PR 905, cap 15M.
+  It ran read-only (opus, 30 tool calls, 115k final context, 10.6 min): no blocking finding; nothing the PR changed
+  lets a launch through or refuses an ordinary command; the record-write check now also refuses tee, rm and cp of a
+  record behind &> (correct); the typed-wait reader decides the same. Holes shared with base, not caused here, for a
+  later unit: a backslash-newline between & and >, claude -p > --bg, 
+...' and nested quotes in $( ), process
+  substitution, and HEREDOC (guard.mjs:256) delimiters bash reads otherwise (<<EOF-1, <<'EOF'x, <<!, $((1<<n))).
+  Main fdae9423 merged in (46692dfa). Paused at 19:02 local for his Desktop update: next is gh pr ready 905 and a
+  ready notice; the lead lands it at once (his correction of 18:55).

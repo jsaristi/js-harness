@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import { realCodexHome } from './codex-review-home.mjs';
 import { resolveStackPm, shownWord } from './package-manager.mjs';
@@ -22,6 +23,7 @@ import { MEMORY_RULES_FIX, memoryRulesState } from './memory-rules.mjs';
 import { SESSION_CLASSES_FIX, sessionClassesState } from './session-classes.mjs';
 import { PNPM_LOCK_FIX, pnpmLockState } from './pnpm-lock.mjs';
 import { desktopDir } from './backup.mjs';
+import { SETTINGS_FILE } from './project-apply.mjs';
 
 const SEMVER_RE = /(\d+\.\d+\.\d+)/;
 // R3-001 (accepted T1 review follow-up): a hung probe must never block `doctor` — kill it and
@@ -217,9 +219,105 @@ export const ENGRAM_SETUP_CLAUDE = 'engram setup claude-code';
  * so a pnpm machine is told `pnpm add -g` and never `npm` (the stack rule). npm keeps `i -g`, the line doctor always
  * printed. `env` is the environment doctor was given, without one the process's; each word is quoted for `platform`,
  * the one the line is run on. */
-function installLine(spec, { env, platform = process.platform }) {
+function installLine(spec, deps) {
+  return packageLine('-g', spec, deps);
+}
+
+/** The package manager's add of `spec` with `flag` (`-g` global, `-D` the project's development dependency). */
+function packageLine(flag, spec, { env, platform = process.platform }) {
   const pm = resolveStackPm(undefined, env ?? process.env);
-  return [...pm.words, pm.kind === 'pnpm' ? 'add' : 'i', '-g', spec].map((word) => shownWord(word, platform)).join(' ');
+  return [...pm.words, pm.kind === 'pnpm' ? 'add' : 'i', flag, spec].map((word) => shownWord(word, platform)).join(' ');
+}
+
+const TYPESCRIPT_LSP = 'typescript-lsp@claude-plugins-official';
+const TYPESCRIPT_LSP_SERVER = 'typescript-language-server';
+/** Where typescript-language-server looks for a project's own TypeScript, walking up from the project
+ * (typescript-language-server 5, `MODULE_FOLDERS`): the first that exists is the one it tries. */
+const WORKSPACE_TYPESCRIPT = ['node_modules/typescript/lib', '.vscode/pnpify/typescript/lib', '.yarn/sdks/typescript/lib', '.pnpm/sdks/typescript/lib'];
+
+/** The `version` of the package.json above the `lib` folder `libDir`, or `unknown`. */
+function typeScriptVersion(libDir) {
+  const { data } = readJsonFile(path.join(path.dirname(libDir), 'package.json'));
+  return typeof data?.version === 'string' ? data.version : 'unknown';
+}
+
+/** The first workspace TypeScript `lib` folder walking up from `project`, as the server finds it, or null. */
+function workspaceTypeScript(project) {
+  for (let dir = path.resolve(project); ; dir = path.dirname(dir)) {
+    for (const folder of WORKSPACE_TYPESCRIPT) {
+      const lib = path.join(dir, folder);
+      if (fs.existsSync(lib)) return lib;
+    }
+    if (path.dirname(dir) === dir) return null;
+  }
+}
+
+/** The typescript-language-server package on `env`'s PATH, or null: the shim's own folder holds it under
+ * `node_modules` (npm on Windows), `../lib/node_modules` (npm elsewhere), or the shim is a link into it. The PATH is
+ * this machine's, so it splits on this machine's delimiter whatever `platform` the lines are shown for. */
+function languageServerPackage(env, platform) {
+  const pathValue = env.PATH ?? env.Path ?? '';
+  const names = platform === 'win32' ? [`${TYPESCRIPT_LSP_SERVER}.cmd`, `${TYPESCRIPT_LSP_SERVER}.exe`, TYPESCRIPT_LSP_SERVER] : [TYPESCRIPT_LSP_SERVER];
+  for (const dir of pathValue.split(path.delimiter).filter(Boolean)) {
+    const shim = names.map((name) => path.join(dir, name)).find((file) => fs.existsSync(file));
+    if (!shim) continue;
+    const candidates = [path.join(dir, 'node_modules', TYPESCRIPT_LSP_SERVER), path.join(dir, '..', 'lib', 'node_modules', TYPESCRIPT_LSP_SERVER)];
+    try {
+      for (let up = path.dirname(fs.realpathSync(shim)); path.dirname(up) !== up; up = path.dirname(up)) candidates.push(up);
+    } catch {
+      // An unreadable link: the folders beside it are still worth a look.
+    }
+    const found = candidates.find((candidate) => readJsonFile(path.join(candidate, 'package.json')).data?.name === TYPESCRIPT_LSP_SERVER);
+    return { found: true, packageDir: found ?? null };
+  }
+  return { found: false, packageDir: null };
+}
+
+/** Whether the plugin's server can start for `project`, read from files only and never started: it needs a TypeScript
+ * that ships `lib/tsserver.js`, which TypeScript 7 does not (the plugin, typescript-lsp 1.0.0, runs
+ * `typescript-language-server --stdio`). The server takes the project's own TypeScript first, then the one its own
+ * package resolves, as `require('typescript')` from it does. `{ state, reason }`: `ok`; `down` with why, a server
+ * not on the path first; `unknown` where the project's TypeScript does not serve and the server's package cannot be
+ * found from its shim, so the TypeScript it would take next cannot be read; `n/a` with no project or while the plugin
+ * is not installed, which the `installed` gap already shows. */
+function languageServerStart({ home, project, env = process.env, platform = process.platform }) {
+  if (!home || !project || pluginInstalledVersion(home, TYPESCRIPT_LSP).state !== 'ok') return { state: 'n/a' };
+  const server = languageServerPackage(env, platform);
+  if (!server.found) return { state: 'down', missing: true, reason: `${TYPESCRIPT_LSP_SERVER}, the server the plugin starts, is not on the path` };
+  const workspace = workspaceTypeScript(project);
+  if (workspace && fs.existsSync(path.join(workspace, 'tsserver.js'))) return { state: 'ok' };
+  if (!server.packageDir) return { state: 'unknown' };
+  let bundled = null;
+  try {
+    bundled = path.dirname(createRequire(path.join(server.packageDir, 'package.json')).resolve('typescript'));
+  } catch {
+    // No TypeScript the server can require.
+  }
+  if (bundled && fs.existsSync(path.join(bundled, 'tsserver.js'))) return { state: 'ok' };
+  const found = [workspace && `the project's TypeScript ${typeScriptVersion(workspace)} (${workspace})`, bundled && `TypeScript ${typeScriptVersion(bundled)} beside the server (${bundled})`].filter(Boolean);
+  const what = found.length > 0
+    ? `${found.join(' and ')} ships no tsserver.js, which ${TYPESCRIPT_LSP_SERVER} needs and TypeScript 7 no longer ships`
+    : `${TYPESCRIPT_LSP_SERVER} finds no TypeScript to start on`;
+  return { state: 'down', reason: `the plugin cannot start: ${what}. Either fix is yours to choose:` };
+}
+
+/** The project's development install of `spec`, in the machine's package manager, quoted for `platform`. */
+function devInstallLine(spec, deps) {
+  return packageLine('-D', spec, deps);
+}
+
+/** The `project` fix of a server that cannot start: the reason, then the fixes, none applied here. */
+function languageServerFix(deps) {
+  const start = languageServerStart(deps);
+  if (start.state !== 'down') return {};
+  if (start.missing) return { project: [start.reason, installLine(TYPESCRIPT_LSP_SERVER, deps)] };
+  return {
+    project: [
+      start.reason,
+      devInstallLine('typescript@<7', deps),
+      `or turn this plugin off and a TypeScript 7 language server plugin on in the project's enabledPlugins (${SETTINGS_FILE}), a settings change of yours`,
+    ],
+  };
 }
 
 /** Tools as data: how to probe each one's installed version, its configured state per host, its
@@ -346,18 +444,21 @@ export const tools = [
     // switch that did not resolve shows it.
     id: 'typescript-lsp',
     when: (deps) => deps.functions?.languageServer?.value !== 'off',
-    installed: ({ home }) => pluginInstalledVersion(home, 'typescript-lsp@claude-plugins-official'),
+    installed: ({ home }) => pluginInstalledVersion(home, TYPESCRIPT_LSP),
     configured: ({ home }) => ({
-      claude: claudeEnabledPlugin(home, 'typescript-lsp@claude-plugins-official'),
+      claude: claudeEnabledPlugin(home, TYPESCRIPT_LSP),
       codex: 'n/a',
     }),
-    project: () => 'n/a',
-    // No `codex` fix: Claude Code plugins have no Codex equivalent, so `codex` is always `n/a`,
-    // never a gap.
-    fix: () => ({
-      installed: 'claude plugin install typescript-lsp@claude-plugins-official',
-      claude: 'claude plugin enable typescript-lsp@claude-plugins-official',
-      upToDate: 'claude plugin update typescript-lsp@claude-plugins-official',
+    // Installed and enabled is not started: `down` where the TypeScript its server would take ships no tsserver.js
+    // (TypeScript 7), read from files, never started (`languageServerStart`).
+    project: (deps) => languageServerStart(deps).state,
+    // No `codex` fix: Claude Code plugins have no Codex equivalent, so `codex` is always `n/a`, never a gap. The
+    // `project` fix names the reason and both fixes and applies neither: switching plugins is the owner's settings change.
+    fix: (deps) => ({
+      installed: `claude plugin install ${TYPESCRIPT_LSP}`,
+      claude: `claude plugin enable ${TYPESCRIPT_LSP}`,
+      upToDate: `claude plugin update ${TYPESCRIPT_LSP}`,
+      ...languageServerFix(deps),
     }),
   },
   {

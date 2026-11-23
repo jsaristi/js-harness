@@ -170,12 +170,24 @@
         "date": "2026-10-29",
         "session": "0f71b2c6-cbce-43ca-a031-276a4b2c381f",
         "line": 23561
+      },
+      {
+        "quote": "casi no avanzamos debe haber una forma de mitigar esto",
+        "date": "2026-11-15",
+        "session": "69918425-3b43-430f-9f50-62b6422422ce",
+        "line": 15446
+      },
+      {
+        "quote": "Apruebo el PR 897, la regla away-autonomy con los forks",
+        "date": "2026-11-16",
+        "session": "699d7c29-54c4-460e-a5e8-700b114eb251",
+        "line": 6810
       }
     ],
-    "reading": "Earlier on 2026-10-28 he asked (lines 8017 to 8296) that before he leaves the lead shows what will run, its hours and its goals, always as a visual artifact in the chat, and that when he is back it shows what was done and what was not against the goals, with each item's time, failures and spend, as a harness protocol measured in real time. Later that day, adding to the protocol of his absence, he asked that its return say what share of everything that was planned was met and show the map, by phase and in time, complete and detailed, checking what advanced (line 12054), and he approved the lead's ideas (line 12237), among them that the return shows the percent of the plan met, the map by phase and a timeline, made by a command from the records. So the return of a stretch shows, beside each goal and each item's time, the share of the planned that was met, the map by phase before and after, and the timeline; and the lead runs the goals with stretch status --goals before he is due back, so the time a goal takes is known before the return and does not hold it. On 2026-10-29 the rule-away-autonomy eval case showed that the five reply states let a stretch with something waiting for him close as a question, against this rule's ask nothing: every trial, with the rule and without it, closed asking him (odd/tasks/f8-s5c-a-coverage.md, L21). So while he is away a reply closes in the working state, or once in the cut that gives the block that waits for him, and a question that is his goes to the relief file and waits for his return; the five states themselves do not change. On 2026-10-29 he asked that the departure say how far the stretch will advance while he is away, as a percentage (line 23408), with the total share now and about where it would reach (line 23526), and made clear that the share he means is the migration's, the project being migrated whole, not the old project that changed course (line 23561). So the departure leads with the migration's share now, counted by the steps of the roadmap's plan, and the share expected at the return with its range, then the map's; the lead names what each item closes (stretch closes), checks with stretch status that a stretch is open before he leaves, and the return shows the shares against that forecast.",
-    "accepted": "He asked for the first additions over five messages (lines 8017 to 8296) and chose in question 103 to build them; He approved the lead's ideas in his own words at line 12237 ('te apruebo las ideas que me diste para que los apliques'); the lead's brief for JH 79 carried his words and the ideas, and the design (odd/tasks/visual-pages.md, 'The rules') passed two blind readers (rule:double-review); the reading is his to correct when he reads the pull request. Tapped, not quoted: Pregunta 111 (lead transcript 0f71b2c6-cbce-43ca-a031-276a4b2c381f, line 21669, 2026-10-29T13:54Z, Sí, agrégalo (Recomendada)), which put this one addition to him: a reply closes in the working state while he is away and the question stays recorded for his return, made with rules change and reviewed by Codex and the lenses, changing neither the five states nor any other rule. The additions of 2026-10-29 are his own words at lines 23408, 23526 and 23561, relayed by the lead to JH 89 with the order to keep them in this rule, and built in PR 675 (odd/tasks/stretch-forecast.md); the reading is his to correct when he reads the pull request.",
+    "reading": "Earlier on 2026-10-28 he asked (lines 8017 to 8296) that before he leaves the lead shows what will run, its hours and its goals, always as a visual artifact in the chat, and that when he is back it shows what was done and what was not against the goals, with each item's time, failures and spend, as a harness protocol measured in real time. Later that day, adding to the protocol of his absence, he asked that its return say what share of everything that was planned was met and show the map, by phase and in time, complete and detailed, checking what advanced (line 12054), and he approved the lead's ideas (line 12237), among them that the return shows the percent of the plan met, the map by phase and a timeline, made by a command from the records. So the return of a stretch shows, beside each goal and each item's time, the share of the planned that was met, the map by phase before and after, and the timeline; and the lead runs the goals with stretch status --goals before he is due back, so the time a goal takes is known before the return and does not hold it. On 2026-10-29 the rule-away-autonomy eval case showed that the five reply states let a stretch with something waiting for him close as a question, against this rule's ask nothing: every trial, with the rule and without it, closed asking him (odd/tasks/f8-s5c-a-coverage.md, L21). So while he is away a reply closes in the working state, or once in the cut that gives the block that waits for him, and a question that is his goes to the relief file and waits for his return; the five states themselves do not change. On 2026-10-29 he asked that the departure say how far the stretch will advance while he is away, as a percentage (line 23408), with the total share now and about where it would reach (line 23526), and made clear that the share he means is the migration's, the project being migrated whole, not the old project that changed course (line 23561). So the departure leads with the migration's share now, counted by the steps of the roadmap's plan, and the share expected at the return with its range, then the map's; the lead names what each item closes (stretch closes), checks with stretch status that a stretch is open before he leaves, and the return shows the shares against that forecast. On 2026-11-15 (line 15446) he asked for a way to mitigate how little a stretch advanced while he was away; the reading: the departure plan carries 2 to 4 forks, each a case that would otherwise wait for his return with the answer proposed, approved or corrected at once in his own words before he leaves (showing them is not a question, and a fork he did not approve or correct waits for his return like any other case of his); while he is away the lead answers the approved cases, the one exception to holding what is his and to a question of his waiting in the relief file, and no other case of his, and the forks authorize no spend and no publishing.",
+    "accepted": "He asked for the first additions over five messages (lines 8017 to 8296) and chose in question 103 to build them; He approved the lead's ideas in his own words at line 12237 ('te apruebo las ideas que me diste para que los apliques'); the lead's brief for JH 79 carried his words and the ideas, and the design (odd/tasks/visual-pages.md, 'The rules') passed two blind readers (rule:double-review); the reading is his to correct when he reads the pull request. Tapped, not quoted: Pregunta 111 (lead transcript 0f71b2c6-cbce-43ca-a031-276a4b2c381f, line 21669, 2026-10-29T13:54Z, Sí, agrégalo (Recomendada)), which put this one addition to him: a reply closes in the working state while he is away and the question stays recorded for his return, made with rules change and reviewed by Codex and the lenses, changing neither the five states nor any other rule. The additions of 2026-10-29 are his own words at lines 23408, 23526 and 23561, relayed by the lead to JH 89 with the order to keep them in this rule, and built in PR 675 (odd/tasks/stretch-forecast.md); the reading is his to correct when he reads the pull request.; and the forks in his answer to question 290, 2026-11-15, lead transcript 69918425 line 16074: 'Sí, por adelantado (Recomendada)', to 'al abrir un tramo, el plan lleva 2 a 4 casos con mi respuesta propuesta ...; los apruebas o corriges de una vez y durante tu ausencia actúo según ellos. Es un cambio de protocolo; no autoriza nada fuera de esos casos, ni gasto, ni publicar.'; and his typed yes to the text with the forks as PR 897 holds it (head d095b86a, the four changes since question 290 and the unchanged spend clause, 'up to the plan's limits', shown to him in question 321, tapped at line 6175), lead transcript 699d7c29 line 6810, 2026-11-17T04:35:37Z: 'Apruebo el PR 897, la regla away-autonomy con los forks'.",
     "checked": {
-      "date": "2026-10-29",
+      "date": "2026-11-16",
       "by": "command"
     }
   },
@@ -746,13 +758,31 @@
         "date": "2026-10-13",
         "session": "65318fd5-80e7-4bb8-92b5-06737140185b",
         "line": 13110
+      },
+      {
+        "quote": "siempre dame las preguntas con opciones",
+        "date": "2026-11-17",
+        "session": "699d7c29-54c4-460e-a5e8-700b114eb251",
+        "line": 7609
+      },
+      {
+        "quote": "hazme todas la pregunta y por favor cementa que siempre me debes pasar las preguntas con opciones",
+        "date": "2026-11-17",
+        "session": "699d7c29-54c4-460e-a5e8-700b114eb251",
+        "line": 7752
+      },
+      {
+        "quote": "Dejarlo con Opciones pero especificando con ejemplos en las opciones y Dejando muy Claro que se tiene que repsonder en la casilla de \"Otro\"",
+        "date": "2026-11-17",
+        "session": "699d7c29-54c4-460e-a5e8-700b114eb251",
+        "line": 8070
       }
     ],
-    "reading": "Every question of every session is put to him in the orchestrator's chat, and only there; he answers there and the orchestrator carries the answer back. His first line asks that the questions come as he asked for them, which is the question tool (the orchestrator skill, \"Questions to the user\"). Both read with sessions --quote; written in the skill by JH 5 (pull request 127).",
-    "accepted": "Not put to him as a reading: the skill text that carries it is JH 5's, merged by the lead, and his to correct.",
+    "reading": "Every question of every session is put to him in the orchestrator's chat, and only there; he answers there and the orchestrator carries the answer back, through the question tool (the 2026-10-13 lines). On 2026-11-17 he asked that every question come with options (7609, 7752), and, asked whether the state of a question answered in writing goes (question 325), typed that it stays with options that give examples and very clear that he answers in the Other box (8070): every question carries 2 to 4 options, the question tool's range, and a written one says so. These supersede the tapped answer A to question 229 (2026-11-08), under which an open question carried no options.",
+    "accepted": "Line 8070 is his own typed answer, in the question tool's Other, to question 325, which put this reading to him; the lead (JH ORQ) relayed it as the reading on 2026-11-17.",
     "checked": {
-      "date": "2026-10-14",
-      "by": "session"
+      "date": "2026-11-17",
+      "by": "command"
     }
   },
   "recap-effort-line": {
@@ -857,12 +887,30 @@
         "date": "2026-10-20",
         "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
         "line": 9112
+      },
+      {
+        "quote": "siempre dame las preguntas con opciones",
+        "date": "2026-11-17",
+        "session": "699d7c29-54c4-460e-a5e8-700b114eb251",
+        "line": 7609
+      },
+      {
+        "quote": "hazme todas la pregunta y por favor cementa que siempre me debes pasar las preguntas con opciones",
+        "date": "2026-11-17",
+        "session": "699d7c29-54c4-460e-a5e8-700b114eb251",
+        "line": 7752
+      },
+      {
+        "quote": "Dejarlo con Opciones pero especificando con ejemplos en las opciones y Dejando muy Claro que se tiene que repsonder en la casilla de \"Otro\"",
+        "date": "2026-11-17",
+        "session": "699d7c29-54c4-460e-a5e8-700b114eb251",
+        "line": 8070
       }
     ],
-    "reading": "He approved the closing format and asked it cemented: a reply ends in one of five states (working, decision, question, cut, finished; the question, an open question of the conversation that he answers in writing rather than with buttons, since 2026-10-23, so a session that waits for his written answer is taken as neither working nor finished: he asked that a pre-project be talked through and guided, and a guided talk asks him questions in writing); text he copies sits in one code block holding only his answer, never an instruction to him; a step whose only answer is yes is not asked but done, its cost said; a question is one decision, never while work runs, explained first in everyday words (what a yes covers, what it does not authorize, the other option) so he can decide quickly, talked through and guided rather than a list. Where questions reach him is rule:questions-one-place; what a question opens with is rule:question-context.",
-    "accepted": "He tapped \"Sí, sumalo\" to Pregunta 48 (transcript 908805db-d0b9-4c2f-a9e6-f828b6bf1e41, line 20667, 2026-10-23), which put the fifth state to him as proposal B of JH 43's finding 8. Before that the four states were not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried them out of a memory note of the same subject.",
+    "reading": "He approved the closing format and asked it cemented: a reply ends in one of five states (working, decision, question, cut, finished; the question, an open question that he answers in writing, since 2026-10-23, and since 2026-11-17 recorded with options that are examples of the answer, put through the question tool and answered in its Other, its number named on the closing line, so a session that waits for his written answer is taken as neither working nor finished: he asked that a pre-project be talked through and guided, and a guided talk asks him questions in writing); text he copies sits in one code block holding only his answer, never an instruction to him; a step whose only answer is yes is not asked but done, its cost said; a question is one decision, never while work runs, explained first in everyday words (what a yes covers, what it does not authorize, the other option) so he can decide quickly, talked through and guided rather than a list. Where questions reach him is rule:questions-one-place; what a question opens with is rule:question-context. On 2026-11-17 he asked that every question come with options (699d7c29 lines 7609, 7752) and, asked whether the written state goes (question 325), typed that it stays with examples in the options and very clear that he answers in Other (line 8070); these supersede the tapped answer A to question 229.",
+    "accepted": "He tapped \"Sí, sumalo\" to Pregunta 48 (transcript 908805db-d0b9-4c2f-a9e6-f828b6bf1e41, line 20667, 2026-10-23), which put the fifth state to him as proposal B of JH 43's finding 8. Before that the four states were not put to him as a reading: the move pass of odd/tasks/memory-feedback-home.md (T2) carried them out of a memory note of the same subject. The 2026-11-17 reading: line 8070 is his own typed answer, in the question tool's Other, to question 325, which put it to him; the lead (JH ORQ) relayed it on 2026-11-17.",
     "checked": {
-      "date": "2026-10-24",
+      "date": "2026-11-17",
       "by": "command"
     }
   },
@@ -1021,46 +1069,34 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "solo permitiremos sol 6.1 en high",
-        "date": "2026-10-08",
-        "session": "77a27016-3431-4df1-bb6f-b33ee53930cc",
-        "line": 4208
-      },
-      {
-        "quote": "Bajar a medio",
-        "date": "2026-10-12",
-        "session": "65318fd5-80e7-4bb8-92b5-06737140185b",
-        "line": 8962
+        "quote": "Pero necesito que hagas una cosa ya y es pasar de revisor codex a Sol 6.2 listo?",
+        "date": "2026-11-17",
+        "session": "305c10e3-46ab-45a7-8670-412d5b7d0422",
+        "line": 2499
       }
     ],
-    "reading": "A Codex review runs at medium effort. His latest word is a tapped option, not a typed sentence: the orchestrator asked him through the question tool \"Pregunta 14: ¿en qué esfuerzo corre la revisión de Codex?\" with the options \"Seguir en alto (Recomendado)\", \"Bajar a medio\" and \"Medir de nuevo antes de decidir\", and the entry at that line is the tool's result holding his answer, read by this session. Earlier words, kept as history: high and no other on 2026-10-08 (the first quote), and medium on 2026-10-06 (session 71ccf3e5-a96a-45d7-b9dc-6c5314571b00, line 1116).",
-    "accepted": "Not put to him as a reading: the option he tapped names the effort.",
+    "reading": "Codex reviews run on GPT-6.2-Sol at max effort from now",
+    "accepted": "question 339, lead transcript 305c10e3-46ab-45a7-8670-412d5b7d0422 line 2676: Sol 6.2 Max",
     "checked": {
-      "date": "2026-10-12",
-      "by": "session"
+      "date": "2026-11-18",
+      "by": "command"
     }
   },
   "review-model": {
     "kind": "words",
     "quotes": [
       {
-        "quote": "Hagamos la Revision con el Modelo Sol 6.1 en Medium mejor",
-        "date": "2026-10-06",
-        "session": "71ccf3e5-a96a-45d7-b9dc-6c5314571b00",
-        "line": 1116
-      },
-      {
-        "quote": "solo permitiremos sol 6.1 en high",
-        "date": "2026-10-08",
-        "session": "77a27016-3431-4df1-bb6f-b33ee53930cc",
-        "line": 4208
+        "quote": "Pero necesito que hagas una cosa ya y es pasar de revisor codex a Sol 6.2 listo?",
+        "date": "2026-11-17",
+        "session": "305c10e3-46ab-45a7-8670-412d5b7d0422",
+        "line": 2499
       }
     ],
-    "reading": "A Codex review runs on the model he calls Sol 6.1, which the command names gpt-6.1-sol, and on no other.",
-    "accepted": "Not put to him as a reading: that his \"sol 6.1\" is the id gpt-6.1-sol is the command's, and his to correct.",
+    "reading": "Codex reviews run on GPT-6.2-Sol at max effort from now",
+    "accepted": "question 339, lead transcript 305c10e3-46ab-45a7-8670-412d5b7d0422 line 2676: Sol 6.2 Max",
     "checked": {
-      "date": "2026-10-11",
-      "by": "session"
+      "date": "2026-11-18",
+      "by": "command"
     }
   },
   "review-part-files": {
@@ -1224,10 +1260,10 @@
         "line": 775
       }
     ],
-    "reading": "He asked on 2026-11-11 for a senior orchestrator on Fable 5.2 high for special tasks the orchestrator gives it, and on 2026-11-12 that there be one the orchestrator sends specific tasks needing more intelligence or complexity. This rule is its model, his \"Fable 5.2\"; its level is a rule of its own, and it runs with no advisor, since the home's advisor is this model itself. The title SR, the starter and the rest of the design are the session's reading (odd/tasks/senior-orchestrator.md, D1 to D5), his to correct.",
-    "accepted": "Typed by him: line 1444 of 812b728f on 2026-11-11 and line 775 of 93b72703 on 2026-11-12; his \"aplica todos los cambios ya\" at line 896 of 93b72703 asks that the changes be applied now.",
+    "reading": "He asked on 2026-11-11 for a senior orchestrator on Fable 5.2 high for special tasks the orchestrator gives it, and on 2026-11-12 that there be one the orchestrator sends specific tasks needing more intelligence or complexity. This rule is its model, his \"Fable 5.2\"; its level is a rule of its own, and it runs with no advisor, since the home's advisor is this model itself. The lead opens it with start_session, as rule:sessions-open-in-sidebar says since his tap on question 306 removed the js-harness sessions start exception; the title SR and the rest of the design are the session's reading (odd/tasks/senior-orchestrator.md, D1 to D5), his to correct.",
+    "accepted": "Typed by him: line 1444 of 812b728f on 2026-11-11 and line 775 of 93b72703 on 2026-11-12; his \"aplica todos los cambios ya\" at line 896 of 93b72703 asks that the changes be applied now. The subject's start_session follows his tap on question 306, 2026-11-15 (local; 2026-11-16 UTC) (lead transcript 699d7c29, line 505): \"Sí, quita la excepción (Recomendada)\", to a question that named the senior-model text; carried by JH 211 (odd/tasks/senior-orchestrator.md, T7, L5).",
     "checked": {
-      "date": "2026-11-12",
+      "date": "2026-11-17",
       "by": "command"
     }
   },
@@ -1434,22 +1470,22 @@
     "kind": "words",
     "quotes": [
       {
-        "quote": "Quiero que que puedas iniciarla sin el mensaje mio escrito",
-        "date": "2026-10-24",
-        "session": "908805db-d0b9-4c2f-a9e6-f828b6bf1e41",
-        "line": 37182
+        "quote": "nunca debemos permitir eso",
+        "date": "2026-11-15",
+        "session": "69918425-3b43-430f-9f50-62b6422422ce",
+        "line": 21275
       },
       {
-        "quote": "yo solo me comunico directamente con el orquestador entonces nisiquiera necesito teners a las demas con remote control",
-        "date": "2026-11-14",
-        "session": "69918425-3b43-430f-9f50-62b6422422ce",
-        "line": 7262
+        "quote": "no se puede abrir ninguna sesion en segundo plano",
+        "date": "2026-11-15",
+        "session": "699d7c29-54c4-460e-a5e8-700b114eb251",
+        "line": 402
       }
     ],
-    "reading": "His words of 2026-10-24 ask that a session can start another without his typed message: start_session stays the way a session opens another wherever it starts one, and js-harness sessions start (claude --bg) is the way where start_session would only leave a card. The rule's purpose, that he can see every session, is kept by the session board and the lead, and by the sidebar for the sessions start_session opens; by his words of 2026-11-14 he talks only to the orchestrator, so Remote Control is the orchestrator's alone and the sessions it tasks have none. They extend his two answers of 2026-10-15 to the lead's question tool on T16 layer 3 (odd/tasks/session-channel.md, section 17, \"Open for him\"), \"Solo donde se declara (Recomendada)\" and \"Rechazar y nombrar start_session (Recomendada)\" (transcript e152c9d8-53bc-4366-8fa5-526b1576bcb6, lines 3689 and 3702, no longer on disk, so not quoted here): the guard refuses the tools that open a session in the app's Routines or in the cloud only in a project that declares this rule, and a scheduled task he asks for himself is refused too, with start_session named as the way.",
-    "accepted": "Messages he typed to the lead, sent as he wrote them: the one of 2026-10-24 (transcript 908805db, line 37182) and the one of 2026-11-14 (transcript 69918425, line 7262), carried by JH 200 (odd/tasks/remote-control-lead-only.md, L1).",
+    "reading": "His words of 2026-11-15 forbid any session he cannot see: no session opens in the background. They supersede his words of 2026-10-24 (transcript 908805db, line 37182), which let a session start another without his typed message by js-harness sessions start (claude --bg): that start is now refused, by the command itself and by the guard for a Bash or Terminal step that launches it or claude --bg. start_session stays the one way: a row in his sidebar on a turn he typed, a card he taps on any other. The tools that open a session in the app's Routines or in the cloud stay refused, and Remote Control stays the orchestrator's alone (his words of 2026-11-14).",
+    "accepted": "His tap on question 306, 2026-11-15 (local; 2026-11-16 UTC) (lead transcript 699d7c29, line 505): \"Sí, quita la excepción (Recomendada)\", to a question that named this change, the guard's refusal of js-harness sessions start for every title and for a resume, and the senior-model text; carried by JH 211 (odd/tasks/senior-orchestrator.md, T7, L5).",
     "checked": {
-      "date": "2026-11-14",
+      "date": "2026-11-17",
       "by": "command"
     }
   },

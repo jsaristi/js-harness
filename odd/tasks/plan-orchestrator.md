@@ -5,12 +5,12 @@ Design only, no code. Version 3, read three times (reads 2a17bbe1, 5eed176c, b88
 findings are taken (L9, L10); the third's 21 are open in L11 and told to him as problems on the page
 (https://claude.ai/artifact/1ppv1NAxbrfv3THX96Gt7b), with no fourth round. Everything from L12 on was added after
 the last read and no reader has read it: Spec 8 (L12), his line on the advisor and the swarms (L14), his four
-answers (L15, L16: the lead opens the work sessions; Fable 5.2 at high; sub-agents inside each session; his
-questions only in the Plan, by a tap and, on 2026-11-17, by his typed line, L19), T11 and Spec 9. On 2026-11-16 he typed yes to
+answers (L15, L16: the lead opens the work sessions, superseded by L18: his words ask that sessions open without asking him, read by the lead and JH PLAN as the Plan opening them; Fable 5.2 at high; sub-agents inside each session; his
+questions only in the Plan, by a tap and, on 2026-11-17, by his typed line, L20), T11 and Spec 9. On 2026-11-16 he typed yes to
 starting phase 0 with those problems said (L17, question 315), so PR 894 (branch `claude/dreamy-nash-50fa03`,
 worktree `rule-lead-effort-split-aac740`) goes ready and the lead lands it. Left: the lead stores the Plan's
 opening and tells him (phase 0's step 1, T10); T6's question part, which now waits for JH 212 and T11 and no
-longer for his typed line (L19); T11, how the lead knows he is away;
+longer for his typed line (L20); T11, how the lead knows he is away;
 T12, how each role reaches its session (Spec 9), JH SR's; a session for T3. The measures:
 `odd/tasks/plan-orchestrator-evidence/measures.md`.
 
@@ -331,8 +331,8 @@ while the next task's design is read. The board is checked before each task star
   his typed line (question 1), a question addressed to the session that holds his chat (`bin/lib/channel.mjs:131`,
   `bin/notify.mjs`) with `rule:questions-one-place`, `rule:lead-charter` and `rule:away-autonomy`. One commit a
   rule. After T4. High risk 3: a verifier. Question 1 is answered A by a tap (L16) and by his typed line of
-  2026-11-17 (L19). The question part still waits for T11, and for JH 212's change of `rule:questions-one-place`
-  to land first: T6 is rebased on it (the lead's word, L19).
+  2026-11-17 (L20). The question part still waits for T11, and for JH 212's change of `rule:questions-one-place`
+  to land first: T6 is rebased on it (the lead's word, L20).
 - [ ] T7 (kind: docs) (1, 2) The texts: "The plan orchestrator" in `bin/lib/lead-protocols.mjs` and the Plan's part
   of the orchestrator skill (`bin/lib/manifest.mjs`), conditional on a Plan holding its role. After T6. High risk
   3: a verifier.
@@ -505,13 +505,20 @@ while the next task's design is read. The board is checked before each task star
   Plan and the senior, not only an opening prompt. Phase 0 does not wait for T12: JH SR writes the Plan's phase 0
   opening with an explicit role section and the lead stores it. Spec 9, its bar line and T12 were added after the
   last read and no reader has read them.
-- L18 2026-11-16, from `odd/tasks/session-roles.md` (T12's design, its Log L5): the two documents touch the same
+- L18 (2026-11-22, JH 301 at the lead's word) L15's "the Plan opens none" is stale. His typed lines since, in
+  transcript `0cdab702-72bd-48e7-8a8e-0c38d4aca9c9`, each read with `js-harness sessions --quote`: line 7148,
+  2026-11-21T09:22:08Z, "no me pidas permiso para abrir las sesiones"; line 14462, 2026-11-23T01:50:29Z (2026-11-22
+  20:50 local, queued while the session worked), "necesito que puedas abrir las sesiones tu solo sin pedir
+  permiso, investiga bien como hacemos para que tu las abras las que necesites sin pedir permiso". His words say that sessions open without asking him each time; "the Plan opens them" is the lead's and JH PLAN's reading of them, not his words, and the addressee of `0cdab702` was not checked here. What the app allows is in
+  `docs/audits/2026-11-22-unattended-session-starts.md`: a start only on a turn he typed, a card otherwise. Open PR
+  899 also edits this document; this entry only appends to the Log.
+- L19 2026-11-16, from `odd/tasks/session-roles.md` (T12's design, its Log L5): the two documents touch the same
   lines. That design's T2 turns the roles of `bin/lib/sessions.mjs` into one exported list and ships the Plan's
   card in `bin/lib/role-cards.mjs`, found by a match of the title alone. So T5 here, when it makes `PLAN` a role,
   adds it to that list and finds its card there, and whichever of the two lands second carries the other's
   change; T7 here renders the Plan's role sentences from the card's constant and writes no second copy. Added
   after the last read of this document and read by no reader.
-- L19 His typed line for question 1 (307), the one L16 said was owed. The lead asked it again as question 322,
+- L20 His typed line for question 1 (307), the one L16 said was owed. The lead asked it again as question 322,
   saying that `rule:questions-one-place` rests on his words of 2026-10-13 and that a tap does not change it. He
   tapped "A: solo en el Plan (escríbelo)" (lead transcript 699d7c29-54c4-460e-a5e8-700b114eb251, line 7705,
   2026-11-17T06:38:44Z) and then typed, read with `js-harness sessions --quote

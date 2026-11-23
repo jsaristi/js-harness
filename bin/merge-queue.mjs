@@ -5,8 +5,9 @@
 // run (`defaultBranchOf`): origin's HEAD, else gh's word, else the run refuses. A pull request is ready
 // when nothing of its own keeps it from merging (`pullRequestProblems`), every code commit of it has a Codex
 // review record (`checkCodexReviews`), and it merges into the candidate so far with no conflict. `--dry-run`
-// builds and prints the candidate; `--land` tests it and moves the default branch to it (`landCandidate`), then
-// retargets the open pull requests stacked on a branch it landed (`retargetStacked`).
+// builds and prints the candidate, refusing as `--land` does a copy whose bin/ is not main's (`staleBin`); `--land`
+// tests it and moves the default branch to it (`landCandidate`), then retargets the open pull requests stacked on a
+// branch it landed (`retargetStacked`).
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -21,7 +22,7 @@ import { gatesOf, readGateLog } from './lib/gate-log.mjs';
 import { reviewEvidence } from './lib/merge-queue-reviews.mjs';
 import { nextLine } from './lib/next-step.mjs';
 import { defaultBranchOf } from './lib/default-branch.mjs';
-import { mergeMessage, pullRequestProblems } from './lib/pull-request.mjs';
+import { conflictSaid, mergeMessage, pullRequestProblems } from './lib/pull-request.mjs';
 import { declarationOf, rulesOfText } from './lib/rules-change-run.mjs';
 import { mainCheckout, projectSlug, roleOfTitle } from './lib/sessions.mjs';
 import { refreshCopy as refreshInstalledCopy } from './lib/refresh-copy.mjs';
@@ -46,7 +47,8 @@ has not yet computed (mergeable UNKNOWN) is decided by its merge into the candid
 request it leaves out and why. Each pull request merged into the candidate passes main's rule rows first (check --door), and one that fails leaves the batch.
 For each ready pull request the queue prints, commit by commit, the Codex record that covers it.
 
---dry-run builds and prints the candidate, tests and pushes nothing, and removes it before it ends.
+--dry-run builds and prints the candidate, tests and pushes nothing, and removes it before it ends. Like --land, it
+stops first, exit 1, when the merge-queue it runs from is not origin's default branch's bin/, naming the files that differ.
 --land tests the candidate: the whole suite on this machine under the gate lock, its gate first in the
 line by a gate-first ticket for the running session (js-harness gate first; with no session id or a
 refused ticket it waits its turn, and says which), and at the same time GitHub Actions' run (.github/workflows/gate.yml) of a queue/*
@@ -113,6 +115,9 @@ landed it; it asks about no pull request, moves nothing, writes no record and ex
 list the worktrees, or claude agents cannot be read when one could be removed.`;
 
 const TIMEOUT_MS = 60_000;
+// The push of main runs the pre-push hook, whose check --push reads every review record of the range: PR 901's took
+// 84 and 117 s, so a push given TIMEOUT_MS was killed before it reached origin (2026-11-17).
+export const PUSH_MAIN_TIMEOUT_MS = 300_000;
 // The open pull requests one landed branch has based on it that a land retargets; gh pages up to this many itself.
 const RETARGET_LIMIT = 1000;
 
@@ -652,7 +657,7 @@ async function landCandidate({ run, gitIn, place, main, defaultBranch, door, mer
     stdout(`The candidate ${candidate.slice(0, 7)} is green on GitHub Actions.`);
     // The one push of main the pre-push hook lets through: it says it is the queue's (S9).
     const pushEnded = log.phase('push');
-    const pushed = answer(run, 'git', ['push', '--quiet', `--force-with-lease=refs/heads/${defaultBranch}:${main}`, 'origin', `${candidate}:refs/heads/${defaultBranch}`], place, TIMEOUT_MS, { JS_HARNESS_MERGE_QUEUE: '1' });
+    const pushed = answer(run, 'git', ['push', '--quiet', `--force-with-lease=refs/heads/${defaultBranch}:${main}`, 'origin', `${candidate}:refs/heads/${defaultBranch}`], place, PUSH_MAIN_TIMEOUT_MS, { JS_HARNESS_MERGE_QUEUE: '1' });
     if (pushed.ok) pushEnded(true);
     else {
       const now = gitIn(place, 'ls-remote', 'origin', `refs/heads/${defaultBranch}`).out.split('\t')[0];
@@ -862,12 +867,14 @@ async function queueRun(args, { run = spawnSync, covered = null, suite = null, e
   log.record.main = main;
   // A land run from a merge-queue that is not main's runs code main no longer has: the lead's lands ran a stale
   // checkout's, so D and B2 never ran (odd/tasks/land-unattended.md, L17). Only where main holds the queue: a
-  // project that runs the installed harness has none of its own. Line ends do not count.
-  if (args.land) {
+  // project that runs the installed harness has none of its own. Line ends do not count. A dry run stops there too:
+  // it is the land's preview, and one passed on a stale copy the land then refused (odd/tasks/merge-queue-dry-run.md).
+  if (args.land || args.dryRun) {
     const stale = staleBin(self, main, (...gitArgs) => gitIn(cwd, ...gitArgs));
     if (stale.length) {
       const named = stale.slice(0, 3).join(', ') + (stale.length > 3 ? ` and ${stale.length - 3} more` : '');
-      return fail(`${self} is not origin/${defaultBranch}'s bin/ (differs: ${named}): a land run from it would run code main no longer has. Land from a checkout at origin/${defaultBranch}.`);
+      const why = `${self} is not origin/${defaultBranch}'s bin/ (differs: ${named}): a land run from it would run code main no longer has`;
+      return fail(args.land ? `${why}. Land from a checkout at origin/${defaultBranch}.` : `${why}, and this dry run stops where that land would. Run it from a checkout at origin/${defaultBranch}.`);
     }
   }
   const isCovered = covered ?? ((head, onto) => reviewEvidence(cwd, main, head, onto));
@@ -894,8 +901,12 @@ async function queueRun(args, { run = spawnSync, covered = null, suite = null, e
       continue;
     }
     const coverage = isCovered(pr.headRefOid, onto);
-    const files = onto !== main && coverage?.conflicted?.length ? coverage.conflicted : null;
-    if (files) leaveOut(log, stdout, pr, 'conflict', `it conflicts with the candidate so far in ${files.join(', ')}.`, { files, next: coverage?.next });
+    // git may report a conflict and name no file of it (merge-tree, some rename conflicts): it is a conflict still.
+    const files = Array.isArray(coverage?.conflicted) ? coverage.conflicted : null;
+    // A conflict is with main itself where the candidate is still main, or where the pull request does not merge onto
+    // main alone either: then its line names the fix; else it waits for the pull requests before it (spec 3).
+    const withMain = files && (onto === main || coverage.conflictOnto === 'main');
+    if (files) leaveOut(log, stdout, pr, 'conflict', conflictSaid({ base: defaultBranch, branch: pr.headRefName, files, earlier: withMain ? [] : candidates.map((one) => one.number) }), { files });
     else if (!coverage?.pass) leaveOut(log, stdout, pr, 'review', `${String(coverage?.detail ?? 'its Codex review records could not be read').replace(/\.$/, '')}.`, { next: coverage?.next });
     if (files || !coverage?.pass) continue;
     for (const line of coverage.lines?.length ? [`PR ${pr.number}, commit by commit:`, ...coverage.lines.map((said) => `  ${said}`)] : []) stdout(line);
@@ -930,7 +941,9 @@ async function queueRun(args, { run = spawnSync, covered = null, suite = null, e
       if (step.kind === 'merged') merged.push({ ...pr, merge: step.merge });
       else if (step.kind === 'broken') return fail(step.line);
       else if (step.kind === 'door') leaveOut(log, stdout, pr, 'door', `${step.line}.`);
-      else if (step.conflicted.length) leaveOut(log, stdout, pr, 'conflict', `it conflicts with the candidate so far in ${step.conflicted.join(', ')}.`, { files: step.conflicted });
+      // By the reviews' rule: with main itself while the candidate is still main (every merge before brought nothing),
+      // or where the pull request does not merge onto main alone either; else it waits for the ones before it.
+      else if (step.conflicted.length) leaveOut(log, stdout, pr, 'conflict', conflictSaid({ base: defaultBranch, branch: pr.headRefName, files: step.conflicted, earlier: merged.every((one) => one.merge === main) || Array.isArray(isCovered(pr.headRefOid, main)?.conflicted) ? [] : merged.map((one) => one.number) }), { files: step.conflicted });
       else leaveOut(log, stdout, pr, 'merge', `it does not merge into the candidate so far: ${step.said}.`);
     }
     if (merged.length === 0) {

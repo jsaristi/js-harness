@@ -1,0 +1,21 @@
+{
+  "batch": "f8-s8-long",
+  "candidate": "0c28d0837eda5ec2283cd82e3b9285a595804ec5",
+  "installedCopy": "0c28d0837eda5ec2283cd82e3b9285a595804ec5",
+  "stack": {
+    "claude": "2.1.327 (Claude Code)",
+    "engram": "engram 3.7.1",
+    "codegraph": "1.6.2"
+  },
+  "installedCopyReadAgainAt": "2026-11-19T07:45Z",
+  "readAt": "2026-11-19T07:09:44Z",
+  "why": "run.mjs records no commit or stack; this sidecar names them, read right after the batch on the same machine (S8 T8)",
+  "grading": {
+    "file": "f8-s8-long.grade.json",
+    "gradedAt": "2026-11-19T16:20:42.457Z",
+    "gradedOn": "5ae4021a",
+    "grader": "evals/long-session/grade.mjs, unchanged from 0c28d083 to 5ae4021a",
+    "codex": "0.169.1",
+    "approval": "question 363, transcript f5c3ee4d line 6439"
+  }
+}

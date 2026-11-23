@@ -36,7 +36,7 @@ import { RUNNER_ENV, TIMED_OUT_MARK, innerSeconds, leftPaths, mirrorName, readGa
 import { functionsOf, harnessOfTree } from './lib/project-functions.mjs';
 import { clonePending } from './lib/project.mjs';
 import { readProjectRules as readRulesData } from './lib/codex-review-allowance.mjs';
-import { CLAUDE_MD_BUDGET, checkClaudeBudget } from './lib/claude-md-budget.mjs';
+import { CLAUDE_MD_BUDGET, checkClaudeBudget, checkFolderInstructions } from './lib/claude-md-budget.mjs';
 import { checkReadSurface } from './lib/read-surface.mjs';
 import { compareLaunches, subagentRowLines, SUBAGENT_RULES } from './lib/subagent-check.mjs';
 import { dayOf, launchesOf } from './lib/subagent-count.mjs';
@@ -1835,7 +1835,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   // written as a failure, and one that informs (`payload`) stops nothing.
   const rows = push
     ? [checkCodexReviews(cwd, head, { ...deps, remote }), checkLensReviews(cwd, head, { ...deps, remote }), ...checkPushRules(cwd, { rules: deps.rules, spawn: deps.git, head, remote }), ...checkTagRow(cwd, { ref, head, spawn: deps.git })]
-    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), ...checkClaudeBudget(cwd), ...checkReadSurface(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkCommitSize(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home), hookEntriesRow(cwd, home, { declared: readHarness(cwd).declared })];
+    : [...checkOwnRules(cwd, { rules: deps.rules }), ...checkFailures(cwd), checkBudget(cwd), ...checkClaudeBudget(cwd), ...checkFolderInstructions(cwd), ...checkReadSurface(cwd), checkContracts(cwd), ...checkSpec(cwd), ...checkCitations(cwd), ...checkCommitSize(cwd), ...checkFunctions(cwd), ...checkPayload(cwd, home), ...checkExactCount(cwd, home), fixedLoadRow(cwd, home), hookEntriesRow(cwd, home, { declared: readHarness(cwd).declared })];
 
   // The ledger of flaky tests (docs/FLAKY.md, `checkLedger`) is one more static row, read after the others.
   if (!push) rows.push(...checkLedger(cwd));

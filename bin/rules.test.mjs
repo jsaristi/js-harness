@@ -233,6 +233,22 @@ test('the plain listing reads no file, so a sources file that is not JSON does n
   });
 });
 
+// odd/tasks/folder-instructions.md, spec 3: rules check reads the marks of every folder instruction file, whole, so a
+// mark below a `## Log` heading counts too (the lens finding on the feature-document cut).
+test('a folder instruction file that names an undeclared rule fails check', async () => {
+  for (const file of ['bin/CLAUDE.md', 'docs/CLAUDE.md', 'evals/CLAUDE.md', 'odd/tasks/CLAUDE.md']) {
+    await inProject(BASE(), async (dir) => {
+      await run(['render'], dir);
+      write(dir, { [file]: '# Folder\n\n## Log\n\nSee `rule:no-such-rule`.\n' });
+      assert.deepEqual(await run(['check'], dir), {
+        code: 1,
+        out: ['FAIL  rules  1 finding', `      ${file}: names rule "no-such-rule", which is declared nowhere`],
+        err: [],
+      });
+    });
+  }
+});
+
 test('a feature document that names an undeclared rule fails check above its Progress line, and not below it', async () => {
   const above = '# Feature\n\nThe limit is `rule:no-such-rule`.\n\n## Progress\n\n- [x] T1 done\n';
   const below = '# Feature\n\nThe limit is one of the rules.\n\n## Progress\n\nThe limit is `rule:no-such-rule`.\n';
@@ -595,11 +611,19 @@ test('applied lists the sessions off the home, desktop and background, with what
     assert.deepEqual(out.slice(at + 1), [
       `  desktop  "JH 7 · work"  its menu holds ${model} at ${other}; held to ${model} at ${effort}; corrected by the lead's session tools`,
       `  desktop  "JH ORQ orquestador F8"  its menu holds ${model} at ${effort}; held to ${model} at ${lead}; corrected by his menu`,
-      `  background  "JH 8 · job" (job-1)  no reply of it was read; its start asked for ${model} at ${other}; its job: busy; held to ${model} at ${effort} with the advisor ${advisor}; corrected by a resume once its job is no longer at work, which a resume refuses until then: js-harness sessions start --resume job-1`,
+      `  background  "JH 8 · job" (job-1)  no reply of it was read; its start asked for ${model} at ${other}; its job: busy; held to ${model} at ${effort} with the advisor ${advisor}; corrected by closing it once its job is no longer at work, once its work has landed and nothing in its worktree is needed (js-harness sessions stop job-1 --remove-worktree), and start_session`,
       `  1 archived desktop session is off it too (1 at ${OFF_MODEL} at ${effort}): nothing corrects one while it is archived; he can unarchive it, and it is then listed`,
       '  on the home: 1 desktop, not archived, and 0 background',
       '  The app\'s record does not say whether a session that is not archived is running. Nothing was written.',
     ]);
+  });
+  // Where sessions-open-in-sidebar is not declared, a resume still runs and is the act (Codex on 1e19075..eb4d8e6).
+  await withHome({ 'bin/lib/rules-data.mjs': writeRules(RULES.filter((rule) => rule.id !== 'sessions-open-in-sidebar')) }, async (project, home) => {
+    const model = declared('session-model').value;
+    const other = LEVELS.find((level) => level !== declared('session-effort').value && level !== declared('lead-effort').value);
+    appendRecord(home, { event: 'started', at: new Date(NOW).toISOString(), id: 'job-1', sessionId: null, title: 'JH 8 · job', root: project, cwd: project, worktree: null, worktreePath: null, model, effort: other });
+    const { out } = await applied(project, home, undefined, { readApp: () => new Map(), agents: () => [{ id: 'job-1', status: 'busy' }] });
+    assert.ok(out.some((line) => line.endsWith('corrected by a resume once its job is no longer at work, which a resume refuses until then: js-harness sessions start --resume job-1')), out.join('\n'));
   });
   await withHome({}, async (project, home) => {
     const { out } = await applied(project, home, undefined, { readApp: () => assert.fail('no home, so no record is read') });

@@ -178,7 +178,13 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   }
   const { OPENING_TOOLS, SESSION_TOOL, TERMINAL_TOOL, agentEffortRefusal, allowedModels, backtickRefusal, driveRootRemovalRefusal, hourRefusal, modelRefusal, openingRefusal, reviewBaseRefusal, reviewRecordWriteRefusal, sessionStartRefusal, terminalNoteRefusal } = await import('./lib/guard.mjs');
   const rootOf = () => projectRoot(typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd());
-  if (tool === TERMINAL_TOOL) return terminalNoteRefusal(input.command, rulesTextOf(rootOf(), readFile));
+  if (tool === TERMINAL_TOOL) {
+    // The Terminal panel launches a background session as Bash does (odd/tasks/senior-orchestrator.md, T7).
+    const { backgroundLaunch, backgroundLaunchRefusal } = await import('./lib/background-launch.mjs');
+    const launch = backgroundLaunch(input.command);
+    const launched = launch === null ? null : backgroundLaunchRefusal(launch, rulesTextOf(rootOf(), readFile));
+    return launched ?? terminalNoteRefusal(input.command, rulesTextOf(rootOf(), readFile));
+  }
   if (!OPENING_TOOLS.includes(tool) && tool !== 'Agent' && tool !== 'Bash' && tool !== SESSION_TOOL && !MESSAGE_TOOLS.has(tool)) return null;
   if (tool === 'Agent') {
     const rules = rulesTextOf(rootOf(), readFile);
@@ -209,7 +215,8 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
     const start = sessionStartRefusal(input, rules, { lead });
     if (start !== null) return start;
     // The tool caps a start at the session that makes it: the app's record of the caller is read, for a call with a
-    // brief only. No id, no record or a reader that fails is no record, which refuses nothing.
+    // brief only, and its level is held, not its model (odd/tasks/starter-model-check.md). No id, no record or a
+    // reader that fails is no record, which refuses nothing.
     let starter = null;
     if (typeof input.prompt === 'string' && input.prompt !== '' && typeof payload.session_id === 'string' && payload.session_id !== '') {
       try {
@@ -230,8 +237,13 @@ async function refusalOf(payload, { now, projectRoot, readFile, testRun, readInd
   if (driveRoot !== null) return driveRoot;
   const record = reviewRecordWriteRefusal(input.command);
   if (record !== null) return record;
-  // Only a command with a chained step reads the project's rules file (lib/chained-step-guard.mjs).
+  // Only a command with a chained step, or one that launches a background session, reads the project's rules file
+  // (lib/chained-step-guard.mjs; odd/tasks/senior-orchestrator.md, T7).
   const { chainedStep, chainedStepRefusal } = await import('./lib/chained-step-guard.mjs');
+  const { backgroundLaunch, backgroundLaunchRefusal } = await import('./lib/background-launch.mjs');
+  const launch = backgroundLaunch(input.command);
+  const launched = launch === null ? null : backgroundLaunchRefusal(launch, rulesTextOf(rootOf(), readFile));
+  if (launched !== null) return launched;
   const chained = chainedStep(input.command) === null ? null : chainedStepRefusal(input.command, rulesTextOf(rootOf(), readFile));
   if (chained !== null) return chained;
   const cwd = typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : process.cwd();

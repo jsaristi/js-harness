@@ -182,9 +182,9 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
 ## Tasks
 - [x] T1 (kind: build) spec 1 — PR 878 — `bin/codex-review.mjs`, `bin/lib/codex-review-turns.mjs` + tests — commit `fix(codex-review): read a snapshot of the head, not the live folder`
 - [x] T2 (kind: build) spec 2 — PR 883, main c7afe0be — `bin/lib/codex-review-turns.mjs`, `bin/codex-review.mjs` + tests — commit `fix(codex-review): review the gap below a merge of main alone`
-- [ ] T3 (kind: build) spec 3 — `bin/merge-queue.mjs`, `bin/lib/pull-request.mjs` (clearance asked) + tests — commit `fix(merge-queue): a conflict with main names its fix`
+- [x] T3 (kind: build) spec 3 — branch fix/codex-spend-t3 (L34-L37) — `bin/merge-queue.mjs`, `bin/lib/pull-request.mjs`, `bin/lib/merge-queue-reviews.mjs:97` (cleared L36) + tests — commit `fix(merge-queue): a conflict with main names its fix`
 - [ ] T4 (kind: build) specs 4, 5 — `rules change double-review` on `rule/double-review-sequence`, `bin/double-review.mjs`, `bin/js-harness.mjs` usage + tests — commits `chore(rules): a question's double review reads Claude first` and `feat(double-review): Codex reads what Claude passed`
-- [ ] T5 (kind: build) spec 6 — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
+- [x] T5 (kind: build) spec 6 — branch feat/codex-spend-t5 (L38-L48) — `bin/lib/land-records.mjs`, `bin/codex-meter.mjs` + tests — commit `feat(codex-meter): Codex input per landed PR`
 - [ ] T6 (kind: verify) — the measure after the slices land, against the baseline, by Done-when's T6 line; result in the Log
 
 ## Log
@@ -445,3 +445,158 @@ se este gastando por esto" (69918425:6293, queued). What he endorsed is the lead
   it; Y1 goes to JH 207. The lead also asked whether Y1 is on main: yes, C1f (no merge) on main 7de0b95's own bin
   passes the push row after a nothing-to-review record over an owed review (JH 199 scratchpad verify5,
   out-C1f-main.txt). JH 199 closes with its summary, docs/sessions/2026-11-15-jh-199-sin-desperdicio-de-codex.md.
+- L34 2026-11-18, JH 220 (item `codexspend` of the plan of 2026-11-18, v4): T3 and T5, worktree
+  `.claude/worktrees/codex-spend-t3-t5-9335da` from main b044dbf7. L12's cleared lines were counted at main 4187cb1;
+  at b044dbf7 they are `:896` (GitHub's answer), `:900-902` (the reviews read onto the candidate) and `:936` (the merge
+  into it), plus the import line `:24` for the one new name. `bin/notify.test.mjs`: the one assertion of
+  `readyProblems`' CONFLICTING words changes (`:429`), no test added. T3's decisions: the words have one home,
+  `conflictSaid` in `bin/lib/pull-request.mjs`. GitHub's CONFLICTING is computed against the branch the pull request
+  targets, so its fix names that branch. In the reviews' loop a conflict onto main is now a `conflict` (it was left out
+  as `review`, with a "merging or rebasing" next step); onto a candidate with earlier pull requests, main alone is asked
+  again (`isCovered(head, main)`, only on that path), since `reviewEvidence` returns main's own conflict first and the
+  line called it the candidate's. At the merge, the candidate is still main while every merge before it brought
+  nothing (`merge === main`), not only while none was made. A conflict with the batch names the pull requests merged
+  so far, not the one it meets: git does not say which, and they land together. The one reader of a land record's
+  `leftOut` reason is `leftOutText` (`bin/merge-queue.mjs:264`), which prints it in brackets before `said` and branches
+  on nothing (`grep -rn "leftOut\|\.reason\b"` over `bin/merge-queue.mjs`, `bin/lib/merge-queue-*.mjs`,
+  `bin/lib/stretch*.mjs`, `bin/stretch.mjs` and `workshop/`, non-test files, unbounded). Left: `README.md:1308` shows the old
+  CONFLICTING line, and `bin/lib/merge-queue-reviews.mjs:75` still says "by merging or rebasing" for `check`'s own
+  use; both outside T3's files.
+- L35 2026-11-18, T3's reviews on b044dbf..c3385fc. Codex (915,136 input tokens, 818,816 cached; its plan said about
+  1.9M, over the 300,000 allowance, sent to the lead before it ran): five P2, verdict incorrect. Lenses risk 0,
+  readability 1 warning. Verifier (opus, read-only): clean, probe on a real repository reproduced the old misnaming
+  and the fix; five low notes. Taken in one commit, tests first: a conflict git names no file of is still a
+  conflict (`Array.isArray`, Codex 1); the step comes before the lists, which a notice cuts at its length (Codex 4);
+  CONFLICTING against a branch the queue refuses as base names no merge of it (Codex 5); the wait names "the one of"
+  the earlier pull requests it conflicts with, not all of them (Codex 3, verifier 1); the merge loop decides "with
+  main" by the reviews' rule, asking main alone where earlier merges moved the candidate (lens). Answered, not
+  taken: Codex 2 (carry the conflict's base in `reviewEvidence`'s result instead of asking main alone again) needs
+  `bin/lib/merge-queue-reviews.mjs`, outside the cleared files; the second ask runs only on a conflict with the
+  batch. Verifier 2 (`readyProblems` asks gh for no `headRefName`, so notify's line names no branch) needs
+  `bin/notify.mjs`; verifier 3 (an UNKNOWN conflict found by the reviews keeps `reviewEvidence`'s words in notify)
+  is `merge-queue-reviews.mjs` too. Both go to the lead as follow-ups with README.md:1308.
+- L36 2026-11-18, Codex's recheck of c3385fc..1dbba7f (297,006 input tokens): 3 fixed, 2 not fixed. Finding 4 (a long
+  list still came before the wait's condition) and finding 2 (ask main again) both taken. For finding 2 the lead
+  cleared, 16:24 local: "You may edit bin/lib/merge-queue-reviews.mjs at line 97 and its test, adding only the
+  optional field conflictOnto." `reviewEvidence`'s conflict now says whose it is, `main` or `candidate`, and the
+  reviews' loop reads it; the merge loop still asks main alone, since a `git merge` there has no such result. Lenses
+  on 1dbba7f: risk 0; readability a follow-up, answered: at the merge a failed `git merge` with no unmerged file is not
+  a conflict (the test "a merge that fails with no conflict says what git said"), while `merge-tree`'s exit 1 is.
+  The lead holds T5's Codex review (planned 7.5M to 17.3M input tokens) for the owner's answer.
+- L37 2026-11-18, the second recheck, 1dbba7f..6bf60cc (195,381 input tokens): both findings fixed, verdict correct
+  (0.99). T3's reviews end at three: Codex 915,136 + 297,006 + 195,381 = 1,407,523 input tokens; lenses risk 0 each
+  round, readability's follow-up (say in a comment why the two loops count an empty conflict list apart) left for
+  the next change of those lines, since a code edit now would need a fourth review. Merge-queue tests 133 of 133.
+- L38 2026-11-18, T5's writer, round 1 (sub-agent of JH 220), worktree `D:\js-harness-worktrees\codex-spend-t5` on
+  feat/codex-spend-t5 from main b044dbf7: 9d9b5b55 `feat(codex-meter): Codex input per landed PR`. A run is a landed
+  PR's when its head is among the commits the land's merge brought in (`<merge>^1..<merge>^2`), lands of exit 0 only;
+  a run of no landed PR is pending (on a branch not landed), on the default branch by no land, or orphaned. The
+  baseline on the real records: 3,173,294 over all their days and 3,053,278 on 2026-11-14, L3's figures exactly. Run
+  lines carry no `--again` marker; the report says so and leaves none out. Real run 121 s.
+- L39 2026-11-18, the verifier (opus, read-only) on 9d9b5b55 and round 2, 2e40eb81. Taken, tests first: M1, a re-read
+  run that also read uncovered code is no "bought no new reading" (the baseline's 911,660 all were): re-reads split
+  into "covered code alone" and "covered code beside new" with k of n code commits; tokens a line divide the tokens
+  of the runs that bought new reading by their `coverage.total`. M2, rounds were 6, 9 and 5 for PRs 866-868 against
+  L5's 3, 4 and 0: a round is now a fresh `reviewed` run (no recheck, no remerge) above a clean pass of the same PR on
+  its first-parent line, printed on its own line that says not to add it. M3, one failing-first test each for the
+  `^1` exclusion, the exit-0 filter and "first land wins". Low: a PR merged twice keeps both merges' runs (PR 731, 2
+  runs, 117,860), as `pullRequestsOf` (`bin/lib/report-git.mjs:77`) joins them; a run with no count prints unknown;
+  cached tokens print. The rule gives L5's lists for PR 864 (08:17) and 867 (09:46, 09:55, 10:05, 10:52) and more for
+  866 (09:28 too) and 868 (11:42, 11:49, 12:10, where L5 has none): reported, not tuned. Answered: report-git's
+  merge-subject regex is not exported, so `MERGE_OF_PR` copies it. `where` handed to `reviewCoverage` cut git
+  processes 537 to 506 (`show-cdup` 80 to 49); the run times, 98 s and 127 s, are noise beside that.
+- L40 2026-11-18, the confirming verifier and the lenses on 2e40eb81, and the lead's decisions (JH ORQ), 18:13
+  local: "(1) T6 compares the 'beside new' figure: the 306,981 now sits there, and covered-alone is 0 for all 410
+  PRs. Write in the baseline line that the depth pass's figure moved from alone to beside new, and why. (2) Add no
+  size cut, since no rule supports one: PR 866 09:28 keeps counting as a round." 18:24 local: "keep the rounds rule
+  as you wrote it (fresh reviews above a clean pass of the same PR). Name 866 09:28 and 868 11:42, 11:49 and 12:10 in
+  the baseline as counted by that rule, beside L5's narrower reading. No criterion for next-work-unit reviews exists,
+  so do not invent one." Round 3, f6c388e1, taken: the baseline names its run with no count and says both decisions
+  (`BASELINE.notes`); "(C of them cached)" stands beside its total, not beside the uncounted run; the beside-new runs
+  are said to be among "tokens of theirs"; a test pins `coverage.total` as the lines measure (the code was right, a
+  mutant reading `part.changedLines` first fails it); the dead `pass.head !== run.head` goes; the fixture comment says
+  11:49 and 12:10 sit above fresh clean passes. Lens reliability: a test runs `workingPerPr` over a throwaway
+  repository with record files, exit 1 when `lands.jsonl` cannot be read; it failed first by reading this
+  repository's records (`codexMeterMain` now takes `cwd`). Its mutants fail it for `read`, `isValid`, the default
+  ref and the admission; `beyondTip: false` survives, since only records whose head is in the run's range are handed
+  on, and `where` only saves git processes. Lens readability (`MERGE_OF_PR` copies report-git's regex): left, L42.
+  No Codex review of T5 ran (held, L36).
+- L41 2026-11-18, the real report at f6c388e1, exit 0 in 206 s (run alone; 84-127 s in round 2, about 500 git
+  processes of 30 `reviewCoverage` calls), as printed: "Baseline, PRs 864-868: 35 runs over all their days, 3,173,294
+  input tokens, and 1 run with no count (ba57f254-b216-4807-ac21-a69f1b9f331e, 2026-11-14T12:16:11.982Z); of them on
+  2026-11-14 alone: 3,053,278", then the two notes and "Re-read of covered code alone: 0 of 412 PRs" (the lead's 410
+  was counted before; covered-alone is 0 still). Bought no new reading: PR 866 failed 1 run 220,599; PR 867 failed 1 run
+  65,993 and no record 1 run 79,096; PR 868 failed 1 run, tokens unknown. Beside new: PR 866 3 runs 528,631 (21 of 24
+  code commits covered), PR 867 3 runs 383,029 (11 of 14). Rounds: 864 1 run 69,498, 865 0, 866 4 runs 364,992, 867 4
+  runs 268,543, 868 3 runs 212,698. Pending 37 runs 9,268,560 and 1 with no count; by no land 720 runs 121,777,561;
+  orphaned 36 runs 3,642,490. Double reviews: 47 reads, 42,715,604 Codex input tokens.
+- L42 2026-11-18, T5's follow-ups, outside its files: the help line `bin/js-harness.mjs:34` lacks `--per-pr`;
+  README's codex-meter section does not show it; `MERGE_OF_PR` in `bin/lib/land-records.mjs` copies the regex of
+  `bin/lib/report-git.mjs`, which exports none; run lines carry no `--again` marker (their writer); zeros outside a
+  repository are left as they are.
+- L43 2026-11-18, round 4, e709d8f4, written inline by JH 220 (no writer, no verifier pass; the lenses read it). The
+  confirming verifier (opus, read-only) on f6c388e1: all eight claims of L40 hold, no High or Medium; six Low, all
+  taken: "35 runs ..., and 1 run with no count" read as 36, now "35 runs (1 of them with no count: ...)" in every tally;
+  "the beside-new runs among them" printed for a PR with none; the baseline's notes printed in any repository, now
+  only when the baseline has runs; `codexDebts` read `process.cwd()` beside `--per-pr`'s `cwd`, now both read `cwd`
+  (no test pins the debts' `cwd`: that path spawns the app-server); the test cited L38 for the decisions (L40); the
+  wiring test left its marks file on a failure. The lenses on 85e918f..26ecda2: reliability 0, readability two
+  suggestions (`unnamedRuns` beside the "no record" class `unnamed`, now `uncountedList`; the L38 citation), both
+  fixed; on 26ecda2..e709d8f 0 and 0, both rechecked fixed. Tests first: 2 of 20 failed before the code changed. The
+  real report at e709d8f4, exit 0 in 130 s (206 s at f6c388e1, unexplained), as printed: "Baseline, PRs 864-868: 35
+  runs (1 of them with no count: ba57f254-b216-4807-ac21-a69f1b9f331e, 2026-11-14T12:16:11.982Z) over all their
+  days, 3,173,294 input tokens; of them on 2026-11-14 alone: 3,053,278", its two notes, "Re-read of covered code
+  alone: 0 of 412 PRs"; per-PR figures and rounds as L41. Codex reads T5 once, as `check --push` names it:
+  `codex-review --base 04b7ac53a258 --at e709d8f44f33` (3 parts, 930 changed lines, 3.96M-8.5M planned).
+- L44 2026-11-18, Codex's review of 04b7ac5..d4c78af (3 parts, 7,475,215 input tokens, 7,021,440 cached; planned
+  5.6M-12.7M): 12 findings, 7 P2 and 5 P3, verdict incorrect (0.99, 0.99, 0.98). Round 5, 97fa01db, writer of JH 220,
+  takes all twelve, tests first, each failed before its code: an unreadable `codex-reviews.jsonl` exits 1
+  (`readCodexReviews` read it as none); the default branch is the merge queue's (`defaultBranchOf`: origin's HEAD,
+  else `gh repo view`; `landingBranch`), and with none pending and on the default branch are one bucket, `onABranch`,
+  the branch walk still run; a count is one only from a rollout reading (`usageSource: 'rollout'`; one line, 2026-10-07,
+  no `usageSource` and 0 tokens, moves to no count); tokens a line take the runs with a count alone, both sides; on the
+  default branch is reached from its tip, so a failed candidate's ancestry stays orphaned; a round's clean pass is on
+  the reviewed head's first-parent line too; the baseline PRs are matched by their merges on main (`BASELINE.merges`);
+  "0 of 412 PRs with Codex runs (529 PRs landed)". The GIT_* reset of both test files: with GIT_DIR at a scratch
+  repository, 12 and 5 refs leaked without it, 0 with it. The trailing-space top (P3): no test, Windows holds no such
+  folder; `where` carries the common git dir alone and `reviewCoverage` reads the top with `--show-cdup` as the push
+  does, giving back round 2's 31 saved calls. Found by the advisor before the commit: with no default branch the walk
+  ran outside a repository and exited 1; it runs now only for a run of no landed PR (test first). Mutants: the 9
+  earlier still caught; of the wiring ones only `beyondTip` (equivalent) and `where` (saves processes) survive. The
+  real report at 97fa01db, exit 0 in 129 s (98 s just before the commit, same tree), as printed: "Baseline, PRs
+  864-868: 35 runs (1 of them with no count: ba57f254-b216-4807-ac21-a69f1b9f331e, 2026-11-14T12:16:11.982Z) over all
+  their days, 3,173,294 input tokens; of them on 2026-11-14 alone: 3,053,278", its two notes; per-PR figures and
+  rounds as L41 (864 1, 865 0, 866 4, 867 4, 868 3); by no land 720 runs (3 with no count, 2 before), orphaned 36,
+  pending 55 (new runs since L41). Left: the recheck and the second recheck.
+- L45 2026-11-19, the lenses on round 5 (d4c78af..c23201a): reliability 0, resilience 0, readability two suggestions
+  (a read kept only to throw looked dead; the `landingBranch` test filled an `asked` list no assertion read), taken in
+  4e13e2ae (a comment on the line; the test pins that gh is asked only when origin names no HEAD, and a mutant that
+  always asks gh fails it), lenses 0 and 0 on it. Codex's recheck of d4c78af..4e13e2a, `--base 97fa01db^`: 9 of 12
+  fixed, 3 not, incorrect (0.98), 1,489,161 input tokens. Taken in 75840bac, inline by JH 220: findings 3 and 10, a
+  fork that kept this history and landed its own PR 864 (or its land record left in a clone) still joined the
+  baseline once git held the baseline's merge; `landedOwners` now keeps the merge that brought each commit in, and a
+  baseline run is one its PR's own merge (`BASELINE.merges`) brought in (the test, PR 7 merged twice, counted 2 runs
+  before and 1 now). Finding 12, Windows git honours `git_dir` as `GIT_DIR` and the case-sensitive filter kept it:
+  both test files drop `/^GIT_/i`, as `bin/check.test.mjs` does; with `git_dir` set to a scratch repository the old
+  filter leaked 12 refs (land-records) and 5 (codex-meter), the new one none. Lenses on 4e13e2a..75840ba: 0 and 0.
+  The real report at 75840bac, exit 0 in 85 s: the baseline line as at e709d8f4 (35 runs, 1 with no count, 3,173,294,
+  3,053,278), per-PR figures as L41. Left: the second recheck, the last review of the range.
+- L46 2026-11-19, Codex's second recheck of 4e13e2a..62cfe89, `--base 75840bac^`, the last of the three reviews:
+  2 of 3 fixed (10, 12), 1 not (3, P3), incorrect (0.98), 300,514 input tokens; T5's Codex reviews come to
+  7,475,215 + 1,489,161 + 300,514 = 9,264,890. Finding 3, as it stands: a js-harness clone whose `origin` is
+  switched to a fork that kept the upstream merges still prints the baseline from its own record files. Answered,
+  not changed: the baseline is the runs this clone's records hold of the merges `BASELINE.merges` names, which are
+  those PRs' spend wherever `origin` now points; no run line, record or land line carries a repository identity, and
+  `origin`'s URL is no such identity either (a rename or a mirror would drop the baseline). The command only
+  reads and prints. A change would need a fourth review, which the rules do not give a range, so it goes to the lead
+  with the ready.
+- L47 2026-11-19, a read-only verifier (opus) on e709d8f4..27cb11f9, the commits after round 3 that none had read:
+  clean, no High or Medium; its mutants for findings 5 and 6 and for the old baseline rule fail tests; the real
+  report gives the baseline unchanged (304 s, another gate held the lock). Lows left open, since the range has no
+  Codex review left: with no default branch the text lists every run of `onABranch` (1,648 lines against 929);
+  the JSON keeps the baseline's notes at 0 runs; a second merge of a baseline PR's number is left out of the
+  baseline by design; a gh timeout costs 20 s and says nothing. PR 923 handed to the lead.
+- L48 2026-11-19, the owner on question 360 (JH PLAN's transcript f5c3ee4d, line 6376, 15:54:34Z, checked with
+  `js-harness sessions --quote`): "Dispensarlo y que entre (Recomendada)". Finding 3 (P3, L46) is known and
+  waived: T5 lands with it open, no code change and no more Codex. PR 923 was a draft for one land batch while
+  the question waited, and is ready again.

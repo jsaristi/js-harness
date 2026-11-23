@@ -581,7 +581,7 @@ card ships without the lines that wait for a rule.
   compaction, so it can spend the owed card or take it from the resume block. (Claude 5) A senior under a
   numbered title, as JH 213 and JH 214 are, holds the role `work` and would get the work session's card and
   mode line. (Claude 6, Codex 6, shared) His typed answer to question 307 is recorded
-  (`odd/tasks/plan-orchestrator.md`, L19, "Solo en el Plan") and this document says it is owed; no test holds
+  (`odd/tasks/plan-orchestrator.md`, L20, "Solo en el Plan") and this document says it is owed; no test holds
   that a rule a card names is live. (Claude 7) What the card and the mode line do when `ruleHere` answers
   `behind` or `elsewhere` is not said. (Claude 9) The forecast's lower bound ignored that each read cost more
   than the one before, which this read's 3.31M bears out; "Ask me before" said nothing waits while State said

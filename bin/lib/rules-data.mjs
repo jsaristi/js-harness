@@ -47,9 +47,9 @@ export const RULES = [
   },
   {
     "id": "away-autonomy",
-    "subject": "once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once; before he leaves it shows the stretch's departure, led by the migration's share now and the share expected at the return, with its goals, and when he is back its return checked against them; while he is away a reply closes in the working state, or once in the cut that gives his block, and a question of his waits in the relief file for his return",
+    "subject": "once he says he leaves the lead alone or will be away, it asks nothing and seeks no permission until he is back, holds what is his with no question and gives a block that waits for him once; before he leaves it shows the stretch's departure, led by the migration's share now and the share expected at the return, with its goals and the few forks it pre-decides, cases of his it answers alone once he approves or corrects them at once in his own words before he leaves, an unapproved one waiting like any other, no other case of his and no spend or publishing by them, and when he is back its return checked against them; while he is away a reply closes in the working state, or once in the cut that gives his block, and a question of his waits in the relief file for his return",
     "owner": "sebastian",
-    "since": "2026-10-29",
+    "since": "2026-11-15",
     "path": "bin/lib/manifest.mjs",
     "phrases": [
       "When the user says they leave you alone or will be away, ask nothing and seek no permission",
@@ -62,7 +62,9 @@ export const RULES = [
       "before they are due back, so the time they take is known before the return",
       "Both are shown as a visual page in the chat, never drawn by hand",
       "a reply closes in the working state, saying what wakes you, or once in the cut that gives that block",
-      "first the migration's share now and the share expected at the return"
+      "first the migration's share now and the share expected at the return",
+      "The plan also carries 2 to 4 forks, each a case that would otherwise wait for their return and the answer you propose",
+      "you answer the approved cases, the one exception to holding what is theirs, and no other case of theirs; the forks authorize no spend and no publishing"
     ]
   },
   {
@@ -451,13 +453,14 @@ export const RULES = [
   },
   {
     "id": "questions-one-place",
-    "subject": "every question of the project reaches the user in the orchestrator's chat, through the host's question tool, recorded before it is asked",
+    "subject": "every question of the project reaches the user in the orchestrator's chat, through the host's question tool with options, recorded before it is asked",
     "owner": "sebastian",
-    "since": "2026-10-14",
+    "since": "2026-11-17",
     "path": "bin/lib/manifest.mjs",
     "phrases": [
       "Every question of the project reaches the user in one place",
-      "Ask the user nothing while an orchestrator holds its role"
+      "Ask the user nothing while an orchestrator holds its role",
+      "Every question carries 2 to 4 options, the written ones included"
     ]
   },
   {
@@ -482,12 +485,13 @@ export const RULES = [
     "id": "reply-five-states",
     "subject": "a reply ends in one of five states, and a question is his decision alone, explained before it is asked",
     "owner": "sebastian",
-    "since": "2026-10-24",
+    "since": "2026-11-17",
     "path": "bin/lib/protocols-skill.mjs",
     "phrases": [
       "A reply ends in one of five states.",
       "One decision a question, one question at a time, never while work runs.",
-      "Before the question, say what a yes covers in everyday words"
+      "Before the question, say what a yes covers in everyday words",
+      "Question: an open question that the user answers in writing, recorded with options that are examples of the answer"
     ]
   },
   {
@@ -550,8 +554,11 @@ export const RULES = [
     "id": "review-effort",
     "subject": "the effort a Codex review runs at",
     "owner": "sebastian",
-    "since": "2026-10-12",
-    "value": "medium",
+    "since": "2026-11-18",
+    "value": "max",
+    "was": [
+      { "value": "medium", "until": "2026-11-18" }
+    ],
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\bcodex\\b.{0,60}\\bat `?{amount}`? effort",
       "^(?!.*\\bruleValue\\().*\\b(?:runs?|is run|set to)\\b.{0,30}(?<![\\w.-])(?!claude-)(?=[a-z]+(?:-[a-z0-9.]+)*-\\d)[a-z][\\w.-]+`?\\s+at\\s+`?{amount}`?"
@@ -561,8 +568,11 @@ export const RULES = [
     "id": "review-model",
     "subject": "the one model a Codex review runs on",
     "owner": "sebastian",
-    "since": "2026-10-08",
-    "value": "gpt-6.1-sol",
+    "since": "2026-11-18",
+    "value": "gpt-6.2-sol",
+    "was": [
+      { "value": "gpt-6.1-sol", "until": "2026-11-18" }
+    ],
     "patterns": [
       "^(?!.*\\bruleValue\\().*\\b(?:codex|review)\\b.{0,60}\\bon `?(?!claude-)(?=[a-z]+(?:-[a-z0-9.]+)*-\\d){amount}"
     ]
@@ -653,7 +663,7 @@ export const RULES = [
   },
   {
     "id": "senior-model",
-    "subject": "the model a senior session runs on, titled <code> SR · <purpose>, which the lead starts with js-harness sessions start and sends tasks needing more intelligence or complexity",
+    "subject": "the model a senior session runs on, titled <code> SR · <purpose>, which the lead opens with start_session and sends tasks needing more intelligence or complexity",
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-11-12",
@@ -761,7 +771,7 @@ export const RULES = [
   },
   {
     "id": "sessions-open-in-sidebar",
-    "subject": "the way a session opens another in this repository, so that the user can see every session: start_session wherever it starts one, and js-harness sessions start where start_session would only leave a card; the tools that open one in the app's Routines or in the cloud are refused",
+    "subject": "the way a session opens another in this repository, so that the user can see every session: start_session, a row in his sidebar on a turn he typed and a card he taps on any other; js-harness sessions start, claude --bg and the tools that open one in the app's Routines or in the cloud are refused",
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-15",

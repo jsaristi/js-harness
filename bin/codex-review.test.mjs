@@ -4353,6 +4353,23 @@ test('a correction owed below a merge: after that one recheck of both left the g
   assert.match(end.detail, /^1 of \d+ code commits since origin\/main have no Codex review record/, end.detail);
 });
 
+test('a correction owed below a merge: a clean review of the merge from main, after the record of what was written in it that owes, read less, so the push row still says the recheck above the merge was the third review of the gap (L71 A)', () => {
+  const due = mergeOwes(secondDueAtGap(), 7);
+  const where = { where: whereOf(due.root) };
+  // Main is no ancestor of the gap: the clean review from it read less than the merge's own record, which owes.
+  reviewRuns.appendCodexReviewRun(due.root, { schema: reviewRuns.CODEX_REVIEW_RUN_SCHEMA, id: idOf(8), outcome: 'reviewed', answer: { findings: [], verdict: 'correct' } }, where);
+  appendCodexReview(due.root, { ...reviewedRecord(due.main, due.head), run: idOf(8) });
+  const fixed = fixAbove(due, { gap: true });
+  // The recheck of both above the merge left the gap's finding open.
+  const open = { title: '[not fixed] 2 The gap drops a line', severity: 'P1', file: 'g.txt', start: 1, end: 1 };
+  reviewRuns.appendCodexReviewRun(due.root, { schema: reviewRuns.CODEX_REVIEW_RUN_SCHEMA, id: idOf(9), outcome: 'reviewed', answer: { findings: [open], verdict: 'incorrect' }, recheck: { of: due.head, findings: 2, fixed: 1, notFixed: 1, followUps: 0, blocking: 0, unmarked: 0 } }, where);
+  appendCodexReview(due.root, { ...reviewedRecord(due.head, fixed), run: idOf(9), recheckOf: due.head });
+  const warned = checkCodexReviews(due.root);
+  assert.equal(warned.pass, true, warned.detail);
+  assert.ok(warned.lines.some((line) => line.startsWith('three reviews did not settle this change')) && warned.lines.some((line) => line.includes('The gap drops a line')), warned.lines.join('\n'));
+  assert.ok(!warned.lines.some((line) => line.includes('a second recheck')), warned.lines.join('\n'));
+});
+
 test('a correction owed below a merge: after one recheck of both and a second recheck that left the gap\'s finding open, --again from the gap\'s head is refused as a fourth review (codex-spend L26, W3)', async () => {
   const repo = await owedBelowMerge();
   correctAbove(repo);
@@ -7671,6 +7688,42 @@ test('an injected effort is what the session is held to: a review that ran at it
   assert.equal(wrote(other.root), false);
 });
 
+// A model no rule names: what a configuration measured on an earlier model passes once the rule has moved on.
+const OTHER_MODEL = 'gpt-measured-earlier';
+const atModel = (argv, model) => argv.map((token, at) => (argv[at - 1] === '-m' ? model : token));
+
+test('codexArgs: the model is an option as the effort is, and without it the argv names the rule\'s', () => {
+  const base = 'a'.repeat(40);
+  assert.deepEqual(codexArgs(base, 'linux', 'codex', { model: REVIEW_MODEL }), leanArgv(base));
+  assert.deepEqual(codexArgs(base, 'linux', 'codex', { model: OTHER_MODEL }), atModel(leanArgv(base), OTHER_MODEL));
+  assert.equal(atModel(leanArgv(base), OTHER_MODEL).includes(OTHER_MODEL), true, 'the fixture does change the token');
+  assert.deepEqual(codexArgs(base, 'linux', 'own', { model: OTHER_MODEL, effort: OTHER_EFFORT }), atEffort(atModel(ownArgv(), OTHER_MODEL), OTHER_EFFORT));
+  // A model is one token of a command line: no space, no quote, nothing a shell or Codex would read as more.
+  for (const model of ['gpt 6', '', '-x', 'a"b', 7, null]) assert.throws(() => codexArgs(base, 'linux', 'codex', { model }), /model/, JSON.stringify(model));
+});
+
+test('an injected model is the model the command passes and the one the session is held to', async () => {
+  // A session that ran on the model it was asked for stands: the run line and the line that announces the review name it.
+  const mine = fakeHome();
+  const kept = makeRepo();
+  const range = `${kept.base.slice(0, 7)}..${kept.head.slice(0, 7)}`;
+  const stands = await leanReviewThatRan(kept.root, kept.base, turnContext(OTHER_MODEL, REVIEW_EFFORT), mine, { model: OTHER_MODEL });
+  assert.deepEqual([stands.code, stands.err], [0, '']);
+  assert.deepEqual([onlyRun(kept.root).outcome, onlyRun(kept.root).model, onlyRun(kept.root).effort, ...sessionRan(onlyRun(kept.root))], ['reviewed', OTHER_MODEL, REVIEW_EFFORT, OTHER_MODEL, REVIEW_EFFORT]);
+  assert.equal(afterPlan(stands.out)[0], `Codex is reviewing ${range} with the lean session (${OTHER_MODEL}, ${REVIEW_EFFORT}); this can take several minutes.`);
+  // And the argv it launched is the one `codexArgs` gives for that model.
+  const { root, base } = makeRepo();
+  const fake = fakeCodex(reviewed(root, base));
+  await run(['--base', 'HEAD~1', '--session', 'lean', '--cwd', root], { ...fake, model: OTHER_MODEL });
+  assert.deepEqual(fake.calls[0].args, atModel(leanArgv(base), OTHER_MODEL));
+  // Asked for the earlier model and ran on the rule's: not what was asked, so it falls.
+  const other = makeRepo();
+  const falls = await leanReviewThatRan(other.root, other.base, turnContext(REVIEW_MODEL, REVIEW_EFFORT), mine, { model: OTHER_MODEL });
+  assert.equal(falls.code, 1);
+  assert.equal(falls.err.replace(RERUN_LAST, ''), `Codex's turn completed, but its session ran on ${REVIEW_MODEL} at ${REVIEW_EFFORT} effort, and the command passed ${OTHER_MODEL} at ${REVIEW_EFFORT} effort${RAN_ON_ANOTHER}`);
+  assert.equal(wrote(other.root), false);
+});
+
 test('injected extra configuration is added to the argv, before what is reviewed', async () => {
   const { root, base } = makeRepo();
   const lean = fakeCodex(reviewed(root, base));
@@ -8125,6 +8178,34 @@ function recheckAnswer(root, { blocks = false } = {}) {
     overall_explanation: 'One finding is still open.',
   };
 }
+
+test('the command a spanned debt names, run, writes the recheck of that head and the push passes (T5, the reliability lens on 6e4f892)', async () => {
+  // odd/tasks/again-subrange.md T5: base..owing owes; a clean middle..fixed spans owing and read less, so the push
+  // refuses and names `codex-review --base <owing> --again`; that run is a recheck of owing and settles it.
+  const { root, base, head: middle } = makeRepo();
+  // The push compares against the default branch of origin, here the base.
+  git(root, 'remote', 'add', 'origin', 'https://example.invalid/js-harness-test.git');
+  git(root, 'update-ref', 'refs/remotes/origin/main', base);
+  fs.writeFileSync(path.join(root, 'f.txt'), 'two and a half', 'utf8');
+  git(root, 'commit', '-am', 'owing');
+  const owing = git(root, 'rev-parse', 'HEAD');
+  assert.equal((await run(['--base', base, '--cwd', root], { ...fakeCodex(reviewed(root, base), {}, PROBE_OK, answerWith(root)), randomUUID: () => idOf(41) })).code, 0);
+  fs.writeFileSync(path.join(root, 'f.txt'), 'three', 'utf8');
+  git(root, 'commit', '-am', 'fixed');
+  const fixed = git(root, 'rev-parse', 'HEAD');
+  assert.equal((await run(['--base', middle, '--again', '--cwd', root], { ...fakeCodex(reviewed(root, middle), {}, PROBE_OK, NO_FINDINGS), randomUUID: () => idOf(42) })).code, 0);
+  const refused = checkCodexReviews(root);
+  assert.equal(refused.pass, false, refused.detail);
+  const named = JSON.stringify(refused.next).match(/codex-review --base ([0-9a-f]+) --at [0-9a-f]+ --again/)?.[1];
+  assert.ok(named, `${refused.detail} ${JSON.stringify(refused.next)}`);
+  assert.equal(git(root, 'rev-parse', named), owing, JSON.stringify(refused.next));
+  const allFixed = { findings: [], overall_correctness: 'patch is correct', overall_explanation: 'Each finding is fixed.' };
+  const result = await run(['--base', named, '--again', '--cwd', root], { ...fakeCodex(reviewed(root, owing), {}, PROBE_OK, allFixed), randomUUID: () => RECHECK_ID });
+  assert.equal(result.code, 0, result.err);
+  assert.deepEqual(readCodexReviews(root).at(-1), { ...reviewedRecord(owing, fixed), run: RECHECK_ID, recheckOf: owing });
+  const row = checkCodexReviews(root);
+  assert.equal(row.pass, true, row.detail);
+});
 
 test('every reviewed run line keeps what its review found, so a later range can be checked against it', async () => {
   const { root } = await reviewedThenCorrected();

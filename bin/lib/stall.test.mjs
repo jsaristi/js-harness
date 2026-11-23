@@ -226,7 +226,7 @@ test('readStalled reads every live batch mark and the open questions of the reco
     lines.push(newNotice({ at: ago(140), from: worker(number), to: 'orchestrator', kind: 'note', text: 'on it', worktree: tree(number), branch: `feat/${number}` }));
   }
   // JH 22 asks a question nobody answered.
-  lines.push(newNotice({ at: ago(130), from: worker(22), to: 'orchestrator', kind: 'question', text: 'Which branch?', id: 'q', options: [{ label: 'main' }], waits: 'T2', worktree: tree(22) }));
+  lines.push(newNotice({ at: ago(130), from: worker(22), to: 'orchestrator', kind: 'question', text: 'Which branch?', id: 'q', options: [{ label: 'main' }, { label: 'dev' }], waits: 'T2', worktree: tree(22) }));
   fs.mkdirSync(path.join(home, '.js-harness', 'channel'), { recursive: true });
   fs.writeFileSync(path.join(home, '.js-harness', 'channel', `${slug}.jsonl`), lines.map((line) => JSON.stringify(line)).join('\n'));
   // Two batches run at once, in JH 19's and JH 21's worktrees: both marks count, not only the first.
