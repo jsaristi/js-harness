@@ -133,6 +133,12 @@ is away, and nothing made the sessions take more work once the briefs they held 
   its turn at 07:14:39Z with nothing in the background and the Stop hook let it through (lines 30882 to 30884), and
   its next wait started at 18:03Z (line 31377), so no AWAY line could fire. Four short network cuts, about 7
   minutes in all, 03:14 to 06:20 (Windows NetworkProfile log, read by JH PLAN), came after the gap began
+- Seen: 2026-11-22 — his transcript 0cdab702, line 14256 (checked with sessions --quote); JH PLAN's notes,
+  plan-2026-11-18-away.state.md, the entries of 19:51 and 20:44 local (read here) — from about 19:50 to 20:47 local
+  no work session ran and 0 hours were queued; the lead reported "free work otherwise: none until Codex" (claimed)
+  while token-only documents work existed (two owed Seen lines, prose controls, the project.mjs split plan, briefed
+  to JH 302 at 20:52). He asked: "tenemos que estar a toda hora trabajando con las horas llena y con lo siguiente a
+  trabajar". What stops it: the lead keeps documents work queued for the hours Codex is held
 
 ### block-read-as-task
 A block meant to hold his answer was worded as an instruction and he read it as a task for him to
@@ -262,6 +268,10 @@ check said or before its answer was read.
   document, and the commit ran with the roadmap change alone and a message saying the document closed.
   Commit `1f28794` wrote the document. The next tries were joined by `&&` and stopped where they failed
 - Seen: 2026-11-14 — odd/tasks/audit-cement.md, L30 — JH 198 put `git push` on the line after a `git commit` the pre-commit refused (manifest.mjs over its ceiling), so the push ran and sent only an earlier merge; no harm, the next steps were chained with `&&`
+- Seen: 2026-11-22 — docs/sessions/2026-11-22-jh-300-modern-web-guidance-t2.md, "Failures and lessons" (read
+  here) — JH 300 joined steps with `;` twice (its first probe, and one `plugin disable` line) against its brief's
+  "`&&` only"; neither was a push, commit, pull request, land or notice, so the guard's list did not cover them,
+  and neither changed anything outside its scratch home
 - Control: check — bin/lib/chained-step-guard.test.mjs — "a push, a commit, a pull request, a land or a notice after a ;, a
   line break, || or & is refused, naming the step and the joiner" — since 2026-10-31
 - Was: protocol — bin/lib/protocols-skill.mjs — "Two steps share one command only when the second is conditional on
