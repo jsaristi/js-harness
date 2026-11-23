@@ -16,7 +16,7 @@ A memory pass that deletes a note, planned as the skill says (`memory plan <note
 brings back the note and its index line together.
 
 ## Why
-A deletion always changes `MEMORY.md`: the deleted note's line must go, or verify refuses on a broken link
+Deleting a note the index links always changes `MEMORY.md`: the deleted note's line must go, or verify refuses on a broken link
 (`bin/lib/memory-hygiene.mjs:167`, `bin/lib/memory-pass.mjs:269-273`). But `memory plan` takes the names it is given
 (`bin/memory.mjs:27`, `:176-179`), and the index is outside the write set unless named, so the edit is refused as
 another session's (`bin/lib/memory-pass.mjs:232-235`). On 2026-11-15 a pass that deleted one note was planned with
@@ -24,8 +24,9 @@ the note alone, refused for exactly that, undone, and planned again with the ind
 (`~/.js-harness/memory-hygiene/D--js-harness/journal.jsonl:31-35`). The undo restored the note only: the index edit
 was outside the write set, so it stayed, and the second plan snapshotted the index without the line. Its undo
 would bring the note back with no line, an orphan (`bin/lib/memory-hygiene.mjs:169-170`; the probe of Depth pass
-item 4), and the first snapshot, the only one that holds the line, is the ninth of the ten kept, evicted after nine
-more plans (`bin/lib/memory-pass.mjs:191-192`). Deleting
+item 4), and the first snapshot, the only one of the ten kept that holds the line (`grep -c` over each
+`snapshots/*/files/MEMORY.md`: 1 there, 0 in the other nine), is the ninth, evicted after nine more plans
+(`bin/lib/memory-pass.mjs:191-192`). Deleting
 his notes is stored data (`AGENTS.md`, high risk item 1), and the undo is what makes a deletion safe.
 
 ## Done when
@@ -60,7 +61,8 @@ his notes is stored data (`AGENTS.md`, high risk item 1), and the undo is what m
 - Another session's write to the index during a pass stays visible — because the index is the file sessions write
   most, and a write set that holds it skips its changed-outside check (`bin/lib/memory-pass.mjs:232-235`); T1 says
   what each option costs here.
-- No Codex run before the reset and no paid run (the lead's standing constraint, as the night plan records).
+- No Codex run before the reset and no paid run (the lead's standing constraint, as
+  `odd/tasks/document-sensors-conventions.md:56` records).
 
 ## Ask me before
 Nothing expected. A design that would let a pass change the index without the snapshot holding what undo needs stops
@@ -99,8 +101,9 @@ the task and goes to the lead.
   - Reuse-first search: `grep -rln -i "write set" odd/tasks docs/ROADMAP.md` finds only `memory-hygiene.md` and the
     roadmap line; no open task holds the fix.
 - 3. The bar:
-  spec 1: `node --test bin/lib/memory-pass.test.mjs`: passes today, with no case of a deletion planned with the note
-  alone
+  spec 1: `node --test bin/lib/memory-pass.test.mjs`: 38 of 38 pass at `0b23ff89` (run 2026-11-23); its three
+  deletions (`fs.rmSync` at `:77`, `:101`, `:169`) all plan `MEMORY.md` with the note, so none is planned with the
+  note alone
   spec 2: `node --test --test-name-pattern="undo of a deletion" bin/lib/memory-pass.test.mjs`: none, new behaviour
   (no test undoes a deletion whose plan left the index out)
 - 4. Refutation: the request would not hold if a note-only plan could carry a deletion to verified, or if its undo
@@ -137,9 +140,10 @@ the task and goes to the lead.
 ## Log
 - L1 (2026-11-23): no owner quote was found for this unit. Search: `docs/ROADMAP.md:947` and the body of d60fc705,
   which added it (the lead's notices, no words of his); `grep -n -i "sebasti\|his words\|he asked\|he said"` and
-  quoted Spanish over the roadmap's lines `:940-948` around it (no hit); `grep -n -i "write set"` over
-  `odd/tasks/memory-hygiene.md` (ten lines, none a quotation of his: his order at `:18-21` asks for the hygiene
-  protocol, and his answer at `:434` approves the deletions of 2026-10-15, neither the write set). The night plan's search covered the four failures of lane B, which this unit does not serve, so it
+  `«` and `“` over the roadmap's lines `:940-948` around it (0 hits); `grep -n -i "write set"` over
+  `odd/tasks/memory-hygiene.md` (six lines, `:37`, `:230`, `:234`, `:239`, `:386`, `:437`, none a quotation of his:
+  his order at `:18-21` asks for the hygiene protocol, and his answer at `:432-433` approves the deletions of
+  2026-10-15, neither the write set). The night plan's search covered the four failures of lane B, which this unit does not serve, so it
   does not cover it. The lead's brief names his line 16936, "avanza el harness y las tareas pendientes solo", as the
   cover for the night's work; it was not checked here with `js-harness sessions --quote`, so it is not a spec. The
   words above are the lead's and the code's.
