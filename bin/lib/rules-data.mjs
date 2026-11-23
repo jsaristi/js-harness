@@ -324,13 +324,15 @@ export const RULES = [
   },
   {
     "id": "lead-charter",
-    "subject": "what the lead does alone and tells him after, and what stays his, asked one at a time",
+    "subject": "what the lead does alone and tells him after, and what stays his, asked one at a time while he is here; while he is away rule:away-autonomy says what it decides alone and what waits",
     "owner": "sebastian",
-    "since": "2026-10-22",
+    "since": "2026-11-23",
     "path": "bin/lib/manifest.mjs",
     "phrases": [
       "merge pull requests by the rules below",
-      "Within it you open the next feature's work session"
+      "Within it you open the next feature's work session",
+      "says what you decide alone and what waits",
+      "never answer a question for the user while they are here: you ask it, and carry their answer; while they are away"
     ]
   },
   {

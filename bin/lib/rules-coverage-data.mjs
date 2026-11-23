@@ -373,7 +373,6 @@ export const COVERAGE = {
       "666fe5e2cf2f",
       "377294a3ca2e",
       "26c04c7f4b4d",
-      "78b2fbc4af3e",
       "37f242a0d05f",
       "503dccc64836",
       "43edbca9d292",
@@ -381,6 +380,10 @@ export const COVERAGE = {
       "d040f5b3e611",
       "61d4053f44ed",
       "c2766d62b95e",
+      {
+        "hash": "b859f8a8ed87",
+        "context": "where new work goes: a routing step of the lead with no rule of its own, since the growth limit that held it was retired on 2026-11-15"
+      },
       "e007182d082f",
       "46a073ebf76c",
       "764a9864c861",
@@ -485,11 +488,7 @@ export const COVERAGE = {
       "fa7469f92751",
       "0947d5b8b82d",
       "ddcf7db81c92",
-      "d77576d7b195",
-      {
-        "hash": "b859f8a8ed87",
-        "context": "where new work goes: a routing step of the lead with no rule of its own, since the growth limit that held it was retired on 2026-11-15"
-      }
+      "d77576d7b195"
     ],
     "output-style": [
       "753c849de149",

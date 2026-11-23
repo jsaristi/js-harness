@@ -3413,7 +3413,10 @@ test('the orchestrator skill says what every recap carries and how a block waits
     'the shares against the departure\'s forecast',
     'The chat\'s visual tool takes the file\'s HTML whole; where the host has none, publish the file as an Artifact and give the link.',
   ]) assert.ok(text.includes(line), line);
-  assert.ok(text.includes('ask before anything it does not name; while the user is away it waits instead, as `rule:away-autonomy` says.'));
+  // His order of 2026-11-23 (line 18192, accepted at 18250): while he is away the standing fork decides, not a wait.
+  assert.ok(text.includes('ask before anything it does not name; while the user is away, `rule:away-autonomy` says what you decide alone and what waits.'));
+  assert.ok(text.includes('never answer a question for the user while they are here: you ask it, and carry their answer; while they are away, `rule:away-autonomy`\'s standing fork answers it, where it covers it.'));
+  assert.doesNotMatch(text, /while the user is away it waits instead/);
   // rule:ask-before-away is retired: its ask before he leaves is the permission he declined.
   assert.doesNotMatch(text, /ask in that reply for everything the stretch will need/);
 });
