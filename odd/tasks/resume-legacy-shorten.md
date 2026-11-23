@@ -4,8 +4,10 @@ Locator: `odd/tasks/resume-legacy-shorten.md` · Branch: none yet (written on `c
 only) · Session: JH 301, unit 3 of the lead's brief `brief-301-plans-ready.md` · Test runner: `node --test`
 
 ## State
-Written 2026-11-22 by JH 301, documents only, nothing built. Next: the lead puts the roadmap line "Shorter resume
-sections" to him once (it says "it waits for him"); on a yes, T1. Open: nothing else.
+Written 2026-11-22 by JH 301, documents only, nothing built. Owed first: this document's double review
+(`rule:double-review`), whose Codex reader is held until the weekly reset of 2026-11-23 23:45; nothing is built
+before it. Next: the lead puts the roadmap line "Shorter resume sections" to him once (it says "it waits for him");
+on a yes, T1. Open: nothing else.
 
 ## Goal
 The three feature documents on `RESUME_LEGACY` bring their resume head under the 5,000-token bound by moving history,

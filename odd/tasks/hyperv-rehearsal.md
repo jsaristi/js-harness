@@ -4,7 +4,9 @@ Locator: `odd/tasks/hyperv-rehearsal.md` · Branch: none yet (written on `claude
 · Session: JH 301, unit 3 of the lead's brief `brief-301-plans-ready.md` · Test runner: `node --test`
 
 ## State
-Written 2026-11-22 by JH 301, documents only, nothing installed or downloaded. Next: his decisions under `## Ask me
+Written 2026-11-22 by JH 301, documents only, nothing installed or downloaded; its refutation only read the machine
+and changed nothing. Owed first: this document's double review (`rule:double-review`), whose Codex reader is held
+until the weekly reset of 2026-11-23 23:45; nothing is built or installed before it. Next: his decisions under `## Ask me
 before`, through the lead (card 6 of `return-decisions-2026-11-22.md`: "El ensayo en Hyper-V: instala algo en tu
 máquina"). Open: all of T1 to T4.
 
