@@ -394,20 +394,25 @@ test('a notice of another kind runs no land checks', withMachine(async (machine)
   assert.equal(code, 0);
 }));
 
-/** A `run` that answers gh with the pull request `view` and git with origin/main's id, and keeps what it was asked. */
-function landRun(view, { ghStatus = 0, fetchStatus = 0 } = {}) {
+/** A `run` that answers gh with the pull request `view`, and git with origin/main's id, the sender's HEAD (`head`,
+ * `null` for a HEAD git cannot read), its branch and whether the pull request's head is an ancestor of it (`ancestor`:
+ * `true`, `false` or `null` for a merge-base that fails), and keeps what it was asked. */
+function landRun(view, { ghStatus = 0, fetchStatus = 0, head = 'head0sha', branch = 'feature', ancestor = false } = {}) {
   const calls = [];
   const run = (command, args, options) => {
     calls.push([command, ...args, options?.cwd]);
     if (command === 'gh') return { status: ghStatus, stdout: ghStatus === 0 ? JSON.stringify(view) : '', stderr: ghStatus === 0 ? '' : 'no such pull request' };
     if (args[0] === 'fetch') return { status: fetchStatus, stdout: '', stderr: fetchStatus === 0 ? '' : 'no network' };
-    if (args[0] === 'rev-parse') return { status: 0, stdout: 'main0sha\n', stderr: '' };
+    if (args[0] === 'rev-parse' && args[1] === 'origin/main') return { status: 0, stdout: 'main0sha\n', stderr: '' };
+    if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return { status: 0, stdout: `${branch}\n`, stderr: '' };
+    if (args[0] === 'rev-parse' && args[1] === 'HEAD') return head === null ? { status: 128, stdout: '', stderr: 'not a git repository' } : { status: 0, stdout: `${head}\n`, stderr: '' };
+    if (args[0] === 'merge-base') return ancestor === null ? { status: 128, stdout: '', stderr: 'bad object' } : { status: ancestor ? 0 : 1, stdout: '', stderr: '' };
     return { status: 1, stdout: '', stderr: 'unexpected' };
   };
   return { run, calls };
 }
 
-const READY_VIEW = { number: 360, state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', baseRefName: 'main', body: 'Risk: none', headRefOid: 'head0sha' };
+const READY_VIEW = { number: 360, state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', baseRefName: 'main', body: 'Risk: none', headRefOid: 'head0sha', headRefName: 'feature' };
 
 test('readyProblems asks the land\'s reviewEvidence about the head against fetched origin/main, and passes what passes', async () => {
   const { run, calls } = landRun(READY_VIEW);
@@ -426,7 +431,7 @@ test('readyProblems gives pullRequestProblems\' words, and reads UNKNOWN mergeab
   const evidence = () => ({ pass: true, detail: 'covered' });
   assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, isDraft: true }).run, evidence }), ['PR 360 is a draft.']);
   assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, mergeable: 'UNKNOWN' }).run, evidence }), []);
-  assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, mergeable: 'CONFLICTING' }).run, evidence }), ['PR 360 is not mergeable (CONFLICTING): merge main into its branch and push it, since it conflicts with main itself.']);
+  assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun({ ...READY_VIEW, mergeable: 'CONFLICTING' }).run, evidence }), ['PR 360 is not mergeable (CONFLICTING): merge main into its branch feature and push it, since it conflicts with main itself.']);
 });
 
 test('readyProblems gives reviewEvidence\'s detail when the reviews do not cover the head', async () => {
@@ -440,11 +445,41 @@ test('readyProblems says so when gh or the fetch does not answer', async () => {
   assert.match((await readyProblems(360, 'D:/wt', { run: landRun(READY_VIEW, { fetchStatus: 1 }).run, evidence }))[0], /could not fetch origin \(no network\)/);
 });
 
+// L15 of odd/tasks/consistent-orders.md: a ready went out while the verified commit sat on the sender's local branch,
+// above the head the pull request held (F11).
+test('readyProblems refuses, naming both hashes, while the sender holds commits above the pull request\'s head', async () => {
+  const evidence = () => ({ pass: true, detail: 'covered' });
+  const ahead = await readyProblems(360, 'D:/wt', { run: landRun(READY_VIEW, { head: 'local0sha', branch: 'worktree-x', ancestor: true }).run, evidence });
+  assert.equal(ahead.length, 1);
+  assert.match(ahead[0], /PR 360's head is head0sha, and this checkout's HEAD is local0sha/);
+  assert.match(ahead[0], /push/);
+});
+
+test('readyProblems refuses while the sender is on the pull request\'s branch at another commit', async () => {
+  const evidence = () => ({ pass: true, detail: 'covered' });
+  const behind = await readyProblems(360, 'D:/wt', { run: landRun(READY_VIEW, { head: 'old0sha', branch: 'feature', ancestor: false }).run, evidence });
+  assert.equal(behind.length, 1);
+  assert.match(behind[0], /PR 360's head is head0sha, and this checkout's HEAD is old0sha/);
+});
+
+test('readyProblems passes a sender elsewhere, such as the lead on main, and one whose HEAD git cannot read, saying so', async () => {
+  const evidence = () => ({ pass: true, detail: 'covered' });
+  // The lead announces from its own checkout: main is behind the head, not above it.
+  assert.deepEqual(await readyProblems(360, 'D:/main', { run: landRun(READY_VIEW, { head: 'main0sha', branch: 'main', ancestor: false }).run, evidence }), []);
+  const said = [];
+  assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun(READY_VIEW, { head: null }).run, evidence, warn: (line) => said.push(line) }), []);
+  assert.match(said.join('\n'), /could not compare PR 360's head with this checkout's HEAD/);
+  said.length = 0;
+  assert.deepEqual(await readyProblems(360, 'D:/wt', { run: landRun(READY_VIEW, { head: 'local0sha', branch: 'worktree-x', ancestor: null }).run, evidence, warn: (line) => said.push(line) }), []);
+  assert.match(said.join('\n'), /could not compare PR 360's head/);
+});
+
 test('the usage says what a ready notice takes', async () => {
   const err = [];
   assert.equal(await notifyMain([], { stdout: () => {}, stderr: (line) => err.push(line) }), 2);
   assert.match(err.join('\n'), /A ready notice says a pull request is ready to land, and names it with --pr <n>/);
   assert.match(err.join('\n'), /refused, with the land's reasons,\s+while the land would leave that pull request out/);
+  assert.match(err.join('\n'), /while its head is not\s+this checkout's HEAD/);
 });
 
 // --- who sends ---

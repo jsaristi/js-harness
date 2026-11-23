@@ -44,7 +44,8 @@ export const USAGE = [
   `    ${NOTICE_TEXT_MAX} characters at most.`,
   '  A ready notice says a pull request is ready to land, and names it with --pr <n>, so the land knows whose it',
   '    is from the record and not from a branch; no other kind takes --pr. It is refused, with the land\'s reasons,',
-  '    while the land would leave that pull request out: its state, its base, its reviews.',
+  '    while the land would leave that pull request out: its state, its base, its reviews; and while its head is not',
+  '    this checkout\'s HEAD, when this checkout holds commits above that head or is on its branch: push them first.',
   '  A closed notice gives the work back and names the summary the session leaves with --summary <file>, a file of',
   '    docs/sessions/ (js-harness summary template prints it); no other kind takes --summary. It is refused while a',
   '    section of that file is empty or missing, or while neither origin\'s default branch, origin/main nor the session\'s',
@@ -248,13 +249,14 @@ function leadProjectsOf(code, { home, slug, run, readdir, readFile }) {
 
 /** What would leave pull request `pr` out of a land before it builds, by the land's own functions and words: its
  * `pullRequestProblems` (UNKNOWN mergeable read as the land reads it, GitHub not having computed it yet), then its
- * `reviewEvidence` of the head against origin/main, fetched first. `[]` when the land would build it. */
-export async function readyProblems(pr, cwd, { run, evidence = null }) {
+ * `reviewEvidence` of the head against origin/main, fetched first, then `headProblems`. `[]` when the land would build
+ * it. `warn` hears what could not be checked and passed. */
+export async function readyProblems(pr, cwd, { run, evidence = null, warn = () => {} }) {
   const answered = (command, args) => {
     const done = run(command, args, { cwd });
     return done.status === 0 ? { ok: true, out: done.stdout } : { ok: false, why: String(done.stderr || done.error?.message || `exit ${done.status}`).trim() };
   };
-  const view = answered('gh', ['pr', 'view', String(pr), '--json', 'number,state,isDraft,mergeable,baseRefName,body,headRefOid']);
+  const view = answered('gh', ['pr', 'view', String(pr), '--json', 'number,state,isDraft,mergeable,baseRefName,body,headRefOid,headRefName']);
   let found = null;
   try {
     found = view.ok ? JSON.parse(view.out) : null;
@@ -271,7 +273,36 @@ export async function readyProblems(pr, cwd, { run, evidence = null }) {
   // The land's module is loaded only for a ready notice: every other notice stays as light as it was.
   const covers = evidence ?? (await import('./merge-queue.mjs')).reviewEvidence;
   const coverage = covers(cwd, main.out.trim(), found.headRefOid);
-  return coverage?.pass ? [] : [`PR ${pr}: ${String(coverage?.detail ?? 'its review records could not be read').replace(/\.$/, '')}.`];
+  if (!coverage?.pass) return [`PR ${pr}: ${String(coverage?.detail ?? 'its review records could not be read').replace(/\.$/, '')}.`];
+  return headProblems(pr, found, answered, run, cwd, warn);
+}
+
+/** The sender's HEAD against the pull request's head (odd/tasks/consistent-orders.md, F11): on 2026-11-15 a ready went
+ * out while the verified commit sat on the sender's local branch, above the head the pull request held (L15). Refused
+ * while this checkout holds commits above that head, or is on its branch at another commit; a checkout elsewhere, such
+ * as the lead's on main, is passed, since it says nothing of what was pushed. What git cannot answer adds no refusal of
+ * its own: `warn` hears it and the notice passes. */
+function headProblems(pr, found, answered, run, cwd, warn) {
+  const pass = (why) => {
+    warn(`js-harness notify: could not compare PR ${pr}'s head with this checkout's HEAD (${why}); not held to it.`);
+    return [];
+  };
+  const prHead = typeof found.headRefOid === 'string' ? found.headRefOid.trim() : '';
+  if (prHead === '') return pass('gh gave no head');
+  const local = answered('git', ['rev-parse', 'HEAD']);
+  if (!local.ok) return pass(`git rev-parse HEAD: ${local.why}`);
+  const head = local.out.trim();
+  if (head === prHead) return [];
+  const branch = answered('git', ['rev-parse', '--abbrev-ref', 'HEAD']);
+  const onItsBranch = branch.ok && typeof found.headRefName === 'string' && branch.out.trim() === found.headRefName;
+  let above = false;
+  if (!onItsBranch) {
+    const done = run('git', ['merge-base', '--is-ancestor', prHead, head], { cwd });
+    if (done.error || (done.status !== 0 && done.status !== 1)) return pass(`git merge-base: ${String(done.stderr || done.error?.message || `exit ${done.status}`).trim()}`);
+    above = done.status === 0;
+  }
+  if (!onItsBranch && !above) return [];
+  return [`PR ${pr}'s head is ${prHead}, and this checkout's HEAD is ${head}: push ${head} to the pull request's branch first, or send from the checkout that holds its head.`];
 }
 
 export async function notifyMain(
@@ -372,7 +403,7 @@ export async function notifyMain(
   // A ready notice is held to the checks the land runs before it builds: 360, 365 and 367 were announced ready and
   // left out of a land for want of review evidence, a relay and some 13 minutes each (odd/tasks/ready-checks.md, S1).
   if (draft.kind === 'ready') {
-    const problems = await landChecks(draft.pr, cwd, { run });
+    const problems = await landChecks(draft.pr, cwd, { run, warn: stderr });
     if (problems.length) {
       stderr(`js-harness notify: pull request ${draft.pr} is not ready to land: ${problems.join(' ')} Not recorded.`);
       return 1;
