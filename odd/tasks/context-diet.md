@@ -4,9 +4,11 @@ Branch `claude/jh286-context-diet`, from origin/main (c9144af9). Session JH 286.
 only file the work writes; nothing on the machine was changed.
 
 ## State
-Measured and written; C1's lever measured in the CLI engine (JH 289, "C1 probe"). Next is the owner's decision, asked
-by the lead: which candidates in the table to turn off for work sessions. Open: whether the desktop honours a deny on
-its own tools and on MCP names (one probe, in "C1 probe"), and the per-tool schema sizes, which no transcript holds.
+Measured and written; C1's lever measured in the CLI engine (JH 289, "C1 probe"); the desktop probe's steps written,
+not run (JH 301, "Desktop probe: the steps"). Next: his yes on that probe (one line), then, on its result, his choice
+of candidates to turn off for work sessions. Open: whether the desktop honours a deny on its own tools and on MCP names
+(the probe settles it), which sessions a real deny reaches (worktree copies, the lead's), and the per-tool schema
+sizes, which no transcript holds.
 
 ## Goal
 Say what the fixed context of a work session of this repo holds, who owns each part, whether work sessions use it,
@@ -167,11 +169,76 @@ run is one call; the figure is input + cache creation + cache read of that call,
   denies Artifact, `mcp__Claude_Browser` and `mcp__visualize`, and a twin with no deny, each sent "say ok"; compare the
   first assistant entry's usage in the two transcripts. A drop near 18K proves it; none disproves it.
 
+## Desktop probe: the steps (JH 301, written 2026-11-22, not run)
+
+What it answers: whether a deny in a project's `.claude/settings.local.json` drops a tool's schema from a desktop
+session's request, for three kinds of tool: built-ins the CLI already proved droppable, the desktop's own `Artifact`,
+and desktop MCP servers. JH 289 proved the deny only through `--settings` inline JSON in the CLI, so an arm with
+no drop must be told apart from a desktop that ignores the file altogether: that is the positive control.
+
+Four arms, not one combined deny, because a combined drop splits into its parts only through sizes read by eye. Each
+arm costs one "say ok" call, about 79K input tokens on his plan, about 0.32M for the four [e], no list dollars.
+
+| Arm | Folder | `permissions.deny` | Expected drop [e] | Proves at | Disproves under |
+|---|---|---|---|---|---|
+| plain | `jh-desktop-probe\plain` | none (the file holds `{}`) | 0, the baseline | — | — |
+| control | `jh-desktop-probe\control` | `["Agent", "Workflow"]` | about 3.4K | 2K | 1K: the desktop does not read the file's deny at all, and the two arms below say nothing |
+| artifact | `jh-desktop-probe\artifact` | `["Artifact"]` | about 11.5K | 6K | 1K |
+| mcp | `jh-desktop-probe\mcp` | `["mcp__Claude_Browser", "mcp__visualize"]` | about 6.7K | 3.5K | 1K |
+
+A drop between the two lines is partial: some of the tool's text stays (a deferred name, a listing entry), and it is
+recorded as measured, not rounded to a verdict. Drops are read against `plain`, after subtracting engram's start block
+where its presence differs between the two (about 2.0K, measured; read it in each transcript's SessionStart hook
+attachment).
+
+The steps:
+1. A work session makes the four folders under `%LOCALAPPDATA%\Temp\jh-desktop-probe\` (not git repositories, so the
+   app cuts no worktree), each with `.claude\settings.local.json` holding `{"permissions": {"deny": [...]}}` as the
+   table says (`{}` for plain). Nothing else goes in them.
+2. The same session starts four sessions with `start_session`, one per folder (`cwd`), "fresh", same model, effort
+   and permission mode, each with the same prompt, `say ok`, within ten minutes, so the app version and the engram
+   state are the same. All four started the same way, so the host's "started from another session" block is in each.
+   The app may show him a trust card for each new folder: that click is his, and is the only step that is.
+3. When the four have answered, the session reads the first assistant entry of each transcript, under
+   `~/.claude/projects/<folder slug>/<session id>.jsonl`, with this reader (tested 2026-11-22 on JH 301's own
+   transcript: 79,136, model `claude-opus-5-5`, version 2.1.330):
+   saved as `first-call.mjs` in the running session's scratchpad and run as `node first-call.mjs <transcript>...`:
+
+   ```js
+   import { readFileSync } from 'node:fs';
+   for (const file of process.argv.slice(2)) {
+     const entry = readFileSync(file, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line))
+       .find((e) => e.type === 'assistant' && e.message?.usage);
+     const u = entry?.message?.usage ?? {};
+     const total = (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
+     console.log(`${file}: input ${u.input_tokens} creation ${u.cache_creation_input_tokens} read ${u.cache_read_input_tokens} total ${total} model ${entry?.message?.model} version ${entry?.version}`);
+   }
+   ```
+4. It checks the four share model and version, notes engram's block per transcript, computes each drop against
+   plain, and writes the table's measured column here.
+5. Undo, in this order: the transcripts are read first; then the four folders are deleted; the four sessions are
+   archived (deleting them is his call). It writes nothing in `~/.claude/settings.json`, in any project's settings
+   or in this repository. What stays outside the repo [a], read from the CLI's shape of `~/.claude.json`: one entry a
+   folder in its `projects` map, with the trust flag, harmless and left as it is rather than edited by hand while the
+   app runs; and the four transcript folders under `~/.claude/projects/`, kept as the evidence.
+
+What the cuts table gains: C1's "Measured / estimated" cell becomes "lever measured in the desktop" (or the row's
+saving becomes 0 if the desktop ignores the deny); the Artifact, browser and visualize sizes become measured, not read
+by eye; "Not checked" item 2 closes. What it leaves open: which sessions a real deny reaches. The probe uses fresh
+scratch folders; a deny for work sessions would sit in this project's `settings.local.json`, whose copies in worktrees
+already cut, and whether the lead's session gets it, are not checked. Card 3 of the lead's decision cards says a yes
+covers work sessions only, never his or the lead's, so that question comes before any deny is applied.
+
+His yes in one line: "Sí, correr la prueba de escritorio de la dieta de contexto (4 sesiones de 'say ok', unos 0,32M
+tokens del plan, carpetas temporales que se borran después)".
+
 ## Tasks
 - [x] T1 (kind: verify) measure the fixed context and propose; spec 1; route: inline, read-only scripts in the
   scratchpad; commit: this document alone.
 - [x] T2 (kind: verify) C1 probe: does a deny drop a tool's schema; spec 1; route: inline, three `claude -p` runs in
   JH 289's scratchpad, no settings file; commit: this document and one `docs/FAILURES.md` line (PR 952).
+- [ ] T3 (kind: verify) the desktop probe of "Desktop probe: the steps", on his yes; spec 1; route: a work session,
+  four `start_session` sessions in scratch folders; commit: this document's measured column and Log.
 
 ## Log
 - L1 His request, typed (0cdab702 line 9413): "solucionemos todos esos errores y dime cuanto nos podemos ahorrar y
@@ -184,3 +251,8 @@ run is one call; the figure is input + cache creation + cache read of that call,
   folders.
 - L5 C1 probe (JH 289, brief `brief-c1-probe.md`, JH ORQ 2026-11-22): three `claude -p` runs in the scratchpad; a
   deny by flag or by `permissions.deny` drops the denied schemas (45,637 to 38,475 and 38,507). Desktop half open.
+- L6 JH 301 (brief `brief-301-plans-ready.md`, JH ORQ 2026-11-22, unit 2): "write the exact steps, what it writes in
+  his settings, its undo, and what the cuts table gains, so his yes costs one line. Do not run it." Written as four
+  arms with a positive control, after an advisor read that a zero from one combined arm could not tell a desktop
+  ignoring the file from one ignoring a deny on its own tools. Nothing run; the reader was tested on JH 301's own
+  transcript only.
