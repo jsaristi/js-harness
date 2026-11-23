@@ -295,6 +295,23 @@ step. `--stack-reviewed` is unchanged. The research that fills the file is JH 10
   (`docs/sessions/2026-10-30-jh-106-rigor-three-checks-on-the-lead-s-mistakes.md`). Missing from the Log (searched
   for "ready", "verif" and "independent"): the ready notices of 710 and 714 (only 707's, 18:05Z, is in L9), and an
   independent verifier over any slice. T5 stays open until they are recorded.
+- L19 (2026-11-23, T5 left open: an independent verifier, read-only, over the slices of PRs 707 (S3: 16043286,
+  c90d1fb1, 6f6d4ae2), 710 (S2: 919e0fe8, fd46303f) and 714 (S1: ccd7e3f9 to 19348fd4) on main `04664ab6`; its notes
+  `verifier-five-2026-11-23.md`, section 4): passes. The Done when tests, each run alone: `bin/lib/reply.test.mjs` 24
+  of 24, `bin/reply.test.mjs` 33 of 33, `bin/lib/reply-commands.test.mjs` 14 pass, 0 fail, 1 skipped (the `bash -n`
+  case, skipped on win32 by design), `bin/lib/host-update.test.mjs` 21 of 21, `bin/doctor.test.mjs` 100 of 100,
+  `bin/lib/failures.test.mjs` 79 of 79, `bin/failures.test.mjs` 32 of 32; `failures check` and `failures weeks` exit
+  0; `contract check` over this document: PASS. S1 met: wired at `bin/reply.mjs:221`; its probe of `commandRefusals`
+  refused a `bash` block, a `|| true` push, a failed run, a command never run and `rm -rf` in his own block, and
+  passed a run `git status`, `Remove-Item -Recurse -Force` and `bash ran` evidence. S2 met: wired before the write at
+  `bin/doctor.mjs:553`; its probe of `hostReviewRefusal` refused no file, and a file with Decision "maybe", no
+  Reason and no Sources, naming all three; a full file passed. S3 met: `docs/FAILURES.md:401`, `:1080`, `:1223`, `:864`; `failures weeks` prints a line a week. The ready notices
+  are lines 1790 (`"pr":707`, 2026-10-30T18:05:58Z), 1796 (`"pr":710`, 18:23:18Z) and 1810 (`"pr":714`,
+  19:33:43Z) of `C:\Users\Oficina\.js-harness\channel\D--js-harness.jsonl` (`"kind":"ready"`). The summary is on main
+  (L18). T5 stays open: its text names `npm run check`, and on `04664ab6` it ran past the gate's 30-minute bound and
+  was stopped (`js-harness gate log`: 1803 s, timed out, no FAIL row, MsMpEng 1,690 CPU s), so it is not proved. Not
+  checked by it: the linux `bash -n` path and the replay over transcript 0f71b2c6. Observation: the Constraints'
+  "The hook keeps its 5 seconds" is superseded by question 138 (15 s, `odd/tasks/reply-hook-timeout.md`).
 
 ## Next step
 State (2026-10-30): PRs 707 (T2) and 710 (T3) are merged; T4 is PR 714 (`ccd7e3f9` to `19348fd4`), every code commit
