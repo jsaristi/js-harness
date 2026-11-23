@@ -41,10 +41,6 @@ ledger with a stable id per finding and a refuter per judgment (`odd/tasks/launc
 inventory, `odd/tasks/launch-audit/inventory.tsv`, is historical and stale, superseded by `docs plan`,
 which computes the same placement each time instead of storing it.
 
-Known open contradictions, so an auditor does not spend a slice finding them: `CLAUDE.md`, "Running what
-costs, and review", still names gentle-ai reviews, though the workflow no longer depends on gentle-ai
-since F8's S11 (`docs/ROADMAP.md`); those lines are the owner's to change.
-
 ## Statuses
 
 - **live**: in force and kept true; a change of the code that falsifies it is a defect.
