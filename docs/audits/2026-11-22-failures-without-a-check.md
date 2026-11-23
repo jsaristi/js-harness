@@ -79,3 +79,11 @@ A watch that looks at intervals cannot see what started between two looks; the h
 a session starts waiting on him. What holds it: a session that waits on him says so itself with a `waiting` notice
 (`js-harness notify --kind waiting`), so the lead does not depend on the watch to find it. Measured: on 2026-11-22
 no check in this repository can see a session start waiting on him between two looks of a watch.
+
+## wait-tied-to-commit
+Corrected later the same evening: the section "Added the same evening" above gave this entry a `check` control
+(`bin/wait.test.mjs`). Its one sighting, on 2026-10-10, was a notice's wording telling a session to wait for other
+branches to move; `js-harness wait` did not exist until 2026-10-14, so that test bounds a command the sighting never
+ran. What holds it: a wait a session runs now is `js-harness wait`, which ends at its bound (480 minutes when not
+given) and says so, so a wait run with it cannot block a session for good. Measured: on 2026-11-22 no check in this
+repository can judge whether a notice asks a session to wait on something that may never come.

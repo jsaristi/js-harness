@@ -2706,7 +2706,10 @@ blocked it.
 - Class: tool
 - Seen: 2026-10-10 — relief file, line 96 — the wait of JH 2 would end only when two other branches
   moved; a second paste of his undid it (line 97); also odd/tasks/session-board.md:1461-1463
-- Control: check — bin/wait.test.mjs — "the time runs out after --for minutes, with a last check at the deadline" — since 2026-10-14
+- Control: measured — docs/audits/2026-11-22-failures-without-a-check.md — "on 2026-11-22 no check in this
+  repository can judge whether a notice asks a session to wait on something that may never come" — since 2026-11-22
+- Was: check — bin/wait.test.mjs — "the time runs out after --for minutes, with a last check at the deadline" — replaced
+  on 2026-11-22: the sighting was a notice's wording, before `js-harness wait` existed, so that test never held it
 
 ### wake-with-no-news
 The watch returns on changes that ask nothing of anybody, and each return costs the orchestrator

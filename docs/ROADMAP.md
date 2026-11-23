@@ -845,6 +845,9 @@ built in rule 1's pull request.
 - **State (2026-11-19):** run, and S8 does not pass (`odd/tasks/f8-s8-certification.md`, `## State` and `## Result`;
   PRs 912 and 924). T8 ran on `0c28d083` for $45.38 of $74; the long-session grading, by his answer to question 363,
   gave both setups 11 of 25 moments (44%), C1.2, C1.3, C1.5 and C2.4 missing. Open in T8: C5.1 by hand, R3.
+  Written since, beside it in `odd/tasks/f8-s8-designs/` (documents only, nothing run or paid): T5's and T7's designs
+  (2026-11-19), and the paid rerun priced row by row and the eval home's Codex login page (2026-11-22), each waiting
+  on his decisions.
 
 ### Beside F8
 - **The long-session eval**, built in a session of its own (`odd/tasks/f8-s0-baseline.md`, its build

@@ -1,8 +1,11 @@
 ## State
 A plan only, written by JH 302 on 2026-11-22 against origin/main e3dce5b3; no code is written. It carries out spec 3
 of `odd/tasks/size-list-splits.md` (pull request 994), which left `bin/lib/project.mjs` for after Codex and wrote
-its refutation as "not run yet": item 4 below runs it. Which of the two documents closes spec 3 is the lead's to say.
-Next: on Codex day, after pull requests 991, 993 and 994 land, T1 to T4 in order, each in its own commit, then T5.
+its refutation as "not run yet": item 4 below runs it. Both documents stay (the lead, 2026-11-22): this one plans
+`bin/lib/project.mjs`, and `size-list-splits.md` closes the other two files.
+Owed: this plan's double review, until the Codex reset (2026-11-23 23:45); T1 does not start before it.
+Next: on Codex day, after the double review and after pull requests 991, 993 and 994 land, T1 to T4 in order, each
+in its own commit, then T5.
 Open: nothing.
 
 ## Goal
