@@ -140,7 +140,7 @@ export const RULES = [
   },
   {
     "id": "codex-review-rate",
-    "subject": "the most input tokens a Codex review may cost for each changed line of its slice, when that is more than the floor",
+    "subject": "the most input tokens a Codex review may cost for each changed line of its slice, when that is more than the floor (a review over its allowance is the lead's call, said with its cost, while Codex's weekly meter is above rule:codex-weekly-floor)",
     "owner": "sebastian",
     "scope": "repository",
     "since": "2026-10-11",

@@ -41,10 +41,10 @@ How far over its allowance the plan of a Codex review may read and still count a
 - Since 2026-10-12. Row: reports. Source: his words of 2026-10-12, checked by a session on 2026-10-12.
 
 ### codex-review-rate
-The most input tokens a Codex review may cost for each changed line of its slice, when that is more than the floor: 1,200 input tokens a changed line.
+The most input tokens a Codex review may cost for each changed line of its slice, when that is more than the floor (a review over its allowance is the lead's call, said with its cost, while Codex's weekly meter is above rule:codex-weekly-floor): 1,200 input tokens a changed line.
 - Of this repository only: not in force in a project that installs the harness.
 - Read by: `bin/lib/codex-review-allowance.mjs`.
-- Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, checked by a session on 2026-10-11.
+- Since 2026-10-11. Row: reports. Source: his words of 2026-10-11, 2026-11-23, 2026-11-23, checked by the command on 2026-11-23.
 
 ### codex-weekly-floor
 The share of Codex's weekly limit left at or under which a Codex review starts nothing and the user decides on the reset: 2 percent of the weekly limit left.
