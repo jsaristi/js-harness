@@ -331,6 +331,17 @@ test('a message to another session, by either tool, is denied when its stamped h
   }
 });
 
+// docs/FAILURES.md, hours-guessed, 2026-11-22: "Lead to JH 302 (22:20):" sent at 22:14 passed, since no stamp form
+// read an hour in parentheses at the opening.
+test('a message whose opening stamps its hour in parentheses is denied when off the clock, and an hour in its body is no stamp', async () => {
+  for (const tool_name of ['SendMessage', 'mcp__ccd_session_mgmt__send_message']) {
+    const refused = await hook({ tool_name, tool_input: { to: 'x', session_id: 'y', message: 'Lead to JH 302 (14:50): order v3 noted.' } });
+    assert.match(denied(refused).permissionDecisionReason, /stamps 14:50, and the clock says 14:44/, tool_name);
+    assert.deepEqual(await hook({ tool_name, tool_input: { message: 'Lead to JH 302 (14:44): order v3 noted.' } }), { code: 0, out: '', err: '' }, tool_name);
+    assert.deepEqual(await hook({ tool_name, tool_input: { message: 'Lead to JH 302: the merge ran (14:50) and the record says (09:12): noted.' } }), { code: 0, out: '', err: '' }, tool_name);
+  }
+});
+
 // odd/tasks/session-channel.md, T12b: failure `hours-guessed` was seen on 2026-10-14 in a block a session committed,
 // "**2026-10-14, about 05:40: the README is merged" written when the clock read 05:15.
 test('a Write or an Edit of a Markdown file whose line opens with today and an hour ahead of the clock is denied', async () => {

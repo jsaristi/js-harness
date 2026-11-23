@@ -218,11 +218,14 @@ const STAMP = /^(?:From\b[^.:\n]{0,90}?[,(]\s*|[A-Z][A-Za-z]{0,3} ?\d{1,3}(?: ·
 // all right (odd/tasks/wake-and-flag.md, T4).
 const HOUR_FIRST = /^((?:[01]?\d|2[0-3]):[0-5]\d)\s+(?=[A-Z])/;
 
+// A label with no colon, then the hour in parentheses ending the opening ("Lead to JH 302 (22:20):", FAILURES.md hours-guessed).
+const PAREN_OPENING = /^[A-Z][^:()\n]{0,60}\((?:about\s+)?((?:[01]?\d|2[0-3]):[0-5]\d)(?:\s+local)?\)\s*:/;
+
 const pad = (n) => String(n).padStart(2, '0');
 
 /** The `HH:MM` that `text` stamps as the time it is sent, or null when its opening carries none. */
 export function stampedHour(text) {
-  const match = STAMP.exec(String(text ?? '')) ?? HOUR_FIRST.exec(String(text ?? ''));
+  const match = STAMP.exec(String(text ?? '')) ?? HOUR_FIRST.exec(String(text ?? '')) ?? PAREN_OPENING.exec(String(text ?? ''));
   if (match === null) return null;
   const [hours, minutes] = match[1].split(':').map(Number);
   return `${pad(hours)}:${pad(minutes)}`;
