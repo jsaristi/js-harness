@@ -465,7 +465,7 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **Cost:** no eval.
 - **His decisions:** the row enters the plan by his answer to question 123 (lead transcript
   0f71b2c6, line 32757): "Sí, agrégala".
-- **State:** done: PR 704 merged 2026-10-30 (`odd/tasks/codex-daemon-row.md`, no task open).
+- **State:** built, PR 704 merged 2026-10-30 (`odd/tasks/codex-daemon-row.md`, no task open).
 
 ### The desktop plan, steps 2 to 5 (JH 107, beside the Host row)
 - **Changes:** steps 2 to 5 of [the desktop proposal's plan](proposals/claude-app-native-sessions.md#12-plan-in-order):
