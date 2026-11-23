@@ -47,7 +47,7 @@ que estar a toda hora trabajando con las horas llena y con lo siguiente a trabaj
 - Not read: whether a lens review can run inside a long-session trial and its cost.
 
 ## Cost
-- Time: first notice 20:57 local (PR 997 ready), last before this summary about 21:50 local, 2026-11-22.
+- Time: first notice 20:57 local (PR 997 ready), closed notice 21:31 local, 2026-11-22.
 - Spend: 26.8M input tokens over 132 calls (sum of input, cache creation and cache read per message id in this
   session's transcript), of the 30M line.
 - Reviews: none run; documents only. Gate: `npm run check` in the pre-commit hook on every commit, all green.
