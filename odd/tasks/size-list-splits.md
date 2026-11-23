@@ -6,8 +6,9 @@ Runner: `node --test` · Delivery: draft PR
 
 ## State
 2026-11-22, JH 299. The four small files of the size list are split in draft PR 993. This document opens the three
-large ones, which the lead calls large work: each moves 600 to 975 lines. Next: T1 (profiles-data), then T2
-(isolation-probe). T3 (project) is left for after Codex, in its own PR (the lead, 20:05). Open: nothing. A conflict of
+large ones, which the lead calls large work: each moves 600 to 975 lines. T1 (profiles-data, 906 lines) and T2
+(isolation-probe, 971 lines) are done, each in two commits (L4). Lenses ran with 0 findings; the Codex skip is recorded. Next: Codex after 2026-11-23 23:45, then land after 991 and 993.
+T3 (project) is left for after Codex, in its own PR (the lead, 20:05). Open: nothing. A conflict of
 the `CEILINGS` lines with PRs 991 and 993 is resolved at land, after Codex, in the order 991, 993, this one (the lead, 20:20).
 
 ## Goal
@@ -94,11 +95,11 @@ limit of `bin/conventions-structure.test.mjs` and leave its `CEILINGS`, with the
 3. `bin/lib/project.mjs` leaves the size list. Same order.
 
 ## Tasks
-- [ ] T1 (kind: build) (spec 1) `AREAS` of `bin/lib/profiles-data.mjs` into `bin/lib/profiles-areas-data.mjs`,
-  re-exported; the header's "imports nothing" is corrected. Route: inline. Commit: one.
-- [ ] T2 (kind: build) (spec 2) the tree hashing and scanning and the sandbox inspection of `evals/isolation-probe.mjs`
+- [x] T1 (kind: build) (spec 1) `AREAS` of `bin/lib/profiles-data.mjs` into `bin/lib/profiles-areas-data.mjs`,
+  re-exported; the header's "imports nothing" is corrected. Route: inline. Commit: 398a99fa and b2308099 (L4).
+- [x] T2 (kind: build) (spec 2) the tree hashing and scanning and the sandbox inspection of `evals/isolation-probe.mjs`
   into a module beside it, with the helpers they share, re-exported. `PROBE_MODEL` and the gentle-ai lines stay.
-  Route: inline. Commit: one.
+  Route: inline. Commit: 0a4281da and 69cc304c (L4).
 - [ ] T3 (kind: build) (spec 3) after Codex (2026-11-23 23:45), in its own PR, by the lead's order of 20:05: blocks of `bin/lib/project.mjs` totalling at least 975 lines into modules beside it,
   re-exported, after its depth pass is written here. It gets the risk lens and an independent verifier. Route:
   inline. Commit: one.
@@ -118,3 +119,17 @@ limit of `bin/conventions-structure.test.mjs` and leave its `CEILINGS`, with the
   in 2fc80d18. The third asks why `bin/resume.mjs` (1111) stays: PR 968 edits it. The tests, each run once:
   codex-isolation-probe 37; suite, configs and long-session 212; practice, release-gate, release-proof and pre-push 198;
   remote, lib/remote, tui, doctor and stack 495.
+- L4. 2026-11-22, T1 and T2. The gate refused T1 as one commit: `commit-size` counted 1,399 changed lines against the
+  1,200 of `rule:reviewed-commit-lines`, because a move counts both its sides. Each task is therefore two commits. The
+  first adds the new module, which nothing imports yet. The second removes the block and re-exports it.
+  - T1: 398a99fa and b2308099. profiles-data goes from 1598 to 906 lines.
+  - T2: 0a4281da and 69cc304c. isolation-probe goes from 1681 to 971 lines. The moved code is in
+    `evals/isolation-probe-trees.mjs` (622) and `evals/isolation-probe-summary.mjs` (108). The probe's export list
+    was compared by importing both versions: 28 names before, 28 after.
+  - A flaw of the session's use scanner, found by the test run: its lookbehind `(?<![\w.])` read a spread
+    `...inspectEnv` as a property access, so `inspectEnv` and `leakHits` were not imported back at first. Fixed
+    before the commit. PR 993's four splits were scanned again with the corrected pattern and leave nothing out.
+  - Tests: probe, codex probe, gentle-ai-absence, rules-switch and conventions 209 of 209. `rules check` passes.
+    `failures check` counts 28 not settled.
+  - Reviews of 1d690bd..69cc304: readability and reliability lenses, 0 findings each, about 76k input tokens each.
+    The Codex skip is recorded with `--unavailable`, for the standing constraint until 2026-11-23 23:45.
