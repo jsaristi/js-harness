@@ -69,7 +69,8 @@ Each was the lead's, recorded in `odd/tasks/size-list-splits.md` (Log L1–L3, S
 - merge-queue.mjs: JH 298 holds it.
 
 ## Cost
-- Time: first state note at 17:15 local, this summary at about 19:30 local, 2026-11-22.
+- Time: this summary at 19:27 local, 2026-11-22, by `date`. The clock times in the notes file and the Decisions above (17:15 to 20:35) were written by hand and do not match that clock; they are not reliable, so the channel log `D--js-harness.jsonl` holds the real ones.
+- Spend against the 60M line: not known; no meter of this session's tokens was read at the end.
 - Context at the end: 47% of 350k, after two host compactions.
 - Plan: 28% of the weekly limit (all models).
 - Reviews: Claude lenses on every code slice. The last run, over 1d690bd..69cc304, was readability and reliability
