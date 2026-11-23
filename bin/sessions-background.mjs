@@ -21,6 +21,7 @@ import { appendNotice, newNotice, nextSessionNumber, placeOf, readNotices } from
 import { mainCheckout, projectCode, projectSlug, sameSession } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { appRoot, appSessions } from './lib/app-record.mjs';
+import { stopLineIn } from './lib/spend-stop.mjs';
 // bin/sessions.mjs is at its size ceiling, so the live verb reaches it through the import it has of this module.
 export { LIVE_USAGE, sessionsLiveMain } from './sessions-live.mjs';
 
@@ -288,7 +289,11 @@ export function sessionsStartMain(argv, given = {}) {
   const launchedAt = new Date(now()).toISOString();
   let result;
   try {
-    result = claude(startArgs({ ...parsed, model, effort, advisor, briefs, prompt: startPrompt(copy) }), { cwd });
+    // The brief's stop line rides in the first prompt as the literal the UserPromptSubmit hook records
+    // (odd/tasks/spend-stop.md, T4): the prompt is only a pointer to the brief, which no hook reads.
+    const line = stopLineIn(brief, { brief: true });
+    const prompt = line === null ? startPrompt(copy) : `${startPrompt(copy)} Stop at ${line} cache-read.`;
+    result = claude(startArgs({ ...parsed, model, effort, advisor, briefs, prompt }), { cwd });
   } catch (err) {
     // A character cmd.exe would act on, in the title or a path: nothing ran.
     fs.rmSync(copy, { force: true });

@@ -874,12 +874,14 @@ test('the stop line: no line never blocks, an unreadable transcript fails open, 
   const status = step('Bash', { command: 'git status' });
 
   assert.deepEqual(await run(status), { code: 0, out: '', err: '' }, 'no line recorded: nothing refused');
+  const tamper = JSON.parse((await run(step('Bash', { command: 'rm ~/.js-harness/channel/spend/x.json' }))).out);
+  assert.match(tamper.hookSpecificOutput.permissionDecisionReason, /writes or removes a session's stop line/, 'the line files are refused to every session');
   recordStopLine({ home: root, sessionId: id, line: 4000 });
   const refused = JSON.parse((await run(status)).out);
   assert.equal(refused.hookSpecificOutput.permissionDecision, 'deny');
   assert.match(refused.hookSpecificOutput.permissionDecisionReason, /spent 5,000 cache-read .*stop line 4,000 .*write your state and stop/);
   assert.deepEqual(await run(step('Bash', { command: 'git status' }, path.join(root, 'gone.jsonl'))), { code: 0, out: '', err: '' }, 'an unreadable transcript lets the call run');
   assert.deepEqual(await run(step('Write', { file_path: path.join(root, 'state.md'), content: 'x' })), { code: 0, out: '', err: '' }, 'the state is written');
-  const secret = JSON.parse((await run(step('Write', { file_path: 'C:/Users/u/.ssh/notes.md', content: 'x' }))).out);
+  const secret = JSON.parse((await run(step('Write', { file_path: 'C:/Users/u/.ssh/session-state.md', content: 'x' }))).out);
   assert.match(secret.hookSpecificOutput.permissionDecisionReason, /a place of secrets/, 'a .md the line lets by still meets the secrets denies');
 });

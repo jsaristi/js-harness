@@ -137,7 +137,7 @@ reply and backup entries in `~/.codex/hooks.json`; the next `install` or `sync` 
 | SessionStart | `claude-resume-hook` | `js-harness resume --hook` | after a compaction, the files to resume from |
 | SessionStart | `claude-rules-start-hook` | `js-harness rules --hook` | the rules main has that the session's base does not, once |
 | SessionStart | `claude-fallback-hook` | `js-harness backup --session-start` | sends a session to the readable memory when Engram lost its project |
-| UserPromptSubmit | `claude-rules-turn-hook` | `js-harness rules --hook` | as at start, at each turn |
+| UserPromptSubmit | `claude-rules-turn-hook` | `js-harness rules --hook` | as at start, at each turn; and records the stop line a prompt names as "Stop at <N> cache-read", once |
 | SubagentStart | `claude-rules-subagent-hook` | `js-harness rules --hook` | as at start, for a sub-agent |
 | PreToolUse | `claude-guard-hook` | `js-harness guard --hook` | refuses a tool call that breaks a held rule |
 | PreToolUse | `claude-template-gate-hook` | `js-harness template gate --hook` | refuses an output to the owner no template command made |

@@ -180,6 +180,18 @@ function withWorld(body, options) {
   };
 }
 
+// odd/tasks/spend-stop.md, T4: the started session's first prompt is a pointer to the brief, so the brief's stop line
+// rides in that prompt as the literal the UserPromptSubmit hook records.
+test('sessions start carries the brief\'s "Stop at <N> cache-read" into the first prompt, and none where the brief has none', withWorld((world) => {
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the thing', '--brief', world.brief]).code, 0);
+  assert.doesNotMatch(actions(world)[0].at(-1), /cache-read/);
+  fs.writeFileSync(world.brief, '# Build the thing\r\n\r\nSpend: stop at 6M cache-read, then write your state.\r\n');
+  assert.equal(js(world, ['sessions', 'start', '--title', 'Build the other', '--brief', world.brief]).code, 0);
+  const prompt = actions(world).at(-1).at(-1);
+  assert.match(prompt, / Stop at 6000000 cache-read\.$/);
+  assert.doesNotMatch(prompt, /\n/);
+}));
+
 // JH 200 (odd/tasks/remote-control-lead-only.md, spec 1): the sessions the lead tasks need no Remote Control, his words
 // of 2026-11-14, so a start asks for none unless --remote-control is given.
 test('sessions start starts claude --bg with the title and a pointer to the brief, with no Remote Control, and records it', withWorld((world) => {

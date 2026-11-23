@@ -272,6 +272,17 @@ test('the command answers in the hooks contract, and exits 0 on empty input, on 
     assert.equal(await rulesHookMain([], io('not json', noGit)), 0);
     assert.deepEqual(out, []);
 
+    // odd/tasks/spend-stop.md, T4: the turn's prompt records the session's stop line from the literal, once.
+    const { readStopLine } = await import('./spend-stop.mjs');
+    const id = '0cdab702-72bd-48e7-8a8e-0c38d4aca9c9';
+    const said = (prompt) => JSON.stringify({ hook_event_name: 'UserPromptSubmit', session_id: id, prompt });
+    assert.equal(await rulesHookMain([], io(said('Your task. Stop at 20M cache-read.'), () => ({ status: 1, stdout: '' }))), 0);
+    assert.equal(readStopLine(m.home, id), 20_000_000);
+    assert.equal(await rulesHookMain([], io(said('Stop at 9M cache-read'), () => ({ status: 1, stdout: '' }))), 0);
+    assert.equal(readStopLine(m.home, id), 20_000_000, 'a later prompt does not move it');
+    out.length = 0;
+    err.length = 0;
+
     assert.equal(await rulesHookMain([], io(JSON.stringify(m.input('SubagentStart', { agent_id: 'a1' })))), 0);
     assert.deepEqual(JSON.parse(out.pop()).hookSpecificOutput.hookEventName, 'SubagentStart');
 
