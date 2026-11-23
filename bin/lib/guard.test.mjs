@@ -554,6 +554,22 @@ test('a stamp that opens the text before the label is read, and a label never cr
   assert.match(hourRefusal('19:48 JH ORQ: PR 300 landed.', AT_1444), /stamps 19:48, and the clock says 14:44/);
 });
 
+// Codex on 7a02fb17 (P2, guard.mjs:222): an hour in parentheses is a stamp only after a sender's label, as in
+// "Lead to JH 302 (22:20):"; a sentence that opens a message, "The gate finished (14:20):", reports an event.
+test('an hour in parentheses at the opening is read after a sender label only, not after any capitalized phrase', () => {
+  for (const [text, hour] of Object.entries({
+    'Lead to JH 302 (22:20): order v3 noted.': '22:20',
+    'Writer to lead (about 09:05): done.': '09:05',
+    'JH 302 (14:20 local): the gate passed.': '14:20',
+    'JH ORQ to JH 5 (07:40): go on.': '07:40',
+  })) assert.equal(stampedHour(text), hour, text);
+  for (const text of [
+    'The gate finished (14:20): all checks passed.',
+    'Merge ran (14:20): done.',
+    'All checks passed on the run of today (14:20): done.',
+  ]) assert.equal(stampedHour(text), null, text);
+});
+
 // gate-wait T11: gentle-ai diffs the tree of `--base-ref` against the head's, and walks up to 64 first-parent ancestors
 // of the head for it; a base off that line costs about 216 git runs against 31 (reader A, 2026-10-17), and one the
 // head is behind also puts the default branch's newer work in the candidate, reversed (20 s and 470 lines).
