@@ -112,8 +112,8 @@ Nothing here is his: the brief carries his decision ("Sí, ábrela"). A finding 
 - [x] T8 (kind: build) spec 9: the step chain on the status report's map, tests first — commits: `8be755d2`, `a4ecfc3c`
 - [x] T9 (kind: build) spec 9: each proposal's estimate, compared by the next report — commits: `8be755d2`
 - [x] T10 (kind: docs) spec 10: the search for a draft plan; not built, written as the next task (L18) — commits: this document's
-- [ ] T4 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice — PR pending
-- [ ] T5 (kind: docs) spec 6: the summary under `docs/sessions/` and the closed notice — pending
+- [x] T4 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice — PR 739, L27
+- [x] T5 (kind: docs) spec 6: the summary under `docs/sessions/` and the closed notice — L26, L28
 
 ## Log
 - L1 (2026-10-31, the lead's brief JH 123,
@@ -330,6 +330,14 @@ Nothing here is his: the brief carries his decision ("Sí, ábrela"). A finding 
   `a4ecfc3c`, `23c028a5`), four lenses captured, its findings corrected in `718858fd`; `23c028a5..718858fd` not
   reviewed by gentle-ai (its validation stopped), reviewed by Codex and the Claude lenses.
 - L26 (2026-10-31, T5): the summary at `docs/sessions/2026-10-31-jh-123-quiet-wait-and-reply-hook-an-absence-with-no-stretch.md`.
+- L27 (2026-11-23, T4 ticked, read by the docs writer of the lead's night plan, unit 2): Codex and the lenses over
+  every code commit (L19 to L25); the independent verifier's verdict over `6bee9e5b..23c028a5` was "fails, on one
+  defect" (L23), and its pass covers the then-uncommitted fix, which it ran; that fix is `718858fd`, which the
+  verifier did not run again. `git merge-base --is-ancestor 718858fd origin/main` exits 0. PR 739 merged
+  2026-10-31T15:26:46Z (`gh pr view 739`); its ready notice with `"pr":739` is line 1943 of the channel record
+  (`C:\Users\Oficina\.js-harness\channel\D--js-harness.jsonl`), 2026-10-31T15:16:40Z.
+- L28 (2026-11-23, T5 ticked): the summary is on main, added by `74d478e5`; the closed notice of JH 123 is line 1944
+  of the same record, 2026-10-31T15:18:37Z ("PR 739 ready to land").
 
 ## Next step
 Push, open the PR, `notify --kind ready --pr <n>`, tell the lead it can land before JH 124. Was: commit the
