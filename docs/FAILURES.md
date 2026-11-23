@@ -140,6 +140,17 @@ is away, and nothing made the sessions take more work once the briefs they held 
   while token-only documents work existed (two owed Seen lines, prose controls, the project.mjs split plan, briefed
   to JH 302 at 20:52). He asked: "tenemos que estar a toda hora trabajando con las horas llena y con lo siguiente a
   trabajar". What stops it: the lead keeps documents work queued for the hours Codex is held
+- Seen: 2026-11-23 — his transcript 0cdab702, lines 16817, 16936 and 18136 (checked with `js-harness sessions --quote`)
+  — he left at 06:06Z for 10 hours ("vas a estar 10 horas solo por favor trabaja") and on his return asked "pero por
+  que se estuvo 8 horas y 17 minutos sin correr?". Work ran from 01:03 to 03:44 local (17 docs PRs, 4 code drafts);
+  from 03:44 to his return at 12:01 local no session worked. Causes: (a) no stretch was opened before he left, so no
+  forks were pre-decided and `rule:away-autonomy` held every card of his (`js-harness report` of 12:03 local:
+  "Stretch: none open or closed since the cut"); (b) the return cards were written at 02:41 local, after he had left,
+  so none was put to him before he went (the lead's notes, return-cards-2026-11-23.md); (c) a read-only sort of those
+  cards found 2 the lead could have taken and 7 that could have become drafts waiting for Codex, about 4-6 real hours
+  (estimate), which the lead declined because the Codex week was full; (d) Codex sat at its 70% weekly floor until
+  2026-11-23 23:45, so no code could land. What stops it: at his departure, in whichever chat he says it, the lead
+  opens the stretch and sorts the cards that unblock hours into forks for his approval before he goes
 - Control: owed — docs/ROADMAP.md — "The lead plans the stretch's next units before it rests"
 
 ### block-read-as-task
