@@ -560,6 +560,21 @@ test('typescript-lsp project walks up to the drive root without `typeScriptStop`
   }
 });
 
+// Codex on d0f63266 (P3, stack.test.mjs:556 and stack.mjs:245): the stop folder itself is searched, and a folder under it
+// whose name starts with two dots is inside it, not a step up.
+test('typescript-lsp project searches `typeScriptStop` itself, and a folder named `..workspace` under it is inside it', () => {
+  const machine = lspMachine({ version: '7.0.2', tsserver: false });
+  try {
+    writeTypeScript(path.join(machine.root, 'node_modules', 'typescript'), { version: '5.9.3', tsserver: true });
+    assert.equal(findTool('typescript-lsp').project({ ...machine, typeScriptStop: machine.root }), 'ok', 'the stop holds the TypeScript');
+    const nested = path.join(machine.root, '..workspace', 'app');
+    fs.mkdirSync(nested, { recursive: true });
+    assert.equal(findTool('typescript-lsp').project({ ...machine, project: nested, typeScriptStop: machine.root }), 'ok', '`..workspace` is under the stop');
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
 
 test('typescript-lsp is missing when installed_plugins.json does not exist', () => {
   const home = makeTmpHome();

@@ -24,6 +24,7 @@ import { SESSION_CLASSES_FIX, sessionClassesState } from './session-classes.mjs'
 import { PNPM_LOCK_FIX, pnpmLockState } from './pnpm-lock.mjs';
 import { desktopDir } from './backup.mjs';
 import { SETTINGS_FILE } from './project-apply.mjs';
+import { within } from './background.mjs';
 
 const SEMVER_RE = /(\d+\.\d+\.\d+)/;
 // R3-001 (accepted T1 review follow-up): a hung probe must never block `doctor` — kill it and
@@ -241,16 +242,11 @@ function typeScriptVersion(libDir) {
   return typeof data?.version === 'string' ? data.version : 'unknown';
 }
 
-/** Whether `dir` is `root` or inside it. */
-const within = (root, dir) => {
-  const relative = path.relative(root, dir);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-};
-
 /** The first workspace TypeScript `lib` folder walking up from `project`, as the server finds it, or null. The walk
  * goes to the drive root, as the server's does; `stop`, a test's own folder, ends it there (`stop` read, its parent
  * not) so a test does not depend on what is installed above it. A `stop` that is not `project` or above it reads
- * `project` alone. */
+ * `project` alone. Inside is `within`'s (./background.mjs): a `..name` folder is inside, and a link's spelling and its
+ * real path are one folder (Codex on d0f63266). */
 function workspaceTypeScript(project, stop) {
   for (let dir = path.resolve(project); ; dir = path.dirname(dir)) {
     for (const folder of WORKSPACE_TYPESCRIPT) {
@@ -258,7 +254,7 @@ function workspaceTypeScript(project, stop) {
       if (fs.existsSync(lib)) return lib;
     }
     if (path.dirname(dir) === dir) return null;
-    if (stop && !within(path.resolve(stop), path.dirname(dir))) return null;
+    if (stop && !within(path.dirname(dir), path.resolve(stop))) return null;
   }
 }
 
