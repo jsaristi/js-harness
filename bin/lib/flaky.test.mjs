@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { checkLedger, failedTestFiles, failingTests, judgeRerun, ledgerRow, localDay, parseLedger, rerunNext } from './flaky.mjs';
 import { firstStep } from './next-step.mjs';
@@ -70,6 +71,25 @@ const END_HOOK = [
 test('a file whose after() hook throws while every test passes is still named failing, so it is rerun (probe-end-hook-flake)', () => {
   assert.deepEqual(failingTests(END_HOOK), ['D:\\js-harness\\bin\\hook.test.mjs']);
   assert.deepEqual(failedTestFiles(END_HOOK, [...FILES, 'bin/hook.test.mjs']), ['bin/hook.test.mjs']);
+});
+
+// Codex on 662815bf (P2, flaky.test.mjs:70): the fixture above pins one node's transcript, so a reporter that stopped
+// naming the file at its hook would leave it green while the gate skipped the rerun. This runs the node at hand on such
+// a file, its reporter left at its default as the gate's sensor leaves it, and hands what it printed to the gate's reader.
+test('the node at hand names a file whose after() hook throws failing, so the gate reruns it (probe-end-hook-flake)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-flaky-hook-'));
+  try {
+    fs.mkdirSync(path.join(root, 'bin'));
+    fs.writeFileSync(path.join(root, 'bin', 'hook.test.mjs'), "import { after, test } from 'node:test';\ntest('passes', () => {});\nafter(() => { throw new Error('after hook failed'); });\n");
+    // Without NODE_TEST_CONTEXT, under which a node --test started by a test reports to it and exits 0 on a failure.
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'NODE_TEST_CONTEXT'));
+    const ran = spawnSync(process.execPath, ['--test', 'bin/hook.test.mjs'], { cwd: root, env, encoding: 'utf8', timeout: 60_000 });
+    assert.equal(ran.error, undefined, String(ran.error));
+    assert.notEqual(ran.status, 0, ran.stdout);
+    assert.deepEqual(failedTestFiles(`${ran.stdout}${ran.stderr}`, ['bin/hook.test.mjs']), ['bin/hook.test.mjs'], `${process.version}:\n${ran.stdout}`);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 // The ledger of odd/tasks/flaky-ledger.md (Design 3 to 5): docs/FLAKY.md, one `### <test file>` entry with
