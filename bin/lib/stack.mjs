@@ -241,14 +241,24 @@ function typeScriptVersion(libDir) {
   return typeof data?.version === 'string' ? data.version : 'unknown';
 }
 
-/** The first workspace TypeScript `lib` folder walking up from `project`, as the server finds it, or null. */
-function workspaceTypeScript(project) {
+/** Whether `dir` is `root` or inside it. */
+const within = (root, dir) => {
+  const relative = path.relative(root, dir);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+};
+
+/** The first workspace TypeScript `lib` folder walking up from `project`, as the server finds it, or null. The walk
+ * goes to the drive root, as the server's does; `stop`, a test's own folder, ends it there (`stop` read, its parent
+ * not) so a test does not depend on what is installed above it. A `stop` that is not `project` or above it reads
+ * `project` alone. */
+function workspaceTypeScript(project, stop) {
   for (let dir = path.resolve(project); ; dir = path.dirname(dir)) {
     for (const folder of WORKSPACE_TYPESCRIPT) {
       const lib = path.join(dir, folder);
       if (fs.existsSync(lib)) return lib;
     }
     if (path.dirname(dir) === dir) return null;
+    if (stop && !within(path.resolve(stop), path.dirname(dir))) return null;
   }
 }
 
@@ -279,12 +289,13 @@ function languageServerPackage(env, platform) {
  * package resolves, as `require('typescript')` from it does. `{ state, reason }`: `ok`; `down` with why, a server
  * not on the path first; `unknown` where the project's TypeScript does not serve and the server's package cannot be
  * found from its shim, so the TypeScript it would take next cannot be read; `n/a` with no project or while the plugin
- * is not installed, which the `installed` gap already shows. */
-function languageServerStart({ home, project, env = process.env, platform = process.platform }) {
+ * is not installed, which the `installed` gap already shows. `typeScriptStop`, a test's own folder, ends the walk for
+ * the project's TypeScript there (`workspaceTypeScript`); without it the walk goes to the drive root. */
+function languageServerStart({ home, project, env = process.env, platform = process.platform, typeScriptStop }) {
   if (!home || !project || pluginInstalledVersion(home, TYPESCRIPT_LSP).state !== 'ok') return { state: 'n/a' };
   const server = languageServerPackage(env, platform);
   if (!server.found) return { state: 'down', missing: true, reason: `${TYPESCRIPT_LSP_SERVER}, the server the plugin starts, is not on the path` };
-  const workspace = workspaceTypeScript(project);
+  const workspace = workspaceTypeScript(project, typeScriptStop);
   if (workspace && fs.existsSync(path.join(workspace, 'tsserver.js'))) return { state: 'ok' };
   if (!server.packageDir) return { state: 'unknown' };
   let bundled = null;

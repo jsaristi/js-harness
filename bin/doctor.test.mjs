@@ -125,7 +125,7 @@ test('doctorMain reports a language server that cannot start as a project gap: t
       output += `${line}\n`;
     };
     try {
-      await doctorMain(['--home', home, '--cwd', project], { PATH: typeScript7, JS_HARNESS_PM: 'npm' }, { spawn, fetch: noopFetch });
+      await doctorMain(['--home', home, '--cwd', project], { PATH: typeScript7, JS_HARNESS_PM: 'npm' }, { spawn, fetch: noopFetch, typeScriptStop: project });
     } finally {
       console.log = original;
     }
