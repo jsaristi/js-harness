@@ -1134,6 +1134,13 @@ Hours written in the relief file were not read from a clock.
   board line "21:10" by hand, ahead of the clock (its date reads were 20:54, then 21:02), and told JH PLAN a refill
   was "at 21:07"; the merges it stood for were 21:00:26 (PR 996) and 21:00:31 (PR 997). Fix named: a stamp only
   from `$(date)` in the same command
+- Seen: 2026-11-22 — the lead's message to JH 302 through `mcp__ccd_session_mgmt__send_message`, opening "Lead to JH
+  302 (22:20):", sent at about 22:14 by the lead's relief line from `$(date)` (the lead's correction to JH 302,
+  claimed) — the guard let it through. The tool is held (`MESSAGE_TOOLS`, `bin/guard.mjs:78`, checked at `:233`); the
+  stamp form is not: `stampedHour` (`bin/lib/guard.mjs:224`) reads only `STAMP` ("From ...," or a short label and a
+  number then "," or " at", `:213`) and `HOUR_FIRST` (the hour first, `:219`), and returns null for "Lead to JH 302
+  (22:20):" (checked: `stampedHour` on that opening is null; on "From the lead, 22:20 local by date." it is 22:20,
+  refused at 22:14). Fix named: the lead puts no hour in a message to a session
 - Control: check — bin/notify.test.mjs — "a notice whose text stamps an hour more than a minute off
   the clock is refused, with the right hour, and not recorded" — since 2026-10-16
 - Proof: messages to another session: bin/guard.test.mjs:54, "a message to another session, by
