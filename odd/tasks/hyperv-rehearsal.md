@@ -21,6 +21,7 @@ copies, `backup ready`, the readable fallback, the transcripts), never all of th
 borrar las memorias o me toca que reinstalar el sistema operativo voy a perder todo".
 
 ## Done when
+- `grep -q "^- Rehearsal result:" odd/tasks/hyperv-rehearsal.md` exits 0 (red until T3 writes that Log line)
 - `js-harness contract check odd/tasks/hyperv-rehearsal.md` exits 0
 - `npm run check` exits 0
 - In the VM, with the result written in `## Log`: `js-harness doctor` exits 0; an engram search returns an
@@ -36,7 +37,11 @@ borrar las memorias o me toca que reinstalar el sistema operativo voy a perder t
   rehearsal shows the need.
 
 ## Constraints
-- Nothing from the VM writes to his GitHub repositories — because the live backup is his host's.
+- Nothing from the VM writes to his GitHub repositories — because the live backup is his host's. A promise is not
+  enough: `js-harness install` registers `backup --hook` on Stop, which starts `backup run` detached whenever a
+  backup is due (`bin/backup.mjs:90`), so a session in the VM could push with nobody typing it. The VM either signs
+  in with a read-only credential (decision 5) or the hook is removed from the VM's settings right after install and
+  checked absent before the first session.
 - Credentials the VM needs (a GitHub sign-in to clone the private repositories, a Claude sign-in) are typed by him in
   the VM — because sign-ins are his, and a copied credentials file once killed his login
   (`odd/tasks/f8-s0-baseline.md:36-39`).
@@ -45,9 +50,13 @@ borrar las memorias o me toca que reinstalar el sistema operativo voy a perder t
 
 ## Ask me before
 1. Turning on Hyper-V: a Windows feature, administrator rights and a restart of his machine. His hands only.
-2. Downloading the Windows evaluation image from Microsoft (about 5 to 6 GB [e], 90-day evaluation, no licence).
+2. Which Windows, and downloading it: his host is Windows 10 IoT Enterprise LTSC 2021, and the closest proof is the
+   same edition (an LTSC evaluation image, if Microsoft still offers one [?]); a Windows 11 Enterprise evaluation
+   (about 5 to 6 GB [e], 90 days, no licence) proves a reinstall onto a newer Windows instead.
 3. The VM's size: proposed 8 GB of memory of his 19.7 GB, 4 virtual processors, a dynamic disk on D: capped at 60 GB.
 4. Whether Hyper-V stays on after the run or is turned off again.
+5. The VM's GitHub access: a read-only fine-grained token for the backup repositories, made and typed by him, or his
+   usual sign-in with the backup hook removed in the VM (Constraints).
 
 ## Depth pass
 - 1. Method: a disaster-recovery test is only a proof when it starts from an empty machine and uses only what the
@@ -69,12 +78,15 @@ borrar las memorias o me toca que reinstalar el sistema operativo voy a perder t
   spec 1: `js-harness doctor`: none today in a VM, new behaviour (with the other three checks of `## Done when`).
 - 4. Refutation: the cheapest thing that could show the rehearsal cannot run here is the machine. Run 2026-11-22:
   `powershell -NoProfile -Command "(Get-CimInstance Win32_ComputerSystem).HypervisorPresent; [bool](Get-Command Get-VM -ErrorAction SilentlyContinue); (Get-CimInstance Win32_Processor).Name"`:
-  True, False, Intel Core i5-1035G1; free space by `Get-PSDrive`: C: 30 GB, D: 42 GB. Hyper-V is off but the
-  platform runs; Intel is nestable; D: holds a dynamic disk of a fresh Windows, its updates, WSL2 and the stack
+  True, False, Intel Core i5-1035G1; free space by `Get-PSDrive`: C: 30 GB, D: 42 GB. The same first run read
+  `(Get-CimInstance Win32_Processor).VirtualizationFirmwareEnabled` False, which points the other way; it is
+  read as masked by the running hypervisor [a], since `systeminfo` lists a `Hyper-V Virtual Ethernet Adapter`
+  (`vEthernet`, WSL2's) and Windows reports a firmware flag as off once a hypervisor holds the processor. So the
+  Hyper-V feature and its tools are off but the platform runs; Intel is nestable; D: holds a dynamic disk of a fresh Windows, its updates, WSL2 and the stack
   (about 30 to 40 GB [e]) only if little else grows there, so the run reads D:'s free space first and stops under
   5 GB (a constraint of T1, below).
   Verdict: supports
-- 5. Request: on his yes to the four decisions, a session writes the step list (T1), he turns Hyper-V on and signs in
+- 5. Request: on his yes to the five decisions, a session writes the step list (T1), he turns Hyper-V on and signs in
   where the VM needs him (T2), a session drives the rehearsal by the protocol as written, logging every gap, with no
   write to the live backup (T3), and the VM is deleted (T4).
   Adds: none

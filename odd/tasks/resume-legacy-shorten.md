@@ -14,11 +14,13 @@ never deleting it, and the list in `bin/lib/read-surface.mjs` ends empty.
 ## Why
 A resumed session reads a document's resume sections whole, and nothing bounded them until F8's S6 added the `read
 surface` row of `check`. Three documents were over the bound when the row arrived and sit on a legacy list that only
-shrinks (`bin/lib/read-surface.mjs:24-27`). Each still costs a session that resumes it three to four and a half times
-the bound. The roadmap's Later list holds the entry, "Not tracked yet; it waits for him" (`docs/ROADMAP.md`, "Shorter
+shrinks (`bin/lib/read-surface.mjs:24-27`). Each still costs a session that resumes it 1.6 to 4.6 times the bound
+(7,977 to 22,989 estimated tokens). The roadmap's Later list holds the entry, "Not tracked yet; it waits for him" (`docs/ROADMAP.md`, "Shorter
 resume sections in feature documents").
 
 ## Done when
+- `node -e "import('./bin/lib/read-surface.mjs').then((m) => process.exit(m.RESUME_LEGACY.length))"` exits 0 (red
+  today: 3)
 - `node --test bin/lib/read-surface.test.mjs` exits 0
 - `npm run check` exits 0
 - `RESUME_LEGACY` in `bin/lib/read-surface.mjs` is `[]`, and the `read surface` row names no legacy document
@@ -53,13 +55,20 @@ Whether to take it now: the roadmap line names him. Nothing else here is his.
     `session-channel.md:3217` `## State for a resume` and `:3467` `## Next step`.
   - `docs/ROADMAP.md`, Later, "Shorter resume sections": 381 lines in `rule-hierarchy.md` and 1,036 in
     `session-channel.md` at `64933f6`, and "Not tracked yet; it waits for him".
+  - The readers of resume sections: `bin/lib/read-surface.mjs` and `bin/resume.mjs:37` both go through
+    `featureParts` (`rg -l "featureParts|RESUME_TITLE|State for a resume" bin`, tests left out: those three files), so
+    a history title leaves the head for the count and for the resume hook alike.
+  - The method was set by S6: settled text moved word for word, a legacy list that only shrinks
+    (`odd/tasks/f8-s6-read-surface.md:70-76`, T2b at `:148`). This document applies it to the three; no other
+    document holds the work (`grep -rl "RESUME_LEGACY\|Shorter resume" odd/tasks`: the S6 document alone, its T2b
+    done; `resume-open-task.md`, the roadmap's source, names the growth and has no task for it).
 - 3. The bar:
   spec 1: `node -e "import('./bin/lib/read-surface.mjs').then(m => ...resumeHead(text) per legacy file)"`: 16,604,
   7,977 and 22,989 today; the bar is each under 5,000 and `RESUME_LEGACY` empty.
 - 4. Refutation: if moving text under a history title did not take it out of the head, the move would need a code
   change. Run 2026-11-22: `resumeHead('## State\nshort\n\n## Next step, history\n' + 'x'.repeat(40000))` gives 4,
   and the same text under `## Next step` gives 10,004 (node over `bin/lib/read-surface.mjs`, `origin/main`
-  `6d6a5d85`). The three heads, by the same function: one-model-home 16,604, rule-hierarchy 7,977, session-channel
+  `6d6a5d85`, the file unchanged at `e3dce5b3`). The three heads, by the same function: one-model-home 16,604, rule-hierarchy 7,977, session-channel
   22,989.
   Verdict: supports
 - 5. Request: in each of the three documents, keep a resume head under 5,000 estimated tokens and move the rest, word
@@ -71,11 +80,13 @@ Whether to take it now: the roadmap line names him. Nothing else here is his.
    The "Next step" and "State for a resume" sections have grown into history".
 
 ## Tasks
-- [ ] T1 (kind: docs) `one-model-home.md`: a head under 5,000, the rest under `## Next step, history`; its name leaves
-  `RESUME_LEGACY` in the same commit — spec 1; inline; one commit
-- [ ] T2 (kind: docs) `rule-hierarchy.md`, as T1 — spec 1; inline; one commit
-- [ ] T3 (kind: docs) `session-channel.md`, both resume sections, as T1; `RESUME_LEGACY` ends `[]` — spec 1; inline;
-  one commit
+- [ ] T1 (kind: build) `one-model-home.md`: a head under 5,000, the rest under `## Next step, history`; its name leaves
+  `RESUME_LEGACY` in the same commit, which is code (`bin/lib/read-surface.mjs`) and so takes both reviews — spec 1;
+  inline; one commit
+- [ ] T2 (kind: build) `rule-hierarchy.md`, as T1 — spec 1; inline; one commit
+- [ ] T3 (kind: build) `session-channel.md`, both resume sections, as T1; `RESUME_LEGACY` ends `[]`, and
+  `bin/lib/read-surface.test.mjs:52-54`, which indexes `RESUME_LEGACY[0]`, is rewritten to pass its own legacy name
+  — spec 1; inline; one commit
 
 ## Log
 - L1 (2026-11-22, JH 301, the lead's brief as written): "The next roadmap units (`js-harness progress`,
