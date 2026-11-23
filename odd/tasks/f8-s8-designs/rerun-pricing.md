@@ -3,11 +3,11 @@
 A price list, not a design and not a decision (unit 1 of JH 301's brief, 2026-11-22). It prices each row of
 `odd/tasks/f8-s8-certification.md` `## Measures` for a second S8 run, so his yes is one line naming a figure. Nothing
 here was run or paid: every dollar figure below is printed by a `--plan` command, which reads the recorded results
-files and starts nothing. It lives beside the S8 document, not in it, because open PR 967 edits that document.
+files and starts nothing. It lives beside the S8 document, not in it, because open PRs 967 and 930 edit that document.
 Marks: [c] checked here, with its command; [i] an estimate; [a] assumed.
 
 ## How each figure was made
-All on 2026-11-22 about 21:10 local, from this worktree on `origin/main` (`6d6a5d85`), model `claude-opus-5-5`,
+All on 2026-11-22 about 20:50 local, from this worktree on `origin/main` (`6d6a5d85`), model `claude-opus-5-5`,
 `--work-root` a scratch folder (nothing written there by a plan):
 - suite rows: `node evals/suite.mjs --claude <claude.exe> --configs <arms> --efforts high --repeats <n> --tasks <ids>
   --permission-mode bypassPermissions --work-root <dir> --name f8-s8r-<row> --plan` (`evals/plan.mjs`): the mean list
@@ -29,7 +29,7 @@ A list cost, not what his plan bills (D2). The plan's usage-cap windows are unkn
 | R1 | the behavioural run of T5's design, 22 trials | $13 to $16 [i] (`t5-behavioural-run.md` `## Cost`); `--plan` cannot price it: its cases are not built | not run | T5 (design in PR 970), then its cases | [i] |
 | A1, A2 | the audits of T7's design | Codex 3M to 7M tokens a run, a pilot first; Claude 1M to 4M input a run on his plan, no dollars [i] (`t7-audits.md` `## Cost`) | not run | the pilot, approved by question 369, after the weekly reset | [i] |
 | R3 | the practice journey's host session | small, not priced | not run | the lead's tag | [a] |
-| Free | C3.1, C3.2, C3.5, C4.1, C4.4, C5.2, R2; C3.4 after PR 963, C4.2 after PR 964 | $0 | — | C4.1 fails at `upgrade` whenever a stack tool is behind (`misses.md`, PR 973) | [c] |
+| Free | C3.1, C3.2, C3.5, C4.1, C4.4, C5.2, R2; C3.4 after PR 963, C4.2 after PR 964 | $0 | — | C4.1 fails at `upgrade` whenever a stack tool is behind (`misses.md`, PR 973); its fix is open PR 978 | [c] |
 | C5.1 | first turn of fresh desktop sessions, by hand | his plan, no list cost | not run | his hands | [c] |
 
 ## Totals
@@ -51,10 +51,15 @@ document). The low end held; the long session's high end was never approached.
    after PR 977; the long-session rows after PR 930 and an answer on the eval home's Codex login. The free rows run
    first, on the candidate, at no cost.
 2. Caps as on 2026-11-19 (question 350's "tope $12 y $74"): $12 a run, which covers the highest single run priced
-   here ($10.72, the smoke at high), and a batch cap he names. For the core, the cap that covers its high is **$85**.
+   here ($10.72, the smoke at high), with the cache kept across turns: a `current` run that misses the cache every
+   turn is priced $10.43 at mid, so at high it could pass $12 and stop. A batch cap he names. For the core, the cap that covers its high is **$85**.
 3. If a run would pass its cap, it stops and the lead asks again; no run is retried after a failure before its cause is
    read (`CLAUDE.md`, "Running what costs, and review": "One try: when it fails, read why before anything runs
    again").
+
+One decision comes before it and is not a spend: whether the eval home gets a Codex login for the long session
+(current-2 held its release on a review it could not get). It touches credentials, so it is the lead's to put to him;
+without it the long-session rows, about $70 of the $85, can repeat that miss. The line below assumes it is settled.
 
 His yes in one line, for the core: "Sí, correr S8 de nuevo con tope $12 por corrida y $85 en total, cuando aterricen
 PR 977 y PR 930". C1.5 at 10 runs (+$38 at high) and R1 (+$16) are each one more figure on that line.
@@ -64,5 +69,5 @@ PR 977 y PR 930". C1.5 at 10 runs (+$38 at high) and R1 (+$16) are each one more
   (`odd/tasks/f8-s8-certification.md`, its `## Cost`, card 1 of `return-decisions-2026-11-22.md` in the lead's notes
   folder): price each row with `evals/plan.mjs` (pricing only, it runs nothing paid), write the table and the
   decision rule, so his yes is one line naming a figure."
-- L2: written here and not in the S8 document's `## Cost` because PR 967 edits that document (`gh pr list --state open
-  --json number,files`, 2026-11-22 about 21:00 local).
+- L2: written here and not in the S8 document's `## Cost` because PRs 967 and 930 edit that document (`gh pr list --state
+  open --limit 200 --json number,files`, 2026-11-22 about 20:56 local); no open PR prices the rerun.
