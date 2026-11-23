@@ -1063,10 +1063,16 @@ test('stop keeps the state and fails when the kill cannot be confirmed afterward
 function fakeProcesses(rows) {
   // The table holds this process under its real pid, which `pids()` leaves out, and a Windows pid is a multiple of 4:
   // a fake pid that is one can be this process's on some machine, and its row then vanishes from `pids()` (seen in
-  // GitHub run 45057389675, pid 900). So a fake pid is never a multiple of 4, but System's own 4.
-  const real = rows.filter((row) => row.pid !== 4 && row.pid % 4 === 0).map((row) => row.pid);
-  if (real.length > 0) throw new Error(`fake pids ${real.join(', ')} are multiples of 4, as a real Windows pid is: use one that is not`);
+  // GitHub run 45057389675, pid 900). So a fake pid is never a multiple of 4, but System's own 4: the rows given, and
+  // those a hook adds, checked at each look and each kill (Codex on 7efa0b0d).
+  const refuseRealPids = (fakes) => {
+    const disallowedPids = fakes.filter((row) => row.pid !== 4 && row.pid % 4 === 0).map((row) => row.pid);
+    if (disallowedPids.length > 0) throw new Error(`fake pids ${disallowedPids.join(', ')} are multiples of 4, as a real Windows pid is: use one that is not`);
+  };
+  refuseRealPids(rows);
   const table = [{ pid: process.pid, ppid: 4, createdAt: OWN_CREATED }, ...rows].map((row) => ({ name: 'node.exe', ...row }));
+  const own = table[0];
+  const fakesOf = () => table.filter((row) => row !== own);
   const kills = [];
   const looks = [];
   const hooks = {};
@@ -1077,12 +1083,14 @@ function fakeProcesses(rows) {
     platform: 'win32',
     takeSnapshot: () => {
       hooks.beforeSnapshot?.(looks.length + 1);
+      refuseRealPids(fakesOf());
       looks.push(table.map((row) => ({ ...row })));
       return table.map((row) => ({ ...row }));
     },
     killProcesses: (targets) => {
       kills.push(targets.map(({ pid }) => pid));
       hooks.beforeKill?.(kills.length, targets);
+      refuseRealPids(fakesOf());
       const outcome = { killed: [], gone: [], running: [] };
       for (const { pid, createdAt } of targets) {
         const index = table.findIndex((row) => row.pid === pid && row.createdAt === createdAt);
@@ -1116,6 +1124,17 @@ const supervisedTree = () => [
   { pid: 805, ppid: 777, createdAt: CREATED + 1000 },
   { pid: 801, ppid: 805, createdAt: CREATED + 2000 },
 ];
+
+// Codex on 7efa0b0d (P2): the hooks insert rows after the table is built, and the collision of pid 900 came from such
+// a row, so the guard reads the table again at each look and each kill.
+test('a fake pid a hook adds that a real Windows pid could be is refused at the next look or kill', () => {
+  const looked = fakeProcesses(supervisedTree());
+  looked.hooks.beforeSnapshot = () => looked.table.push({ pid: 900, ppid: 777, createdAt: CREATED + 5000, name: 'claude.exe' });
+  assert.throws(() => looked.deps.takeSnapshot(), /fake pids 900 are multiples of 4/);
+  const killed = fakeProcesses(supervisedTree());
+  killed.hooks.beforeKill = () => killed.table.push({ pid: 904, ppid: 777, createdAt: CREATED + 5000, name: 'claude.exe' });
+  assert.throws(() => killed.deps.killProcesses([]), /fake pids 904 are multiples of 4/);
+});
 
 test('stop quiesces the supervisor first, then kills what it left: a server launched between the look and the kill does not survive a stop that reports success', { skip: WINDOWS_ONLY }, async () => {
   const root = makeProject();
