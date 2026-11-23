@@ -275,11 +275,12 @@ ${forkSection(view.forks ?? [])}</div>`;
 }
 
 /** The forks the lead pre-decided (his yes to question 290): each case with its proposed answer and their bound, or
- * that none was, so a departure without them says so. */
+ * that none was, so a departure without them says so; either way a case of his not pre-decided goes by the standing
+ * fork of rule:away-autonomy, and what that does not cover waits for his return. */
 function forkSection(forks) {
   const body = forks.length
-    ? `<ul>${forks.map((fork) => `<li>Si ${escapeHtml(fork.if)}: ${escapeHtml(fork.then)}</li>`).join('')}</ul><p class="soft">Con tu aprobación, actúo según estos casos mientras no estás: nada fuera de estos casos, ni gasto, ni publicar.</p>`
-    : '<p class="soft">ningún caso: lo que es tuyo espera tu vuelta</p>';
+    ? `<ul>${forks.map((fork) => `<li>Si ${escapeHtml(fork.if)}: ${escapeHtml(fork.then)}</li>`).join('')}</ul><p class="soft">Con tu aprobación, mientras no estás estos casos se deciden así, en lugar de la opción que yo recomendaría: ninguno cubre lo que esa opción no cubre, ni gasto, ni publicar.</p>`
+    : '<p class="soft">ningún caso: lo tuyo lo decido con la opción que recomendaría y te lo informo a tu vuelta; lo que eso no cubre espera tu vuelta</p>';
   return `<h3>Decidido por adelantado</h3>${body}`;
 }
 
