@@ -44,7 +44,7 @@ get through to reach them.
    harness. C as written breaks the arm [c].
 2. **With the Codex review off, what does a release wait on?** The Codex row asks for nothing: "the Codex review is
    off at the pushed commit ..., so no record is asked for" (`bin/lib/codex-review-rows.mjs:276-281`) [c]. The lens
-   review stays on unless `lensReview` is off too (`bin/lib/functions.mjs:20`), and the push and the merge door ask
+   review stays on unless `lensReview` is off too (`bin/lib/functions.mjs:21`), and the push and the merge door ask
    for its record (question 104, `docs/ROADMAP.md:162`) [c]. Whether the agent inside the trial can run
    `js-harness lens-review`, a Claude run nested in the trial, and at what list cost, was not read [?].
 
