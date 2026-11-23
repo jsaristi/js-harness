@@ -9,9 +9,9 @@ draft pull request; test runner `node --test`.
 - Next: T1, test first. Design: drop `claude-permit-hook` from `entryComponents`; `install --permit-relay` records
   the choice in the manifest, and `install()` reads it back when it builds the declared entries, so `sync` keeps an
   opted-in relay. Write a test for that: opt in, then sync, and the entry is still there.
-- Open: T0 is his. Two unknowns may defeat route S: `ve`'s `nRe` term, and the plugin `claude-security`, whose
-  `hooks/hooks.json` holds a PermissionRequest hook (whether it is enabled was not read). JH 302 paused at 86% context
-  before T1.
+- Open: T0 is his. One unknown may defeat route S: `ve`'s `nRe` term. `claude-security` carries a PermissionRequest
+  hook but is not enabled here (L4). T1 waits for T0 and a fresh context (the lead, L4). The PR is a draft and docs
+  only.
 
 ## Goal
 On a turn he typed, the lead's `start_session` opens a session with no card, while the start checks in the
@@ -125,3 +125,6 @@ stay and stop costing the card. Route H is the fallback: the hook matchers becom
   - `nRe` is not known;
   - the plugin `claude-security` carries a PermissionRequest hook;
   - plain `install` also drops the relay, so "install alone leaves it" in the draft is wrong.
+- L4, 2026-11-23, the lead's answer (the lead's claim): `claude-security` is not enabled here, since `enabledPlugins`
+  lists codex, engram and typescript7-lsp. So of the two unknowns only `nRe` remains. `--no-permit-relay` is not
+  added: T0 decides the route first. T1 goes to a fresh context after T0, so JH 302 stops here.
