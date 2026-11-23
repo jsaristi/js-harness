@@ -18,7 +18,7 @@ His words that ask for it: transcript `0cdab702-72bd-48e7-8a8e-0c38d4aca9c9`, li
    `js-harness sessions start`, scheduled tasks and cloud sessions. Each could start a session with nobody there,
    and each would open it where he does not see it.
 
-So, today, a session opens others without asking him only on a turn he typed, and the app can ask him to approve even that start, by the reading of its bundle below; that the Plan is that session is the lead's and JH PLAN's reading of his words (L18), not his words. "Sin pedir permiso" (line 14462) is met as
+So, today, a session opens others without asking him only on a turn he typed, and the app can ask him to approve even that start (he rejected one on a turn he had typed, line 15193 below); that the Plan is that session is the lead's and JH PLAN's reading of his words (L18), not his words. "Sin pedir permiso" (line 14462) is met as
 far as the host allows. The rest waits on what the test left unproven, or on the host.
 
 ## Checked: the start test, and why the app asked him (JH 301, 2026-11-22)
@@ -41,7 +41,8 @@ Why, from the app's bundle (`C:Program FilesWindowsAppsClaude_6.28899.6.0_x64__p
 read as binary text with `grep -a`, nothing unpacked). [c] checked, by whom; [e] JH PLAN's explorer's claim, not checked:
 1. [c] (JH PLAN; re-run by JH 301) `start_session` and `hand_off_to_session` are given `permission_policy:"always_ask"`:
    the bundle holds `Zn=["start_session","hand_off_to_session"]` and maps each to `{name:e,permission_policy:"always_ask"}`,
-   behind a feature check (`Qn()`). That the check is a remote flag on by default is [e].
+   behind a feature check (`Qn()`, which reads an id; JH 301 did not read its default). That it is a remote flag on by
+   default is JH PLAN's check, by the lead.
 2. [e] The app allows a start with no prompt when no gate trips, or when bypass is honoured for that session.
 3. [e] The gates: the turn came over Remote Control ([c] by JH PLAN); 10 or more starts since his last message; the
    first use of a host, folder or repository; the turn woken by a session and not a person.
@@ -51,7 +52,8 @@ read as binary text with `grep -a`, nothing unpacked). [c] checked, by whom; [e]
 6. [e] No user setting turns it off.
 
 So, if [e] holds, an unattended start always trips the woken-by-a-session gate and runs untapped only where bypass is
-honoured. Not proven: which gate or reason applied at lines 14965, 15049 and 15192, and whether bypass can be honoured
+honoured. That gate does not explain the prompt at line 15192, on a turn he had typed: another gate tripped there, or
+the list above is incomplete. Not proven: which gate or reason applied at lines 14965, 15049 and 15192, and whether bypass can be honoured
 for the Plan. Using it as routine touches the reading of `rule:sessions-open-in-sidebar`, which stays the lead's,
 after Codex's reset, with his lines 14462, 14915 and 15198.
 
