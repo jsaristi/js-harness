@@ -9,9 +9,9 @@ lead's brief (`~/.js-harness/background/briefs/2026-11-15T02-10-23-626Z-2a6b0f77
 T1-T5 done; the Synthesis and the page reconciled with `verifier.md`'s Verdicts and every part's `## Not checked`
 (the advisor's close review). Last: `js-harness contract run`, then `notify --kind closed --summary
 docs/sessions/2026-11-15-jh-203-auditoria-completa-de-lo-construido.md`.
-Since 2026-11-22 (L6) the notes folder this document's Done when, Depth pass specs 1, 2 and 4 and the Synthesis's
-sources point to is gone, with the 13 findings files, `verifier.md`, the coverage summary, `p0-v2.md` and the page.
-The Synthesis below is the surviving copy of the audit. Those checks now fail, and no replacement proof is written.
+The notes folder this document's Done when, Depth pass specs 1, 2 and 4 and the Synthesis's
+sources point to was found gone on 2026-11-22 (L6), when it was removed not known, with the 13 findings files, `verifier.md`, the coverage summary, `p0-v2.md` and the page.
+The Synthesis below is the surviving copy of the audit. Those checks now fail (the Done when line on the branch at origin still holds), and no replacement proof is written.
 
 ## Goal
 Tell, part by part with evidence, what of js-harness to keep, fix, shrink or remove so the harness matures.
@@ -372,5 +372,5 @@ fix (C-11). Status line: remove (A3-4) vs keep and test (E1). F8 share: main's 1
 - L6 2026-11-22, JH 301 at the lead's word, after PR 892 landed this document: the notes folder is gone.
   `ls C:/Users/Oficina/AppData/Local/Claude-Data/claude_pzs8sxrjxfjjc/side-session-notes/local_4096ade6-b204-4ba7-8cb1-aae81ba3bb49`
   printed "No such file or directory", and so did `ls` on its `full-audit/verifier.md` and `auditoria-2026-11-14.html`.
-  So the Done when's first and third commands, and Depth pass specs 1, 2 and 4, fail from that day; they are left as
+  So the Done when's first and third commands, and Depth pass specs 1, 2 and 4, were found failing that day (when the folder was removed is not known); `git ls-remote origin worktree-full-audit` still prints the branch. They are left as
   written, since they record what was proven on 2026-11-15, and no new proof replaces them.
