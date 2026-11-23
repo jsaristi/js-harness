@@ -289,6 +289,12 @@ step. `--stack-reviewed` is unchanged. The research that fills the file is JH 10
   refused with "its parser could not check it", which `bin/lib/reply-commands.test.mjs` already proves), and the
   order of standard-error lines among the checks (diagnostics, not the answer he sees, whose order is unchanged).
   gentle-ai: `862a96d3..19348fd4` approved (lineage `review-c4cd419b84ce606f`).
+- L18 (2026-11-23, T5 read for closing, left open): PRs 707, 710 and 714 are merged (`gh pr view <n> --json
+  state,mergeCommit`: 7d704499 and 5d63d3b1 at 2026-10-30T19:03:39Z, 7e808cfe at 19:45:12Z), the Log shows Codex
+  and the lenses on every slice (L8, L9, L12 to L17), and the summary is on main
+  (`docs/sessions/2026-10-30-jh-106-rigor-three-checks-on-the-lead-s-mistakes.md`). Missing from the Log (searched
+  for "ready", "verif" and "independent"): the ready notices of 710 and 714 (only 707's, 18:05Z, is in L9), and an
+  independent verifier over any slice. T5 stays open until they are recorded.
 
 ## Next step
 State (2026-10-30): PRs 707 (T2) and 710 (T3) are merged; T4 is PR 714 (`ccd7e3f9` to `19348fd4`), every code commit

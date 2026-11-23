@@ -144,3 +144,8 @@ Nothing planned: the rule is his typed words (L2) and the work is the brief's. A
   gentle-ai: the Stop hook offered the whole branch three times; its read-only status was run each time and nothing
   started (CLAUDE.md), so no gentle-ai line covers a commit here.
 - L11 The gate (`js-harness gate -- npm run check`) exited 0; pull request 742 opened against main.
+- L12 (2026-11-23, T5 read for closing, left open): PR 742 is merged (`gh pr view 742 --json state,mergeCommit`:
+  MERGED, af3d44cc, 2026-11-01T06:53:08Z) and the Log shows Codex and the lenses (L8 to L10) and the gate (L11).
+  Missing from the Log (searched for "verif" and "ready"): an independent verifier over the code commits, which the
+  lead's closing pass asks for though T5's own text does not name one, and the `notify --kind ready` T5 names. T5
+  stays open until both are recorded.
