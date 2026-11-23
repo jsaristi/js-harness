@@ -472,6 +472,15 @@ check or an eval case ("After F8", directive coverage).
 **Discarded:** `progress --since`: `progress` counts checkboxes and runs no git without `--pace`. The report's time as a notice: a notice to the orchestrator wakes its own wait. Marking on every read: a report looked at and not given would hide its facts from the next one.
 **Today:** `bin/report.mjs`, `bin/lib/report.mjs`, `js-harness report`
 
+### The feature and phase pages
+
+**Problem:** On 2026-10-28 the two pages the owner liked, the return of a stretch and the map by phase, were drawn by hand: the lead read the roadmap, the plan, the merges and the notices and inferred the percent, the before and after of each step and the timeline, so no one could check them and the next page could not compare with them; he asked for the map, complete and detailed, and for the harness to show almost everything this way, because what is not measured cannot be improved (`odd/tasks/visual-pages.md`, specs 1 and 2).
+**Requirement:** `report feature <doc>` makes the page of a feature's close from its document, git and the records: what its specs and done-when commands promised and its tasks delivered, its pull requests (the merges of the default branch from the branch its document names, `--branch` or `--pr`), the time from its first commit to its last merge against its stretch estimate, the Codex and lens reviews and runs on its commits with their spend, the gates that failed in its worktree, and the map before its first merge and after its last. `report phase` makes the page of a phase's change: the whole map at the default branch now against the commit the last phase page read (or `--since`; with neither the page says it has no before), the phases that closed, each plan step by step and what is next. Both are read-only but for `--html`, which writes the page and puts it in the rendered record of the templates, and `--record`, which keeps the page's numbers in the page record; what no record holds is named as not measured, never shown as a zero.
+**Reason:** A number on a page comes from the command's JSON and the page is that JSON rendered, so a page can be checked and the next one compares with the numbers the last one kept.
+**Proof:** `node --test bin/report-feature.test.mjs`, `node --test bin/report-phase.test.mjs`, `node --test bin/lib/report-feature.test.mjs`, `node --test bin/lib/report-phase.test.mjs`
+**Discarded:** Pages drawn by hand from the roadmap and the merges, as the two of 2026-10-28: a page no one can check, which the next cannot compare with. A new recorder of the work: the pages read the records that exist and say what they do not hold.
+**Today:** `bin/report-feature.mjs`, `bin/report-phase.mjs`, `bin/lib/report-feature.mjs`, `bin/lib/report-phase.mjs`, `js-harness report` (with feature and phase)
+
 ### Onboarding
 
 **Problem:** A project set up with `init` had no plan, and js-harness's own was made by hand (pre-plan, then roadmap); his request of 2026-10-19 asks for the pre-plan and the plan to be made with the AI when the harness is installed (`odd/tasks/onboarding.md`).
