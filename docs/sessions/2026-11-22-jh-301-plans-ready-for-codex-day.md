@@ -23,7 +23,7 @@ que estar a toda hora trabajando con las horas llena y con lo siguiente a trabaj
   $67.20 / $119.40, least gain 4 of 10 on one arm, cap $70 mid only); `eval-codex-login.md`, four ways.
 - PR 1005, merged (`3ac6f393`): the login page's two code reads; C as written breaks the arm
   (`bin/lib/project.mjs:1032-1034`, `:993`), recommendation C'. This summary.
-- After this summary's closed notice the lane took more units, all merged (read with `gh pr view` on 2026-11-23,
+- After this summary's closed notice the lane took more units, all merged (read with `gh pr view` on 2026-11-22, local,
   when JH 303 refreshed this summary at the lead's word): PRs 1007 (`a1929ecd`), 1011 (`2e653bd1`), 1015
   (`d801d269`), 1016 (`bcca95d0`), 1017 (`745f76f6`), 1019 (`4438b6f9`), 1020 (`5a2c4185`) and 1021 (`9d7f1c47`).
   Their decisions and costs are not written here: JH 301 stopped near the end of its line without a summary of
@@ -46,7 +46,7 @@ que estar a toda hora trabajando con las horas llena y con lo siguiente a trabaj
   with `\r?\n` patterns work.
 
 ## Left
-- His decisions: the S8 rerun's cap and the Codex login way (C'), the desktop probe's yes, web-guidance T3's spend,
+- His decisions: the S8 rerun's cap and his yes on C' (the Codex login way, since built as draft PR 1012), the desktop probe's yes, web-guidance T3's spend,
   the Hyper-V rehearsal's five decisions, whether to take the resume shortening now. The lead holds them.
 - Double reviews of PR 1001's two documents, after Codex's reset. The lead places them.
 - Not read: whether a lens review can run inside a long-session trial and its cost.

@@ -2457,7 +2457,8 @@ it waits runs nothing").
 - Seen: 2026-11-22 — the channel record, JH 301's note to the lead at 23:43 local (JH 301's own) — after its
   background tasks were stopped with `TaskStop`, 12 `js-harness wait --notice-to 301` node processes, started 21:26
   to 23:40, were still running; killed by pid, none left after (`Get-CimInstance` on node.exe matching
-  "notice-to 301"). `js-harness wait` runs outside `js-harness loop`, so the control below does not reach it
+  "notice-to 301"). The waits ran as plain background tasks (`bin/wait.mjs` is a command of its own), not under
+  `js-harness loop`, so the control below did not reach them
 - Seen: 2026-11-22 — JH 303's transcript c992d976 (its own) — a `TaskStop` of a background bash running a plan
   script left the script's loop alive (bash pid 8696); it went on checking out heads in the worktree a second run
   used, so some of that run's plans were of another pull request's head; found when the plans named other heads,
