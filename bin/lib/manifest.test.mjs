@@ -3132,6 +3132,9 @@ test('the orchestrator skill says how a question reaches the user: recorded, ask
   assert.ok(text.includes('When the user writes "hazme la pregunta N", they ask for question N now: build its card with `js-harness template ask N` and ask it through the question tool.'));
   assert.ok(text.includes('- Ask the user nothing while an orchestrator holds its role'));
   assert.ok(text.includes('`js-harness sessions --quote <transcript> <line>`'));
+  // His order of 2026-11-23 (JH PLAN transcript, line 18192), read at line 18244 as covering the questions that need
+  // a written line of his: while he is away the lead's note in its place is the answer the session goes on with.
+  assert.ok(text.includes('While the user is away, a note from the lead that answers your question in its place, naming the question and saying it is the lead\'s direction, is your answer: go on with it, and say in your next notice that the lead took it.'));
   // odd/tasks/held-sessions.md, S5: a card the host holds in a session's window reaches him here, not there.
   assert.ok(text.includes("- A session the host holds on a card (the board's line that a call has had no result and the host may be holding it for approval, or a session the host marks as needing the user) is brought to the user in the orchestrator's chat in that same turn, through the question tool: which session, what its card asks, read from its transcript's last call, and what you recommend. The card itself is answered by the user in that session's window; never stop the session to get around it, and never leave it for them to find."));
   // odd/tasks/held-sessions.md, S8 and T7: the lead holds the permit relay and judges each card it brings.

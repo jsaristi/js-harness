@@ -459,14 +459,15 @@ export const RULES = [
   },
   {
     "id": "questions-one-place",
-    "subject": "every question of the project reaches the user in the orchestrator's chat, through the host's question tool with options, recorded before it is asked",
+    "subject": "every question of the project reaches the user in the orchestrator's chat, through the host's question tool with options, recorded before it is asked; while he is away, a note from the lead that answers a session's question in its place is that session's answer",
     "owner": "sebastian",
-    "since": "2026-11-17",
+    "since": "2026-11-23",
     "path": "bin/lib/manifest.mjs",
     "phrases": [
       "Every question of the project reaches the user in one place",
       "Ask the user nothing while an orchestrator holds its role",
-      "Every question carries 2 to 4 options, the written ones included"
+      "Every question carries 2 to 4 options, the written ones included",
+      "a note from the lead that answers your question in its place"
     ]
   },
   {
