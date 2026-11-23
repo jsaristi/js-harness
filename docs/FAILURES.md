@@ -1030,6 +1030,16 @@ nothing said so: the scheduled task went on running the product's `loop heartbea
   own) — the three ticks last ran together at 21:18 local on 2026-11-02 (UTC-05:00), before the workshop was split
   from the product, and did not run again; it was seen only when pull request 809 printed their age at a session
   start, on 2026-11-10
+- Seen: 2026-11-23 — the lead's notes, k-units-2026-11-23.md, K2 (measured there from the transcripts and the
+  relief file); the lines cited checked here on main — the ticks stopped again at 2026-11-11T22:19Z, at a lead
+  handover: f0959bbd stopped its workshop-body heartbeat, and 812b728f started it again at 22:33Z as the product's
+  `js-harness loop heartbeat`, which runs no tick (`bin/loop.mjs:567`, `if (!ctx.throughputTick) return []`), as
+  `bin/lib/manifest.mjs:148` and `:152` and the orchestrator skill direct. Control fired unread: the ticks hook
+  (`ticks --hook`, `.claude/settings.json:9`) said so at 146 session starts from 2026-11-12T13:40Z, and named the
+  product loop on 2026-11-13, but only as a `systemMessage`, which reaches him and not the model (claimed in K2, not
+  tested), and no lead's text reads it. windows-daily and host-watch stayed stale until the lead started the
+  workshop heartbeat on 2026-11-23 (claimed; the lead's own): here `ticks` still printed both STALE, last read
+  2026-11-11T21:21Z, and `loop status` recorded no loop, at 08:30Z
 - Control: check — workshop/bin/ticks.test.mjs — "a stale row against a home whose newest snapshot is two days old:
   the hook exits 0 and says it" — since 2026-11-10
 
