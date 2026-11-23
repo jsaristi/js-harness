@@ -16,6 +16,7 @@ import { CLAUDE_HOME, CODEX_HOME } from './model-home.mjs';
 import { checkRules } from './rules-check.mjs';
 import { countFindings, isTextInForce } from './rules-scan.mjs';
 import { RuleChangeError, changedList, sourceOf } from './rules-change.mjs';
+import { heldDetail } from './rules-change-held.mjs';
 import { isSessionId } from './session-id.mjs';
 
 const NOT_FETCHED = 'not fetched: the count reads origin/main as this clone holds it; a real change fetches it first';
@@ -222,7 +223,7 @@ function runPass({ id: oneId, changes, oneAtATime = false, also = () => [], comm
       }
       if (held.length > 0) {
         const clear = ref.startsWith('origin/') ? `git push origin --delete ${ref.slice('origin/'.length)}` : `git branch -D ${ref}`;
-        throw new RuleChangeError(`${ref} holds a rule change not on ${BASE} (${held.map(([ruleId]) => ruleId).join(', ')}): one change is open at a time; when it has landed or is dropped, ${clear}`);
+        throw new RuleChangeError(`${ref} holds a rule change not on ${BASE} (${held.map(([ruleId]) => ruleId).join(', ')}): one change is open at a time; when it has landed or is dropped, ${clear}. ${heldDetail(ref, git)}`);
       }
     }
 
