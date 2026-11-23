@@ -123,6 +123,18 @@ test('a branch only on origin is pushed, with no local branch or worktree', asyn
   assert.match(result.err, /origin\/rule\/other is pushed, with no local branch or worktree/);
 });
 
+test('a branch on origin whose local branch no longer holds the change names that branch and its worktree', async () => {
+  const { base, dir } = repository();
+  otherBranch(dir, 1);
+  git(dir, 'update-ref', 'refs/remotes/origin/rule/other', 'rule/other');
+  git(dir, 'branch', '-q', '-f', 'rule/other', 'main');
+  git(dir, 'worktree', 'add', '-q', path.join(base, 'held-tree-reset'), 'rule/other');
+  const result = await change(dir);
+  assert.equal(result.code, 1);
+  assert.match(result.err, /origin\/rule\/other holds a rule change not on origin\/main/);
+  assert.match(result.err, /origin\/rule\/other is pushed, and the local rule\/other is checked out in the worktree [^\n]*held-tree-reset/);
+});
+
 test('git that answers nothing leaves only what it could read, and never throws', () => {
   const failing = () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' });
   assert.equal(heldDetail('rule/other', failing), 'rule/other: git could not say whether it is pushed or which worktree holds it');

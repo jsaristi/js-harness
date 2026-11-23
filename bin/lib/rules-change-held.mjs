@@ -13,7 +13,8 @@ const commits = (count) => `${count} commit${count === 1 ? '' : 's'}`;
 /**
  * One sentence on the branch `ref`, a local `rule/<name>` or a remote-tracking `origin/rule/<name>`: whether it is
  * pushed (its origin ref exists), the commits it is ahead of that ref (or of origin/main when it is not pushed), and
- * the worktree that has it checked out, the main checkout included, or none. `git(args)` runs git in the checkout and
+ * the worktree that has it checked out, the main checkout included, or none; for a remote-tracking ref, whether its
+ * local branch exists and the worktree that has that one checked out. `git(args)` runs git in the checkout and
  * gives `{ status, stdout }`; it may fail or throw, and what it could not read is left out of the sentence.
  */
 export function heldDetail(ref, git) {
@@ -25,7 +26,19 @@ export function heldDetail(ref, git) {
       return null;
     }
   };
-  if (ref.startsWith('origin/')) return `${ref} is pushed, with no local branch or worktree`;
+  const listed = run(['worktree', 'list', '--porcelain']);
+  const holder = (branch) => (listed === null ? undefined : parseWorktreeList(listed).find((one) => one.branch === branch && !one.bare) ?? null);
+  const where = (tree) => (tree === null ? 'checked out in no worktree' : `checked out in the worktree ${tree.path}`);
+
+  // A remote-tracking ref blocks when its local branch no longer holds the change, or is gone: say which.
+  if (ref.startsWith('origin/')) {
+    const name = ref.slice('origin/'.length);
+    const local = run(['for-each-ref', '--format=%(objectname)', `refs/heads/${name}`]);
+    if (local === null) return `${ref} is pushed; git could not say whether a local ${name} exists`;
+    if (local.trim() === '') return `${ref} is pushed, with no local branch or worktree`;
+    const tree = holder(name);
+    return `${ref} is pushed, and the local ${name} is ${tree === undefined ? 'there' : where(tree)}`;
+  }
 
   const remote = `origin/${ref}`;
   // for-each-ref, not rev-parse: it exits 0 with nothing for a ref that is not there, so a failure is told apart.
@@ -33,12 +46,11 @@ export function heldDetail(ref, git) {
   const pushed = found !== null && found.trim() !== '';
   const ahead = found === null ? null : run(['rev-list', '--count', `${pushed ? `refs/remotes/${remote}` : BASE}..refs/heads/${ref}`]);
   const count = ahead !== null && /^\d+$/.test(ahead.trim()) ? Number(ahead.trim()) : null;
-  const listed = run(['worktree', 'list', '--porcelain']);
-  const tree = listed === null ? undefined : parseWorktreeList(listed).find((one) => one.branch === ref && !one.bare) ?? null;
+  const tree = holder(ref);
 
   if (found === null && count === null && tree === undefined) return `${ref}: git could not say whether it is pushed or which worktree holds it`;
   const parts = [found === null ? `${ref} (git could not say whether it is pushed)` : pushed ? `${ref} is pushed (${remote})` : `${ref} is not pushed (no ${remote})`];
   if (count !== null) parts.push(`${commits(count)} ahead of ${pushed ? 'it' : BASE}`);
-  if (tree !== undefined) parts.push(tree === null ? 'checked out in no worktree' : `checked out in the worktree ${tree.path}`);
+  if (tree !== undefined) parts.push(where(tree));
   return parts.join(', ');
 }
