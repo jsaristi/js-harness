@@ -380,8 +380,11 @@ the committed range and wrote no record: its tokens were spent on a finding with
 - Seen: 2026-11-14 — odd/tasks/stretch-protocol.md, L12 (JH 201) — `codex-review --base 0c6c245f` over
   0c35bde..a690647, 173,920 input tokens, "Tracked files changed while Codex was reviewing ... no record was written";
   the session wrote `docs/FAILURES.md` and the feature document while the review ran in the background
-- Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews leaves no record" —
-  since 2026-10-12
+- Control: check — bin/codex-review.test.mjs — "reads a snapshot of the head: an edit of a tracked file in the live
+  folder while Codex reviews leaves the record written" — since 2026-11-14
+- Was: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews leaves no record" —
+  replaced on 2026-11-23: 6edc7fca (merged by pull request 878 on 2026-11-14) made the review read a snapshot of the
+  head instead of the live folder and renamed the test, so the old title is gone from main and the control read lost
 
 ### codex-review-incomplete
 A Codex review followed the delegation rules of its home instead of reading the patch, read a tenth
@@ -713,8 +716,12 @@ not the committed range, wrote no record and had to be run again.
   edited, to start T8, during Codex's confirming review of `94e25d3..e3cc2ee`; 88,091 input tokens spent, its
   verdict read (correct, both findings fixed) and nothing recorded; the session judged the edit safe because it
   touched other files than the range, which the check does not weigh, and the review ran again after T8's commit
-- Control: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
-  leaves no record: the tree is no longer the committed range" — since 2026-10-12
+- Control: check — bin/codex-review.test.mjs — "reads a snapshot of the head: an edit of a tracked file in the live
+  folder while Codex reviews leaves the record written" — since 2026-11-14
+- Was: check — bin/codex-review.test.mjs — "an edit of a tracked file made while Codex reviews
+  leaves no record: the tree is no longer the committed range" — replaced on 2026-11-23: 6edc7fca (merged by pull
+  request 878 on 2026-11-14) made the review read a snapshot of the head instead of the live folder and renamed the
+  test, so the old title is gone from main and the control read lost
 
 ### engram-listener-unseen-at-kill
 A gate failed on one test of `evals/isolation-probe.test.mjs` (line 1734), "the probe stops what the
@@ -1590,8 +1597,12 @@ with `cpSync` and set `GIT_CONFIG_GLOBAL` without maintenance off).
   its config inline; it now turns maintenance and gc off too, and its commit asserts under `GIT_TRACE` that none starts.
   Searched again: the other test files that set `GIT_CONFIG_GLOBAL` and call `cpSync` without maintenance off
   (`bin/lib/project-switches.test.mjs`, `evals/task-proof.test.mjs`) copy no repository they committed in
-- Control: check — bin/lib/project-migrate.test.mjs — "a commit in a project these tests make starts no git
-  maintenance" — since 2026-10-30
+- Control: check — scripts/migration.test.mjs — "migrates keeping its edits, and uninstall and git take back every
+  write" — since 2026-11-08
+- Was: check — bin/lib/project-migrate.test.mjs — "a commit in a project these tests make starts no git
+  maintenance" — replaced on 2026-11-23: that test still holds, but the 2026-11-08 sighting was in
+  `scripts/migration.test.mjs`, which it does not cover; that file's test asserts under `GIT_TRACE` that its commit
+  starts no maintenance since a6dd79ae, merged by pull request 793 on 2026-11-08
 
 ### proposal-unreviewed
 A plan, a design or a protocol reached him to decide before any reader that did not write it had
@@ -1606,8 +1617,10 @@ read it, and he found its holes, or was asked to approve a version its next roun
 - Seen: 2026-11-13 — the lead's transcript 69918425, line 354 — question 279, a change to how the lead opens work
   sessions, reached him with no double review: `.git/js-harness/double-reviews.jsonl` holds no read between 01:45Z
   and 18:12Z; the control owed is `notify` refusing a question with no read id (odd/tasks/advisor-use.md, P6, L5)
-- Control: check — bin/lib/protocols-skill.test.mjs — "a proposal reaches the user only after two readers, and a handoff
-  names the rule" — since 2026-10-16
+- Control: owed — odd/tasks/advisor-use.md — "T4 (kind: build) after his yes: P6 in `bin/lib/channel.mjs`"
+- Was: check — bin/lib/protocols-skill.test.mjs — "a proposal reaches the user only after two readers, and a handoff
+  names the rule" — replaced on 2026-11-23: the protocol line it holds did not stop the 2026-11-13 sighting, whose
+  own note names the fix owed, `notify` refusing a question with no read id (odd/tasks/advisor-use.md, P6)
 
 ### push-check-read-as-gate
 The board counted the few seconds of a push's check as a second gate.
@@ -2150,6 +2163,7 @@ after it was made: nothing measured the spend against the figure while the work 
 - Seen: 2026-11-22 — the channel record, lines 4018 and 4020 (JH 303's closing notice at 00:05 local on 2026-11-23;
   its own) — JH 303 measured 33.8M tokens against its 25M line before the lead raised it to 40M, and 37.0M at the
   end; its notices had given about 16M, as estimates
+- Control: owed — docs/ROADMAP.md — "A spend check: a session reads its cache-read sum against its stop line before each step"
 
 ### stack-update-moved-hooks
 A tool of the stack was updated on purpose without the hook count read after it, so a hook entry the update added was
@@ -2596,7 +2610,10 @@ was not so.
   skip phrase and gives PR 930 as not ready; checked in the record (line 3786). Stop: the condition for asking (his
   typed phrase) goes in the lead's message to JH PLAN, never in the card's text, from the next card on; proof, `grep -c
   'porque escribiste' ~/.js-harness/channel/D--js-harness.jsonl` stays 1
-- Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
+- Control: owed — docs/ROADMAP.md — "`merge-queue --land` fast-forwards the lead's checkout"
+- Was: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — replaced on
+  2026-11-23: it was seen again after the measurement, and the Later line of docs/ROADMAP.md that names this entry
+  owes a check for one of its causes; the newest sighting (question 382, 2026-11-20) has another cause
 
 ### turn-ended-waiting
 Sessions ended their turn waiting for his `/compact` or for a message while he was away, so nothing
