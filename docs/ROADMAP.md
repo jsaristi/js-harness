@@ -285,6 +285,17 @@ shrinks (`bin/lib/ratchet.testkit.mjs`; `odd/tasks/conventions.md`).
 - [x] Part 1, js-harness itself: the refused-argument wording, the error split, pure modules and the shipped voice held by tests; the review lines; the protocols skill's trigger (`jsaristi/js-harness#496`)
 - [ ] Part 2, onboarding profiles: the conventions a project picks at onboarding, after onboarding v4 closes
 
+### Instruction files
+Sebastián, 2026-11-23: "quisiera colocar en tareas que revisemos a profundidad tanto el Claude.md como el
+Agents.md como los que estan dentro la carpetas por que los veo muy esquetos y casi sin informacion relevante que
+deberia tener el harness realmente" (`js-harness sessions --quote 0cdab702-72bd-48e7-8a8e-0c38d4aca9c9 18858`).
+Not `odd/tasks/instruction-homes.md` (one home per instruction) nor `odd/tasks/folder-instructions.md` (part 1
+built; its L4 moves of lines out of the root files are this review's input, not its result).
+- [ ] A depth review, done with him ("revisemos"), of `AGENTS.md`, `CLAUDE.md`, `bin/CLAUDE.md`, `docs/CLAUDE.md`,
+  `evals/CLAUDE.md` and `odd/tasks/CLAUDE.md`: per file, what is missing; whether each missing item belongs in the
+  file, a skill or protocol, or a check; and whether a budget would move (`rule:agents-budget` 1500 tokens,
+  `rule:claude-md-budget` 3200, `FOLDER_INSTRUCTIONS_LINES` 49), a budget move being a rule change by its own route
+
 ## F8 plan
 
 F8's step 4 and step 5 in detail, one step at a time, in the order of the checklist (step 4's
