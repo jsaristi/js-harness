@@ -2610,10 +2610,7 @@ was not so.
   skip phrase and gives PR 930 as not ready; checked in the record (line 3786). Stop: the condition for asking (his
   typed phrase) goes in the lead's message to JH PLAN, never in the card's text, from the next card on; proof, `grep -c
   'porque escribiste' ~/.js-harness/channel/D--js-harness.jsonl` stays 1
-- Control: owed — docs/ROADMAP.md — "`merge-queue --land` fast-forwards the lead's checkout"
-- Was: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — replaced on
-  2026-11-23: it was seen again after the measurement, and the Later line of docs/ROADMAP.md that names this entry
-  owes a check for one of its causes; the newest sighting (question 382, 2026-11-20) has another cause
+- Control: measured — odd/tasks/honesty-audit.md — "on 2026-10-15 the general honesty audit was measured not worth building" — since 2026-10-15
 
 ### turn-ended-waiting
 Sessions ended their turn waiting for his `/compact` or for a message while he was away, so nothing
