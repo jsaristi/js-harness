@@ -1542,6 +1542,9 @@ failure did not come back on the next run.
 - Class: tool
 - Seen: 2026-10-13 — relief file, line 561 — the first gate of the merge c05e1c6 failed in 470.9 s;
   JH 8's inference (claimed): the end hook's removal of its folder
+- Control: measured — docs/audits/2026-11-22-failures-a-check-could-hold.md — "on 2026-11-22, under node 26.13.1, a
+  file whose end hook throws is already named by its path as a failing test, and the flaky rerun reruns it" —
+  since 2026-11-22
 
 ### process-left-after-stop
 Stopping a task from the app or with `pkill` ended what the app tracks and left the process under it

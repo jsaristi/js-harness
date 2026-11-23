@@ -81,6 +81,14 @@ request 999 controls. The proposed test names are drafts; the builder writes the
 - `probe-end-hook-flake`: the gate names a test file that failed as a whole with no test red as a file failure,
   apart from the failing tests, so a flake of a file's end hook is told from a real one. Test in
   `bin/lib/ci-gate.test.mjs`: "a file that fails with no failing test is named as a file failure".
+  Measured after this audit (JH 302, 2026-11-22), so no check is built: on 2026-11-22, under node 26.13.1, a
+  file whose end hook throws is already named by its path as a failing test, and the flaky rerun reruns it. A
+  scratch file with one passing test and an `after()` that throws, run with `node --test`, prints under
+  `✖ failing tests:` a `test at a.test.mjs:3:1` line, then `✖ <absolute path of the file>` and the hook's error.
+  `failingTests` (`bin/lib/flaky.mjs:220`), which the gate log keeps, returns that path as the failing test's name;
+  `failedTestFiles` (`bin/lib/flaky.mjs:20`) returns `a.test.mjs`, the file the flaky rerun runs again; and
+  `failedLog` (`bin/lib/ci-gate.mjs:52`) prints a CI log from that summary. The sighting of 2026-10-13 named the
+  file too, with no test of it red; the node version of that run is not known.
 - `short-name-judged-outside`: `isWithinBase` (`bin/lib/project.mjs:203`) folds case but not Windows 8.3 short
   names; resolving both paths with `fs.realpathSync.native` first would. It waits for the split planned in
   `odd/tasks/project-split.md`. Test in `bin/lib/project.test.mjs`: "a path spelled with a short name is within
