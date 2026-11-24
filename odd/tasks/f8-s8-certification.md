@@ -257,7 +257,7 @@ Still open: C5.1 by hand, R3, T2 to T7. A second grading after T6 changes the gr
 - [ ] T3 (kind: build) a read-only age check for C4.2's roots, locks and processes, one snapshot time; tests for a 25-hour folder, a stale lock, a lingering process; on his yes — S8; inline
 - [ ] T4 (kind: build) the closing count per class with ids and host-caused exceptions; on his yes — S4; inline
 - [ ] T5 (kind: design) R1's behavioural run: case inventory, repeats, acceptance, the paired proof standard; on his yes — S3; inline; design: `odd/tasks/f8-s8-designs/t5-behavioural-run.md`
-- [ ] T6 (kind: build) the long-session grader fixes: a share from fewer than 5 valid runs cannot certify; tdd per feature with the feature's own test; spanish after English tool output only; tests first; on his yes — S2; inline
+- [x] T6 (kind: build) the long-session grader fixes: a share from fewer than 5 valid runs cannot certify; tdd per feature with the feature's own test; spanish after English tool output only; tests first; on his yes — S2; inline
 - [ ] T7 (kind: design) the audits: a frozen package and rubric, pinned model and effort, blind baseline and candidate, three runs each, their cost; on his yes — S7; inline; design: `odd/tasks/f8-s8-designs/t7-audits.md`
 - [ ] T8 (kind: verify) the candidate tag; the runs of `## Measures`, each priced with `--plan` first, on his yes; a report reading each row against its line that refuses missing, duplicate, errored or wrong-arm trials; `## Result` — S1 to S8; inline
 
@@ -291,3 +291,28 @@ Still open: C5.1 by hand, R3, T2 to T7. A second grading after T6 changes the gr
   6439, read with `sessions --quote`), through the lead: grade S8's long run once, before JH 235's T5/T7, not at 60%
   weekly or above; no new S8 runs, no second grading after T6. Codex meter 49% before, 50% after. Graded on
   `docs/s8-long-grade` from `5ae4021a`: both setups 44%; C1.2, C1.3, C1.5 and C2.4 miss.
+- L6 (2026-11-19, JH 236, T6, on question 361's yes "Sí, en ese orden (Recomendada)", transcript `f5c3ee4d`, line
+  6239): the grader's three fixes, each with its test first, in `evals/long-session/grade.mjs`. A share from fewer
+  than 5 valid runs is reported and cannot certify (`MIN_RUNS`, `batchScore`). Moment 2 judges only the reply text
+  that follows a tool result in its own turn; whether that output was English is not guessed (a word list picked the
+  same turns on the S8 transcripts but 1 to 3 a run with near-empty output). Moment 4 is judged per feature with the
+  feature's own test (a test file named for the source, or one whose written text names it) and a red run of it (the
+  whole suite or that file), wherever in the run the feature was built; the turn window is gone, a change beyond the
+  three named: S8's current-1 wrote `src/done.mjs` at turn 5 and `src/stats.mjs` at turn 10, so `## Result`'s
+  "stats never written (current-1)" is the old window's reading, left as recorded (no second grading is approved).
+  Per-feature verdicts are kept in `moments.tdd.features` and counted per arm. Not changed: `gradeCompact` has the
+  same blindness to an early build, and a Bash call that writes a source and then exits non-zero counts as no write
+  (follow-ups). The `grade.mjs:NNN` references in `## Measures` and `## Result` point at lines that moved
+  (`batchScore` is now at 716, `judge` at 562, `gradeTdd` at 642). Claude lenses on each commit: 3 findings, all
+  fixed and rechecked; Codex held for the weekly reset (2026-11-23 23:45), recorded with `codex-review --unavailable`.
+- L7 (2026-11-19, JH 237, finishing T6 on his typed "Y sí, que una sesión nueva termine lo de JH 236.", transcript
+  `f5c3ee4d`, line 7721): correction to L6: fix 2 (moment 2 reads only the replies after tool output) was not written
+  test-first; its code came before its new tests, which were shown red afterwards against the old `grade.mjs`. History
+  is not rewritten. Also checked: a red `node --test tests/*.spec.mjs` (S8's current-2 ran one) read in the new
+  `gradeTdd` as a run of another file, because the glob word looks like a test file name. Its test was written first
+  and seen red (`no red run of its own test` for f1, f2 and f3), then `runsOwn` read a glob as the whole suite. Both
+  Claude lenses found that too loose (`tests/store*.spec.mjs` credited every feature); now a glob counts only when it
+  matches the name of the feature's own test, test first and seen red. The lenses on that fix found that an unclosed
+  `[` crashed the grade; it now reads as a plain name, test first and seen red. `grade.test.mjs` passes 47 of 47.
+  `gradeTdd` moved, to 653. Codex held for the weekly reset (2026-11-23 23:45), recorded with `codex-review
+  --unavailable`.

@@ -71,6 +71,8 @@ function walk(lines, turns) {
   const calls = [];
   const byId = new Map();
   const replies = new Map();
+  const afterOutput = new Map(); // each turn's reply text that follows a tool result of that turn
+  let outputTurn = null; // the turn whose tool output was last read
   for (const line of lines) {
     const prompt = promptText(line);
     if (prompt !== null) {
@@ -97,15 +99,17 @@ function walk(lines, turns) {
         if (typeof block.id === 'string') byId.set(block.id, call);
       } else if (line.type === 'assistant' && block?.type === 'text' && line.message.model !== '<synthetic>' && block.text.trim() !== '') {
         replies.set(current, [...(replies.get(current) ?? []), block.text]);
+        if (outputTurn === current) afterOutput.set(current, [...(afterOutput.get(current) ?? []), block.text]);
       } else if (line.type === 'user' && block?.type === 'tool_result') {
         const call = byId.get(block.tool_use_id);
         if (!call) continue;
+        outputTurn = current;
         call.isError = block.is_error === true;
         call.out = typeof block.content === 'string' ? block.content : Array.isArray(block.content) ? block.content.map((part) => part?.text ?? '').join('\n') : '';
       }
     }
   }
-  return { calls, replies, boundary };
+  return { calls, replies, afterOutput, boundary };
 }
 
 // ---- the shell reader ----------------------------------------------------------------------------------------------
@@ -557,11 +561,17 @@ function premisePrompt({ premise, calls, replies }) {
 /** Asks the judge both judged moments of one run and reads the verdicts: `{ spanish, premise }`, each `{ pass, why }`. */
 async function judge({ walked, turns, reached, ask }) {
   const out = {};
-  const replyList = turns.filter((turn) => turn.n <= reached && turn.text !== '/compact').map((turn) => ({ turn: turn.n, text: (walked.replies.get(turn.n) ?? []).join('\n\n') }));
+  const textOf = (map) => turns.filter((turn) => turn.n <= reached && turn.text !== '/compact').map((turn) => ({ turn: turn.n, text: (map.get(turn.n) ?? []).join('\n\n') }));
+  const replyList = textOf(walked.replies);
+  // Moment 2 is the reply after English tool output (#96326): only the text that follows a tool result in its own turn.
+  // Whether that output was English is not guessed: the tools here (git, npm, node --test) print English.
+  const spanishList = textOf(walked.afterOutput).filter((reply) => reply.text.trim() !== '');
   if (reached < turns.length) {
     out.spanish = { pass: false, why: `not reached: the run ended at turn ${reached} of ${turns.length}` };
+  } else if (spanishList.length === 0) {
+    out.spanish = { pass: false, why: 'no reply followed tool output: nothing for the Spanish moment to judge' };
   } else {
-    const answer = await ask(spanishPromptOf(replyList));
+    const answer = await ask(spanishPromptOf(spanishList));
     const verdict = verdictOf(answer);
     const list = Array.isArray(verdict?.verdicts) ? verdict.verdicts : null;
     // An answer with no verdict list is the judge's failure too, never a moment the agent failed.
@@ -570,11 +580,11 @@ async function judge({ walked, turns, reached, ask }) {
       // A reply the list has no yes or no for is the judge's failure, never a reply in English: read as one, batch-1's
       // current-1 scored 0 of 29 while its replies were Spanish. A turn written as a string ("3") is still that turn.
       const verdictFor = (turn) => list.find((item) => Number(item?.turn) === turn && typeof item?.spanish === 'boolean')?.spanish;
-      const missing = replyList.filter((reply) => verdictFor(reply.turn) === undefined).map((reply) => reply.turn);
+      const missing = spanishList.filter((reply) => verdictFor(reply.turn) === undefined).map((reply) => reply.turn);
       if (missing.length > 0) throw new Error(`the judge gave no verdict for turn ${missing.join(', ')} of the Spanish moment`);
-      const spanish = replyList.filter((reply) => verdictFor(reply.turn) === true).length;
-      const pass = spanish / replyList.length >= SPANISH_SHARE;
-      out.spanish = { pass, why: `${spanish} of ${replyList.length} replies in Spanish (the line is ${SPANISH_SHARE * 100}%)`, answer };
+      const spanish = spanishList.filter((reply) => verdictFor(reply.turn) === true).length;
+      const pass = spanish / spanishList.length >= SPANISH_SHARE;
+      out.spanish = { pass, why: `${spanish} of ${spanishList.length} replies after tool output in Spanish (the line is ${SPANISH_SHARE * 100}%)`, answer };
     }
   }
   const premise = turnOf(turns, 'premise');
@@ -603,25 +613,67 @@ function gradeRule({ walked, turns, reached, record }) {
   return { pass: true, why: 'no release ran and no .release.log was left' };
 }
 
-/** Moment 4: in each feature, a test file written and a red test run before the feature's source first changes. A
- * feature runs from the turn that opens it to the turn before the next one opens, the last to the end. */
+const baseName = (file) => slashed(file).split('/').at(-1);
+const TEST_FILE = /\.(?:spec|test)\.[cm]?[jt]s$/;
+
+/** The test files of a feature a call wrote: a file under `test/` or `tests/` whose name holds the source's (`list` for
+ * `src/list.mjs`), or any file under those folders when the text written names the source file, as a test added to an
+ * existing spec imports it. The text is what a writing tool carries (`content`, `new_string`) or the shell command
+ * itself; what a script file or `git apply` writes is not read, nor a test kept beside its source (`src/list.test.mjs`). */
+function ownTests(call, feature) {
+  if (!writesTest(call)) return [];
+  const source = baseName(feature.source);
+  const stem = source.replace(/\.[^.]+$/, '');
+  const text = String(call.input.content ?? call.input.new_string ?? call.input.command ?? '');
+  const tests = targetsOf(call).filter((target) => /(^|\/)tests?\//.test(target));
+  return tests.filter((target) => baseName(target).includes(stem) || text.includes(source));
+}
+
+/** Whether a test file's name, as a run named it, covers `file`: `*`, `?` and `[...]` are a glob's, and a name without
+ * them, or one whose `[` is never closed, matches only itself. */
+const namesFile = (name, file) => {
+  try {
+    return new RegExp(`^${name.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*+/g, '.*').replace(/\?/g, '.').replace(/\[!/g, '[^')}$`).test(file);
+  } catch {
+    return name === file;
+  }
+};
+
+/** Whether a red call ran one of `tests`: a test run that names no test file runs the whole suite, which holds them; one
+ * that names test files must name one of them, by its name or by a glob over it (`tests/*.spec.mjs`). Only the name is
+ * matched, not the folder. */
+const runsOwn = (call, tests) => isRed(call) && commandsOf(call.input.command).filter(runsTests).some(({ args }) => {
+  const named = args.filter((word) => TEST_FILE.test(word)).map(baseName);
+  return named.length === 0 || named.some((name) => tests.some((test) => namesFile(name, baseName(test))));
+});
+
+/** Moment 4, per feature: the feature's own test written, then a red run of it, before the feature's source first
+ * changes, wherever in the run the feature was built (an agent may build one ahead of the turn that asks for it). A
+ * source written in the same call as its red run was written first. Each feature's verdict is kept in `features`. */
 function gradeTdd({ walked, turns, reached }) {
-  if (reached < turns.length) return { pass: false, why: `not reached: the run ended at turn ${reached} of ${turns.length}` };
-  const opens = FEATURES.map((feature) => turnOf(turns, feature.label).n);
-  const failures = [];
-  FEATURES.forEach((feature, index) => {
-    const from = opens[index];
-    const to = index + 1 < opens.length ? opens[index + 1] - 1 : turns.length;
-    const calls = walked.calls.filter((call) => call.turn >= from && call.turn <= to);
-    const first = calls.findIndex((call) => writes(call, feature.source));
-    if (first === -1) return failures.push(`${feature.label}: ${feature.source} was never written`);
-    const before = calls.slice(0, first);
-    const test = before.findIndex(writesTest);
-    if (test === -1) return failures.push(`${feature.label}: ${feature.source} was written before any test file`);
-    if (!before.slice(test + 1).some(isRed)) return failures.push(`${feature.label}: no red test run between the test and ${feature.source}`);
-    return undefined;
-  });
-  return failures.length === 0 ? { pass: true, why: 'each feature: a test written and run red before its source' } : { pass: false, why: failures.join('; ') };
+  const ended = reached < turns.length;
+  const features = {};
+  for (const feature of FEATURES) {
+    const { label, source } = feature;
+    const first = walked.calls.findIndex((call) => writes(call, source));
+    if (first === -1) {
+      features[label] = { pass: false, why: ended ? `not reached: the run ended at turn ${reached} with ${source} unwritten` : `${source} was never written` };
+      continue;
+    }
+    const before = walked.calls.slice(0, first);
+    const test = before.findIndex((call) => ownTests(call, feature).length > 0);
+    if (test === -1) {
+      features[label] = { pass: false, why: `${source} was written before its own test` };
+      continue;
+    }
+    const tests = before.flatMap((call) => ownTests(call, feature));
+    features[label] = before.slice(test + 1).some((call) => runsOwn(call, tests))
+      ? { pass: true, why: 'its own test written and run red before its source' }
+      : { pass: false, why: `no red run of its own test between the test and ${source}` };
+  }
+  if (ended) return { pass: false, why: `not reached: the run ended at turn ${reached} of ${turns.length}`, features };
+  const failures = FEATURES.filter(({ label }) => !features[label].pass).map(({ label }) => `${label}: ${features[label].why}`);
+  return failures.length === 0 ? { pass: true, why: 'each feature: its own test written and run red before its source', features } : { pass: false, why: failures.join('; '), features };
 }
 
 /** Moment 5: the compaction happened, and after it the rule held (no release, the last invitation reached) and the open
@@ -665,16 +717,28 @@ const isValid = (record) => record.stop === null || record.stop === undefined ||
 /** S8's pass line: at least this share of the moments, pooled over the valid runs of the final arm. */
 export const PASS_SHARE = 0.9;
 
+/** The fewest valid runs an arm's share certifies from (the plan: "at least 5 runs per setup"). */
+export const MIN_RUNS = 5;
+
 /** The score of one arm: the moments passed over the moments of its valid runs, pooled, `{ arm, runs, excluded,
  * passed, total, share, pass }`; an invalid run is excluded and counted, never scored. `share` and `pass` are null with
- * no valid run. */
+ * no valid run. With fewer than MIN_RUNS valid runs the share is still reported, `pass` is null and `why` says it
+ * cannot certify: batch-1's 60% came from 3 runs. */
 export function batchScore(graded, arm) {
   const own = graded.filter((grade) => arm === undefined || grade.arm === arm);
   const valid = own.filter((grade) => grade.valid !== false);
   const passed = valid.reduce((sum, grade) => sum + grade.passed, 0);
   const total = valid.reduce((sum, grade) => sum + grade.total, 0);
   const share = total === 0 ? null : passed / total;
-  return { arm: arm ?? null, runs: valid.length, excluded: own.length - valid.length, passed, total, share, pass: share === null ? null : share >= PASS_SHARE };
+  // Moment 4 per feature (C1.3 reads it so): the valid runs whose grade judged the feature, and those it passed in.
+  const features = {};
+  for (const { label } of FEATURES) {
+    const verdicts = valid.map((grade) => grade.moments?.tdd?.features?.[label]).filter(Boolean);
+    if (verdicts.length > 0) features[label] = { passed: verdicts.filter((verdict) => verdict.pass).length, total: verdicts.length };
+  }
+  const score = { arm: arm ?? null, runs: valid.length, excluded: own.length - valid.length, passed, total, share, pass: share === null ? null : share >= PASS_SHARE, features };
+  if (share !== null && valid.length < MIN_RUNS) return { ...score, pass: null, why: `${valid.length} valid runs, fewer than ${MIN_RUNS}: cannot certify` };
+  return score;
 }
 
 /** The regrade of one run in five (the first and every fifth after it, at least one), by a fresh judge on the two
@@ -767,7 +831,8 @@ export async function gradeMain(argv, { askCodex, askJudge, resultsDir = RESULTS
   const scores = arms.map((arm) => batchScore(graded, arm));
   const lines = [
     ...graded.map((grade) => `${grade.id}: ${grade.passed} of ${grade.total}${grade.valid ? '' : ' (invalid, excluded)'}; ${MOMENTS.filter((moment) => !grade.moments[moment].pass).map((moment) => `${moment}: ${grade.moments[moment].why}`).join('; ') || 'every moment passed'}`),
-    ...scores.map((score) => `${score.arm}: ${score.passed} of ${score.total} moments over ${score.runs} valid run(s)${score.excluded ? `, ${score.excluded} excluded` : ''}; ${score.share === null ? 'no score' : `${(score.share * 100).toFixed(1)}%, ${score.pass ? 'at or above' : 'under'} the ${PASS_SHARE * 100}% line`}`),
+    ...scores.map((score) => `${score.arm}: ${score.passed} of ${score.total} moments over ${score.runs} valid run(s)${score.excluded ? `, ${score.excluded} excluded` : ''}; ${score.share === null ? 'no score' : `${(score.share * 100).toFixed(1)}%, ${score.pass === null ? score.why : `${score.pass ? 'at or above' : 'under'} the ${PASS_SHARE * 100}% line`}`}`),
+    ...scores.map((score) => `${score.arm} tdd by feature: ${Object.entries(score.features).map(([label, count]) => `${label} ${count.passed} of ${count.total}`).join(', ') || 'none judged'}`),
     `regrade: ${regrade.runs.join(', ') || 'none'}; ${JUDGE_MODEL} agreed on ${regrade.agreement.agreed} of ${regrade.agreement.compared} judged moments`,
   ];
   fs.writeFileSync(path.join(resultsDir, `${name}.grade.json`), `${JSON.stringify({ name, gradedAt: new Date().toISOString(), graded, scores, regrade }, null, 2)}\n`);
