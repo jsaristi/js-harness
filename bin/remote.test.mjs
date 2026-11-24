@@ -1061,7 +1061,18 @@ test('stop keeps the state and fails when the kill cannot be confirmed afterward
  * each, to change the table the way a live machine does between two looks. The table also holds the command's
  * own process, which `pids()` leaves out, and `looks` keeps what each snapshot showed. */
 function fakeProcesses(rows) {
+  // The table holds this process under its real pid, which `pids()` leaves out, and a Windows pid is a multiple of 4:
+  // a fake pid that is one can be this process's on some machine, and its row then vanishes from `pids()` (seen in
+  // GitHub run 45057389675, pid 900). So a fake pid is never a multiple of 4, but System's own 4: the rows given, and
+  // those a hook adds, checked at each look and each kill (Codex on 7efa0b0d).
+  const refuseRealPids = (fakes) => {
+    const disallowedPids = fakes.filter((row) => row.pid !== 4 && row.pid % 4 === 0).map((row) => row.pid);
+    if (disallowedPids.length > 0) throw new Error(`fake pids ${disallowedPids.join(', ')} are multiples of 4, as a real Windows pid is: use one that is not`);
+  };
+  refuseRealPids(rows);
   const table = [{ pid: process.pid, ppid: 4, createdAt: OWN_CREATED }, ...rows].map((row) => ({ name: 'node.exe', ...row }));
+  const own = table[0];
+  const fakesOf = () => table.filter((row) => row !== own);
   const kills = [];
   const looks = [];
   const hooks = {};
@@ -1072,12 +1083,14 @@ function fakeProcesses(rows) {
     platform: 'win32',
     takeSnapshot: () => {
       hooks.beforeSnapshot?.(looks.length + 1);
+      refuseRealPids(fakesOf());
       looks.push(table.map((row) => ({ ...row })));
       return table.map((row) => ({ ...row }));
     },
     killProcesses: (targets) => {
       kills.push(targets.map(({ pid }) => pid));
       hooks.beforeKill?.(kills.length, targets);
+      refuseRealPids(fakesOf());
       const outcome = { killed: [], gone: [], running: [] };
       for (const { pid, createdAt } of targets) {
         const index = table.findIndex((row) => row.pid === pid && row.createdAt === createdAt);
@@ -1101,16 +1114,27 @@ function fakeProcesses(rows) {
   };
 }
 
-/** A supervisor (777) with its server (800) and what the server started (801), beside two processes that are not
- * its own: one unrelated (50), and one that records pid 777 from before the supervisor existed (60), as a pid
+/** A supervisor (777) with its server (805) and what the server started (801), beside two processes that are not
+ * its own: one unrelated (50), and one that records pid 777 from before the supervisor existed (63), as a pid
  * that was reused does. */
 const supervisedTree = () => [
   { pid: 50, ppid: 4, createdAt: CREATED - 9000 },
-  { pid: 60, ppid: 777, createdAt: CREATED - 5000 },
+  { pid: 63, ppid: 777, createdAt: CREATED - 5000 },
   { pid: 777, ppid: 50, createdAt: CREATED },
-  { pid: 800, ppid: 777, createdAt: CREATED + 1000 },
-  { pid: 801, ppid: 800, createdAt: CREATED + 2000 },
+  { pid: 805, ppid: 777, createdAt: CREATED + 1000 },
+  { pid: 801, ppid: 805, createdAt: CREATED + 2000 },
 ];
+
+// Codex on 7efa0b0d (P2): the hooks insert rows after the table is built, and the collision of pid 900 came from such
+// a row, so the guard reads the table again at each look and each kill.
+test('a fake pid a hook adds that a real Windows pid could be is refused at the next look or kill', () => {
+  const looked = fakeProcesses(supervisedTree());
+  looked.hooks.beforeSnapshot = () => looked.table.push({ pid: 900, ppid: 777, createdAt: CREATED + 5000, name: 'claude.exe' });
+  assert.throws(() => looked.deps.takeSnapshot(), /fake pids 900 are multiples of 4/);
+  const killed = fakeProcesses(supervisedTree());
+  killed.hooks.beforeKill = () => killed.table.push({ pid: 904, ppid: 777, createdAt: CREATED + 5000, name: 'claude.exe' });
+  assert.throws(() => killed.deps.killProcesses([]), /fake pids 904 are multiples of 4/);
+});
 
 test('stop quiesces the supervisor first, then kills what it left: a server launched between the look and the kill does not survive a stop that reports success', { skip: WINDOWS_ONLY }, async () => {
   const root = makeProject();
@@ -1119,18 +1143,18 @@ test('stop quiesces the supervisor first, then kills what it left: a server laun
   const world = fakeProcesses(supervisedTree());
   world.hooks.beforeKill = (n) => {
     // The supervisor's backoff ends as it is about to be killed: one more server, in no list of targets yet.
-    if (n === 1) world.table.push({ pid: 900, ppid: 777, createdAt: CREATED + 5000, name: 'claude.exe' });
+    if (n === 1) world.table.push({ pid: 905, ppid: 777, createdAt: CREATED + 5000, name: 'claude.exe' });
   };
   world.hooks.beforeSnapshot = () => {
     // Once the supervisor is dead its pid is anyone's: a later program that records it is not its child.
     if (world.kills.length > 0 && !world.pids().includes(61)) world.table.push({ pid: 61, ppid: 777, createdAt: Date.now() + 600_000, name: 'other.exe' });
   };
   const code = await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps);
-  const left = world.pids().filter((pid) => [777, 800, 801, 900].includes(pid));
+  const left = world.pids().filter((pid) => [777, 805, 801, 905].includes(pid));
   assert.ok(!(code === 0 && left.length > 0), `stop reported success while pid ${left.join(', ')} of the supervisor's tree still ran`);
   assert.equal(code, 0, world.err());
   assert.deepEqual(world.kills[0], [777], 'the supervisor alone, first: dead, it cannot launch another server');
-  assert.deepEqual(world.pids(), [50, 60, 61], 'the tree is gone, and nothing else is touched');
+  assert.deepEqual(world.pids(), [50, 61, 63], 'the tree is gone, and nothing else is touched');
   assert.equal(fs.existsSync(statePath(home, root)), false);
   assert.match(world.out(), /stopped/);
 });
@@ -1143,10 +1167,10 @@ test('stop kills what a child of the supervisor had started, though that child d
   world.hooks.beforeKill = (n) => {
     // What Windows does when the supervisor, a node process, is killed: its own child (the cmd.exe of a .cmd CLI)
     // ends with it, and the server under that child stays, recording a parent that no longer exists.
-    if (n === 2) world.table.splice(world.table.findIndex((row) => row.pid === 800), 1);
+    if (n === 2) world.table.splice(world.table.findIndex((row) => row.pid === 805), 1);
   };
   assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps), 0, world.err());
-  assert.deepEqual(world.pids(), [50, 60], 'the server is killed from what was read while the supervisor lived');
+  assert.deepEqual(world.pids(), [50, 63], 'the server is killed from what was read while the supervisor lived');
   assert.equal(fs.existsSync(statePath(home, root)), false);
 });
 
@@ -1157,10 +1181,10 @@ test('stop sees through a server it killed: what that server started in the mean
   const world = fakeProcesses(supervisedTree());
   world.hooks.beforeKill = (n, targets) => {
     // The server starts a session just before it dies: its parent is gone by the next look.
-    if (targets.some(({ pid }) => pid === 800) && !world.pids().includes(950)) world.table.push({ pid: 950, ppid: 800, createdAt: CREATED + 6000 });
+    if (targets.some(({ pid }) => pid === 805) && !world.pids().includes(950)) world.table.push({ pid: 950, ppid: 805, createdAt: CREATED + 6000 });
   };
   const code = await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps);
-  const left = world.pids().filter((pid) => ![50, 60].includes(pid));
+  const left = world.pids().filter((pid) => ![50, 63].includes(pid));
   assert.ok(!(code === 0 && left.length > 0), `stop reported success while pid ${left.join(', ')} of the supervisor's tree still ran`);
   assert.equal(code, 0, world.err());
   assert.equal(fs.existsSync(statePath(home, root)), false);
@@ -1169,7 +1193,7 @@ test('stop sees through a server it killed: what that server started in the mean
 test('stop keeps the state, fails and names the pids when something of the tree survives, or cannot be looked for', { skip: WINDOWS_ONLY }, async () => {
   const failures = {
     'the supervisor survives its kill': { arrange: (world) => world.unkillable.add(777), says: /pid 777/ },
-    'a server survives its kill': { arrange: (world) => world.unkillable.add(800), says: /still running: pid 800/ },
+    'a server survives its kill': { arrange: (world) => world.unkillable.add(805), says: /still running: pid 805/ },
     'the look after the supervisor is dead fails': {
       arrange: (world) => {
         world.hooks.beforeSnapshot = () => {
@@ -1182,7 +1206,7 @@ test('stop keeps the state, fails and names the pids when something of the tree 
       arrange: (world) => {
         // Whatever is about to be killed starts one more process first, every time.
         world.hooks.beforeKill = (n, targets) => {
-          if (n > 1) world.table.push({ pid: 2000 + n, ppid: targets[0].pid, createdAt: CREATED + 7000 + n });
+          if (n > 1) world.table.push({ pid: 2001 + 2 * n, ppid: targets[0].pid, createdAt: CREATED + 7000 + n });
         };
       },
       says: /kept appearing.*pid 20\d\d/s,
@@ -1229,7 +1253,7 @@ test('stop kills nothing under a program that took the supervisor\'s pid between
   const world = fakeProcesses(supervisedTree());
   const moved = afterTheIdentityCheck(world, () => {
     // The supervisor exits, its tree with it, and Windows hands its pid to another program that starts its own.
-    for (const pid of [777, 800, 801]) world.table.splice(world.table.findIndex((row) => row.pid === pid), 1);
+    for (const pid of [777, 805, 801]) world.table.splice(world.table.findIndex((row) => row.pid === pid), 1);
     world.table.push(
       { pid: 777, ppid: 50, createdAt: CREATED + 50_000, name: 'other.exe' },
       { pid: 910, ppid: 777, createdAt: CREATED + 51_000, name: 'other-child.exe' },
@@ -1238,7 +1262,7 @@ test('stop kills nothing under a program that took the supervisor\'s pid between
   });
   const code = await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps);
   assert.ok(moved.changed(), 'the pid changed hands after the check, before the tree was read');
-  assert.deepEqual(world.pids(), [50, 60, 777, 910, 911], 'the program that has the pid now, and what it started, are untouched');
+  assert.deepEqual(world.pids(), [50, 63, 777, 910, 911], 'the program that has the pid now, and what it started, are untouched');
   assert.deepEqual(world.kills, [], 'nothing is selected from a look in which the pid is not the recorded process');
   assert.equal(code, 0, world.err());
   assert.match(world.out(), /not running/);
@@ -1257,7 +1281,7 @@ test('stop kills nothing when, in the look its tree is read from, the supervisor
   assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps), 1);
   assert.ok(moved.changed());
   assert.deepEqual(world.kills, [], 'it may be the supervisor or another program: nothing under it is taken for the tree');
-  assert.deepEqual(world.pids(), [50, 60, 777, 800, 801]);
+  assert.deepEqual(world.pids(), [50, 63, 777, 801, 805]);
   assert.equal(fs.readFileSync(statePath(home, root), 'utf8'), before);
   assertWayOut(world, home, root, 'unreadable at the tree read');
 });
@@ -1268,10 +1292,10 @@ test('stop refuses before killing anything when a process under the supervisor c
   writeState(home, root, { pid: 777, startedAt: CREATED });
   const before = fs.readFileSync(statePath(home, root), 'utf8');
   // The server started a process Windows gives no creation time for, with one of its own under it.
-  const world = fakeProcesses([...supervisedTree(), { pid: 802, ppid: 800, createdAt: null }, { pid: 803, ppid: 802, createdAt: CREATED + 3000 }]);
+  const world = fakeProcesses([...supervisedTree(), { pid: 802, ppid: 805, createdAt: null }, { pid: 803, ppid: 802, createdAt: CREATED + 3000 }]);
   assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps), 1);
   assert.deepEqual(world.kills, [], 'a tree that cannot be read whole is not started on');
-  assert.deepEqual(world.pids(), [50, 60, 777, 800, 801, 802, 803]);
+  assert.deepEqual(world.pids(), [50, 63, 777, 801, 802, 803, 805]);
   assert.equal(fs.readFileSync(statePath(home, root), 'utf8'), before);
   assert.match(world.err(), /pid 802/);
   assert.match(world.err(), /creation time/);
@@ -1290,11 +1314,11 @@ test('stop does not report a clean tree when a later look finds a process it can
   const world = fakeProcesses(supervisedTree());
   world.hooks.beforeKill = (n) => {
     // One more server as the supervisor is about to be killed, and Windows gives no creation time for it.
-    if (n === 1) world.table.push({ pid: 900, ppid: 777, createdAt: null, name: 'claude.exe' });
+    if (n === 1) world.table.push({ pid: 905, ppid: 777, createdAt: null, name: 'claude.exe' });
   };
   assert.equal(await remoteMain(['stop', '--cwd', root, '--home', home], {}, world.deps), 1);
-  assert.ok(world.pids().includes(900), 'it cannot be killed by identity, so it is left');
-  assert.match(world.err(), /pid 900/);
+  assert.ok(world.pids().includes(905), 'it cannot be killed by identity, so it is left');
+  assert.match(world.err(), /pid 905/);
   assert.match(world.err(), /creation time/);
   assert.match(world.err(), /kept/);
   assert.equal(fs.readFileSync(statePath(home, root), 'utf8'), before, 'the stop is not proven complete');
