@@ -246,7 +246,8 @@ function typeScriptVersion(libDir) {
  * goes to the drive root, as the server's does; `stop`, a test's own folder, ends it there (`stop` read, its parent
  * not) so a test does not depend on what is installed above it. A `stop` that is not `project` or above it reads
  * `project` alone. Inside is `within`'s (./background.mjs): a `..name` folder is inside, and a link's spelling and its
- * real path are one folder (Codex on d0f63266). */
+ * real path are one folder (Codex on d0f63266). The walk also ends once it has read the stop itself, each inside the
+ * other, so a stop that is a link inside the folder it points to does not open its own parent (Codex on 8ac01841). */
 function workspaceTypeScript(project, stop) {
   for (let dir = path.resolve(project); ; dir = path.dirname(dir)) {
     for (const folder of WORKSPACE_TYPESCRIPT) {
@@ -254,7 +255,7 @@ function workspaceTypeScript(project, stop) {
       if (fs.existsSync(lib)) return lib;
     }
     if (path.dirname(dir) === dir) return null;
-    if (stop && !within(path.dirname(dir), path.resolve(stop))) return null;
+    if (stop && (!within(path.dirname(dir), path.resolve(stop)) || (within(dir, stop) && within(stop, dir)))) return null;
   }
 }
 

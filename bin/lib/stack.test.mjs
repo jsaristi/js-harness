@@ -575,6 +575,28 @@ test('typescript-lsp project searches `typeScriptStop` itself, and a folder name
   }
 });
 
+// Codex on 8ac01841 (P3, stack.mjs:257 and stack.test.mjs:569): a `typeScriptStop` that is a link ends the walk at the
+// folder it names, under either spelling: a link inside the folder it points to does not open its own parent to the walk,
+// and a project on the real path still reaches the stop the link names.
+test('typescript-lsp project ends the walk at a `typeScriptStop` that is a link, whichever spelling the project has', () => {
+  const machine = lspMachine({ version: '7.0.2', tsserver: false });
+  try {
+    const real = path.join(machine.root, 'real');
+    const parent = path.join(real, 'parent');
+    fs.mkdirSync(path.join(real, 'project'), { recursive: true });
+    fs.mkdirSync(parent, { recursive: true });
+    const link = path.join(parent, 'stop');
+    fs.symlinkSync(real, link, 'junction');
+    writeTypeScript(path.join(parent, 'node_modules', 'typescript'), { version: '5.9.3', tsserver: true });
+    const throughLink = path.join(link, 'project');
+    assert.equal(findTool('typescript-lsp').project({ ...machine, project: throughLink, typeScriptStop: link }), 'down', 'the link\'s own parent is above the stop');
+    writeTypeScript(path.join(real, 'node_modules', 'typescript'), { version: '5.9.3', tsserver: true });
+    assert.equal(findTool('typescript-lsp').project({ ...machine, project: path.join(real, 'project'), typeScriptStop: link }), 'ok', 'the stop is searched when the project is on the real path');
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
 
 test('typescript-lsp is missing when installed_plugins.json does not exist', () => {
   const home = makeTmpHome();
