@@ -28,14 +28,10 @@ const ARG_ERROR_CLASS = /\bclass\s+\w*ArgError\s+extends\s+Error\b/;
 const EXIT_EXEMPT = { 'no-test-outside-turn.cjs': 'a --require preload: it ends the node run it is loaded into with exit 97' };
 
 const LEGACY = {
-  'backup.mjs': 'prints the usage from its dispatch and returns 2',
-  'fetch.mjs': 'prints the refusal from its main and returns 2',
   'guard.mjs': 'prints the usage and returns 2',
   'merge-queue.mjs': 'prints the usage and returns 2',
-  'onboard.mjs': 'its parse returns { error }',
   'reply.mjs': 'prints the usage and returns 2',
   'resume.mjs': 'prints the refusal from its main and returns 2',
-  'wake.mjs': 'throws a plain Error',
 };
 
 const code = (file) => withoutComments(fs.readFileSync(file, 'utf8'));
@@ -75,7 +71,6 @@ test('the .cjs files under bin/lib are read by the exit convention too', () => {
 // dispatcher's COMMANDS table loads from `./bin/`, its core every module under `workshop/lib`.
 const WORKSHOP = path.join(BIN, '..', 'workshop');
 const WORKSHOP_LEGACY = {
-  'windows-daily.mjs': 'prints the refusal from its main and returns 2',
 };
 
 /** The workshop's command modules: each `./bin/<name>.mjs` its dispatcher's COMMANDS table imports. */

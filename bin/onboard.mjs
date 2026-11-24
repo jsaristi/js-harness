@@ -43,52 +43,56 @@ const ADR_SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const ADR_FILE = /^(\d{4})-.+\.md$/;
 const ADR_CLAIM = /^\.(\d{4})\.claim$/;
 
-/** Walks argv token by token: an unknown flag or word is a usage error, never one silently ignored. */
+/** A bad command line: its message is printed above the usage, and the exit is 2. */
+class OnboardArgError extends Error {}
+
+/** Walks argv token by token: an unknown flag or word is a usage error, never one silently ignored; it throws an
+ * `OnboardArgError` for one. */
 function parseArgs(argv, cwd) {
   const parsed = { cwd, plan: false, write: false, area: null, checklist: null, size: null, words: [] };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--cwd') {
       const value = argv[index + 1];
-      if (value === undefined || value.startsWith('--')) return { error: '--cwd requires a value' };
+      if (value === undefined || value.startsWith('--')) throw new OnboardArgError('--cwd requires a value');
       parsed.cwd = path.resolve(value);
       index += 1;
     } else if (VALUE_FLAGS.includes(arg)) {
       const value = argv[index + 1];
-      if (value === undefined || value.startsWith('--')) return { error: `${arg} requires a value` };
+      if (value === undefined || value.startsWith('--')) throw new OnboardArgError(`${arg} requires a value`);
       parsed[arg.slice(2)] = value;
       index += 1;
     } else if (arg === '--plan') parsed.plan = true;
     else if (arg === '--write') parsed.write = true;
     else if (!arg.startsWith('-')) parsed.words.push(arg);
-    else return { error: `unknown argument: ${arg}` };
+    else throw new OnboardArgError(`unknown argument: ${arg}`);
   }
   const [word, ...rest] = parsed.words;
   // No verb is the stage: what the session does next.
   const verb = word ?? 'stage';
   const flagsOf = { stage: [], check: ['plan'], hash: [], template: ['write'], profile: ['area', 'checklist', 'size'] };
-  if (word === 'stage' || !Object.hasOwn(flagsOf, verb)) return { error: `unknown argument: ${word}` };
+  if (word === 'stage' || !Object.hasOwn(flagsOf, verb)) throw new OnboardArgError(`unknown argument: ${word}`);
   for (const flag of ['plan', 'write', 'area', 'checklist', 'size']) {
-    if (parsed[flag] && !flagsOf[verb].includes(flag)) return { error: `--${flag} is not an option of ${word ?? 'onboard with no verb'}` };
+    if (parsed[flag] && !flagsOf[verb].includes(flag)) throw new OnboardArgError(`--${flag} is not an option of ${word ?? 'onboard with no verb'}`);
   }
   if (verb === 'profile') {
-    if (rest.length > 1) return { error: `unknown argument: ${rest[1]}; joined kinds are written with a comma, as platform,multiplatform-app` };
-    if (parsed.area && parsed.checklist) return { error: '--area and --checklist are printed apart: pass one of them' };
-    if (parsed.checklist && !['advice', 'bar'].includes(parsed.checklist)) return { error: '--checklist takes advice or bar' };
-    if (parsed.size && !parsed.checklist) return { error: '--size goes with --checklist' };
-    if (parsed.size && !['small', 'large'].includes(parsed.size)) return { error: '--size takes small or large' };
+    if (rest.length > 1) throw new OnboardArgError(`unknown argument: ${rest[1]}; joined kinds are written with a comma, as platform,multiplatform-app`);
+    if (parsed.area && parsed.checklist) throw new OnboardArgError('--area and --checklist are printed apart: pass one of them');
+    if (parsed.checklist && !['advice', 'bar'].includes(parsed.checklist)) throw new OnboardArgError('--checklist takes advice or bar');
+    if (parsed.size && !parsed.checklist) throw new OnboardArgError('--size goes with --checklist');
+    if (parsed.size && !['small', 'large'].includes(parsed.size)) throw new OnboardArgError('--size takes small or large');
     return { ...parsed, verb, kind: rest[0] ?? null };
   }
   if (verb === 'template') {
     if (rest[0] === 'adr') {
       // The slug is the file's name: nothing in it can leave docs/adr/.
-      if (rest.length !== 2 || !ADR_SLUG.test(rest[1])) return { error: 'template adr takes a slug of lowercase letters and digits, joined by single dashes, as auth-provider' };
+      if (rest.length !== 2 || !ADR_SLUG.test(rest[1])) throw new OnboardArgError('template adr takes a slug of lowercase letters and digits, joined by single dashes, as auth-provider');
       return { ...parsed, verb, template: 'adr', slug: rest[1] };
     }
-    if (rest.length !== 1 || !Object.hasOwn(TEMPLATES, rest[0])) return { error: 'template takes one of feature, origin, roadmap, or adr <slug>' };
+    if (rest.length !== 1 || !Object.hasOwn(TEMPLATES, rest[0])) throw new OnboardArgError('template takes one of feature, origin, roadmap, or adr <slug>');
     return { ...parsed, verb, template: rest[0] };
   }
-  if (rest.length > 0) return { error: `unknown argument: ${rest[0]}` };
+  if (rest.length > 0) throw new OnboardArgError(`unknown argument: ${rest[0]}`);
   return { ...parsed, verb };
 }
 
@@ -339,8 +343,8 @@ function template(root, name, write, { stdout, stderr }) {
   return 0;
 }
 
-/** What `profile` prints, as `{ lines }`, or `{ error }` that names what is missing, with `usage: true` when it is a
- * value typed on the command line (a kind or an area that is not one), a usage error. With no kind
+/** What `profile` prints, as `{ lines }`, or `{ error }` that names what is missing; a value typed on the command line
+ * that is not one (a kind or an area) throws an `OnboardArgError`, a usage error. With no kind
  * named, `--area` and `--checklist` read `Kind`, and `--checklist` `Size`, from the onboarding document's
  * `## Setup`, so the session never retypes them (D9). */
 function profileOutput(root, { kind, area, checklist, size }) {
@@ -350,7 +354,7 @@ function profileOutput(root, { kind, area, checklist, size }) {
   let kinds;
   if (kind) {
     kinds = parseKind(kind);
-    if (kinds.error) return { error: kinds.error, usage: true };
+    if (kinds.error) throw new OnboardArgError(kinds.error);
   } else {
     if (document === null) return { error: `profile reads the kind from ${ONBOARDING_PATH}, which is not there: name a kind, as js-harness onboard profile platform` };
     if (!setup.Kind && checklist && !size && !setup.Size) {
@@ -365,7 +369,7 @@ function profileOutput(root, { kind, area, checklist, size }) {
     const lines = areaLines(advised, area);
     if (lines) return { lines };
     const name = area.startsWith('A:') ? area : `A:${area}`;
-    return { error: `${name} is not an area of ${kinds.label}; js-harness onboard profile ${kinds.kinds.join(',')} lists its areas`, usage: true };
+    throw new OnboardArgError(`${name} is not an area of ${kinds.label}; js-harness onboard profile ${kinds.kinds.join(',')} lists its areas`);
   }
   if (!checklist) return { lines: kindLines(advised, kinds.label) };
   let chosen = size;
@@ -385,7 +389,7 @@ function profile(root, args, { stdout, stderr }) {
   const result = profileOutput(root, args);
   if (result.error) {
     stderr(result.error);
-    return result.usage ? 2 : 1;
+    return 1;
   }
   stdout(result.lines.join('\n'));
   return 0;
@@ -395,17 +399,23 @@ function profile(root, args, { stdout, stderr }) {
  * of its own, this is no initialized project, or a profile cannot tell the kind, the size or the area it needs, or 2
  * for an argument it does not take or a kind or an area that is not one. */
 export async function onboardMain(argv, env = process.env, { cwd = process.cwd(), stdout = console.log, stderr = console.error } = {}) {
-  const args = parseArgs(argv, cwd);
-  if (args.error) {
-    stderr(`${args.error}\n\n${USAGE}`);
+  try {
+    return await run(parseArgs(argv, cwd), { stdout, stderr });
+  } catch (err) {
+    if (!(err instanceof OnboardArgError)) throw err;
+    stderr(`${err.message}\n\n${USAGE}`);
     return 2;
   }
+}
+
+/** Runs the verb of `args` in its project; an `OnboardArgError` it throws is `onboardMain`'s to print. */
+function run(args, io) {
+  const { stdout, stderr } = io;
   const { root, error } = projectRoot(args.cwd);
   if (error) {
     stderr(error);
     return 1;
   }
-  const io = { stdout, stderr };
   if (args.verb === 'stage') return stage(root, io);
   if (args.verb === 'check') return check(root, args.plan, io);
   if (args.verb === 'hash') return hash(root, io);

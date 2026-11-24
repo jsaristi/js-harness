@@ -62,6 +62,10 @@ const SAME_BOOT_MS = 2 * 60 * 1000;
 
 const BOOTED = /^The machine booted at (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z)/;
 
+/** A bad command line: its message is printed above the usage, and the exit is 2. */
+class WakeArgError extends Error {}
+
+/** The options of `argv`; throws a `WakeArgError` for an unknown token, a missing value or a pair that does not go together. */
 function parseArgs(argv) {
   const parsed = { notify: false, atLogin: false, remove: false };
   const flags = new Map([['--notify', 'notify'], ['--at-login', 'atLogin'], ['--remove', 'remove']]);
@@ -71,13 +75,13 @@ function parseArgs(argv) {
     if (flags.has(token)) parsed[flags.get(token)] = true;
     else if (paths.has(token)) {
       const value = argv[++index];
-      if (value === undefined || value.startsWith('--')) throw new Error(`${token} takes a value`);
+      if (value === undefined || value.startsWith('--')) throw new WakeArgError(`${token} takes a value`);
       parsed[paths.get(token)] = value;
-    } else throw new Error(`unknown argument: ${token}`);
+    } else throw new WakeArgError(`unknown argument: ${token}`);
   }
-  if (parsed.remove && !parsed.atLogin) throw new Error('--remove goes with --at-login');
-  if (parsed.atLogin && (parsed.notify || parsed.bootTime !== undefined)) throw new Error('--at-login takes neither --notify nor --boot-time: the file it writes runs wake --notify at each login');
-  if (parsed.bootTime !== undefined && !Number.isFinite(Date.parse(parsed.bootTime))) throw new Error(`--boot-time takes a time, as 2026-10-15T04:52:00Z: ${parsed.bootTime}`);
+  if (parsed.remove && !parsed.atLogin) throw new WakeArgError('--remove goes with --at-login');
+  if (parsed.atLogin && (parsed.notify || parsed.bootTime !== undefined)) throw new WakeArgError('--at-login takes neither --notify nor --boot-time: the file it writes runs wake --notify at each login');
+  if (parsed.bootTime !== undefined && !Number.isFinite(Date.parse(parsed.bootTime))) throw new WakeArgError(`--boot-time takes a time, as 2026-10-15T04:52:00Z: ${parsed.bootTime}`);
   return parsed;
 }
 
@@ -131,6 +135,7 @@ export async function wakeMain(
   try {
     parsed = parseArgs(argv);
   } catch (err) {
+    if (!(err instanceof WakeArgError)) throw err;
     stderr(`${err.message}\n\n${USAGE}`);
     return 2;
   }
