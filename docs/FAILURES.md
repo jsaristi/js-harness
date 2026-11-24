@@ -1770,6 +1770,8 @@ ended still ran its own background processes, such as `node --test`: it does not
 - Seen: 2026-11-16 — relief file, line 3079 — again, with the count script pid 15524 alive
 - Seen: 2026-11-16 — relief file, line 3080 — again, the tenth time; quiet was not started again while JH 207 had
   known work
+- Control: check — bin/quiet.test.mjs — "quiet: a node --test run is work, by node's own flag; --test after a
+  script, or a test file run alone, is not" — since 2026-11-22
 
 ### ready-head-not-pushed
 A session said a pull request ready while the work it had verified sat on a local branch never

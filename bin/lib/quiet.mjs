@@ -15,10 +15,11 @@ export const WORK_KINDS = [
   { kind: 'codex-review', text: 'Codex review' },
   { kind: 'lens-review', text: 'lens review' },
   { kind: 'evals', text: 'eval batch' },
+  { kind: 'tests', text: 'test run' },
 ];
 
 /** The pattern of the process listing (./process-list.mjs) on Windows: every process `workKindOf` may count. */
-export const QUIET_PROCESSES = String.raw`merge-queue|codex|lens-review|suite\.mjs`;
+export const QUIET_PROCESSES = String.raw`merge-queue|codex|lens-review|suite\.mjs|--test`;
 
 const sessionName = (agent) => `session ${agent.name ?? '(no title)'} (${agent.id ?? String(agent.sessionId ?? '').slice(0, 8)})`;
 
@@ -65,6 +66,30 @@ export function workOfGateLock(lock) {
   ];
 }
 
+/** The flags of node that take their value as the next word when written without `=`: every option `node --help`
+ * (v26.13.1) shows as `--flag=...`, and the few it shows another way (`--inspect-port`, `--print`, the loaders, the
+ * report folder, `--test-isolation`). A flag missing here reads its value as the script. */
+const NODE_VALUED = new Set([
+  '--allow-fs-read', '--allow-fs-write', '--bench-isolation', '--bench-name-pattern', '--bench-reporter',
+  '--bench-reporter-destination', '--bench-samples', '--bench-warmup', '--build-sea', '--build-snapshot-config',
+  '--conditions', '--cpu-prof-dir', '--cpu-prof-interval', '--cpu-prof-name', '--debug-port', '--diagnostic-dir',
+  '--disable-proto', '--disable-warning', '--dns-result-order', '--env-file', '--env-file-if-exists', '--eval',
+  '--experimental-loader', '--experimental-package-map', '--experimental-sea-config',
+  '--experimental-test-tag-filter', '--heap-prof-dir', '--heap-prof-interval', '--heap-prof-name',
+  '--heapsnapshot-near-heap-limit', '--heapsnapshot-signal', '--icu-data-dir', '--import', '--input-type',
+  '--inspect-port', '--inspect-publish-uid', '--loader', '--localstorage-file', '--max-http-header-size',
+  '--max-old-space-size-percentage', '--network-family-autoselection-attempt-timeout', '--openssl-config', '--print',
+  '--process-timeout', '--redirect-warnings', '--report-dir', '--report-directory', '--report-filename',
+  '--report-signal', '--require', '--run', '--secure-heap', '--secure-heap-min', '--snapshot-blob',
+  '--test-concurrency', '--test-coverage-branches', '--test-coverage-exclude', '--test-coverage-functions',
+  '--test-coverage-include', '--test-coverage-lines', '--test-global-setup', '--test-isolation',
+  '--test-name-pattern', '--test-random-seed', '--test-reporter', '--test-reporter-destination',
+  '--test-rerun-failures', '--test-shard', '--test-skip-pattern', '--test-timeout', '--title', '--tls-cipher-list',
+  '--tls-keylog', '--trace-event-categories', '--trace-event-file-pattern', '--trace-require-module',
+  '--unhandled-rejections', '--use-largepages', '--v8-pool-size', '--vfs-load', '--watch-kill-signal',
+  '--watch-path', '-C', '-e', '-p', '-r'
+]);
+
 /** The name of the program or script an argument names: its file name, in lower case, with no extension. */
 const nameOf = (argument) => argument.split(/[\\/]/).pop().toLowerCase().replace(/\.(exe|cmd|mjs|cjs|js)$/, '');
 
@@ -74,14 +99,26 @@ const nameOf = (argument) => argument.split(/[\\/]/).pop().toLowerCase().replace
  * in review, 2026-10-25). The program is the first argument; for `node`, the first argument that is no flag, its
  * script; for the dispatcher (`js-harness`), the word after it. A land is `merge-queue` with `--land` and no
  * `--dry-run`, which pushes nothing; a review is `codex-review` or `lens-review` with no `--unavailable`, which only
- * records a skip, or Codex's `exec`; an eval batch is `evals/suite.mjs`. */
+ * records a skip, or Codex's `exec`; an eval batch is `evals/suite.mjs`; a test run is `node` with its own `--test`
+ * flag before the script, or with no script at all, its `script` the first file named (a session's own `node --test`
+ * kept the PC on unseen: docs/FAILURES.md, quiet-misses-background-work). */
 export function workOf(commandLine) {
   const args = splitCommandLine(commandLine);
   if (args.length === 0) return null;
   let script = args[0];
   let rest = args.slice(1);
   if (nameOf(script) === 'node') {
-    const at = rest.findIndex((argument) => !argument.startsWith('-'));
+    // node's own flags come before its script, and some take their value as the next word (`--import tsx`), which is
+    // no script: the script is the first word that is neither a flag nor such a value.
+    let at = -1;
+    for (let i = 0; i < rest.length; i += 1) {
+      if (!rest[i].startsWith('-')) {
+        at = i;
+        break;
+      }
+      if (NODE_VALUED.has(rest[i])) i += 1;
+    }
+    if ((at === -1 ? rest : rest.slice(0, at)).includes('--test')) return { kind: 'tests', script: at === -1 ? null : rest[at] };
     if (at === -1) return null;
     script = rest[at];
     rest = rest.slice(at + 1);

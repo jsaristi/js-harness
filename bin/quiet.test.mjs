@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { quietMain } from './quiet.mjs';
+import { QUIET_PROCESSES } from './lib/quiet.mjs';
 import { mainCheckout, projectSlug } from './lib/sessions.mjs';
 import { RECORD_SCHEMA as STRETCH_SCHEMA, stretchFile } from './lib/stretch.mjs';
 
@@ -230,6 +231,34 @@ test('quiet: a process is work by what it runs, never by an argument that only n
   assert.match(run.stdout, /^busy: 1 thing runs/);
   assert.match(run.stdout, /Codex review, pid 26: /);
   assert.doesNotMatch(run.stdout, /pid 2[1-5]/);
+}));
+
+// quiet said nothing had run and the PC could be turned off while a session whose turn had ended still ran its own
+// `node --test` (docs/FAILURES.md, quiet-misses-background-work: ten times on 2026-11-16, JH 207's pids alive). A test
+// run is work by node's own `--test` flag, before the script; the same word after a script is that script's argument.
+test("quiet: a node --test run is work, by node's own flag; --test after a script, or a test file run alone, is not",withWorld(async (world) => {
+  const processes = [
+    proc(41, '"C:\\Program Files\\nodejs\\node.exe" --test'),
+    proc(42, 'node --test --test-reporter=tap D:\\js\\bin\\lib\\quiet.test.mjs D:\\js\\bin\\quiet.test.mjs'),
+    proc(43, 'node D:\\js\\bin\\check-tests.mjs --test'),
+    proc(44, 'node D:\\js\\bin\\quiet.test.mjs'),
+    // A flag whose value is a separate word does not hide the run (the lenses on 5cd993f7).
+    proc(45, 'node --import tsx --test'),
+    proc(46, 'node --test-reporter spec --test D:\\js\\bin\\a.test.mjs'),
+    // A flag's value that ends like a script, and a script with no extension that takes --test (the lenses on ff8bf2e).
+    proc(47, 'node --import ./register.mjs --test'),
+    proc(48, 'node ./bin/www --test'),
+    // Every valued flag of `node --help`, not a hand-picked few (the lenses on 2b8f480).
+    proc(49, 'node --disable-warning ExperimentalWarning --test-coverage-include src/** --test'),
+  ];
+  for (const { pid, commandLine } of processes.filter((one) => ![43, 44, 48].includes(one.pid))) assert.match(commandLine, new RegExp(QUIET_PROCESSES), `the listing keeps pid ${pid}`);
+  const run = await quiet(world, ['--json'], { processes });
+  assert.equal(run.code, 1, run.stdout);
+  assert.deepEqual(JSON.parse(run.stdout).work.map((item) => [item.source, item.pid]), [['tests', 41], ['tests', 42], ['tests', 45], ['tests', 46], ['tests', 47], ['tests', 49]]);
+  const text = await quiet(world, [], { processes });
+  assert.match(text.stdout, /^busy: 6 things run/);
+  assert.match(text.stdout, /test run, pid 41: /);
+  assert.doesNotMatch(text.stdout, /pid 4[34]/);
 }));
 
 test('quiet: a listing claude could not give is unknown, never quiet, exit 3', withWorld(async (world) => {
