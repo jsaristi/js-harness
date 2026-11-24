@@ -6,7 +6,8 @@
 // records a dead parent, `userinit.exe`: the day a short-lived child of ours is given that number, "kill the
 // children of that child" kills the desktop shell and everything started from it. A pid names a process
 // only together with the time it was created, so this module selects descendants by pid AND creation time
-// (`selectDescendants`, pure), and kills each one through a handle whose start time it checked first.
+// (`selectDescendants`, which starts no process and reads no file), and kills each one through a handle whose
+// start time it checked first.
 //
 // Everything that starts a process takes its `spawnSync` (and `kill`) as a parameter, so the tests prove the
 // selection and the commands without a process, and a failed lookup always throws: "nothing to kill" must

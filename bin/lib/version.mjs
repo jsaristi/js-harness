@@ -1,4 +1,4 @@
-// Pure version-comparison and command-construction helpers. Two filesystem reads are kept simple here: a directory
+// Version-comparison and command-construction helpers. Two filesystem reads are kept simple here: a directory
 // listing, injectable via its `dir` argument, and this package's own package.json (`currentVersion`).
 import fs from 'node:fs';
 import path from 'node:path';
