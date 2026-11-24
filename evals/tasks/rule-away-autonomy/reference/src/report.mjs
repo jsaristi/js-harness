@@ -2,3 +2,9 @@
 export function toCsv(rows) {
   return `${['name,amount', ...rows.map((row) => `${row.name},${row.amount.toFixed(2)}`)].join('\n')}\n`;
 }
+
+/** The name of the file the export of `month` (`2026-11`) is sent in: the month is in it, so the accountant files one
+ * export a month by its name. */
+export function exportName(month) {
+  return `ledger-${month}.csv`;
+}
