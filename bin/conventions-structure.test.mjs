@@ -72,8 +72,6 @@ const CEILINGS = {
   'bin/lib/manifest.mjs': 1644,
   'bin/check.mjs': 1928,
   'bin/lib/project.mjs': 1975,
-  'evals/isolation-probe.mjs': 1681,
-  'bin/lib/profiles-data.mjs': 1598,
   'bin/backup.mjs': 1302,
   'bin/remote.mjs': 1118,
   'scripts/practice-lib.mjs': 1174,
