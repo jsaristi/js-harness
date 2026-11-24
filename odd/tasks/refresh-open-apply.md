@@ -54,7 +54,9 @@ Nothing beyond the brief: the field's shape and the exit code are decided here (
 - [x] T2 (kind: build) spec 1: the refusal in the refresh, a planted open question that turns it red, then green.
 - [x] T3 (kind: build) spec 2: the waiting lines of the resume, a planted waiting notice that turns it red, then green.
 - [x] T4 (kind: docs) spec 3: the two `- Seen:` lines with their controls.
-- [ ] T5 (kind: verify) Codex, the Claude lenses and an independent verifier over each code slice; PR; ready notice.
+- [x] T5 (kind: verify) Codex, the Claude lenses and an independent verifier over each code slice; PR; ready notice.
+  Codex L8; lenses, the verifier over 962c7396 and the ready notice L12; PR 736 merged (6bee9e5b); the `npm run
+  check` that `## State for a resume` plans before T5 passed on main `6dc46522` (L13).
 
 ## State for a resume
 Done: every code commit has a Codex record and a lens record (L8, L9). Pushed; PR 736 open; ready notice recorded
@@ -142,3 +144,39 @@ lead's land. Left: L9's verified "No".
   merge of origin/main into this branch, `node --test bin/reply-budget.test.mjs` on Windows passed: p90 873 ms (the
   lead's stop) and 1037 ms (a work session's), budget 2500. Not measured: the same in WSL (the worktree guard refuses
   `wsl`), and main alone against this branch. The trial merge was aborted; the branch is as reviewed.
+- L11 (2026-11-23, T5 read for closing, left open): PR 736 is merged (`gh pr view 736 --json state,mergeCommit`:
+  MERGED, 6bee9e5b, 2026-10-31T09:00:25Z) and the Log shows Codex (L8) and the verifier over `3d02efbf` (L9). Not in
+  the Log (searched for "lens" and "ready"): the two lens runs and the ready notice of 2026-10-31T08:41:28Z, which
+  are recorded only in `## State for a resume` (commits 814f03dc and b075b607); and no verifier read the fix commit
+  962c7396 that took its defects. T5 stays open until the Log records them.
+- L12 (2026-11-23, T5 left open: an independent verifier, read-only, over the fix commit `962c7396` on main `04664ab6`;
+  its notes `verifier-five-2026-11-23.md`, section 2): passes. `962c7396` is an ancestor of origin/main;
+  `refresh-consent.mjs` and `resume-record.mjs` are unchanged since (`git diff --stat 962c7396 origin/main -- ...`),
+  and `merge-queue-refresh.mjs` changed only in 7f918a92, its try/catch around `unanswered(sha)` in `refreshNow` kept
+  (`:181-185`). Spec 1 met: `node --test bin/lib/refresh-consent.test.mjs` 12 of 12, `merge-queue-refresh.test.mjs`
+  28 of 28, `refresh-copy.test.mjs` 30 of 30, `merge-queue-refresh-now.test.mjs` 3 of 3, `channel.test.mjs` 67 of
+  67, `node --test --test-name-pattern="exit 77|refresh" bin/merge-queue.test.mjs` 10 of 10; `git rev-parse --verify
+  --quiet` of a missing commit exits 1, as the fix relies on; usage names exit 77 beside 75 (`bin/merge-queue.mjs:80`,
+  `:89`). Spec 2 met: `bin/lib/resume-record.test.mjs` 8 of 8, `bin/resume.test.mjs` 103 of 103, wired at
+  `bin/resume.mjs:955`. Spec 3 met: `docs/FAILURES.md:477` `compaction-dropped-waiting` and `:1757`
+  `refresh-applied-unanswered`; `failures check` exits 0 (170 failures). `contract check` over this document: PASS.
+  The lens records are lines 258 and 259 of `D:\js-harness\.git\js-harness\lens-reviews.jsonl`: `2947b290..3fde3ae2`
+  (run `ebaf9bd6`) and `3fde3ae2..b5cff02d` (run `5717490f`, slice B, which holds `962c7396`), outcome reviewed,
+  lenses risk, resilience, reliability and readability, 0 findings each; the verifier reports both admitted
+  (`admittedLensReviews`), and every code commit of PR 736 covered; the commits after `b5cff02d` are markdown only.
+  The ready notice of PR 736 is line 1905 of `C:\Users\Oficina\.js-harness\channel\D--js-harness.jsonl`
+  (`"kind":"ready"`, `"pr":736`, 2026-10-31T08:41:28Z). Not proved: `npm run check` on `04664ab6` ran past the
+  gate's 30-minute bound and was stopped (1803 s, MsMpEng 1,690 CPU s), so that Done when line, and the `npm run
+  check` that `## State for a resume` plans before T5, stay unproved; T5's text does not name it. Observations, not
+  fails: `refreshAfterLand` (`bin/lib/merge-queue-refresh.mjs:108`) has no catch of its own around `unanswered(sha)`,
+  so a throw on the land path exits REFRESH_FAILED, not 77 (nothing installs either way); L9's Left (a verified "No"
+  closes the question) stays as designed. T5 stays open (the lead, 2026-11-23, unticking it): `## State for a resume`
+  plans `npm run check` on main before T5 is marked, and that check is unproved, as it is for f8-lead-rigor T5 and
+  departure-stretch T4.
+- L13 (2026-11-23, T5 ticked): `npm run check` passes on main `6dc46522`, which is `04664ab6`, the main the verifier
+  read (L12), plus docs-only merges: `git diff --stat 04664ab6 6dc46522` touches only `docs/FAILURES.md` and four
+  `odd/tasks/` documents. The lead ran `js-harness gate --max 60 -- npm run check`, exit 0; `js-harness gate log
+  --last 2` shows "11-23 02:46:50 1837 s pass ... D:\js-harness", and the lead reports the output ends "PASS check 23
+  rows passed". That was the only item L12 left open. The closed notice that `## State for a resume` plans after T5
+  was already sent: line 1910 of `C:\Users\Oficina\.js-harness\channel\D--js-harness.jsonl` (`"kind":"closed"`, JH
+  121, 2026-10-31T09:05:32Z). L9's Left (a verified "No" closes the question) stays as designed.

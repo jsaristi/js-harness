@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { checkLedger, failedTestFiles, judgeRerun, ledgerRow, localDay, parseLedger, rerunNext } from './flaky.mjs';
+import { checkLedger, failedTestFiles, failingTests, judgeRerun, ledgerRow, localDay, parseLedger, rerunNext } from './flaky.mjs';
 import { firstStep } from './next-step.mjs';
+import { checkSensors } from '../check.mjs';
 
 const QUARANTINE = 'to quarantine each file above, give it an entry in docs/FLAKY.md: "### <file>" with "- Owner:", "- Expires: YYYY-MM-DD" and "- Failure: <id in docs/FAILURES.md>", and commit it (an expired entry is renewed in place)';
 const FIX = 'fix the failing tests the output names';
@@ -42,6 +44,63 @@ test('a red run that names no test file of the suite gives none, so nothing is r
 test('colours in the output do not hide a failed file', () => {
   const coloured = '\u001b[31m✖ failing tests:\u001b[39m\n\n\u001b[2mtest at bin/b.test.mjs:4:1\u001b[22m\n\u001b[31m✖ b (1ms)\u001b[39m\n';
   assert.deepEqual(failedTestFiles(coloured, FILES), ['bin/b.test.mjs']);
+});
+
+// As node 26.13.1's spec reporter ended a run, on 2026-11-23, of a file whose one test passed and whose after() hook
+// threw (the failure probe-end-hook-flake): the file itself is the failed test, located at its hook. The scratch root
+// the run printed is written D:\js-harness here, and the stack is cut to its first frame.
+const END_HOOK = [
+  '✔ passes (0.99ms)',
+  '✖ D:\\js-harness\\bin\\hook.test.mjs (0.2546ms)',
+  'ℹ tests 2',
+  'ℹ suites 0',
+  'ℹ pass 1',
+  'ℹ fail 1',
+  'ℹ cancelled 0',
+  'ℹ skipped 0',
+  'ℹ todo 0',
+  'ℹ duration_ms 127.7968',
+  '',
+  '✖ failing tests:',
+  '',
+  'test at bin\\hook.test.mjs:2:1',
+  '✖ D:\\js-harness\\bin\\hook.test.mjs (0.2546ms)',
+  '  Error: after hook failed',
+  '      at TestContext.<anonymous> (file:///D:/js-harness/bin/hook.test.mjs:2:21)',
+].join('\n');
+
+test('a file whose after() hook throws while every test passes is still named failing, so it is rerun (probe-end-hook-flake)', () => {
+  assert.deepEqual(failingTests(END_HOOK), ['D:\\js-harness\\bin\\hook.test.mjs']);
+  assert.deepEqual(failedTestFiles(END_HOOK, [...FILES, 'bin/hook.test.mjs']), ['bin/hook.test.mjs']);
+});
+
+// Codex on 662815bf (P2, flaky.test.mjs:70): the fixture above pins one node's transcript, so a reporter that stopped
+// naming the file at its hook would leave it green while the gate skipped the rerun. This runs the node at hand on such
+// a file, its reporter left at its default as the gate's sensor leaves it, and hands what it printed to the gate's reader.
+test('the node at hand names a file whose after() hook throws failing, so the gate reruns it (probe-end-hook-flake)', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-flaky-hook-'));
+  try {
+    fs.mkdirSync(path.join(root, 'bin'));
+    fs.writeFileSync(path.join(root, 'bin', 'hook.test.mjs'), "import { after, test } from 'node:test';\ntest('passes', () => {});\nafter(() => { throw new Error('after hook failed'); });\n");
+    // Without NODE_TEST_CONTEXT, under which a node --test started by a test reports to it and exits 0 on a failure.
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'NODE_TEST_CONTEXT'));
+    const ran = spawnSync(process.execPath, ['--test', 'bin/hook.test.mjs'], { cwd: root, env, encoding: 'utf8', timeout: 60_000 });
+    assert.equal(ran.error, undefined, String(ran.error));
+    assert.notEqual(ran.status, 0, ran.stdout);
+    assert.deepEqual(failedTestFiles(`${ran.stdout}${ran.stderr}`, ['bin/hook.test.mjs']), ['bin/hook.test.mjs'], `${process.version}:\n${ran.stdout}`);
+    // Codex on bde15b5b (P2, flaky.test.mjs:89): the gate itself, handed that live result as its suite's, reruns the file
+    // alone, as bin/check-flaky.test.mjs drives checkSensors with a spawn that answers in turn.
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ scripts: { test: 'node --test' } }));
+    fs.writeFileSync(path.join(root, 'harness.json'), JSON.stringify({}));
+    const commands = [];
+    const answers = [{ status: ran.status, signal: null, stdout: ran.stdout, stderr: ran.stderr }, { status: 0, signal: null, stdout: '', stderr: '' }];
+    const spawn = async (command) => answers[Math.min(commands.push(command) - 1, answers.length - 1)];
+    const rows = await checkSensors(root, { spawn });
+    assert.deepEqual(commands, ['npm run test', 'node --test bin/hook.test.mjs'], `${process.version}:\n${ran.stdout}`);
+    assert.equal(rows.find((row) => row.name === 'tests')?.pass, false, 'a file that passes alone with no ledger entry still blocks');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 // The ledger of odd/tasks/flaky-ledger.md (Design 3 to 5): docs/FLAKY.md, one `### <test file>` entry with

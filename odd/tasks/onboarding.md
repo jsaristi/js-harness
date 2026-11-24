@@ -1467,3 +1467,9 @@ ceiling.
   guided interview, and his answer to question 351 covered every question it asks (its text: "La entrevista guiada
   hace hoy sus preguntas abiertas en el chat ... ¿Cuál vale para la entrevista guiada?"). The "Codex has no question
   tool" line of the hosts list now says a host with no question tool, as L48 took.
+- L51 (2026-11-23) The ROADMAP's Onboarding step "Design, past its two readers" (`docs/ROADMAP.md:276`) is ticked,
+  from this document as read: T1 is done with its two readers (`## Reviews`, round 1 on version 1 and round 2 on its
+  blockers, L3) and his yes (L22); T6, design v4, is done past both reader rounds (L15; v4 round 2 left B1, G4 and G7
+  open, taken after it and not read again, as `## Reviews` says under Unguaranteed) and his yes to v4, Pregunta 35
+  (L22). Both Onboarding steps of the ROADMAP are now ticked, but T5 stays open while T4, the two real onboardings,
+  is open: the reviews T5 records include T4's.

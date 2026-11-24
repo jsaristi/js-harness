@@ -551,11 +551,13 @@ function loadWritten(load) {
 /** The record of one gate: what `check` and `js-harness gate` write the log through. The gate checks
  * `cwd` and runs `command`, which is cut at `GATE_COMMAND_MAX`.
  *
- * - `start({ lock, waitedMs, waitedFor, load })`, when the gate is about to run what it runs: `lock` is
+ * - `start({ lock, waitedMs, waitedFor, maxMinutes, load })`, when the gate is about to run what it runs: `lock` is
  *   `own`, `parent` (the turn of the process that started it) or `none` (no lock could be taken),
  *   `waitedFor` the gates it waited for as `[{ cwd, pid, command }]`, the command of each cut as the
- *   gate's own, `load` the sample of the machine's load as it was read (`loadWritten`), left out where
- *   none was taken.
+ *   gate's own, `maxMinutes` the minutes its command may run before it is stopped (`--max` of
+ *   `js-harness gate`), so that a reader of a running gate knows when it will be, left out where it is no
+ *   number above zero, as for `check`, which hands none; `load` the sample of the machine's load as it was
+ *   read (`loadWritten`), left out where none was taken.
  * - `end({ result, sensors })`, on every way out of a gate that started: `result` is `pass`, `fail` or
  *   `timeout` for the sensors of `check`, with a line for each in `sensors`, `exit <code>` or `killed` for
  *   the command of `js-harness gate`, and `error` for a gate that ended by an error of its own. Nothing
@@ -632,10 +634,11 @@ export function gateRecord({ home, cwd, command, pid = process.pid, session, app
       if (kept.length === 0) return;
       handed('the test times of this gate', appendTestTimes, { v: GATE_LOG_VERSION, id: gate, at: new Date(now()).toISOString(), files: kept });
     },
-    start({ lock, waitedMs, waitedFor, load }) {
+    start({ lock, waitedMs, waitedFor, maxMinutes, load }) {
       const at = now();
       const sampled = loadWritten(load);
-      if (write('this gate', at, { event: 'start', ...said, lock, ...waited({ waitedMs, waitedFor }), ...(sampled && { load: sampled }) })) startedAt = at;
+      const bound = Number.isFinite(maxMinutes) && maxMinutes > 0 && { maxMinutes };
+      if (write('this gate', at, { event: 'start', ...said, lock, ...waited({ waitedMs, waitedFor }), ...bound, ...(sampled && { load: sampled }) })) startedAt = at;
     },
     end({ result, sensors, code, files, tried }) {
       if (startedAt === undefined) return;

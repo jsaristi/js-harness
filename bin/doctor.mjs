@@ -196,7 +196,8 @@ export async function buildReport({ home, cwd, offline, interactive, env }, deps
   const { resolved: functions } = functionsOf(harness, workingTree(gitIn(project, spawn)));
 
   // `homedir` decides whether `home` is the real one, whose Codex home is the CODEX_HOME the user set (stack-install T8).
-  const localRows = probeStack({ home, project, spawn, platform, interactive, functions, env, homedir: deps.homedir });
+  // `typeScriptStop`, a test's own folder, ends the walk for the project's TypeScript there.
+  const localRows = probeStack({ home, project, spawn, platform, interactive, functions, env, homedir: deps.homedir, typeScriptStop: deps.typeScriptStop });
   // The harness's own rules against main's, for every caller and never through `computeUpToDate`: its version is a
   // hash, not a semver one. It reads main's list fresh, so only an interactive online run may make its request, and
   // that request runs beside the lookups of the latest versions, so a slow network is waited on once, not twice.
@@ -567,7 +568,7 @@ function recordHostReview({ home, cwd }, deps) {
 function recordStackReview({ home, cwd }, deps) {
   const spawn = deps.spawn ?? spawnSync;
   const platform = deps.platform ?? process.platform;
-  const rows = probeStack({ home, project: resolveProjectRoot(cwd, spawn), spawn, platform, interactive: false, functions: {} });
+  const rows = probeStack({ home, project: resolveProjectRoot(cwd, spawn), spawn, platform, interactive: false, functions: {}, typeScriptStop: deps.typeScriptStop });
   const versions = readStackVersions(rows, { home, spawn, platform });
   if (Object.keys(versions).length === 0) {
     console.error('js-harness doctor: could not read the version of any tool of the stack: nothing was recorded.');

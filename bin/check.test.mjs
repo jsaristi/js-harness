@@ -18,7 +18,7 @@ import { gateDir, gateLockDir, readGateHolder, takeGateLock } from './lib/gate-l
 import { appendGateEvent, gateLogDir, gatesOf, readGateBusiest, readGateLog } from './lib/gate-log.mjs';
 import { filesKey, treeKey } from './lib/gate-tree.mjs';
 import { issueTicket, readTickets } from './lib/gate-first.mjs';
-import { LEFT_MARK, SYNCED_MARK, TIMED_OUT_MARK } from './lib/gate-wsl.mjs';
+import { LEFT_MARK, NODE_MARK, SYNCED_MARK, TIMED_OUT_MARK } from './lib/gate-wsl.mjs';
 import { commandStep, firstStep, nextLine, noStep } from './lib/next-step.mjs';
 
 /** The line a failing row prints as its next step, as `formatRow` prints it: six spaces, then the line. */
@@ -5336,6 +5336,17 @@ test('a gate on a machine whose switch file names a distribution runs its sensor
   assert.match(output, /^PASS {2}tests {2}npm run test passed in WSL2 \(Ubuntu, its mirror synced in 1\.2 s\)$/m);
   const ends = readGateLog(home).events.filter((event) => event.event === 'end');
   assert.deepEqual(ends.map((end) => end.sensors.map(({ name, ranIn }) => ({ name, ranIn }))), [[{ name: 'tests', ranIn: 'wsl' }]]);
+}));
+
+// Codex on bad8fc3c (P3, check.mjs:1587): the gate log keeps the node of the PATH a sensor ran with in WSL2.
+test('the gate log keeps the node of the PATH a sensor ran with in WSL2', () => withGate({ tests: 'npm run test' }, async (dir, home) => {
+  switchOn(dir, home);
+  const spawn = spawnsInTurn({ ...reachedMirror(0), stderr: `${SYNCED_MARK}1200 ms\n${NODE_MARK}v24.15.0\n` });
+  const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
+  assert.equal(code, 0, output);
+  const ends = readGateLog(home).events.filter((event) => event.event === 'end');
+  // Codex on b07b9cb2 (P2, check.mjs:1096): named as the PATH's node, never as the node the sensor ran.
+  assert.deepEqual(ends.map((end) => end.sensors.map(({ name, node, pathNode }) => ({ name, node, pathNode }))), [[{ name: 'tests', node: undefined, pathNode: 'v24.15.0' }]]);
 }));
 
 test('a sensor that fails in WSL2 fails the gate there, and is not run again on Windows', () => withGate({ tests: 'npm run test' }, async (dir, home) => {

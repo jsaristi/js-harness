@@ -77,22 +77,65 @@ test('an allocation that cannot find a usable port in its attempts fails instead
   await assert.rejects(allocatePort({ listen: async () => 7437, attempts: 4, reserved: new Set() }), /free port/);
 });
 
+test('a candidate something already accepts connections on is skipped when the caller asks to probe it', async () => {
+  const candidates = [40001, 40002];
+  const asked = [];
+  const isPortListening = async (port) => {
+    asked.push(port);
+    return port === 40001;
+  };
+  const port = await allocatePort({ listen: async () => candidates.shift(), isPortListening, reserved: new Set(), recent: [] });
+  assert.equal(port, 40002);
+  assert.deepEqual(asked, [40001, 40002]);
+});
+
+// Codex on 1940b3c4 (P2, ports.mjs:77): two allocations that overlap may both be handed one candidate while its probe
+// is pending; the one that resumes second must see the port the first reserved meanwhile.
+test('two allocations that overlap over a pending probe never return one port', async () => {
+  const reserved = new Set();
+  const recent = [];
+  let open;
+  const probed = new Promise((resolve) => { open = resolve; });
+  const isPortListening = async () => { await probed; return false; };
+  const first = [40001, 40002];
+  const second = [40001, 40003];
+  const a = allocatePort({ listen: async () => first.shift(), isPortListening, reserved, recent });
+  const b = allocatePort({ listen: async () => second.shift(), isPortListening, reserved, recent });
+  open();
+  assert.deepEqual(await Promise.all([a, b]), [40001, 40003]);
+});
+
 test('real allocations are distinct, bindable once released, and none is the real engram port', async () => {
-  const ports = await Promise.all(Array.from({ length: 12 }, () => allocatePort()));
+  // On GitHub's machines another process once took a port in the moment between its release and this test's look
+  // (docs/FAILURES.md, ports-test-free-port-race). Another process on a shared machine may take any free port at any
+  // moment, so the allocations probe their candidates before handing them out and the test does not look again; and
+  // the bind goes to the first of the twelve still free, since one may be held without a listener in that moment.
+  const ports = await Promise.all(Array.from({ length: 12 }, () => allocatePort({ isPortListening: isListening })));
   try {
     assert.equal(new Set(ports).size, 12);
+    for (const port of ports) assert.ok(Number.isInteger(port) && port >= 1024 && port !== REAL_ENGRAM_PORT, String(port));
+    // A fresh server for each try, as bindFreePort does, so a failed bind leaves no callback on the next (Codex, P3).
+    let server = null;
+    let bound = null;
     for (const port of ports) {
-      assert.ok(Number.isInteger(port) && port >= 1024 && port !== REAL_ENGRAM_PORT, String(port));
-      assert.equal(await isListening(port), false, 'nothing holds it');
+      const candidate = net.createServer();
+      try {
+        await new Promise((resolve, reject) => {
+          candidate.once('error', reject);
+          candidate.listen(port, '127.0.0.1', resolve);
+        });
+      } catch (error) {
+        if (error.code !== 'EADDRINUSE') throw error;
+        continue;
+      }
+      server = candidate;
+      bound = port;
+      break;
     }
-    const server = net.createServer();
-    await new Promise((resolve, reject) => {
-      server.once('error', reject);
-      server.listen(ports[0], '127.0.0.1', resolve);
-    });
-    assert.equal(await isListening(ports[0]), true);
+    assert.notEqual(bound, null, 'one of twelve fresh ports is bindable');
+    assert.equal(await isListening(bound), true);
     await new Promise((resolve) => server.close(resolve));
-    assert.equal(await isListening(ports[0]), false);
+    assert.equal(await isListening(bound), false);
   } finally {
     for (const port of ports) releasePort(port);
   }

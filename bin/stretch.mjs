@@ -414,8 +414,8 @@ function departureLines(view) {
     ...view.goals.list.map((goal) => `  goal ${goal.id} ${goal.text}: ${goal.command}`),
     ...(view.forks?.length ? [
       ...view.forks.map((fork, i) => `  fork ${i + 1}: if ${fork.if}, then ${fork.then}`),
-      '  the forks, once the user approves them, are what the lead acts on while they are away: nothing outside these forks, no spend and no publishing',
-    ] : ['  no fork pre-decided: what is the user\'s waits for their return']),
+      '  the forks, once the user approves them, answer their cases while they are away in place of the standing fork: none covers what the standing fork does not, no spend and no publishing',
+    ] : ['  no fork pre-decided: what is the user\'s goes by the standing fork, and what it does not cover waits for their return']),
   ];
 }
 

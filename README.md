@@ -978,7 +978,7 @@ js-harness advisor-gate report --since 2026-11-14
 `advisor-gate --hook` and `advisor-gate --stop` are the hooks `install` registers: before an act that
 decides (a question to the user, a land, a session opened, a plan or a new task document, a piece said ready or
 closed, a block said with a `waiting` notice) and at a sub-agent's end, they look for an advisor call with a result in the caller's stretch, since the
-user's last message or the last session event and within 60 tool calls. An act with none is refused, its reason
+user's last message, the last session event or the host's last compaction, and within 60 tool calls. A stretch does not survive a compaction: the summary's own mark ends it, so a consult made before it covers no act after it, and the session consults again. An act with none is refused, its reason
 saying how to consult and retry, and a sub-agent's uncovered end is turned back once, its next stop let through; every decision is appended to `~/.js-harness/advisor-gate/decisions.jsonl`. They act only
 in a project with a `harness.json` and let through, recorded unchecked, what they cannot read
 (odd/tasks/advisor-use.md). `advisor-gate report` prints the decisions by day, kind and act, how many flags

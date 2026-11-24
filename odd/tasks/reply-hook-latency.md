@@ -417,6 +417,12 @@ a longer timeout for the reply hook seldom lengthens a stop. That value is his: 
   block", the pass JH PLAN set as condition 1; answered in L21, not changed. The third review it offers, a range from
   `dc88947`, was not run: it would recheck only that decided pass. `node --test bin/lib/reply-commands.test.mjs`: 14
   pass, 1 skipped. PR 916 mergeable with main.
+- L24 (2026-11-23, T7 left open, read by the docs writer of the lead's night plan, unit 2): the summary is on main,
+  added by `d0c11a06` (`docs/sessions/2026-10-31-jh-116-reply-hook-under-its-timeout-so-no-stop-skips-its-che.md`),
+  and PR 732 merged 2026-10-31T05:27:15Z (`gh pr view 732`). Missing: the closed notice. JH 116's notices in
+  `C:\Users\Oficina\.js-harness\channel\D--js-harness.jsonl` are opened, question, note and two ready with
+  `"pr":732`, no closed (searched: its session id and the title `JH 116 ` over every file of that channel directory,
+  0 closed). T7 closes when the lead records that notice or decides the merged PR stands for it.
 
 ## Next step
 JH 223 (2026-11-18): T5 and T8 are done, and JH PLAN's three conditions are met (L21, L22). The module is final at

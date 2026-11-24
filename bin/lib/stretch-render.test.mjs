@@ -35,8 +35,10 @@ test('the departure page shows the pre-decided forks and their bound, or says no
   const html = renderDeparture({ ...departure, forks });
   assert.match(html, /Decidido por adelantado/);
   assert.match(html, /el verificador encuentra un fallo &lt;ya&gt; en main[\s\S]*aterrizo/);
-  assert.match(html, /nada fuera de estos casos, ni gasto, ni publicar/);
-  assert.match(renderDeparture(departure), /Decidido por adelantado[\s\S]*ningún caso: lo que es tuyo espera tu vuelta/);
+  // The standing fork of rule:away-autonomy (his words of 2026-11-23, line 18192, accepted at 18250).
+  assert.match(html, /en lugar de la opción que yo recomendaría: ninguno cubre lo que esa opción no cubre, ni gasto, ni publicar/);
+  assert.match(renderDeparture(departure), /Decidido por adelantado[\s\S]*ningún caso: lo tuyo lo decido con la opción que recomendaría y te lo informo a tu vuelta; lo que eso no cubre espera tu vuelta/);
+  assert.doesNotMatch(renderDeparture(departure), /lo que es tuyo espera tu vuelta/);
 });
 
 // --- the departure made plain (spec 6) ---

@@ -84,7 +84,7 @@ absence is in L1.
 - [x] T7 (kind: build) N35: retire `work-sessions-private-windows` with no successor through `js-harness rules change` (S20, S21; L17; 35399967, branch `rule/retire-work-sessions-windows`, after PR 701 landed)
 - [~] T5 (kind: docs) Text rows (S1, S3-S5, S7, S9-S14). Done: N33 (efef30d0); N6, N46, N38, N39-N42 in the init block (protocols 6 and 1 are pointed at, not restated); N1, N8, N38 in AGENTS.md; protocol 3 names every slice through Codex; N3 already held by protocol 3 (`operation_timeout`); N4, N22 (L6); N43 (L7, the orchestrator copy kept); N44 (L8). The owner list: T4 (protocol 1 holds it; CLAUDE.md, protocol 7, the init block and the permit relay name it). Open: the orchestrator copy of the pause sentence in `bin/lib/manifest.mjs` (L7) needs the owner's typed words for `announce-finished` or the lead's decision
 - [x] T6 (kind: verify) N48: a test asserts the shipped init block and AGENTS.md name the same rule ids (S15); RED then GREEN in `bin/lib/template-block.test.mjs`; the block names `rule:context-pause` and `rule:questions-one-place`, and so does AGENTS.md (L9)
-- [ ] T8 (kind: docs) The control of `command-handed-untested` (L15): a command handed to him that writes his configuration is run first against a scratch configuration and its read-back shown. Owed; routed by the lead on 2026-10-30 to `odd/tasks/f8-lead-rigor.md` T4, the reply check's refusal of a command block not run first, which closes this task when it lands
+- [x] T8 (kind: docs) The control of `command-handed-untested` (L15): a command handed to him that writes his configuration is run first against a scratch configuration and its read-back shown. Owed; routed by the lead on 2026-10-30 to `odd/tasks/f8-lead-rigor.md` T4, the reply check's refusal of a command block not run first, which closes this task when it lands
 - [ ] T9 (kind: docs) The control of `written-question-buried` (L15): a question he answers in writing goes alone in its message, with its text ready to copy, never at the end of a report. Owed; the lead routes its text
 
 ## Draft for T4 and T7
@@ -170,3 +170,7 @@ meter, read at that moment". His typed words of 2026-10-11 ("recuerda siempre de
   drops the retired rule's owed control. gentle-ai: 400653c3..35399967 (35399967) assessed medium, not due
   (under_budget), by `gentle-ai review assess --base-ref 400653c3 --committed-only`. Codex: correct (0.97), no
   findings; the Claude lens reliability: 0 findings; both recorded.
+- L18 (2026-11-23, T8 ticked, read by the docs writer of the lead's night plan, unit 2): its carrier,
+  `odd/tasks/f8-lead-rigor.md` T4, is ticked (line 83; "T4 is PR 714" at line 294), and PR 714 merged
+  2026-10-30T19:45:12Z (`gh pr view 714`, "turn back a reply handing him a command block not proved"). The
+  closed notice of JH 106, its session, is line 1811 of the channel record, sent before that merge. T9 stays open.

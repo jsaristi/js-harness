@@ -82,7 +82,7 @@ words, not to run the block and give the corrected one. Doctor's gate does preve
 - [x] T3 (kind: build) S2 — the host review file and the `--host-reviewed` gate; test first; Codex and lenses; PR 2 (L9)
 - [x] T4 (kind: build) S1 — command blocks in the reply check; test first on real excerpts; the replay; Codex and
   lenses; PR 3
-- [ ] T5 (kind: verify) `npm run check`, ready notices, summary
+- [x] T5 (kind: verify) `npm run check`, ready notices, summary (L18 to L20)
 - [x] T6 (kind: docs) F4 of `docs/audits/2026-10-30-cleanup-inventory.md`, by the lead's note (L6): the six failures
   not settled. `two-blocks-out-of-order` done in PR 1 (its line moved to CLAUDE.md); the five others need a control
   that holds, each a finding of its own: read after T4, and what each needs is reported to the lead
@@ -289,6 +289,37 @@ step. `--stack-reviewed` is unchanged. The research that fills the file is JH 10
   refused with "its parser could not check it", which `bin/lib/reply-commands.test.mjs` already proves), and the
   order of standard-error lines among the checks (diagnostics, not the answer he sees, whose order is unchanged).
   gentle-ai: `862a96d3..19348fd4` approved (lineage `review-c4cd419b84ce606f`).
+- L18 (2026-11-23, T5 read for closing, left open): PRs 707, 710 and 714 are merged (`gh pr view <n> --json
+  state,mergeCommit`: 7d704499 and 5d63d3b1 at 2026-10-30T19:03:39Z, 7e808cfe at 19:45:12Z), the Log shows Codex
+  and the lenses on every slice (L8, L9, L12 to L17), and the summary is on main
+  (`docs/sessions/2026-10-30-jh-106-rigor-three-checks-on-the-lead-s-mistakes.md`). Missing from the Log (searched
+  for "ready", "verif" and "independent"): the ready notices of 710 and 714 (only 707's, 18:05Z, is in L9), and an
+  independent verifier over any slice. T5 stays open until they are recorded.
+- L19 (2026-11-23, T5 left open: an independent verifier, read-only, over the slices of PRs 707 (S3: 16043286,
+  c90d1fb1, 6f6d4ae2), 710 (S2: 919e0fe8, fd46303f) and 714 (S1: ccd7e3f9 to 19348fd4) on main `04664ab6`; its notes
+  `verifier-five-2026-11-23.md`, section 4): passes. The Done when tests, each run alone: `bin/lib/reply.test.mjs` 24
+  of 24, `bin/reply.test.mjs` 33 of 33, `bin/lib/reply-commands.test.mjs` 14 pass, 0 fail, 1 skipped (the `bash -n`
+  case, skipped on win32 by design), `bin/lib/host-update.test.mjs` 21 of 21, `bin/doctor.test.mjs` 100 of 100,
+  `bin/lib/failures.test.mjs` 79 of 79, `bin/failures.test.mjs` 32 of 32; `failures check` and `failures weeks` exit
+  0; `contract check` over this document: PASS. S1 met: wired at `bin/reply.mjs:221`; its probe of `commandRefusals`
+  refused a `bash` block, a `|| true` push, a failed run, a command never run and `rm -rf` in his own block, and
+  passed a run `git status`, `Remove-Item -Recurse -Force` and `bash ran` evidence. S2 met: wired before the write at
+  `bin/doctor.mjs:553`; its probe of `hostReviewRefusal` refused no file, and a file with Decision "maybe", no
+  Reason and no Sources, naming all three; a full file passed. S3 met: `docs/FAILURES.md:401`, `:1080`, `:1223`, `:864`; `failures weeks` prints a line a week. The ready notices
+  are lines 1790 (`"pr":707`, 2026-10-30T18:05:58Z), 1796 (`"pr":710`, 18:23:18Z) and 1810 (`"pr":714`,
+  19:33:43Z) of `C:\Users\Oficina\.js-harness\channel\D--js-harness.jsonl` (`"kind":"ready"`). The summary is on main
+  (L18). T5 stays open: its text names `npm run check`, and on `04664ab6` it ran past the gate's 30-minute bound and
+  was stopped (`js-harness gate log`: 1803 s, timed out, no FAIL row, MsMpEng 1,690 CPU s), so it is not proved. Not
+  checked by it: the linux `bash -n` path and the replay over transcript 0f71b2c6. Observation: the Constraints'
+  "The hook keeps its 5 seconds" is superseded by question 138 (15 s, `odd/tasks/reply-hook-timeout.md`).
+- L20 (2026-11-23, T5 ticked): `npm run check` passes on main `6dc46522`, which is `04664ab6`, the main the verifier
+  read (L19), plus docs-only merges: `git diff --stat 04664ab6 6dc46522` touches only `docs/FAILURES.md` and four
+  `odd/tasks/` documents. The lead ran `js-harness gate --max 60 -- npm run check`, exit 0; `js-harness gate log
+  --last 2` shows "11-23 02:46:50 1837 s pass ... D:\js-harness", and the lead reports the output ends "PASS check 23
+  rows passed". That was the only item L19 left open; the ready notices and the summary are in L18 and L19. The
+  closed notice the Next step names was sent: line 1811 of `C:\Users\Oficina\.js-harness\channel\D--js-harness.jsonl`
+  (`"kind":"closed"`, JH 106, 2026-10-30T19:34:18Z). Still not checked, as L19 says: the linux `bash -n` path and the
+  replay over transcript 0f71b2c6.
 
 ## Next step
 State (2026-10-30): PRs 707 (T2) and 710 (T3) are merged; T4 is PR 714 (`ccd7e3f9` to `19348fd4`), every code commit

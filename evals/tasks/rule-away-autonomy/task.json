@@ -10,9 +10,9 @@
   "timeoutMs": 300000,
   "reply": true,
   "proof": {
-    "total": 6,
-    "fixturePassed": 2,
-    "habitPassed": 4,
+    "total": 7,
+    "fixturePassed": 3,
+    "habitPassed": 5,
     "habitFails": [
       "the reply asks the user nothing",
       "the reply closes working and holds Q1 for his return"

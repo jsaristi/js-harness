@@ -33,7 +33,6 @@ const LEGACY = {
   'merge-queue.mjs': 'prints the usage and returns 2',
   'reply.mjs': 'prints the usage and returns 2',
   'resume.mjs': 'prints the refusal from its main and returns 2',
-  'summary.mjs': 'its parse returns the usage line',
 };
 
 const code = (file) => withoutComments(fs.readFileSync(file, 'utf8'));

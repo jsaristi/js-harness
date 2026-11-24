@@ -112,8 +112,8 @@ Nothing here is his: the brief carries his decision ("Sí, ábrela"). A finding 
 - [x] T8 (kind: build) spec 9: the step chain on the status report's map, tests first — commits: `8be755d2`, `a4ecfc3c`
 - [x] T9 (kind: build) spec 9: each proposal's estimate, compared by the next report — commits: `8be755d2`
 - [x] T10 (kind: docs) spec 10: the search for a draft plan; not built, written as the next task (L18) — commits: this document's
-- [ ] T4 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice — PR pending
-- [ ] T5 (kind: docs) spec 6: the summary under `docs/sessions/` and the closed notice — pending
+- [x] T4 (kind: verify) spec 6: Codex, the lenses, an independent verifier, the PR and its ready notice — PR 739; the verifier passed `718858fd` (L29); spec 6's `npm run check` passed on main `6dc46522` (L30)
+- [x] T5 (kind: docs) spec 6: the summary under `docs/sessions/` and the closed notice — L26, L28
 
 ## Log
 - L1 (2026-10-31, the lead's brief JH 123,
@@ -330,6 +330,38 @@ Nothing here is his: the brief carries his decision ("Sí, ábrela"). A finding 
   `a4ecfc3c`, `23c028a5`), four lenses captured, its findings corrected in `718858fd`; `23c028a5..718858fd` not
   reviewed by gentle-ai (its validation stopped), reviewed by Codex and the Claude lenses.
 - L26 (2026-10-31, T5): the summary at `docs/sessions/2026-10-31-jh-123-quiet-wait-and-reply-hook-an-absence-with-no-stretch.md`.
+- L27 (2026-11-23, T4 left open, the lead's call: not verified, a verifier is owed on `718858fd`; read by the docs writer of the lead's night plan, unit 2): Codex and the lenses over
+  every code commit (L19 to L25); the independent verifier's verdict over `6bee9e5b..23c028a5` was "fails, on one
+  defect" (L23), and its pass covers the then-uncommitted fix, which it ran; that fix is `718858fd`, which the
+  verifier did not run again. `git merge-base --is-ancestor 718858fd origin/main` exits 0. PR 739 merged
+  2026-10-31T15:26:46Z (`gh pr view 739`); its ready notice with `"pr":739` is line 1943 of the channel record
+  (`C:\Users\Oficina\.js-harness\channel\D--js-harness.jsonl`), 2026-10-31T15:16:40Z.
+- L28 (2026-11-23, T5 ticked): the summary is on main, added by `74d478e5`; the closed notice of JH 123 is line 1944
+  of the same record, 2026-10-31T15:18:37Z ("PR 739 ready to land").
+- L29 (2026-11-23, T4 left open: an independent verifier, read-only, over `718858fd` on main `04664ab6`; its notes
+  `verifier-five-2026-11-23.md`, section 5): passes on the commit and on specs 4, 5, 7, 8, 9 and 11. The fix, red
+  before and green after: `report --mark --html` against a clone whose origin/main has no `docs/ROADMAP.md`, from
+  `git archive 23c028a5`, exit 1 "not recorded: a section could not be read"; with main's `bin/js-harness.mjs`, exit
+  0, "Recorded this report", the page naming the missing roadmap. Spec 4 met on Windows (`node --test
+  bin/reply-budget.test.mjs` 6 of 6); not checked: WSL, and the false-positive count was not redone. Spec 5 met:
+  `docs/FAILURES.md:2315` `stretch-not-opened` has its 2026-10-31 Seen line; `odd/tasks/lead-duty-checks.md:133` row
+  45 names its check. Spec 7 met: `node --test bin/quiet.test.mjs` 22 of 22, and `quiet --wait --settle 0 --for 1`
+  with an empty `--home` exits 4. Spec 8 met: `bin/lib/return-report.test.mjs` 32 of 32, wired at
+  `bin/reply.mjs:193-198`. Spec 9 met: `bin/lib/report-status.test.mjs` 12 of 12, `bin/report.test.mjs` 19 of 19,
+  `bin/lib/report.test.mjs` 17 of 17, `bin/stretch.test.mjs` 34 of 34, `bin/lib/stretch.test.mjs` 33 of 33. Spec 11
+  met: the title names `reply --hook`. Specs 2, 3 and 10: left out or superseded by the document (L11, L18). Spec 6:
+  the ready notice is line 1943 of `C:\Users\Oficina\.js-harness\channel\D--js-harness.jsonl` (`"kind":"ready"`,
+  `"pr":739`, 2026-10-31T15:16:40Z); the summary on main (L26, L28); the lens records `6bee9e5b..a4ecfc3c`,
+  `a4ecfc3c..23c028a5` and `23c028a5..718858fd` (0 findings, admitted) and Codex `23c028a5..718858fd`; row 45 as
+  above. `contract check` over this document: PASS. T4 stays open: spec 6 needs `npm run check`, and on `04664ab6`
+  it ran past the gate's 30-minute bound and was stopped (`js-harness gate log`: 1803 s, timed out, no FAIL row,
+  MsMpEng 1,690 CPU s), so it is not proved.
+- L30 (2026-11-23, T4 ticked): `npm run check` passes on main `6dc46522`, which is `04664ab6`, the main the verifier
+  read (L29), plus docs-only merges: `git diff --stat 04664ab6 6dc46522` touches only `docs/FAILURES.md` and four
+  `odd/tasks/` documents. The lead ran `js-harness gate --max 60 -- npm run check`, exit 0; `js-harness gate log
+  --last 2` shows "11-23 02:46:50 1837 s pass ... D:\js-harness", and the lead reports the output ends "PASS check 23
+  rows passed". That was the only item of spec 6 L29 left open. Still not checked, as L29 says, and outside T4 (spec
+  4, T2's): the Stop hook's budget tests in WSL and a redone false-positive count.
 
 ## Next step
 Push, open the PR, `notify --kind ready --pr <n>`, tell the lead it can land before JH 124. Was: commit the

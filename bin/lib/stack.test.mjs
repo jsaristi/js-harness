@@ -406,7 +406,8 @@ test('typescript-lsp reads its version from installed_plugins.json', () => {
 // --- project: typescript-lsp can start (the TypeScript its server resolves ships lib/tsserver.js) ---
 
 /** A machine with the plugin installed and typescript-language-server on PATH at `<root>/prefix`, its own
- * TypeScript at `version`, with `lib/tsserver.js` where `tsserver` is set (TypeScript 7 ships none). */
+ * TypeScript at `version`, with `lib/tsserver.js` where `tsserver` is set (TypeScript 7 ships none). The walk for
+ * the project's TypeScript stops at `root`, so what is installed above the temp folder is never read. */
 function lspMachine({ version = '5.9.3', tsserver = true, server = true } = {}) {
   const root = makeTmpHome('js-harness-stack-lsp-');
   writeJson(path.join(root, '.claude', 'plugins', 'installed_plugins.json'), {
@@ -422,7 +423,7 @@ function lspMachine({ version = '5.9.3', tsserver = true, server = true } = {}) 
   }
   const project = path.join(root, 'project');
   fs.mkdirSync(project, { recursive: true });
-  return { root, home: root, project, env: { PATH: prefix, JS_HARNESS_PM: 'npm' } };
+  return { root, home: root, project, env: { PATH: prefix, JS_HARNESS_PM: 'npm' }, typeScriptStop: root };
 }
 
 function writeTypeScript(dir, { version, tsserver }) {
@@ -534,6 +535,63 @@ test('typescript-lsp project is n/a while the plugin is not installed: the insta
   try {
     fs.rmSync(path.join(machine.home, '.claude', 'plugins'), { recursive: true, force: true });
     assert.equal(findTool('typescript-lsp').project(machine), 'n/a');
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+test('typescript-lsp project reads no TypeScript above `typeScriptStop`, so a test does not depend on what is installed above its folder', () => {
+  const machine = lspMachine({ version: '7.0.2', tsserver: false });
+  try {
+    writeTypeScript(path.join(machine.root, 'node_modules', 'typescript'), { version: '5.9.3', tsserver: true });
+    assert.equal(findTool('typescript-lsp').project({ ...machine, typeScriptStop: machine.project }), 'down');
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+test('typescript-lsp project walks up to the drive root without `typeScriptStop`, as typescript-language-server does', () => {
+  const machine = lspMachine({ version: '7.0.2', tsserver: false });
+  try {
+    writeTypeScript(path.join(machine.root, 'node_modules', 'typescript'), { version: '5.9.3', tsserver: true });
+    assert.equal(findTool('typescript-lsp').project({ ...machine, typeScriptStop: undefined }), 'ok');
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+// Codex on d0f63266 (P3, stack.test.mjs:556 and stack.mjs:245): the stop folder itself is searched, and a folder under it
+// whose name starts with two dots is inside it, not a step up.
+test('typescript-lsp project searches `typeScriptStop` itself, and a folder named `..workspace` under it is inside it', () => {
+  const machine = lspMachine({ version: '7.0.2', tsserver: false });
+  try {
+    writeTypeScript(path.join(machine.root, 'node_modules', 'typescript'), { version: '5.9.3', tsserver: true });
+    assert.equal(findTool('typescript-lsp').project({ ...machine, typeScriptStop: machine.root }), 'ok', 'the stop holds the TypeScript');
+    const nested = path.join(machine.root, '..workspace', 'app');
+    fs.mkdirSync(nested, { recursive: true });
+    assert.equal(findTool('typescript-lsp').project({ ...machine, project: nested, typeScriptStop: machine.root }), 'ok', '`..workspace` is under the stop');
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+// Codex on 8ac01841 (P3, stack.mjs:257 and stack.test.mjs:569): a `typeScriptStop` that is a link ends the walk at the
+// folder it names, under either spelling: a link inside the folder it points to does not open its own parent to the walk,
+// and a project on the real path still reaches the stop the link names.
+test('typescript-lsp project ends the walk at a `typeScriptStop` that is a link, whichever spelling the project has', () => {
+  const machine = lspMachine({ version: '7.0.2', tsserver: false });
+  try {
+    const real = path.join(machine.root, 'real');
+    const parent = path.join(real, 'parent');
+    fs.mkdirSync(path.join(real, 'project'), { recursive: true });
+    fs.mkdirSync(parent, { recursive: true });
+    const link = path.join(parent, 'stop');
+    fs.symlinkSync(real, link, 'junction');
+    writeTypeScript(path.join(parent, 'node_modules', 'typescript'), { version: '5.9.3', tsserver: true });
+    const throughLink = path.join(link, 'project');
+    assert.equal(findTool('typescript-lsp').project({ ...machine, project: throughLink, typeScriptStop: link }), 'down', 'the link\'s own parent is above the stop');
+    writeTypeScript(path.join(real, 'node_modules', 'typescript'), { version: '5.9.3', tsserver: true });
+    assert.equal(findTool('typescript-lsp').project({ ...machine, project: path.join(real, 'project'), typeScriptStop: link }), 'ok', 'the stop is searched when the project is on the real path');
   } finally {
     fs.rmSync(machine.root, { recursive: true, force: true });
   }
