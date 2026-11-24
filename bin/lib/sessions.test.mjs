@@ -4964,3 +4964,28 @@ test('renderBoard: a senior\'s row is labelled senior, not no role (odd/tasks/se
   const section = rosterSection([member(A, 'JH SR · a design', 60)], { record: recordOf([]) });
   assert.match(section.join('\n'), /^ {2}senior {2}JH SR · a design/m);
 });
+
+// --- sessionFacts: the orphan scan's notification (JH 294) ---
+//
+// The lead's transcript d6383aea, line 20696 (2026-11-21T00:35:05Z): after a restart the host marked two background
+// shells stopped in one notification with a task-id each, and a third id that is its scan marker. Only the first was
+// read, so bwfwe08il stayed in flight in every resume after it, and its header-only output led the lead to report a
+// dead wait on 2026-11-22. The text is the host's, as written.
+const ORPHANS = '<task-notification>\n<task-id>bh51o963n</task-id>\n<task-id>bwfwe08il</task-id>\n<task-id>__orphan_summary__:shell</task-id>\n<status>stopped</status>\n<summary>2 background shell command tasks didn\'t finish before the previous session ended. Task ids: bh51o963n, bwfwe08il.</summary>\n<note>No completion record was found for them in the previous session. They may have been stopped (via the UI, Monitor timeout, or agent teardown — these leave no transcript marker), or they may have been running when the previous Claude Code process exited. They have been marked stopped. Task ids in this notification beginning with "__orphan_summary" are internal scan markers, not tasks.</note>\n</task-notification>';
+
+test('a notification that names several tasks ends each of them, and its scan marker is no task', () => {
+  const facts = lib.sessionFacts(transcript(
+    prompt('go', 1), ...backgroundBash('toolu_1', 'bh51o963n', 2), ...backgroundBash('toolu_2', 'bwfwe08il', 3, 'Wait for the next notice to the lead'),
+    { type: 'user', ...base(9), origin: { kind: 'task-notification' }, message: { role: 'user', content: ORPHANS } },
+    reply('done', 10),
+  ));
+  assert.deepEqual(facts.work.map((work) => [work.id, work.ended, work.status]), [['bh51o963n', true, 'stopped'], ['bwfwe08il', true, 'stopped']]);
+  assert.equal(facts.state, 'waiting');
+});
+
+test('a TaskStop the host answers with no such task ends the work of that id as lost: the host holds no such task', () => {
+  // The lead's transcript d6383aea, line 24107: the host's answer to a TaskStop of bwfwe08il.
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), ...backgroundBash('toolu_1', 'bwfwe08il', 2), stop('toolu_3', 'bwfwe08il', 6),
+    result('toolu_3', 'Error: No task found with ID: bwfwe08il', 7, { content: '<tool_use_error>No task found with ID: bwfwe08il</tool_use_error>', is_error: true }), reply('done', 8)));
+  assert.deepEqual(facts.work.map((work) => [work.ended, work.endedAt, work.status]), [[true, at(7), 'lost']]);
+});

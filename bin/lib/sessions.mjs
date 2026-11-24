@@ -111,18 +111,17 @@ function tagOf(block, name) {
  * transcript in three forms: a user entry whose content is the notification, a `queue-operation` entry
  * that holds it while the session is busy, and a `queued_command` attachment when it was absorbed
  * mid-turn. Only text that *starts* with the notification counts, so one quoted inside a prompt, or
- * echoed by a hook, is never read as an end. */
+ * echoed by a hook, is never read as an end. The orphan scan names several tasks and a marker that is none (d6383aea:20696). */
 function notificationsOf(entry) {
   let text = null;
   if (entry.type === 'user') text = entry.message?.content;
   else if (entry.type === 'queue-operation') text = entry.content;
   else if (entry.type === 'attachment' && entry.attachment?.type === 'queued_command') text = entry.attachment.prompt;
   if (typeof text !== 'string' || !text.trimStart().startsWith('<task-notification>')) return [];
-  return [...text.matchAll(NOTIFICATION_PATTERN)].map(([, block]) => ({
-    task: tagOf(block, 'task-id'),
-    toolUse: tagOf(block, 'tool-use-id'),
-    status: tagOf(block, 'status'),
-  }));
+  return [...text.matchAll(NOTIFICATION_PATTERN)].flatMap(([, block]) => {
+    const tasks = [...block.matchAll(/<task-id>([^<]*)<\/task-id>/g)].map(([, id]) => id.trim()).filter((id) => !id.startsWith('__orphan_summary'));
+    return (tasks.length > 0 ? tasks : [undefined]).map((task) => ({ task, toolUse: tasks.length > 1 ? undefined : tagOf(block, 'tool-use-id'), status: tagOf(block, 'status') }));
+  });
 }
 
 /** A user entry's text when somebody typed it: not a meta entry (which is also what the host makes of a
@@ -689,9 +688,10 @@ export function sessionFacts(
         // session writes the stop again, after work that started later under the same id. What it says is
         // that the host stopped the task, not that its process is gone: the process listing says that.
         const task = typeof outcome.task_id === 'string' ? outcome.task_id : launch.block.input?.task_id;
-        if (block.is_error !== true && typeof task === 'string') {
-          for (const item of workByCall.values()) if (item.id === task && launchIndex(item) < launch.index) end(item, entry.timestamp, 'stopped');
-        }
+        if (block.is_error !== true && typeof task === 'string') for (const item of workByCall.values()) if (item.id === task && launchIndex(item) < launch.index) end(item, entry.timestamp, 'stopped');
+        // A stop answered "No task found": the host lost that id (`lost`), whatever its process did (d6383aea:24107).
+        const lost = block.is_error === true && typeof task === 'string' && JSON.stringify(block.content ?? '').includes('No task found with ID');
+        for (const item of workByCall.values()) if (lost && item.id === task && launchIndex(item) < launch.index) end(item, entry.timestamp, 'lost');
       } else if (typeof outcome.backgroundTaskId === 'string') {
         // Also a call that never asked for the background: one that outlived its timeout is moved there.
         if (!work) workByCall.set(block.tool_use_id, (work = newWork(launch.block, launch.entry, 'background')));
