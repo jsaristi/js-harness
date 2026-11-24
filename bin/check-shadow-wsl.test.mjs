@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { checkSensor } from './check.mjs';
-import { SYNCED_MARK } from './lib/gate-wsl.mjs';
+import { NODE_MARK, SYNCED_MARK } from './lib/gate-wsl.mjs';
 import { TRACER_VERSION, TRACE_PRELOAD, hashOf, traceEnvOf } from './lib/trace-reads.mjs';
 
 // The suite runs on CI too, where `CI` is set and skip mode runs the whole suite (L18): these tests pin a
@@ -146,5 +146,24 @@ test('no shadow where the node of the mirror cannot be asked, or where the suite
     assert.equal(/shadow/.test(row.detail), false);
   } finally {
     fell.done();
+  }
+});
+
+// The node a suite in WSL2 ran under (gate-pass-on-other-node, docs/FAILURES.md): the runner prints it, and the row
+// names it, so a pass there is not taken for one under the gate's own node; a runner that printed none adds nothing.
+test('a sensor that ran in WSL2 names the node it ran under in its row (gate-pass-on-other-node)', async () => {
+  const { root, options, done } = gate();
+  try {
+    const printed = (stderr) => () => ({ status: 0, signal: null, stdout: 'suite\n', stderr });
+    const row = await checkSensor(root, sensor, options({ traces: null, spawn: printed(`${SYNCED_MARK}1200 ms\n${NODE_MARK}v24.15.0\n`) }));
+    assert.equal(row.pass, true, row.output);
+    assert.equal(row.detail, 'node --test passed in WSL2 (Ubuntu, PATH node v24.15.0, its mirror synced in 1.2 s)');
+    assert.equal(row.pathNode, 'v24.15.0');
+    assert.equal('node' in row, false, 'named as the PATH\'s node, not the sensor\'s (Codex on b07b9cb2)');
+    const silent = await checkSensor(root, sensor, options({ traces: null, spawn: printed(`${SYNCED_MARK}1200 ms\n`) }));
+    assert.equal(silent.detail, 'node --test passed in WSL2 (Ubuntu, its mirror synced in 1.2 s)');
+    assert.equal('pathNode' in silent, false);
+  } finally {
+    done();
   }
 });

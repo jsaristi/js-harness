@@ -15,6 +15,9 @@ export const GATE_WSL_ENV = 'JS_HARNESS_GATE_WSL';
  * command never reached the mirror (no distro, no `wsl.exe`, a sync that failed), and the gate then
  * runs that sensor on Windows: a gate that skipped its suite would be worse than a slow one. */
 export const SYNCED_MARK = 'js-harness-gate-wsl: synced in ';
+// The line that names the node of the PATH the sensor runs with, so a pass says which (gate-pass-on-other-node,
+// docs/FAILURES.md).
+export const NODE_MARK = 'js-harness-gate-wsl: node ';
 
 /** What the runner prints when it stopped the command at its bound: `timeout` exits 124 then, and so may a
  * command by itself, so the runner tells them apart by the time the command took. The gate reads it as
@@ -110,6 +113,7 @@ export function runnerScript({ source, mirror, node, command, held, heldVariable
     ? `JS_HARNESS_TRACE_ROOT="$mirror" JS_HARNESS_TRACE_DIR=${word(trace.dir)} JS_HARNESS_TRACE_RESULTS=${word(trace.results)} NODE_OPTIONS=${word(`--require=${preload}`)} `
     : '';
   const sync = 'rsync -a --delete --delete-excluded --exclude=/.git --exclude=/.codegraph --exclude=node_modules';
+  const runPath = `PATH=${word(node)}':/usr/local/bin:/usr/bin:/bin'`;
   return [
     '#!/bin/bash',
     '# Written by js-harness check for one sensor of a gate; see bin/lib/gate-wsl.mjs.',
@@ -125,8 +129,13 @@ export function runnerScript({ source, mirror, node, command, held, heldVariable
     `echo "${SYNCED_MARK}$(( ($(date +%s%N) - started) / 1000000 )) ms" >&2`,
     'home=$(mktemp -d) || exit 1',
     'cd "$mirror" || exit 1',
+    // Asked where and as the command runs (the mirror, its HOME, its PATH), so it is the node the command finds first
+    // unless it names another; bounded on its own, so a node that hangs leaves the version unset, not the sensor stopped.
+    // What a probe that failed or ran out printed is dropped, as wslNodeVersion drops it (Codex on b07b9cb2).
+    `node_version=$(timeout -k 1 5 env -i HOME="$home" ${runPath} node -v 2>/dev/null) || node_version=''`,
+    `echo "${NODE_MARK}$node_version" >&2`,
     'ran=$(date +%s%N)',
-    `env -i HOME="$home" ${Object.entries(RUNNER_ENV).map(([key, value]) => `${key}=${value}`).join(' ')} PATH=${word(node)}':/usr/local/bin:/usr/bin:/bin' \\`,
+    `env -i HOME="$home" ${Object.entries(RUNNER_ENV).map(([key, value]) => `${key}=${value}`).join(' ')} ${runPath} \\`,
     `  JS_HARNESS_CHECK_INNER=1 ${held ? `${heldVariable}=1 ` : ''}${traced}npm_config_cache="$home/.npm-cache" \\`,
     `  timeout -k 10 ${seconds} bash -c ${word(command)}`,
     'code=$?',
@@ -161,6 +170,18 @@ export function wslNodeVersion(distro, node, { spawnSync = childProcess.spawnSyn
   const asked = spawnSync('wsl.exe', ['-d', distro, '--exec', `${node.replace(/\/+$/, '')}/node`, '-v'], { encoding: 'utf8', timeout: timeoutMs, windowsHide: true });
   const said = /^v\d+\.\d+\.\d+\S*$/.exec(String(asked.stdout ?? '').trim());
   return asked.status === 0 && said ? said[0] : null;
+}
+
+/** The version of the node the runner's PATH finds, such as `v24.15.0`, from the runner's own line on standard error
+ * (`stderr`): the first line that opens with `NODE_MARK`, so a line that only quotes the mark is not it, and the
+ * runner's comes before anything the sensor writes. What that line holds is final: the version alone, or `null` when
+ * it is empty (no node, or a probe that failed or ran out) or holds anything else, so no later line of a sensor stands
+ * in for it (Codex on b07b9cb2). It is the node of the PATH the command runs with, not always the one it runs: a
+ * command can name another. */
+export function nodeVersionOf(stderr) {
+  const line = String(stderr ?? '').split('\n').find((one) => one.startsWith(NODE_MARK));
+  const said = line === undefined ? null : /^(v\d+\.\d+\.\d+\S*)\r?$/.exec(line.slice(NODE_MARK.length));
+  return said ? said[1] : null;
 }
 
 /** The milliseconds of the sync the runner printed, or `null` where it printed no mark: the sensor never

@@ -961,6 +961,8 @@ and nothing in the pass said which.
   return-block-3.md): the full suite 9901 tests, 4 fail (git spawn 0xC0000142 under load, one not explained), the
   failing file alone 225 tests, 0 fail. Check candidate: the gate's summary prints each sensor's ranIn and node
   version. Whether the WSL node and CI move to 26 is his decision in JH PLAN's miniplan 13; nothing is decided here
+- Control: check — bin/check-shadow-wsl.test.mjs — "a sensor that ran in WSL2 names the node it ran under in its
+  row (gate-pass-on-other-node)" — since 2026-11-22
 
 ### gate-ran-unseen
 "No gate runs" was said while a gate of a session that cannot notify was running.
