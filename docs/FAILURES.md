@@ -212,6 +212,15 @@ the `checked` stamp `sessions live` prints, which refreshes the page's freshness
   live board and its summary were not updated, about 50 minutes by the brief's count and 47 by those two times,
   past the one check of 45 minutes (`CHECK_MINUTES`, bin/lib/live-rows.mjs); the Stop hook caught it at the lead's
   turn end
+- Seen: 2026-11-24 — relief file, line 4054 (the lead's own) — from 04:20 to 06:09 local the live board and its
+  summary were not updated, about 110 minutes by the lead's count and 109 by those two times, past the one check of
+  45 minutes: the lead waited on long agents with no timer, and nothing woke it in the quiet stretch. Fix the lead
+  reports: a 40-minute background timer (`sleep 2400`), re-armed at each wake; the proof to read is the gaps between
+  the board's and its summary's `checked` stamps through the rest of the stretch
+- Seen: 2026-11-24 — relief file, line 4079; JH PLAN's catch at 07:41 local (claimed; the lead's own) — the
+  summary's `yours[0]` still listed 7 pull requests on his list while "Cómo va" counted 12: the list had grown and its
+  line in `yours` had not. Corrected at summary v606, with the old line kept in `yoursDropped`; fix the lead reports:
+  `yours[0]` is updated in the same step that puts a pull request on his list
 - Control: check — bin/lib/stale-board.test.mjs — "the lead whose summary was last written with now or status
   before notices that waited longer than one check is told so" — since 2026-10-31
 
@@ -1202,6 +1211,10 @@ Hours written in the relief file were not read from a clock.
   number then "," or " at", `:213`) and `HOUR_FIRST` (the hour first, `:219`), and returns null for "Lead to JH 302
   (22:20):" (checked: `stampedHour` on that opening is null; on "From the lead, 22:20 local by date." it is 22:20,
   refused at 22:14). Fix named: the lead puts no hour in a message to a session
+- Seen: 2026-11-24 — relief file, lines 4057 to 4060, and the correction at line 4061 (the lead's own) — four relief
+  lines were stamped "~06:40", "~06:55", "~07:10" and "~07:20 local" by guess; what they record happened between
+  06:25 and 06:43, when the lead read the clock and appended the correction. Fix the lead reports: every stamp is
+  taken from the clock (`$(date +%H:%M)`) in the same command that writes it
 - Control: check — bin/notify.test.mjs — "a notice whose text stamps an hour more than a minute off
   the clock is refused, with the right hour, and not recorded" — since 2026-10-16
 - Proof: messages to another session: bin/guard.test.mjs:54, "a message to another session, by
