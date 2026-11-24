@@ -97,13 +97,14 @@ function parseArgs(argv, env) {
 
 /** What the plan reads: the tool rows `probeStack` probes (its checks left out), the project's switches as `doctor`
  * resolves them, and the prerequisites' states. `homedir` is the real home, whose Codex home is the `CODEX_HOME` the
- * user set (T8). `prerequisites: false` leaves them out: `stack upgrade` updates none, and gh, run in a scratch home,
- * writes its device-id there. */
-export function readStack({ home, cwd, spawn = spawnSync, platform = process.platform, env = process.env, homedir, prerequisites: probe = true }) {
+ * user set (T8); `typeScriptStop`, a test's own folder, ends the walk for the project's TypeScript there.
+ * `prerequisites: false` leaves them out: `stack upgrade` updates none, and gh, run in a scratch home, writes its
+ * device-id there. */
+export function readStack({ home, cwd, spawn = spawnSync, platform = process.platform, env = process.env, homedir, typeScriptStop, prerequisites: probe = true }) {
   const project = resolveProjectRoot(cwd, spawn);
   const { resolved: functions } = functionsOf(harnessOfTree(project), workingTree(gitIn(project, spawn)));
   const ids = new Set(tools.map((tool) => tool.id));
-  const rows = probeStack({ home, project, spawn, platform, interactive: false, functions, env, homedir }).filter((r) => ids.has(r.id));
+  const rows = probeStack({ home, project, spawn, platform, interactive: false, functions, env, homedir, typeScriptStop }).filter((r) => ids.has(r.id));
   const prerequisites = !probe ? [] : PREREQUISITES.map((id) => ({ id, state: probeVersionCommand(id, ['--version'], { spawn, platform }).state }));
   return { rows, functions, prerequisites };
 }
