@@ -869,8 +869,10 @@ export async function remoteMain(argv = process.argv.slice(2), env = process.env
     error(`${err.message}\n\n${USAGE}`);
     return 2;
   }
-  const topLevel = repositoryRoot(opts, error, deps.gitTopLevel);
-  if (!topLevel) return 1;
+  const { root: topLevel, error: notFound } = repositoryRoot(opts.cwd, deps.gitTopLevel);
+  if (notFound === 'noSuchDirectory') error(`no such directory: ${opts.cwd}`);
+  if (notFound === 'notGit') error(`not inside a git repository: ${opts.cwd}; js-harness remote acts on the repository a folder is in (run it inside one, or pass --cwd <path> to one)`);
+  if (notFound) return 1;
   if (platform !== 'win32') {
     error('js-harness remote runs on Windows only for now: it tells its supervisor from a reused pid by creation time, which it only reads there.');
     return 1;

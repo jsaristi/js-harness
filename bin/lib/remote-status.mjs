@@ -1,7 +1,9 @@
 // What `js-harness remote` (bin/remote.mjs) reads and prints without acting: the repository a command acts on, the
 // server's state from the last lines of its log, the marker a `stop` leaves so the watchdog does not bring the server
-// back, and the lines of `status`. Kept apart from the command so it stays under the size limit
-// (bin/conventions-structure.test.mjs); the command imports it, and re-exports `logTail` and `readServerState`.
+// back, and the lines of `status`. The marker's two writers (`markStopped`, `clearStopped`) are here too, beside its
+// rule, until they move beside `remoteFiles` in bin/lib/remote.mjs. Kept apart from the command so it stays under
+// the size limit (bin/conventions-structure.test.mjs); the command imports it, and re-exports `logTail` and
+// `readServerState`.
 import fs from 'node:fs';
 import path from 'node:path';
 import { gitTopLevel } from './project.mjs';
@@ -20,7 +22,7 @@ function plainLines(text) {
 }
 
 const SUPERVISOR_LINE = /^\[js-harness remote\] /;
-export const SUPERVISOR_DOWN = /^\[js-harness remote\] (server exited|server could not start|stopped|could not stop)/;
+const SUPERVISOR_DOWN = /^\[js-harness remote\] (server exited|server could not start|stopped|could not stop)/;
 /** The state words the server prints after its `·✔︎·` mark. `Ready` is what one with no pre-created session prints
  * where one with a session prints `Connected` (`serverArgs`); it counts only as that word between `·` marks, where
  * the server writes it, since `ready` is an ordinary word too. */
@@ -124,19 +126,13 @@ export function reportStatus({ found, state, name, root, logPath, stopped = fals
   log(`environment: ${server.environmentUrl ?? 'unknown (not in the log yet)'}`);
 }
 
-/** The top level of the git repository `opts.cwd` is in, or `null` after saying why there is none. Whether
- * js-harness initialized that repository does not matter: nothing here reads `harness.json` or the project
- * manifest, and the first place the command is needed (this repository) has neither. So it asks git for the
- * top level and nothing else (`projectLocation` would spend a second git call finding files it never reads). */
-export function repositoryRoot(opts, error, topLevel = gitTopLevel) {
-  if (!fs.existsSync(opts.cwd)) {
-    error(`no such directory: ${opts.cwd}`);
-    return null;
-  }
-  const root = topLevel(opts.cwd);
-  if (!root) {
-    error(`not inside a git repository: ${opts.cwd}; js-harness remote acts on the repository a folder is in (run it inside one, or pass --cwd <path> to one)`);
-    return null;
-  }
-  return root;
+/** The top level of the git repository `cwd` is in as `{ root }`, or `{ error }` naming why there is none,
+ * `noSuchDirectory` or `notGit`: the command (`remoteMain`) says it and exits. Whether js-harness initialized that
+ * repository does not matter: nothing here reads `harness.json` or the project manifest, and the first place the
+ * command is needed (this repository) has neither. So it asks git for the top level and nothing else
+ * (`projectLocation` would spend a second git call finding files it never reads). */
+export function repositoryRoot(cwd, topLevel = gitTopLevel) {
+  if (!fs.existsSync(cwd)) return { error: 'noSuchDirectory' };
+  const root = topLevel(cwd);
+  return root ? { root } : { error: 'notGit' };
 }
