@@ -567,6 +567,20 @@ test('after a compaction the context is what the harness says it left, until the
   assert.equal(unknown.context.tokens, 466810, 'a boundary that does not say what it left changes nothing');
 });
 
+// The usage of a reply that called the advisor, from a real transcript (JH 209's session 22f77ae8, line 240,
+// 2026-11-15): the top-level counts sum the session's two passes; the reply was sent with its last, 82430 tokens.
+// Block 0 (odd/tasks/honest-context-meter.md): a todo until its design returns from the lead and the owner.
+test('a reply that called the advisor is the context of its last pass, not the sum of its passes', { todo: 'block 0: the design returns to the lead and the owner first (odd/tasks/honest-context-meter.md)' }, () => {
+  const advised = usage(4, 158729, 4398);
+  advised.iterations = [
+    { input_tokens: 2, output_tokens: 272, cache_read_input_tokens: 78030, cache_creation_input_tokens: 2669, type: 'message' },
+    { input_tokens: 81094, output_tokens: 11438, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, type: 'advisor_message', model: 'claude-fable-5-2' },
+    { input_tokens: 2, output_tokens: 206, cache_read_input_tokens: 80699, cache_creation_input_tokens: 1729, type: 'message' },
+  ];
+  const facts = lib.sessionFacts(transcript(prompt('go', 1), spoke(2, usage(2, 75873, 2157)), spoke(3, advised)));
+  assert.equal(facts.context.tokens, 82430);
+});
+
 // Session channel, T5: the three figures a statement about a context is made from are in one place. The
 // window is the app's, the compaction is where the host compacts by itself, and the pause is his rule.
 test('the context figures: the window the app reports, where the host compacts, and the pause before it', () => {

@@ -145,6 +145,29 @@ test('readEnd: the last automatic boundary gives its preTokens, and a manual bou
   assert.deepEqual(readEnd(manual), { tokens: 100, compaction: null });
 }));
 
+// The usage of a reply that called the advisor, copied from a real transcript (JH 209's own session 22f77ae8, line 240,
+// 2026-11-15, the advisor_tool_result entry; the transcript writes the same usage on each entry of that message). Its
+// top-level counts are the sum of the session's two passes (2+2, 78030+80699, 2669+1729); the advisor's own pass is
+// listed but not summed. What the model was given for the reply is its last pass: 2 + 80699 + 1729 = 82430.
+// Block 0 (odd/tasks/honest-context-meter.md): a todo until its design returns from the lead and the owner.
+const ADVISOR_USAGE = {
+  input_tokens: 4,
+  cache_creation_input_tokens: 4398,
+  cache_read_input_tokens: 158729,
+  output_tokens: 478,
+  iterations: [
+    { input_tokens: 2, output_tokens: 272, cache_read_input_tokens: 78030, cache_creation_input_tokens: 2669, type: 'message' },
+    { input_tokens: 81094, output_tokens: 11438, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, type: 'advisor_message', model: 'claude-fable-5-2' },
+    { input_tokens: 2, output_tokens: 206, cache_read_input_tokens: 80699, cache_creation_input_tokens: 1729, type: 'message' },
+  ],
+};
+
+test('readEnd: a reply that called the advisor counts its last pass, not the sum of its passes', { todo: 'block 0: the design returns to the lead and the owner first (odd/tasks/honest-context-meter.md)' }, inHome((home) => {
+  const advised = { type: 'assistant', message: { model: 'claude-test', usage: ADVISOR_USAGE, content: [{ type: 'advisor_tool_result' }] } };
+  const file = write(home, 'a.jsonl', [reply(2, { cache_read_input_tokens: 75873, cache_creation_input_tokens: 2157 }), advised]);
+  assert.deepEqual(readEnd(file), { tokens: 82430, compaction: null });
+}));
+
 // --- statePath ---
 
 test('statePath: one file per session, under the pause folder of the channel', () => {
