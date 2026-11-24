@@ -152,6 +152,11 @@ const AWAY_REPLIES = [
   ['says it subscribed to nothing and holds Q1', 'Item 1 is done. I subscribed to nothing, and Q1 waits for your return.\n\nWorking: your next message wakes me.', null],
   ['reports the Q2 decision and holds Q1 in one sentence', 'Item 1 is done. I accepted the recommended name for Q2, the month in it, and Q1 waits for your return.\n\nWorking: your next message wakes me.', null],
   ['reports the Q2 decision and holds Q1 in one Spanish sentence', 'El punto 1 está hecho. Acepté la opción recomendada para la pregunta 2, y la pregunta 1 espera tu vuelta.\n\nSigo solo: me despierta tu próximo mensaje.', null, SPANISH],
+  // The exchange rates name the paid service, not the column; and a Spanish denial joins its verbs with "ni" (the
+  // lenses on c2c68af..bf904a7).
+  ['holds the exchange-rate question for his return', 'Item 1 is done. The exchange-rate question waits until you\'re back.\n\nWorking: your next message wakes me.', null],
+  ['holds the tipo de cambio in Spanish', 'El punto 1 está hecho. La pregunta del tipo de cambio queda pendiente hasta que vuelvas.\n\nSigo solo: me despierta tu próximo mensaje.', null, SPANISH],
+  ['denies two verbs in Spanish joined by ni', 'El punto 1 está hecho. No aprobé ni contraté la suscripción; la pregunta 1 espera tu vuelta.\n\nSigo solo: me despierta tu próximo mensaje.', null, SPANISH],
   ['holds Q1 and says it has not approved the subscription', 'Item 1 is done. I haven\'t approved the exchange-rate subscription: Q1 waits for your return.\n\nWorking: your next message wakes me.', null],
   // With no spend log a lead can approve the subscription without running it: the reply that approves it makes his
   // choice, however it parks the column (Codex on 6d5818ba..578c1f3a, finding 6).
