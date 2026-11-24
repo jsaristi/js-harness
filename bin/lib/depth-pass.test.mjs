@@ -468,6 +468,103 @@ test('a branch whose merges are not the queue\'s is one pull request, and code m
   assert.deepEqual(errorsOf(mixed), ['code was committed before the pass\'s verdict: bin/b.mjs']);
 });
 
+/** A branch `stacked` cut from another session's branch `base`, which holds its own document with its pass and then its
+ * code; `stacked` is made from `base` by `git checkout -b`, so its reflog says where it was created, and then opens the
+ * feature document, its code after its pass or before it with `early`. With `drop`, `base` is deleted after, so no other branch holds that commit. */
+function stackedBranch(root, { early = false, drop = false, remote = false } = {}) {
+  git(root, 'checkout', '-q', '-b', 'base', 'origin/main');
+  // A log of its own longer than the rest, so that `git log --follow`, which `trail` reads, does not take the feature
+  // document for a copy of this one.
+  const log = Array.from({ length: 40 }, (_, n) => `- L${n + 1}: the base's entry ${n + 1}, in words of its own.`).join('\n');
+  write(root, 'odd/tasks/base.md', `${document()}\n## Log\n${log}\n`);
+  commit(root, 'docs: the base\'s pass', 'odd/tasks/base.md');
+  write(root, 'bin/b.mjs', 'b\n');
+  commit(root, 'feat: the base\'s code', 'bin/b.mjs');
+  if (remote) {
+    // Cut from the pull request's remote-tracking ref, which git then sets as the branch's upstream; no local `base`.
+    git(root, 'config', 'remote.origin.url', 'https://example.invalid/repo.git');
+    git(root, 'config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*');
+    git(root, 'update-ref', 'refs/remotes/origin/base', 'base');
+    git(root, 'checkout', '-q', '--detach');
+    git(root, 'branch', '-q', '-D', 'base');
+    git(root, 'checkout', '-q', '--track', '-b', 'stacked', 'origin/base');
+  } else git(root, 'checkout', '-q', '-b', 'stacked', 'base');
+  if (drop) git(root, 'branch', '-q', '-D', 'base');
+  const itsCode = () => {
+    write(root, 'bin/c.mjs', 'c\n');
+    commit(root, 'feat: its own code', 'bin/c.mjs');
+  };
+  if (early) itsCode();
+  write(root, FILE, document());
+  commit(root, 'docs: the pass', FILE);
+  if (!early) itsCode();
+}
+
+// JH 207's S1, 2026-11-15 (docs/ROADMAP.md, the contracts row): a branch cut from PR 883's head could commit no depth
+// pass, since `trunk..HEAD` read that pull request's code as its own. A branch stacked on another branch reads its own
+// commits, from where its reflog says it was created; the base's documents were judged on the base's branch.
+test('a branch stacked on another branch is judged by its own commits, and the base\'s documents by the base', (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  stackedBranch(root);
+  assert.deepEqual(errorsOf(root), []);
+  assert.deepEqual(errorsOf(root, undefined, 'odd/tasks/base.md'), []);
+});
+
+// The reliability lens on 3d89c37..30f8904: a branch cut from another pull request's remote-tracking ref takes it as its
+// upstream, and that ref is the one that holds the base; only the branch's own pushed copy is left out of the holders.
+test('a branch stacked on another pull request\'s remote-tracking ref, its upstream, is judged by its own commits', (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  stackedBranch(root, { remote: true });
+  assert.equal(git(root, 'rev-parse', '--abbrev-ref', '@{upstream}'), 'origin/base');
+  assert.deepEqual(errorsOf(root), []);
+});
+
+// The reliability lens on 30f8904..b276786: the branch's own pushed copy holds the base too, under whatever name it was
+// pushed; a ref that holds the branch's own commits is a copy of it, not another branch. And a remote ref that only
+// ends in the branch's name, `origin/team/stacked`, belongs to another pull request.
+test('the stacked branch\'s own pushed copy, under any name, is no other branch holding its base', (t) => {
+  const [copy, team] = [repo(), repo()];
+  t.after(() => [copy, team].forEach((root) => fs.rmSync(root, { recursive: true, force: true })));
+  stackedBranch(copy, { drop: true });
+  git(copy, 'update-ref', 'refs/remotes/origin/feature-x', 'HEAD');
+  assert.deepEqual(errorsOf(copy), ['code was committed before the pass\'s verdict: bin/b.mjs']);
+  stackedBranch(team, { drop: true });
+  git(team, 'update-ref', 'refs/remotes/origin/team/stacked', 'HEAD~2');
+  assert.deepEqual(errorsOf(team), []);
+});
+
+// The reliability lens on b276786..d5c9768: once the stacked branch merges its base's later commits, the base's branch
+// meets HEAD past the creation commit and still is another branch, not a copy of this one.
+test('a stacked branch that merges its base\'s later commits still reads from its base', (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  stackedBranch(root);
+  git(root, 'checkout', '-q', 'base');
+  write(root, 'bin/d.mjs', 'd\n');
+  commit(root, 'feat: the base\'s later code', 'bin/d.mjs');
+  git(root, 'checkout', '-q', 'stacked');
+  git(root, 'merge', '-q', '--no-ff', '-m', 'Merge branch \'base\' into stacked', 'base');
+  assert.deepEqual(errorsOf(root), []);
+});
+
+test('a stacked branch with its own code before its verdict is refused, by its own files alone', (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  stackedBranch(root, { early: true });
+  assert.deepEqual(errorsOf(root), ['code was committed before the pass\'s verdict: bin/c.mjs']);
+});
+
+// A branch cut from a commit no other branch holds is read whole: where it started is no evidence the code below is
+// another's, so committing code and then cutting a branch from it does not hide that code.
+test('a branch cut from a commit no other branch holds is read whole', (t) => {
+  const root = repo();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  stackedBranch(root, { drop: true });
+  assert.deepEqual(errorsOf(root), ['code was committed before the pass\'s verdict: bin/b.mjs']);
+});
+
 // odd/tasks/folder-instructions.md: the folder's instruction file is no feature document, so it owes no contract.
 test('depthPassJudge leaves odd/tasks/CLAUDE.md alone', async () => {
   const { depthPassJudge } = await import('./depth-pass.mjs');

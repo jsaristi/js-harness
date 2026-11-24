@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { CONTRACT_TEMPLATE, doneWhen, isContract, modeLine, parseContract, taskModes, validateContract } from './lib/contract.mjs';
 import { ruleHere, ruleOf, ruleValue } from './lib/rules.mjs';
-import { depthPassJudge } from './lib/depth-pass.mjs';
+import { depthPassJudge, verdictOf } from './lib/depth-pass.mjs';
 import { QUEUE_TRAILER } from './lib/pull-request.mjs';
 import { localDay } from './lib/flaky.mjs';
 
@@ -441,20 +441,51 @@ function openedIn(git, rev) {
   return opened;
 }
 
-/** The trunk and the branch's commits oldest first, `{ trunk, commits: [{ hash, files, side? }] }`, from the trunk to
- * `HEAD`, merges left out; `null` where no trunk is known, so no order can be judged. In a candidate of the merge
- * queue each commit carries its `side` (`sidesOf`). */
+/** The trunk, the base the branch is stacked on or `null`, and the branch's commits oldest first, `{ trunk, base,
+ * commits: [{ hash, files, side? }] }`, from the trunk and the base to `HEAD`, merges left out; `null` where no trunk
+ * is known, so no order can be judged. In a candidate of the merge queue each commit carries its `side` (`sidesOf`). */
 function branchOf(git) {
   const trunk = TRUNKS.find((ref) => git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]) !== null);
   if (!trunk) return null;
+  const base = stackBaseOf(git, trunk);
   const commits = [];
-  for (const line of git(['log', '--reverse', '--topo-order', '--no-merges', '--relative', '--name-only', '--format=>%H', `${trunk}..HEAD`]) ?? []) {
+  for (const line of git(['log', '--reverse', '--topo-order', '--no-merges', '--relative', '--name-only', '--format=>%H', ...ownRange(trunk, base)]) ?? []) {
     if (line.startsWith('>')) commits.push({ hash: line.slice(1), files: [] });
     else commits.at(-1)?.files.push(line);
   }
   const sides = sidesOf(git, trunk);
   if (sides !== null) for (const commit of commits) commit.side = sides.get(commit.hash);
-  return { trunk, commits };
+  return { trunk, base, commits };
+}
+
+/** The revisions of the branch's own history: `HEAD`, less the trunk and the base it is stacked on. */
+const ownRange = (trunk, base) => ['HEAD', `^${trunk}`, ...(base ? [`^${base}`] : [])];
+
+/** The commit the branch at `HEAD` is stacked on, another session's code not yet on `trunk`, or `null`: the commit its
+ * reflog says it was created from, kept only where it is not on the trunk, is an ancestor of `HEAD` and another branch,
+ * local or remote, holds it. Its own creation point is no evidence that the code below is another's: a branch cut from
+ * one's own commit no other branch holds is read whole. With no reflog (a fresh clone, as on CI), a detached `HEAD`
+ * (a candidate of the merge queue) or a branch rebased since, the whole range is read, as it was before
+ * (odd/tasks/contract-row-stacked.md, JH 207's S1). */
+function stackBaseOf(git, trunk) {
+  const branch = git(['symbolic-ref', '--quiet', 'HEAD'])?.[0];
+  if (!branch) return null;
+  const created = git(['reflog', 'show', '--format=%H %gs', branch])?.at(-1) ?? '';
+  const base = created.slice(0, created.indexOf(' '));
+  if (!base || !created.slice(created.indexOf(' ') + 1).startsWith('branch: Created from ')) return null;
+  const isAncestor = (of) => git(['merge-base', '--is-ancestor', base, of]) !== null;
+  if (isAncestor(trunk) || !isAncestor('HEAD')) return null;
+  // Another branch holds the base and none of this branch's own commits, those of HEAD's first-parent line past the base:
+  // a ref that holds one is a copy of this branch, pushed under any name, while the base's branch whose later commits
+  // HEAD merged in holds only commits off that line. The pushed copy with no commit yet is told by its name. The upstream
+  // may be another's: a branch cut from another pull request's remote-tracking ref takes that ref (the reliability lens).
+  const name = branch.slice('refs/heads/'.length);
+  const copies = new Set((git(['remote']) ?? []).map((remote) => `refs/remotes/${remote}/${name}`));
+  const ownLine = (...not) => git(['rev-list', '--first-parent', 'HEAD', `^${base}`, ...not.map((ref) => `^${ref}`)])?.length;
+  const own = ownLine();
+  const holders = git(['for-each-ref', '--contains', base, '--format=%(refname)', 'refs/heads', 'refs/remotes']) ?? [];
+  const another = (ref) => ref !== branch && !copies.has(ref) && !ref.endsWith('/HEAD') && ownLine(ref) === own;
+  return holders.some(another) ? base : null;
 }
 
 /** The pull request each commit past `trunk` belongs to, hash to a number, where `HEAD` is a candidate of the merge
@@ -507,6 +538,7 @@ export function depthPassFor(root, { git = gitIn(root), today = localDay() } = {
 function readJudge(git, since, today) {
   const branch = branchOf(git);
   const trunk = branch?.trunk;
+  const base = branch?.base ?? null;
   const text = (spec) => git(['show', spec])?.join('\n') ?? null;
   return depthPassJudge({
     since,
@@ -514,10 +546,14 @@ function readJudge(git, since, today) {
     opened: openedOn(git, [trunk, 'MERGE_HEAD']),
     branch: branch?.commits ?? null,
     staged: git(['diff', '--cached', '--relative', '--name-only']) ?? [],
-    onTrunk: (file) => text(`${trunk}:./${file}`),
+    // A verdict on the base a branch is stacked on was judged on the base's branch, as one on the trunk was on its own.
+    onTrunk: (file) => {
+      const onBase = base ? text(`${base}:./${file}`) : null;
+      return verdictOf(onBase) !== null ? onBase : text(`${trunk}:./${file}`);
+    },
     trail: (file) => {
       const trail = [];
-      for (const line of git(['log', '--follow', '--no-merges', '--name-only', '--format=>%H', `${trunk}..HEAD`, '--', file]) ?? []) {
+      for (const line of git(['log', '--follow', '--no-merges', '--name-only', '--format=>%H', ...ownRange(trunk, base), '--', file]) ?? []) {
         if (line.startsWith('>')) trail.unshift({ hash: line.slice(1), path: null });
         else if (trail[0].path === null) trail[0].path = line;
       }
