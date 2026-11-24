@@ -1860,3 +1860,110 @@ test('the first line of standard error is cut to 160 characters', () => {
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// --- JH 296 (odd/tasks/hook-timeouts.md, T2): `doctor --hook` timed out in 14 of 26 session starts, 1.8 s of its
+// 3.2 s in these probes. Outside the interactive report a CLI installed as a package is read from the package.json its
+// shim runs, never spawned; the interactive report still spawns it, so a broken binary is told there. ---
+
+/** A PATH folder holding `codegraph` as npm installs it on Windows and `codex` as pnpm does, each with `version`. */
+function shimMachine({ codegraph = '9.1.2', codex = '0.333.0' } = {}) {
+  const root = makeTmpHome('js-harness-stack-shims-');
+  const bin = path.join(root, 'bin');
+  fs.mkdirSync(bin, { recursive: true });
+  fs.writeFileSync(path.join(bin, 'codegraph.cmd'), '@ECHO off\r\n"%_prog%"  "%dp0%\\node_modules\\@colbymchenry\\codegraph\\npm-shim.js" %*\r\n');
+  writeJson(path.join(bin, 'node_modules', '@colbymchenry', 'codegraph', 'package.json'), { name: '@colbymchenry/codegraph', version: codegraph });
+  fs.writeFileSync(path.join(bin, 'codex.cmd'), '@SETLOCAL\r\n  node  "%~dp0\\..\\global\\v11\\abc\\node_modules\\@openai\\codex\\bin\\codex.js" %*\r\n');
+  writeJson(path.join(root, 'global', 'v11', 'abc', 'node_modules', '@openai', 'codex', 'package.json'), { name: '@openai/codex', version: codex });
+  return { root, env: { PATH: bin }, platform: 'win32' };
+}
+
+test('outside the interactive report, codegraph and codex are read from the package their shim runs, with no spawn', () => {
+  const machine = shimMachine();
+  try {
+    const calls = [];
+    const deps = { ...machine, spawn: commandSpawn({}, calls) };
+    assert.deepEqual(findTool('codegraph').installed(deps), { state: 'ok', version: '9.1.2' });
+    assert.deepEqual(findTool('codex').installed(deps), { state: 'ok', version: '0.333.0' });
+    assert.deepEqual(calls.map((call) => call.line), []);
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+test('the version read follows an upgrade at once: the package.json is read again on every probe', () => {
+  const machine = shimMachine();
+  try {
+    const deps = { ...machine, spawn: commandSpawn({}) };
+    assert.equal(findTool('codex').installed(deps).version, '0.333.0');
+    writeJson(path.join(machine.root, 'global', 'v11', 'abc', 'node_modules', '@openai', 'codex', 'package.json'), { name: '@openai/codex', version: '0.334.0' });
+    assert.equal(findTool('codex').installed(deps).version, '0.334.0');
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+test('the interactive report still spawns the version probe, so a binary that does not run is told there', () => {
+  const machine = shimMachine();
+  try {
+    const calls = [];
+    const deps = { ...machine, interactive: true, spawn: commandSpawn({ 'codex --version': CLI_VERSION }, calls) };
+    assert.deepEqual(findTool('codex').installed(deps), { state: 'ok', version: '0.130.0' });
+    assert.deepEqual(calls.map((call) => call.line), ['codex --version']);
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+test('with no env, no shim of the package, or a package of another name, the probe spawns as before', () => {
+  const machine = shimMachine();
+  try {
+    const answers = { 'codegraph --version': { status: 0, stdout: '1.0.0\n', stderr: '' } };
+    assert.equal(findTool('codegraph').installed({ platform: 'win32', spawn: commandSpawn(answers) }).version, '1.0.0', 'no env');
+    const packageJson = path.join(machine.env.PATH, 'node_modules', '@colbymchenry', 'codegraph', 'package.json');
+    writeJson(packageJson, { name: 'other', version: '9.1.2' });
+    assert.equal(findTool('codegraph').installed({ ...machine, spawn: commandSpawn(answers) }).version, '1.0.0', 'another name');
+    // The package still beside the shim, but the shim runs something else: the version of what runs is not that one.
+    writeJson(packageJson, { name: '@colbymchenry/codegraph', version: '9.1.2' });
+    fs.writeFileSync(path.join(machine.env.PATH, 'codegraph.cmd'), '@ECHO off\r\n"C:\\elsewhere\\codegraph.exe" %*\r\n');
+    assert.equal(findTool('codegraph').installed({ ...machine, spawn: commandSpawn(answers) }).version, '1.0.0', 'a shim that runs no package');
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+test('probeStack outside the interactive report spawns neither version probe of a CLI found as a package', () => {
+  const machine = shimMachine();
+  try {
+    const calls = [];
+    probeStack({ ...machine, home: machine.root, project: null, interactive: false, functions: {}, spawn: commandSpawn({}, calls) });
+    const versions = calls.map((call) => call.line).filter((line) => / (--version|version)$/.test(line) && !line.startsWith('engram'));
+    assert.deepEqual(versions, []);
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+test('a codex package whose binary does not run still shows a gap outside the interactive report: its login probe fails', () => {
+  // The reliability lens on 9bc7fa2..97598c9: the version read from files says installed even when the binary cannot
+  // run. The login probe still spawns codex, so the Codex row keeps its gap and doctor --hook its notice.
+  const machine = shimMachine();
+  try {
+    const row = probeTool(findTool('codex'), { ...machine, home: machine.root, interactive: false, spawn: commandSpawn({}) });
+    assert.equal(row.installed, 'ok');
+    assert.equal(row.codex, 'missing');
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
+
+test('a POSIX shim of pnpm is read by the script path it names from $basedir', () => {
+  const machine = shimMachine();
+  try {
+    fs.writeFileSync(path.join(machine.env.PATH, 'codex'), '#!/bin/sh\nexec node  "$basedir/../global/v11/abc/node_modules/@openai/codex/bin/codex.js" "$@"\n');
+    const calls = [];
+    assert.deepEqual(findTool('codex').installed({ ...machine, platform: 'linux', spawn: commandSpawn({}, calls) }), { state: 'ok', version: '0.333.0' });
+    assert.deepEqual(calls, []);
+  } finally {
+    fs.rmSync(machine.root, { recursive: true, force: true });
+  }
+});
