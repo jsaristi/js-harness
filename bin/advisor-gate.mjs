@@ -414,14 +414,22 @@ function transcriptsUnder(folder, day) {
   return found;
 }
 
+/** When an act gated after the others became one, by the merge to main that gated it: no installed copy decided it
+ * before. `waiting` was gated by S1 (odd/tasks/consistent-orders.md), PR 886 merged at 5f22aa6a; before F8 the report
+ * counted the waiting notices sent before it as acts with no decision. A fixed date, not the first decision seen: a
+ * gate that failed for its first acts must still show them. */
+export const GATED_SINCE = { waiting: '2026-11-15T19:00:14.000Z' };
+
 /** Whether two paths name one file: the host writes `transcript_path` in its own spelling, and Windows ignores case and
  * takes either slash. */
 const samePath = (a, b) => (process.platform === 'win32' ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase() : path.resolve(a) === path.resolve(b));
 
 /** The gated acts of the transcripts under `projects` from `from` on, each matched to a decision: by the tool call's
  * id when the decision recorded one, else by transcript, act and a decision within 120 s after the call, each
- * decision used once. A sub-agent's end is no tool call and is left out. */
+ * decision used once. A sub-agent's end is no tool call and is left out. An act gated later than the others is counted
+ * from the day its gate reached main (`GATED_SINCE`). */
 function reconcile(projects, from, decisions) {
+  const gatedSince = (act) => (GATED_SINCE[act] !== undefined && GATED_SINCE[act] > from ? GATED_SINCE[act] : from);
   const byToolUse = new Map(decisions.filter((d) => typeof d.toolUseId === 'string').map((d) => [d.toolUseId, d]));
   const loose = decisions.filter((d) => typeof d.toolUseId !== 'string' && typeof d.transcript === 'string');
   const used = new Set();
@@ -449,7 +457,7 @@ function reconcile(projects, from, decisions) {
         const act = block.name === 'Write'
           ? (created.has(block.id) && typeof block.input?.file_path === 'string' && TASK_DOCUMENT.test(path.resolve(cwd, block.input.file_path)) ? 'plan' : null)
           : gatedAct(block.name, block.input, cwd);
-        if (act === null) continue;
+        if (act === null || entry.timestamp < gatedSince(act)) continue;
         acts.found++;
         const limit = new Date(Date.parse(entry.timestamp) + 120_000).toISOString();
         const match = byToolUse.get(block.id) ?? loose.find((d) => !used.has(d) && samePath(d.transcript, file) && d.act === act && d.at >= entry.timestamp && d.at <= limit);
