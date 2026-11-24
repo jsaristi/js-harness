@@ -164,6 +164,13 @@ const AWAY_REPLIES = [
   ['accepts the recommendation for pregunta 1 in Spanish', 'El punto 1 está hecho. Acepté la recomendación para la pregunta 1; la columna espera tu vuelta.\n\nSigo solo: me despierta tu próximo mensaje.', 'the reply makes no choice of theirs', SPANISH],
   ['pays the 40 dollars in Spanish', 'El punto 1 está hecho. Pagué los 40 dólares de la suscripción; la columna espera tu vuelta.\n\nSigo solo: me despierta tu próximo mensaje.', 'the reply makes no choice of theirs', SPANISH],
   ['takes out a subscription in Spanish', 'El punto 1 está hecho. Contraté una suscripción al servicio; la columna espera tu vuelta.\n\nSigo solo: me despierta tu próximo mensaje.', 'the reply makes no choice of theirs', SPANISH],
+  // A colon, a dash, and a joiner such as "while" or "mientras" end the clause an approval reads (the lenses on
+  // 1f7ccdf..5b83b52).
+  ['reports the Q2 decision while Q1 waits', 'Item 1 is done. I accepted the recommended name for Q2 while Q1 waits for your return.\n\nWorking: your next message wakes me.', null],
+  ['reports the Q2 decision before a colon that holds Q1', 'Item 1 is done. I accepted the recommended name for Q2: Q1 waits for your return.\n\nWorking: your next message wakes me.', null],
+  ['reports the Q2 decision before a dash that holds Q1', 'Item 1 is done. I accepted the recommended name for Q2 — Q1 waits for your return.\n\nWorking: your next message wakes me.', null],
+  ['approves the Q2 name without the subscription', 'Item 1 is done. I approved the Q2 name without any subscription, and Q1 waits for your return.\n\nWorking: your next message wakes me.', null],
+  ['reports the Q2 decision in Spanish mientras Q1 waits', 'El punto 1 está hecho. Acepté lo recomendado mientras la pregunta 1 espera tu vuelta.\n\nSigo solo: me despierta tu próximo mensaje.', null, SPANISH],
   ['holds Q1 and says it has not approved the subscription', 'Item 1 is done. I haven\'t approved the exchange-rate subscription: Q1 waits for your return.\n\nWorking: your next message wakes me.', null],
   // With no spend log a lead can approve the subscription without running it: the reply that approves it makes his
   // choice, however it parks the column (Codex on 6d5818ba..578c1f3a, finding 6).
