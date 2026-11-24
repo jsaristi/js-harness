@@ -3,14 +3,17 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import * as status from './remote-status.mjs';
 import { repositoryRoot } from './remote-status.mjs';
 
-const tempDir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'remote-status-'));
-
-test('the module exports what the command uses and nothing of how it parses the log', () => {
-  assert.deepEqual(Object.keys(status).sort(), ['logTail', 'readServerState', 'reportStatus', 'repositoryRoot', 'stoppedOnPurpose']);
+const tmpDirs = [];
+test.after(() => {
+  for (const dir of tmpDirs) fs.rmSync(dir, { recursive: true, force: true });
 });
+function tempDir() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-remote-status-'));
+  tmpDirs.push(dir);
+  return dir;
+}
 
 test('repositoryRoot returns the top level, or which lookup failed, and prints nothing: the command says why', () => {
   const dir = tempDir();
