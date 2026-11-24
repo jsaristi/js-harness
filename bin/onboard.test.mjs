@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { onboardMain, writeAdr } from './onboard.mjs';
+import { USAGE, onboardMain, writeAdr } from './onboard.mjs';
 import {
   AGENTS_PATH, ONBOARDING_PATH, ORIGIN_PATH, ROADMAP_PATH, adrTemplate, featureTemplate, originTemplate, roadmapTemplate, shortHash,
 } from './lib/onboard.mjs';
@@ -410,8 +410,10 @@ test('profile names what is missing when it cannot tell the kind, the size or th
   const cases = [
     [bare, ['profile', '--checklist', 'advice'], `profile reads the kind from ${ONBOARDING_PATH}, which is not there: name a kind, as js-harness onboard profile platform`],
     [bare, ['profile', 'platform', '--checklist', 'advice'], `--checklist needs the size: pass --size small|large, or write - Size: under ## Setup in ${ONBOARDING_PATH}`],
-    [bare, ['profile', 'shop'], 'shop is not a kind of the profiles; js-harness onboard profile lists them', 2],
-    [bare, ['profile', 'static-site', '--area', 'A:auth'], 'A:auth is not an area of static-site; js-harness onboard profile static-site lists its areas', 2],
+    [bare, ['profile', 'shop'], `shop is not a kind of the profiles; js-harness onboard profile lists them\n\n${USAGE}`, 2],
+    [bare, ['profile', 'static-site', '--area', 'A:auth'], `A:auth is not an area of static-site; js-harness onboard profile static-site lists its areas\n\n${USAGE}`, 2],
+    // The kind from the document, the area typed: still a usage error.
+    [project(t, { [ONBOARDING_PATH]: SETUP('- Kind: static-site') }), ['profile', '--area', 'A:auth'], `A:auth is not an area of static-site; js-harness onboard profile static-site lists its areas\n\n${USAGE}`, 2],
     [project(t, { [ONBOARDING_PATH]: SETUP('- Size: large (L5)') }), ['profile', '--area', 'A:ci'], `${ONBOARDING_PATH} has no - Kind: line under ## Setup: name a kind, or write it there`],
     [project(t, { [ONBOARDING_PATH]: SETUP('- Teaching: on (L2)') }), ['profile', '--checklist', 'bar'], `${ONBOARDING_PATH} has no - Kind: and no - Size: line under ## Setup: name a kind and --size, or write both there`],
     [project(t, { [ONBOARDING_PATH]: SETUP('- Kind: shop') }), ['profile', '--area', 'A:ci'], `${ONBOARDING_PATH}, ## Setup: shop is not a kind of the profiles; js-harness onboard profile lists them`],

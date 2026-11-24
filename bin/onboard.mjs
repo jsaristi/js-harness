@@ -343,8 +343,8 @@ function template(root, name, write, { stdout, stderr }) {
   return 0;
 }
 
-/** What `profile` prints, as `{ lines }`, or `{ error }` that names what is missing, with `usage: true` when it is a
- * value typed on the command line (a kind or an area that is not one), a usage error. With no kind
+/** What `profile` prints, as `{ lines }`, or `{ error }` that names what is missing; a value typed on the command line
+ * that is not one (a kind or an area) throws an `OnboardArgError`, a usage error. With no kind
  * named, `--area` and `--checklist` read `Kind`, and `--checklist` `Size`, from the onboarding document's
  * `## Setup`, so the session never retypes them (D9). */
 function profileOutput(root, { kind, area, checklist, size }) {
@@ -354,7 +354,7 @@ function profileOutput(root, { kind, area, checklist, size }) {
   let kinds;
   if (kind) {
     kinds = parseKind(kind);
-    if (kinds.error) return { error: kinds.error, usage: true };
+    if (kinds.error) throw new OnboardArgError(kinds.error);
   } else {
     if (document === null) return { error: `profile reads the kind from ${ONBOARDING_PATH}, which is not there: name a kind, as js-harness onboard profile platform` };
     if (!setup.Kind && checklist && !size && !setup.Size) {
@@ -369,7 +369,7 @@ function profileOutput(root, { kind, area, checklist, size }) {
     const lines = areaLines(advised, area);
     if (lines) return { lines };
     const name = area.startsWith('A:') ? area : `A:${area}`;
-    return { error: `${name} is not an area of ${kinds.label}; js-harness onboard profile ${kinds.kinds.join(',')} lists its areas`, usage: true };
+    throw new OnboardArgError(`${name} is not an area of ${kinds.label}; js-harness onboard profile ${kinds.kinds.join(',')} lists its areas`);
   }
   if (!checklist) return { lines: kindLines(advised, kinds.label) };
   let chosen = size;
@@ -389,7 +389,7 @@ function profile(root, args, { stdout, stderr }) {
   const result = profileOutput(root, args);
   if (result.error) {
     stderr(result.error);
-    return result.usage ? 2 : 1;
+    return 1;
   }
   stdout(result.lines.join('\n'));
   return 0;
@@ -399,20 +399,23 @@ function profile(root, args, { stdout, stderr }) {
  * of its own, this is no initialized project, or a profile cannot tell the kind, the size or the area it needs, or 2
  * for an argument it does not take or a kind or an area that is not one. */
 export async function onboardMain(argv, env = process.env, { cwd = process.cwd(), stdout = console.log, stderr = console.error } = {}) {
-  let args;
   try {
-    args = parseArgs(argv, cwd);
+    return await run(parseArgs(argv, cwd), { stdout, stderr });
   } catch (err) {
     if (!(err instanceof OnboardArgError)) throw err;
     stderr(`${err.message}\n\n${USAGE}`);
     return 2;
   }
+}
+
+/** Runs the verb of `args` in its project; an `OnboardArgError` it throws is `onboardMain`'s to print. */
+function run(args, io) {
+  const { stdout, stderr } = io;
   const { root, error } = projectRoot(args.cwd);
   if (error) {
     stderr(error);
     return 1;
   }
-  const io = { stdout, stderr };
   if (args.verb === 'stage') return stage(root, io);
   if (args.verb === 'check') return check(root, args.plan, io);
   if (args.verb === 'hash') return hash(root, io);

@@ -674,7 +674,7 @@ function valueOf(args, flag) {
   return value === undefined || value.startsWith('--') ? null : value;
 }
 
-/** A bad command line: its message is printed alone, and the exit is 2. */
+/** A bad command line: its message is printed above the usage, and the exit is 2. */
 class BackupArgError extends Error {}
 
 /** Throws a `BackupArgError` for the first of `flags` that `args` holds with no value after it. */
@@ -1264,13 +1264,13 @@ const FLAGS = {
   verify: { valued: ['--from', '--summary', '--transcripts'] },
 };
 
-/** Runs one subcommand; a `BackupArgError` from any of them is its usage error, printed with exit 2. */
+/** Runs one subcommand; a `BackupArgError` from any of them is its usage error, printed above the usage with exit 2. */
 export async function backupMain(args, deps = defaultDeps()) {
   try {
     return await dispatch(args, deps);
   } catch (err) {
     if (!(err instanceof BackupArgError)) throw err;
-    deps.stderr.write(`${err.message}\n`);
+    deps.stderr.write(`${err.message}\n\n${USAGE}\n`);
     return 2;
   }
 }

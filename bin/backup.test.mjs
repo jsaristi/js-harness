@@ -1304,8 +1304,12 @@ test('every backup subcommand refuses an unknown flag with a usage error, and ke
   for (const args of typos) {
     deps.stderr = sink();
     assert.equal(await backupMain(args, deps), 2, args.join(' '));
-    assert.match(deps.stderr.text, /unknown argument: --no-such-flag/, args.join(' '));
+    assert.match(deps.stderr.text, /^backup \w+: unknown argument: --no-such-flag\n\nUsage: js-harness backup /, args.join(' '));
   }
+  // A usage error met inside a subcommand prints the usage too.
+  deps.stderr = sink();
+  assert.equal(await backupMain(['restore', '--from', 'x', '--home', '--merge'], deps), 2);
+  assert.match(deps.stderr.text, /^backup restore: --home needs a value\n\nUsage: js-harness backup /);
   assert.equal(fs.readFileSync(paths.config, 'utf8'), before, 'a refused init changes nothing');
 
   deps.stderr = sink();
