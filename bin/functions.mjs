@@ -21,23 +21,27 @@ export const USAGE = [
     .join('; ')}.`,
 ].join('\n');
 
+/** A bad command line: its message is printed above the usage, and the exit is 2. */
+class FunctionsArgError extends Error {}
+
+/** The options and the verb of `argv`; throws a `FunctionsArgError` for a bad command line. */
 function parseArgs(argv, cwd) {
   const parsed = { cwd, json: false, words: [] };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--json') parsed.json = true;
     else if (arg === '--cwd') {
-      if (!argv[index + 1] || argv[index + 1].startsWith('--')) return { error: '--cwd requires a value' };
+      if (!argv[index + 1] || argv[index + 1].startsWith('--')) throw new FunctionsArgError('--cwd requires a value');
       parsed.cwd = path.resolve(argv[(index += 1)]);
     }
     else if (!arg.startsWith('-')) parsed.words.push(arg);
-    else return { error: `unknown argument: ${arg}` };
+    else throw new FunctionsArgError(`unknown argument: ${arg}`);
   }
   const [verb, ...rest] = parsed.words;
   if (verb === undefined) return parsed;
   if (verb === 'apply' && rest.length === 0 && !parsed.json) return { ...parsed, verb };
   if (verb === 'set' && rest.length === 2 && !parsed.json) return { ...parsed, verb, name: rest[0], value: rest[1] };
-  return { error: `unknown argument: ${verb === 'apply' || verb === 'set' ? argv.join(' ') : verb}` };
+  throw new FunctionsArgError(`unknown argument: ${verb === 'apply' || verb === 'set' ? argv.join(' ') : verb}`);
 }
 
 /** One line per switch: its name, its value, and why; `auto: ` goes before a reason read from the files. */
@@ -138,9 +142,12 @@ export async function functionsMain(
   env = process.env,
   { cwd = process.cwd(), stdout = console.log, stderr = console.error, spawn = spawnSync, platform = process.platform } = {},
 ) {
-  const args = parseArgs(argv, cwd);
-  if (args.error) {
-    stderr(`${args.error}\n\n${USAGE}`);
+  let args;
+  try {
+    args = parseArgs(argv, cwd);
+  } catch (err) {
+    if (!(err instanceof FunctionsArgError)) throw err;
+    stderr(`${err.message}\n\n${USAGE}`);
     return 2;
   }
   if (!fs.existsSync(args.cwd)) {
