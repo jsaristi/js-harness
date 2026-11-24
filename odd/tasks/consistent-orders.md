@@ -190,7 +190,7 @@ answering a block, while a session waits) were missed with nothing to say so; on
 - [ ] F6 follow-up, owner: the lead — JH 199's and JH 204's long stretches of commits and verifier launches with no consult: those acts are not gated by his yes to question 282; widening the gated acts is his call
 - [ ] F8 follow-up, owner: the lead — the gate's report will count `waiting` notices sent before S1 was installed as acts with no decision (bin/advisor-gate.mjs, the reconciliation)
 - [ ] F9 follow-up, owner: the lead — inherited false refusals: an `echo`, a shell comment or an unquoted heredoc commit body that names a gated notify reads as that act (JH 206's T8, odd/tasks/advisor-use.md); also a non-js-harness tool chained after a notice whose own `--kind` is a gated word (L11)
-- [ ] F10 follow-up, owner: the lead — README and the gate's usage text describe the stretch without the compaction break
+- [x] F10 follow-up, owner: the lead — README and the gate's usage text describe the stretch without the compaction break (L24: README.md, docs/SPEC.md, the usage text and header of bin/advisor-gate.mjs now name the compaction break; `node --test bin/advisor-gate.test.mjs` 36 of 36, among them the compaction test at line 148)
 - [ ] F11 follow-up, owner: the lead — `notify --kind ready --pr` refuses while the pull request's head is not the sender's HEAD
 - [ ] F12 follow-up, owner: the lead — a work session whose `waiting` S1 refused, and which then sends a `note` or ends its turn, leaves no block S2 can see (L22, Limits; the double review's codex 1)
 - [ ] F7 follow-up, owner: the lead — 8 stale `waiting` notices from sessions long gone stay newest in the channel
@@ -437,3 +437,7 @@ answering a block, while a session waits) were missed with nothing to say so; on
   Unguaranteed: what was written after the read and no reader saw: the git rule's removal, coverage by time with
   compaction only, the marker scoped to the immediate retry, relief and `opened` by number, and the build's file
   collision with `tokenizer`. The lead's review of the pull request is the only read of them.
+- L24 (2026-11-22, JH 291, the lead's fourth unit) F10 closed in docs only: the stretch's ends now name the host's
+  compaction in README.md (advisor-gate), docs/SPEC.md's requirement, the gate's usage text and its header comment, as
+  the code does it (`breakOf` returns `compaction` on an entry with `isCompactSummary`, `bin/advisor-gate.mjs:119`, so a
+  consult made before a compaction covers no act after it; tested at `bin/advisor-gate.test.mjs:148`). No behaviour changed.
