@@ -1,9 +1,8 @@
 // What `js-harness remote` (bin/remote.mjs) reads and prints without acting: the repository a command acts on, the
 // server's state from the last lines of its log, the marker a `stop` leaves so the watchdog does not bring the server
-// back, and the lines of `status`. The marker's two writers (`markStopped`, `clearStopped`) are here too, beside its
-// rule, until they move beside `remoteFiles` in bin/lib/remote.mjs. Kept apart from the command so it stays under
-// the size limit (bin/conventions-structure.test.mjs); the command imports it, and re-exports `logTail` and
-// `readServerState`.
+// back, and the lines of `status`. What writes that marker is in bin/lib/remote.mjs (`markStopped`, `clearStopped`).
+// Kept apart from the command so it stays under the size limit (bin/conventions-structure.test.mjs); the command
+// imports it, and re-exports `logTail` and `readServerState`.
 import fs from 'node:fs';
 import path from 'node:path';
 import { gitTopLevel } from './project.mjs';
@@ -87,26 +86,6 @@ export function logTail(logPath) {
  * also when this start then fails. The watchdog (`start --watchdog`) only reads it, and starts nothing while it
  * is there: a supervisor that died is its to bring back, one he stopped is not. */
 export const stoppedOnPurpose = (files) => fs.existsSync(files.stoppedPath);
-
-/** Leaves the marker. Returns why it could not, or nothing. */
-export function markStopped(files) {
-  try {
-    fs.writeFileSync(files.stoppedPath, `stopped on purpose by js-harness remote stop at ${new Date().toISOString()}; the next js-harness remote start removes this file\n`);
-    return undefined;
-  } catch (err) {
-    return err.message;
-  }
-}
-
-/** Removes the marker, if there is one. Returns why it could not, or nothing. */
-export function clearStopped(files) {
-  try {
-    fs.rmSync(files.stoppedPath, { force: true });
-    return undefined;
-  } catch (err) {
-    return err.message;
-  }
-}
 
 /** `found` is what `locate` answered. The server's state is read from the log only for a supervisor known to run:
  * the last lines of a log say nothing about a process that may be gone. `stopped` says the marker of a `stop` is

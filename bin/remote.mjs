@@ -26,13 +26,13 @@ import {
 } from './lib/manifest.mjs';
 import { killProcesses, killTree, selectDescendants, takeSnapshot } from './lib/process-tree.mjs';
 import {
-  SPAWN_MODES, cleanServerEnv, launcherFileName, locate, logNote, loginLauncher, lookUpProcesses, readPersistentEnv, readState, remoteFiles, remoteId,
-  resolveClaude as findClaude, serverArgs, supervise, watchdogTask, watchdogTaskXml, whereabouts,
+  SPAWN_MODES, cleanServerEnv, clearStopped, launcherFileName, locate, logNote, loginLauncher, lookUpProcesses, markStopped, readPersistentEnv, readState,
+  remoteFiles, remoteId, resolveClaude as findClaude, serverArgs, supervise, watchdogTask, watchdogTaskXml, whereabouts,
 } from './lib/remote.mjs';
 import { disableLauncher, launcherLine, planLauncher, retireBatchLauncher, writeLauncher } from './lib/remote-launcher.mjs';
 import { unknownArgument } from './lib/args.mjs';
 import { harnessHome } from './lib/home.mjs';
-import { clearStopped, markStopped, reportStatus, repositoryRoot, stoppedOnPurpose } from './lib/remote-status.mjs';
+import { reportStatus, repositoryRoot, stoppedOnPurpose } from './lib/remote-status.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
 

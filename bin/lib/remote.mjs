@@ -663,6 +663,27 @@ export function readState(file) {
   }
 }
 
+/** Leaves the marker of a stop (its rule is `stoppedOnPurpose` of lib/remote-status.mjs). Returns why it could
+ * not, or nothing. */
+export function markStopped(files) {
+  try {
+    fs.writeFileSync(files.stoppedPath, `stopped on purpose by js-harness remote stop at ${new Date().toISOString()}; the next js-harness remote start removes this file\n`);
+    return undefined;
+  } catch (err) {
+    return err.message;
+  }
+}
+
+/** Removes the marker, if there is one. Returns why it could not, or nothing. */
+export function clearStopped(files) {
+  try {
+    fs.rmSync(files.stoppedPath, { force: true });
+    return undefined;
+  } catch (err) {
+    return err.message;
+  }
+}
+
 /** The rows one snapshot has for `pids`: `[{ pid, createdAt }]`, `createdAt` `null` for a process whose creation
  * time Windows does not give: it runs, and nothing says which process it is. A pid with no row is not running.
  * Throws when the snapshot could not be taken. */

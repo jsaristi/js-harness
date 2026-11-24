@@ -9,7 +9,7 @@ import { repositoryRoot } from './remote-status.mjs';
 const tempDir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'remote-status-'));
 
 test('the module exports what the command uses and nothing of how it parses the log', () => {
-  assert.deepEqual(Object.keys(status).sort(), ['clearStopped', 'logTail', 'markStopped', 'readServerState', 'reportStatus', 'repositoryRoot', 'stoppedOnPurpose']);
+  assert.deepEqual(Object.keys(status).sort(), ['logTail', 'readServerState', 'reportStatus', 'repositoryRoot', 'stoppedOnPurpose']);
 });
 
 test('repositoryRoot returns the top level, or which lookup failed, and prints nothing: the command says why', () => {
