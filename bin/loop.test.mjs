@@ -1,13 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { loopMain } from './loop.mjs';
 import { killTargets, loopRecordPath, readRecord, snapshotProcesses, targetsOf, withRecordLock, writeRecord as publishRecord } from './lib/loops.mjs';
 import { projectSlug } from './lib/sessions.mjs';
+import { tempDir } from './lib/temp-dir.testkit.mjs';
 
 // The process table and the kill are fakes, except in the last test, which starts a real loop and stops it. The
 // records are real files in a temporary home; git is a fake that fails, so the project is the folder itself.
@@ -19,7 +19,7 @@ const T0 = Date.parse('2026-10-15T04:50:00.000Z');
 const noGit = () => ({ status: 128, stdout: '', stderr: 'fatal: not a git repository' });
 
 function place() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'loop-test-'));
+  const root = tempDir('loop-test-');
   const cwd = path.join(root, 'project');
   const home = path.join(root, 'home');
   fs.mkdirSync(cwd);

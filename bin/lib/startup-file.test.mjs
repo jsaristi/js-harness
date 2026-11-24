@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { readManifest, uninstall } from './manifest.mjs';
 import { batchName, hiddenLauncherCommand, hiddenLauncherText, removeStartupFile, startupLocation, writeStartupFile } from './startup-file.mjs';
+import { tempDir } from './temp-dir.testkit.mjs';
 
 const sha = (text) => createHash('sha256').update(text).digest('hex');
 
@@ -52,7 +52,7 @@ test('batchName is the name the batch launcher of the same file had, before laun
 // A real Windows Script Host, as the Startup folder runs a .vbs: the command reaches node whole. That it opens no
 // window was measured by hand (odd/tasks/login-launchers.md, L3): a window handle is not something a test can read.
 test('a launcher run by the real wscript.exe hands node its arguments intact, through a space and a letter beyond ASCII', { skip: process.platform === 'win32' ? false : 'wscript.exe only', timeout: 60000 }, async () => {
-  const dir = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-startup-')), 'lanzador ñ');
+  const dir = path.join(tempDir('js-harness-startup-'), 'lanzador ñ');
   fs.mkdirSync(dir);
   const script = path.join(dir, 'fake ñandú.mjs');
   fs.writeFileSync(script, "import fs from 'node:fs';\nfs.writeFileSync(new URL('./args.json', import.meta.url), JSON.stringify(process.argv.slice(2)));\n");
@@ -68,7 +68,7 @@ test('a launcher run by the real wscript.exe hands node its arguments intact, th
 
 /** An APPDATA whose Startup folder exists, and a home for the machine manifest. */
 function places({ startup = true } = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-startup-'));
+  const root = tempDir('js-harness-startup-');
   const appData = path.join(root, 'AppData');
   const dir = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
   if (startup) fs.mkdirSync(dir, { recursive: true });
