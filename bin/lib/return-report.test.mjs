@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { recordPath } from './channel.mjs';
-import { ABSENCE_MS, AWAY_MARKER, NO_STRETCH_MARKER, OPEN_STRETCH_MARKER, RETURN_MARKER, departureLine, departureWatch, returnReportWarning, returnStretchWarning, stretchRecordsIn } from './return-report.mjs';
+import { ABSENCE_MS, AWAY_MARKER, LEAD_WAKE_MARKER, NO_STRETCH_MARKER, OPEN_STRETCH_MARKER, RETURN_MARKER, departureLine, departureWatch, leadWakeWarning, returnReportWarning, returnStretchWarning, stretchRecordsIn } from './return-report.mjs';
 import { mainCheckout, projectSlug } from './sessions.mjs';
 import { RECORD_SCHEMA as STRETCH_SCHEMA, stretchFile } from './stretch.mjs';
 import { RENDERED_SCHEMA, renderedFile } from './template-record.mjs';
@@ -424,4 +424,70 @@ test('a transcript read piece by piece gives what the whole gives, a question an
   const closed = [his(LEFT), asked(), dismissed('2026-10-30T18:57:00.000Z')];
   assert.equal(departure({ pieces: [closed, [asked()]] }).heldSince, departure({ pieces: [[...closed, asked()]] }).heldSince);
   assert.equal(departure({ pieces: [closed, [asked()]] }).heldSince, null);
+});
+
+// --- the lead's wake (JH 294, docs/FAILURES.md away-hours-no-work, 2026-11-22) ---
+//
+// The stop it replays: the lead's transcript d6383aea, line 30882. Its last wait had ended on JH 292's notice at
+// 07:09:51Z, the host compacted it at 07:11, and at 07:14:40Z it closed "Sigo solo" with nothing in its background
+// while JH 291 still held work (its newest notice, at 07:02Z, a note); the hook let it through and the lead slept until
+// 18:03Z. His last message was at 05:35Z, 1.65 hours before.
+
+const STOP = '2026-11-22T07:14:40.000Z';
+const W291 = { host: 'claude-code', id: 'work-291', title: 'JH 291 · idle wake, then a stretch counts idle' };
+const fromTo = (at, from, kind, to = { role: 'orchestrator' }) => JSON.stringify({ schema: 'js-harness.channel-notice/v1', at, from, to, kind, text: 'x' });
+const NIGHT = [fromTo('2026-11-22T06:00:00.000Z', LEAD, 'note'), fromTo('2026-11-22T07:02:07.000Z', W291, 'note')];
+const SLEPT = [his('2026-11-22T05:35:07.000Z', 'llena las horas'), said('2026-11-22T07:14:39.000Z', 'Sigo solo: me despierta un aviso.')];
+const launched = (at) => line({ type: 'assistant', timestamp: at, message: { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_w', name: 'Bash', input: { command: 'js-harness wait --notice-to orchestrator', run_in_background: true } }] } });
+const leadWarned = (at) => line({ type: 'attachment', timestamp: at, attachment: { type: 'hook_blocking_error', hookName: 'Stop', hookEvent: 'Stop', blockingError: { blockingError: `js-harness reply: ... ${LEAD_WAKE_MARKER} ...` } } });
+
+function leadWake({ transcript = SLEPT, record = NIGHT, payload = {}, state = 'working', now = STOP } = {}) {
+  const files = { [RECORD]: `${record.join('\n')}\n`, [TRANSCRIPT]: `${transcript.join('\n')}\n` };
+  const io = {
+    readFile: (file) => {
+      if (Object.hasOwn(files, file)) return files[file];
+      throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
+    },
+    run: noGit,
+    env: { JS_HARNESS_HOME: HOME },
+    homedir: () => path.resolve('/elsewhere'),
+    now: () => Date.parse(now),
+  };
+  return leadWakeWarning({ cwd: PROJECT, session_id: 'lead-1', transcript_path: TRANSCRIPT, background_tasks: [], ...payload }, state, io);
+}
+
+test('the lead stop of 07:14:40Z, bare while JH 291 held work, is turned back with the wait to arm', () => {
+  const reason = leadWake();
+  assert.ok(reason?.includes(LEAD_WAKE_MARKER), reason);
+  assert.match(reason, /^js-harness reply: /);
+  assert.match(reason, /number 291/, 'names the work session that runs');
+  assert.match(reason, /js-harness wait --notice-to orchestrator/);
+});
+
+test('the lead is turned back when he is away, though no work session runs', () => {
+  const quiet = [fromTo('2026-11-22T06:00:00.000Z', LEAD, 'note'), fromTo('2026-11-22T06:30:00.000Z', W291, 'closed')];
+  assert.equal(leadWake({ record: quiet }), null, 'he wrote 1.65 hours before and every work session gave its work back');
+  const reason = leadWake({ record: quiet, now: '2026-11-22T08:00:00.000Z' });
+  assert.ok(reason?.includes(LEAD_WAKE_MARKER), reason);
+  assert.match(reason, /2\.4 hours ago/);
+});
+
+test('a work session whose newest notice is older than a day is not counted as running', () => {
+  const old = [fromTo('2026-11-22T06:00:00.000Z', LEAD, 'note'), fromTo('2026-11-21T06:00:00.000Z', W291, 'note')];
+  assert.equal(leadWake({ record: old }), null);
+});
+
+test('a lead with a wait, a cron, or asking him, or a session that is not the lead, is let through', () => {
+  assert.equal(leadWake({ payload: { background_tasks: [{ id: 'b1', status: 'running' }] } }), null);
+  assert.equal(leadWake({ payload: { session_crons: [{ id: 'c1' }] } }), null);
+  assert.equal(leadWake({ state: 'decision' }), null);
+  assert.equal(leadWake({ state: 'question' }), null);
+  assert.equal(leadWake({ payload: { session_id: 'work-291' } }), null);
+  assert.equal(leadWake({ payload: { background_tasks: undefined } }), null, 'Codex sends no background tasks');
+});
+
+test('the lead is told once, and again after a wait it armed has ended', () => {
+  assert.equal(leadWake({ transcript: [...SLEPT, leadWarned('2026-11-22T07:14:41.000Z')] }), null, 'warned, nothing launched since');
+  const again = leadWake({ transcript: [...SLEPT, leadWarned('2026-11-22T07:14:41.000Z'), launched('2026-11-22T07:15:00.000Z'), said('2026-11-22T07:40:00.000Z', 'Sigo solo.')] });
+  assert.ok(again?.includes(LEAD_WAKE_MARKER), 'a wait armed after the warning ended, and the lead stops bare again');
 });
