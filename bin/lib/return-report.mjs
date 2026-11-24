@@ -179,13 +179,16 @@ export function returnReportWarning(payload, state, io) {
 export const NO_STRETCH_MARKER = 'no stretch covered his absence';
 export const OPEN_STRETCH_MARKER = 'the stretch of his absence is still open';
 
-/** The stretches a stretch record's `text` holds, each `{ id, openedAt, closedAt }` (ms; `closedAt` null while open),
+/** The stretches a stretch record's `text` holds, each `{ id, openedAt, closedAt, returnAt }` (ms; `closedAt` null
+ * while open; `returnAt` its opening plus its plan's hours, as `js-harness stretch` gives it, or null without them),
  * read as `js-harness stretch status` reads it (`eventsOf`). */
 export function stretchRecordsIn(text) {
   const events = eventsOf(text);
   return events.filter((event) => event.event === 'open').map((open) => {
     const close = events.find((event) => event.event === 'close' && event.id === open.id);
-    return { id: open.id, openedAt: Date.parse(open.at), closedAt: close ? Date.parse(close.at) : null };
+    const openedAt = Date.parse(open.at);
+    const hours = open.plan?.hours;
+    return { id: open.id, openedAt, closedAt: close ? Date.parse(close.at) : null, returnAt: Number.isFinite(hours) && hours > 0 ? openedAt + hours * 3_600_000 : null };
   });
 }
 

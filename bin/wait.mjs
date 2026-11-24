@@ -5,7 +5,9 @@
 // `--every` seconds, and ends: exit 0 when the condition holds; exit 1 when the time runs out, or when the pull
 // request is closed without merging; exit 2 for a usage error, with nothing checked; exit 3 when a notice to the
 // waiting work session's own number comes first; exit 4 when, in the lead's session, the user's absence that the
-// heartbeat tells with its AWAY line comes first (bin/lib/lead-away.mjs). Zero dependencies.
+// heartbeat tells with its AWAY line comes first (bin/lib/lead-away.mjs); exit 5 when, in the lead's session, a
+// stretch is open with hours left and no work session has written for IDLE_MS, told with the IDLE line. Zero
+// dependencies.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,7 +17,7 @@ import { mainCheckout, projectDirsOf, projectSlug, roleNamed, roleOfTitle } from
 import { ruleValue } from './lib/rules.mjs';
 import { renewOwnLease } from './permit.mjs';
 import { harnessHome } from './lib/home.mjs';
-import { leadAbsence, readTailOf, sessionTranscript } from './lib/lead-away.mjs';
+import { IDLE_MS, leadAbsence, readTailOf, sessionTranscript, stretchIdle } from './lib/lead-away.mjs';
 import { ABSENCE_MS } from './lib/return-report.mjs';
 
 /** How often a wait checks, and how long it waits, when --every and --for do not say: the declared rules
@@ -42,13 +44,18 @@ export const USAGE = [
   `    when the user has not written to that session for ${ABSENCE_MS / 3600000} hours and no stretch covers them (exit 4): it prints the`,
   '    AWAY line of js-harness loop heartbeat, which names the command that opens the stretch, and the same wait to run',
   '    again. An absence is told once, by this wait or the heartbeat, which keep one mark of it.',
+  `  The same lead's wait also ends when a stretch is open with hours left and no work session of the project has written`,
+  `    its transcript, nor a gate its log, for ${IDLE_MS / 60000} minutes (exit 5): it prints the IDLE line, which names the hours left and`,
+  '    says to plan the next unit or close the stretch, and the same wait to run again. Told once an idle spell, by this',
+  "    wait or the heartbeat, which keep one mark of it. A work session's wait never ends on it.",
   "  Every wait run by a work session (its title's number, read from the transcript CLAUDE_CODE_SESSION_ID names) also",
   '    ends on a notice to that number written after it started (exit 3): it prints the notice and the same wait to',
   '    run again. A session with no number keeps its one condition.',
   '  --cwd <path> is the folder the checks run from (the repository); --home <path> is the harness home whose channel record',
   '    is read (JS_HARNESS_HOME, else the user\'s home).',
   '  Exit codes: 0 the condition holds; 1 the time ran out, or the pull request closed without merging; 2 a usage error, with',
-  '    nothing checked; 3 a notice to this work session\'s number ended the wait; 4 the user\'s absence ended the lead\'s wait.',
+  '    nothing checked; 3 a notice to this work session\'s number ended the wait; 4 the user\'s absence ended the lead\'s wait;',
+  "    5 an open stretch with no work session running ended the lead's wait.",
 ].join('\n');
 
 /** A mistake in the arguments: answered with the usage and exit 2, before anything is checked. */
@@ -336,12 +343,14 @@ export async function waitMain(
       const claudeDir = path.resolve(defaultCwd, env.CLAUDE_CONFIG_DIR ?? path.join(homedir(), '.claude'));
       const reading = leadAbsence({ home, slug, session: leaseSession, readFile, writeFile, say: (line) => stderr(`js-harness wait: ${line}`) });
       const transcript = sessionTranscript({ cwd, root, claudeDir, session: leaseSession, mtime, run: bounded });
-      away = { reading, transcript, offset: 0, lead: reading.leads(), unreadSaid: false };
+      // The idle stretch is read from the same folders the transcript is looked for in.
+      const idle = stretchIdle({ home, slug, session: leaseSession, dirs: () => projectDirsOf(bounded, root, claudeDir), readdir, mtime, readFile, writeFile, say: (line) => stderr(`js-harness wait: ${line}`) });
+      away = { reading, idle, transcript, offset: 0, lead: reading.leads(), unreadSaid: false };
     } catch (err) {
       stderr(`js-harness wait: the user's absence is not read (${err.message})`);
     }
   }
-  if (away?.lead) endings.push(`when the user has not written to this session for ${ABSENCE_MS / 3600000} hours and no stretch covers them`);
+  if (away?.lead) endings.push(`when the user has not written to this session for ${ABSENCE_MS / 3600000} hours and no stretch covers them`, `when a stretch is open with hours left and no work session has written for ${IDLE_MS / 60000} minutes`);
   const ends = `ends when it holds, ${endings.map((ending) => `${ending}, `).join('')}or after ${minutes} minutes`;
   stdout(`js-harness wait: waits for ${phrase}; ${ends}${renews ? '; renews the relay lease while it waits' : ''}; stop it with TaskStop when it is no longer needed`);
   /** The AWAY line of an absence not told before, in the lead's session, or `[]`. */
@@ -362,6 +371,14 @@ export async function waitMain(
     const found = away.reading.at(at);
     return found !== null && found.before !== away.reading.told() ? [away.reading.tell(found, at)] : [];
   };
+  /** The IDLE line of an idle spell not told before, in the lead's session, or `[]`. Read after `awayLines`, which
+   * settles whether the session leads. */
+  const idleLines = () => {
+    if (away === null || !away.lead) return [];
+    const at = now();
+    const found = away.idle.at(at);
+    return found !== null && found.since !== away.idle.told() ? [away.idle.tell(found, at)] : [];
+  };
 
   let lastReason = null;
   let lastWatchReason = null;
@@ -369,7 +386,8 @@ export async function waitMain(
     if (leaseSession !== undefined && leaseSession !== '') renewLease();
     // Read before what else ends the wait, so an absence that starts in the tick of a notice is told with it.
     const told = awayLines();
-    for (const line of told) stdout(line);
+    const idled = idleLines();
+    for (const line of [...told, ...idled]) stdout(line);
     if (watched) {
       let looked;
       try {
@@ -405,6 +423,10 @@ export async function waitMain(
     if (told.length > 0) {
       stdout(`js-harness wait: the wait ends for the AWAY line above, before ${phrase} held (${hourOf(now())}); to wait again, run: js-harness wait ${shellLine(argv)}`);
       return 4;
+    }
+    if (idled.length > 0) {
+      stdout(`js-harness wait: the wait ends for the IDLE line above, before ${phrase} held (${hourOf(now())}); to wait again, run: js-harness wait ${shellLine(argv)}`);
+      return 5;
     }
     if (outcome.state === 'failed' && outcome.reason !== lastReason) {
       lastReason = outcome.reason;

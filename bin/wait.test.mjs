@@ -520,11 +520,14 @@ const stretchOpened = (at) => `${JSON.stringify({ schema: STRETCH_SCHEMA, event:
 // Who the lead is, is the return check's rule: the newest notice the session sent carries the lead's title.
 const LEADS = noticeLine({ at: T0 - 4 * HOUR, to: WORK(4), title: 'JH ORQ · lead', id: SELF_ID });
 const awayOf = (state) => state.out.filter((line) => line.startsWith('AWAY:'));
-const leadStart = (minutes = WAIT_FOR_MINUTES) => `js-harness wait: waits for a notice to orchestrator; ends when it holds, when the user has not written to this session for 2 hours and no stretch covers them, or after ${minutes} minutes; stop it with TaskStop when it is no longer needed`;
+const idleOf = (state) => state.out.filter((line) => line.startsWith('IDLE:'));
+const WORK_TRANSCRIPT = path.join(PROJECT_DIR, 'cccccccc-3333-4333-8333-333333333333.jsonl');
+const IDLE_MARK = path.join(loopsFolder(HOME, projectSlug(CWD)), 'idle', `${SELF_ID}.json`);
+const leadStart = (minutes = WAIT_FOR_MINUTES) => `js-harness wait: waits for a notice to orchestrator; ends when it holds, when the user has not written to this session for 2 hours and no stretch covers them, when a stretch is open with hours left and no work session has written for 20 minutes, or after ${minutes} minutes; stop it with TaskStop when it is no longer needed`;
 
 /** The world of a lead's wait: the record holds `record`, the transcript `transcript`, and the marks and the stretch
  * record live in `state.marks`, which the wait reads and writes. */
-function leadWorld({ record = LEADS, transcript, marks = {}, at = LEAD_TRANSCRIPT, answer }) {
+function leadWorld({ record = LEADS, transcript, marks = {}, at = LEAD_TRANSCRIPT, answer, files = {} }) {
   const made = world({ record, answer });
   const { state, deps } = made;
   state.transcript = transcript;
@@ -534,9 +537,17 @@ function leadWorld({ record = LEADS, transcript, marks = {}, at = LEAD_TRANSCRIP
   deps.writeFile = (file, text) => {
     state.marks[file] = text;
   };
+  // `files` maps a transcript of another session to the time it was last written, as the idle reading lists them.
+  state.files = { ...files };
   deps.mtime = (file) => {
+    if (Object.hasOwn(state.files, file)) return state.files[file];
     if (file === at && at !== LEAD_TRANSCRIPT) return T0;
     throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
+  };
+  const listed = deps.readdir;
+  deps.readdir = (dir) => {
+    const names = Object.keys(state.files).filter((file) => path.dirname(file) === dir).map((file) => path.basename(file));
+    return names.length > 0 ? names : listed(dir);
   };
   deps.readTail = (file, from) => {
     state.tails = (state.tails ?? 0) + 1;
@@ -610,7 +621,8 @@ test("an absence told before, by this wait or the heartbeat, does not end the le
 });
 
 test("the lead's wait does not end while a stretch covers his absence", async () => {
-  const { state, deps } = leadWorld({ transcript: his(T0 - 3 * HOUR), marks: { [STRETCHES]: stretchOpened(T0 - HOUR) } });
+  // A work session wrote at the start, so the stretch is not idle either.
+  const { state, deps } = leadWorld({ transcript: his(T0 - 3 * HOUR), marks: { [STRETCHES]: stretchOpened(T0 - HOUR) }, files: { [WORK_TRANSCRIPT]: T0 } });
   assert.equal(await waitMain(args('--notice-to', 'orchestrator', '--for', '10'), LEAD_ENV, deps), 1);
   assert.deepEqual(awayOf(state), []);
   assert.equal(state.marks[AWAY_MARK], undefined);
@@ -638,4 +650,72 @@ test("a question on his screen is said in the lead's wait's AWAY line, as the he
   const { state, deps } = leadWorld({ transcript: his(T0 - 3 * HOUR) + question(T0 - 3 * HOUR + MIN) });
   assert.equal(await waitMain(args('--notice-to', 'orchestrator'), LEAD_ENV, deps), 4);
   assert.match(state.out[1], /^AWAY: .*The question tool held this session from \d\d:\d\d, through the start of this absence/);
+});
+
+// JH 291 (odd/tasks/idle-stretch.md): on 2026-11-22 the stretch's goals were met early and from 03:52Z to 05:22Z no
+// work session ran; the lead's wait ended on nothing, since a stretch silences the AWAY line. It now ends with an IDLE
+// line when a stretch is open with hours left and no work session has written for 20 minutes, told once a spell.
+const nineHours = (at) => `${JSON.stringify({ schema: STRETCH_SCHEMA, event: 'open', id: iso(at), at: iso(at), plan: { hours: 9 } })}\n`;
+
+test("the lead's wait ends with an IDLE line when a stretch is open and no work session has written for 20 minutes, exit 5", async () => {
+  const { state, deps } = leadWorld({ transcript: his(T0 - 30 * MIN), marks: { [STRETCHES]: nineHours(T0 - 3 * HOUR) }, files: { [WORK_TRANSCRIPT]: T0 - 10 * MIN } });
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator', '--every', '300'), LEAD_ENV, deps), 5);
+  assert.equal(state.out[0], leadStart());
+  assert.equal(state.clock, T0 + 10 * MIN, 'the first check after twenty quiet minutes');
+  assert.match(state.out[1], /^IDLE: no work session of this project has written since \d\d:\d\d, local time \(UTC[+-]\d\d:\d\d\) \(20 minutes ago\), and the stretch opened at \d\d:\d\d has 5\.8 hours left: plan the next unit or close the stretch/);
+  assert.match(state.out[2], /^js-harness wait: the wait ends for the IDLE line above, before a notice to orchestrator held \(\d\d:\d\d\); to wait again, run: js-harness wait --cwd .* --notice-to orchestrator --every 300$/);
+  assert.equal(state.out.length, 3);
+  assert.deepEqual(state.err, []);
+  assert.equal(JSON.parse(state.marks[IDLE_MARK]).told, iso(T0 - 10 * MIN));
+});
+
+test("a work session written in the last 20 minutes, or no stretch open, does not end the lead's wait on IDLE", async () => {
+  const running = leadWorld({ transcript: his(T0 - 30 * MIN), marks: { [STRETCHES]: nineHours(T0 - 3 * HOUR) }, files: { [WORK_TRANSCRIPT]: T0 } });
+  running.deps.sleep = async (ms) => {
+    running.state.clock += ms;
+    running.state.files[WORK_TRANSCRIPT] = running.state.clock;
+  };
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator', '--for', '60'), LEAD_ENV, running.deps), 1);
+  assert.deepEqual(idleOf(running.state), []);
+
+  const none = leadWorld({ transcript: his(T0 - 30 * MIN), files: { [WORK_TRANSCRIPT]: T0 - 5 * HOUR } });
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator', '--for', '60'), LEAD_ENV, none.deps), 1);
+  assert.deepEqual(idleOf(none.state), []);
+  assert.equal(none.state.marks[IDLE_MARK], undefined);
+});
+
+test("an idle spell told once, by this wait or the heartbeat, does not end the lead's wait again; new work then quiet does", async () => {
+  const { state, deps } = leadWorld({ transcript: his(T0 - 30 * MIN), marks: { [STRETCHES]: nineHours(T0 - 3 * HOUR) }, files: { [WORK_TRANSCRIPT]: T0 - HOUR } });
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator'), LEAD_ENV, deps), 5);
+  state.out = [];
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator', '--for', '30'), LEAD_ENV, deps), 1);
+  assert.deepEqual(idleOf(state), [], 'the wait run again is not ended by the spell it told');
+
+  state.files[WORK_TRANSCRIPT] = state.clock;
+  state.out = [];
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator', '--every', '600'), LEAD_ENV, deps), 5);
+  assert.equal(idleOf(state).length, 1);
+
+  // The heartbeat's mark is the same file: a spell it told does not end the wait.
+  const told = leadWorld({ transcript: his(T0 - 30 * MIN), marks: { [STRETCHES]: nineHours(T0 - 3 * HOUR), [IDLE_MARK]: `${JSON.stringify({ told: iso(T0 - HOUR) })}\n` }, files: { [WORK_TRANSCRIPT]: T0 - HOUR } });
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator', '--for', '10'), LEAD_ENV, told.deps), 1);
+  assert.deepEqual(idleOf(told.state), []);
+});
+
+test("a wait run by a work session never ends on IDLE, and a wait for a work session's number neither", async () => {
+  const work = leadWorld({ record: noticeLine({ at: T0 - 4 * HOUR, to: WORK(4), title: 'JH 7 · otra', id: SELF_ID }), transcript: his(T0 - 30 * MIN), marks: { [STRETCHES]: nineHours(T0 - 3 * HOUR) }, files: { [WORK_TRANSCRIPT]: T0 - HOUR } });
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator', '--for', '10'), LEAD_ENV, work.deps), 1);
+  assert.deepEqual(idleOf(work.state), []);
+  assert.equal(work.state.marks[IDLE_MARK], undefined);
+
+  const own = leadWorld({ transcript: his(T0 - 30 * MIN), marks: { [STRETCHES]: nineHours(T0 - 3 * HOUR) }, files: { [WORK_TRANSCRIPT]: T0 - HOUR } });
+  assert.equal(await waitMain(args('--notice-to', '4', '--for', '10'), LEAD_ENV, own.deps), 1);
+  assert.deepEqual(idleOf(own.state), []);
+});
+
+test("an idle spell found in the tick a notice comes is told first, and the lead's wait ends on the notice", async () => {
+  const { state, deps } = leadWorld({ record: LEADS + noticeLine({ at: T0 + 1000, to: ORQ, text: 'listo' }), transcript: his(T0 - 30 * MIN), marks: { [STRETCHES]: nineHours(T0 - 3 * HOUR) }, files: { [WORK_TRANSCRIPT]: T0 - HOUR } });
+  assert.equal(await waitMain(args('--notice-to', 'orchestrator'), LEAD_ENV, deps), 0);
+  assert.match(state.out[1], /^IDLE: /);
+  assert.match(state.out[2], /^js-harness wait: a notice to orchestrator holds/);
 });

@@ -26,9 +26,9 @@ import { readNotices, recordPath } from './lib/channel.mjs';
 import { gateLogDir } from './lib/gate-log.mjs';
 import { ruleValue } from './lib/rules.mjs';
 import { ABSENCE_MS } from './lib/return-report.mjs';
-import { leadAbsence, readTailOf, sessionTranscript } from './lib/lead-away.mjs';
+import { IDLE_MS, leadAbsence, readTailOf, sessionTranscript, stretchIdle } from './lib/lead-away.mjs';
 import { readStalled } from './lib/stall.mjs';
-import { mainCheckout, projectSlug } from './lib/sessions.mjs';
+import { mainCheckout, projectDirsOf, projectSlug } from './lib/sessions.mjs';
 import { harnessHome } from './lib/home.mjs';
 import { SIGNIN_WARN_DAYS, readSigninExpiry, signinTold } from './lib/signin-expiry.mjs';
 import { modelHomeHealth } from './lib/home-doctor.mjs';
@@ -75,6 +75,9 @@ export const USAGE = [
   '    command that opens one, and says since when the question tool held the session where it could open none; a work',
   '    session is told nothing;',
   '    told once an absence, kept in an away folder under the loop records, and named on an "already told:" line by a relaunch;',
+  `    with an IDLE line (exit 0) when, in the lead's session, a stretch is open with hours left and no work session has written its`,
+  `    transcript, nor a gate its log, for ${IDLE_MS / 60000} minutes, as the lead's wait tells it: told once an idle spell, kept in an idle`,
+  '    folder under the loop records, and named on an "already told:" line by a relaunch;',
   '    with the DUE line of a throughput review (exit 0) when it falls due and again an hour, three and',
   '    seven after, one already due at the start being named on an "already due:" line; or after --max hours (10,',
   '    exit 1). Every line that ends it is followed by the DUE lines still open. Each tick also keeps, as',
@@ -630,6 +633,19 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   const awayAt = (now) => (away === null ? null : away.at(now));
   const toldAway = () => away.told();
   const tellAway = (found, now) => away.tell(found, now);
+  // An open stretch with nothing running (odd/tasks/idle-stretch.md): the reading and the mark the lead's wait keeps,
+  // asked only once the session is found to lead.
+  const idle = session === null ? null : stretchIdle({ home, slug, session, dirs: () => projectDirsOf(ctx.run, mainCheckout(ctx.run, path.resolve(ctx.cwd)), ctx.claudeDir), readdir: ctx.readdir, mtime: ctx.mtime, readFile: (file) => ctx.readFile(file), writeFile: ctx.writeFile, say: ctx.out });
+  let leads = false;
+  const idleAt = (now) => {
+    if (idle === null) return null;
+    leads ||= away.leads();
+    return leads ? idle.at(now) : null;
+  };
+  const idleLines = (now) => {
+    const found = idleAt(now);
+    return found !== null && found.since !== idle.told() ? [idle.tell(found, now)] : [];
+  };
   // Every line that ends the loop is followed by the sign-in's line, from its margin on, and by the reviews still due,
   // so whatever wakes the lead names them. The ending's own lines are said first: the sign-in's may wait on a reading.
   // The lead's HOME lines said at the start, and whether the loop has passed its start (`ticking`): an ending at the
@@ -669,7 +685,7 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   const signinHeld = [];
   signinRose(started, true, (line) => signinHeld.push(line));
   const signinAsked = Boolean(ctx.signinExpiry) && signin.reading?.asked !== false;
-  ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or a work session holds handed work with no commit, notice or gate for ${plural(stallLimit / 60000, 'minute')}, or after ${plural(max, 'hour')}${windows === 0 || !ctx.windowsDaily ? '' : `; every ${plural(windows, 'minute')}, the daily Windows run is read, and a red one told now ends it`}${ctx.hostWatch ? '; every hour, the host\'s versions are read, and an update no host watch session holds ends it' : ''}${ctx.throughputTick ? '; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it' : ''}${signinAsked ? `; every ${plural(SIGNIN_HOURS, 'hour')}, the end of the stored claude.ai sign-in is read, and one that comes within ${plural(SIGNIN_WARN_DAYS, 'day')}, or passes, ends it` : ''}${transcript === null ? '' : `; each tick reads this session's compactions, and a compaction that brings them to ${LEAD_CUT_COMPACTIONS} or more ends it: the lead's cut after ${LEAD_CUT_COMPACTIONS} compactions; each tick reads when the user last wrote to this session, and in the lead's session ${plural(ABSENCE_MS / 3600000, 'hour')} with no message and no stretch covering them end it`}`);
+  ctx.out(`js-harness loop heartbeat: ends when ${plural(quiet, 'minute')} pass with no write to the gate log (${gateDir}) or the channel (${channel}), or a work session holds handed work with no commit, notice or gate for ${plural(stallLimit / 60000, 'minute')}, or after ${plural(max, 'hour')}${windows === 0 || !ctx.windowsDaily ? '' : `; every ${plural(windows, 'minute')}, the daily Windows run is read, and a red one told now ends it`}${ctx.hostWatch ? '; every hour, the host\'s versions are read, and an update no host watch session holds ends it' : ''}${ctx.throughputTick ? '; each tick keeps the settled days with no throughput snapshot, and a throughput review falling due ends it' : ''}${signinAsked ? `; every ${plural(SIGNIN_HOURS, 'hour')}, the end of the stored claude.ai sign-in is read, and one that comes within ${plural(SIGNIN_WARN_DAYS, 'day')}, or passes, ends it` : ''}${transcript === null ? '' : `; each tick reads this session's compactions, and a compaction that brings them to ${LEAD_CUT_COMPACTIONS} or more ends it: the lead's cut after ${LEAD_CUT_COMPACTIONS} compactions; each tick reads when the user last wrote to this session, and in the lead's session ${plural(ABSENCE_MS / 3600000, 'hour')} with no message and no stretch covering them end it, and in the lead's session a stretch open with hours left and no work session written for ${plural(IDLE_MS / 60000, 'minute')} end it`}`);
   for (const line of signinHeld) ctx.out(line);
   // A heartbeat started inside the margin says the line now, without ending for it: the loop may run for hours, and
   // the lead should not learn at its end what was known at its start.
@@ -696,13 +712,18 @@ async function heartbeat(ctx, parsed, { home, slug }) {
   // His absence is read before the cut ends the start, as a tick reads it before what ends the tick: a cut told
   // alone would end the loop with the absence unsaid.
   const awayAtStart = awayAt(started);
-  const awayStartLines = awayAtStart !== null && awayAtStart.before !== toldAway() ? [tellAway(awayAtStart, started)] : [];
+  const idleAtStart = idleAt(started);
+  const awayStartLines = [
+    ...(awayAtStart !== null && awayAtStart.before !== toldAway() ? [tellAway(awayAtStart, started)] : []),
+    ...(idleAtStart !== null && idleAtStart.since !== idle.told() ? [idle.tell(idleAtStart, started)] : []),
+  ];
   if (compactions !== null && compactions >= LEAD_CUT_COMPACTIONS) {
     if (compactions > toldCut()) return ending([...awayStartLines, tellCut(compactions)], startDues, 0);
     ctx.out(`already due: the lead's cut, ${compactions} compactions in this session, told before`);
   }
   if (awayStartLines.length > 0) return ending(awayStartLines, startDues, 0);
   if (awayAtStart !== null) ctx.out(`already told: the user's absence since ${hourOf(Date.parse(awayAtStart.before))}, with no stretch covering it`);
+  if (idleAtStart !== null) ctx.out(`already told: the idle stretch since ${hourOf(Date.parse(idleAtStart.since))}`);
   ticking = true;
   for (;;) {
     const last = lastWrite();
@@ -714,7 +735,7 @@ async function heartbeat(ctx, parsed, { home, slug }) {
     // told alone would end the loop with his absence unsaid, and the lead may start no heartbeat after it.
     const counted = compactionsNow();
     const gone = awayAt(now);
-    const awayLines = gone !== null && gone.before !== toldAway() ? [tellAway(gone, now)] : [];
+    const awayLines = [...(gone !== null && gone.before !== toldAway() ? [tellAway(gone, now)] : []), ...idleLines(now)];
     if (now - last >= quiet * 60000) return ending([...awayLines, `STALL: no gate-log or channel write since ${hourOf(last)}`], dues, 0);
     const fresh = stalledAt(now).filter((item) => crossing(item) > (told.get(identity(item)) ?? -1));
     if (fresh.length > 0) return ending([...awayLines, ...fresh.map(stalledLine)], dues, 0);
