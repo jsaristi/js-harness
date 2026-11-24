@@ -167,6 +167,11 @@ test('upgradeProblem passes the upgrade\'s own notes of an install it went on fr
   assert.equal(upgradeProblem({ status: 1, stdout: 'upgraded to 0.98.0\n', stderr: `${tryAgain}${goingOn}${NO_TERMINAL}` }, '0.98.0', UPGRADE), null);
   assert.match(upgradeProblem({ status: 1, stdout: 'upgraded to 0.98.0\n', stderr: goingOn }, '0.98.0', UPGRADE), /exited 1/, 'a note alone is no stack that waited');
   assert.match(upgradeProblem({ status: 1, stdout: 'upgraded to 0.98.0\n', stderr: `pnpm exited 1, but the copy it installed answers 0.97.1: going on\n${NO_TERMINAL}` }, '0.98.0', UPGRADE), /exited 1/, 'a note of another version');
+  // Codex on c7b664b4 (P2, release-proof-lib.mjs:117): the same cleanup can leave pnpm's bin lock, which upgrade
+  // removes and says so (clearPnpmLock in bin/update.mjs).
+  const lock = 'removed pnpm\'s bin lock C:\\pnpm\\bin\\.lock, left by this install\n';
+  assert.equal(upgradeProblem({ status: 1, stdout: 'upgraded to 0.98.0\n', stderr: `${lock}${goingOn}${NO_TERMINAL}` }, '0.98.0', UPGRADE), null);
+  assert.match(upgradeProblem({ status: 1, stdout: 'upgraded to 0.98.0\n', stderr: `pnpm's bin lock C:\\pnpm\\bin\\.lock, left by this install, stays: rmdir refused it (EPERM)\n${NO_TERMINAL}` }, '0.98.0', UPGRADE), /exited 1/, 'a lock that stays');
 });
 
 test('installProblem judges an install by the copy it left, as upgrade does: a copy of the version passes whatever the exit', () => {
