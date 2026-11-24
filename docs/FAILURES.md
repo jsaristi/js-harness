@@ -208,6 +208,10 @@ the `checked` stamp `sessions live` prints, which refreshes the page's freshness
   of the 133 recorded was closed; found when he asked whether they were open. The page's freshness reads the newest
   row and the stamp alone (`docs/live-board.html:512-518`, `bin/sessions-live.mjs:218-220`)
   (odd/tasks/lead-duty-checks.md, row 1 of the list)
+- Seen: 2026-11-24 — the Stop hook's warning to the lead (claimed; the lead's own) — from 01:49 to 02:36 local the
+  live board and its summary were not updated, about 50 minutes by the brief's count and 47 by those two times,
+  past the one check of 45 minutes (`CHECK_MINUTES`, bin/lib/live-rows.mjs); the Stop hook caught it at the lead's
+  turn end
 - Control: check — bin/lib/stale-board.test.mjs — "the lead whose summary was last written with now or status
   before notices that waited longer than one check is told so" — since 2026-10-31
 
@@ -388,6 +392,15 @@ the input tokens it had read were spent.
 - Seen: 2026-10-12 — odd/tasks/rule-hierarchy.md, Progress, "T16b, design and first slice" —
   `859a797..6a721cc`, part 1 of 7, 49,568 input tokens; run again in a turn of the gate lock, on
   the same model, and not recorded as a skip
+
+### codex-order-took-window
+An order of Codex work the lead started used up Codex's five-hour window, so work of a higher priority that needed
+Codex in that window could not run in it.
+- Class: rule-not-acting
+- Seen: 2026-11-23 — the lead's brief of 2026-11-24 for its owed failure lines (claimed; the lead's own) — the lead's
+  Codex day order used up the five-hour window that his first-priority rule change, PR 1045, needed. What stops it:
+  before an order of Codex work starts, the lead reserves in the window the room the work of a higher priority needs,
+  and the order stops at that reserve
 
 ### codex-review-edited-during-run
 A session edited tracked files in its worktree while its own Codex review ran, so the review read a tree that was not
@@ -1245,6 +1258,15 @@ dearest part finding it again.
 - Seen: 2026-10-08 — odd/tasks/codex-review-cost.md:234-239 — "the parent's error, to not repeat"
 - Control: measured — docs/audits/2026-11-22-failures-without-a-check.md — "on 2026-11-22 no command can tell a known defect left for later from work rightly deferred" — since 2026-11-22
 
+### land-brief-wrong-base
+A land brief named the wrong base for the pull request it was to land: a commit taken from where the work began, not
+the pull request's head as GitHub holds it.
+- Class: wrong-information
+- Seen: 2026-11-24 — the lead's land brief for PR 1028, about 01:17 local, and the land agent's step-1 check (claimed;
+  the lead's own) — the brief gave the base of the fix branch instead of PR 1028's GitHub head; the land agent's step-1
+  check caught the difference and nothing was pushed. What stops it: a land brief takes the pull request's head from
+  GitHub (`gh pr view <n> --json headRefOid`) in the same step it is written, and the land agent's step-1 check stays
+
 ### land-removed-live-worktree
 `merge-queue --land` ran `git worktree remove` on the worktree of the pull request it landed while a session still
 worked there; on Windows git deleted the files and the registration, failed on the folder the session stood in, and
@@ -1868,6 +1890,16 @@ the harness's.
   the run is still refused
 - Control: check — evals/paths.test.mjs — "exists says a path below a file is not there, where the
   system says ENOTDIR" — since 2026-10-12
+
+### refused-step-asked-of-peer
+A step the guard had refused one session was asked of a peer session, so that the peer would do it where the asker
+could not: permission laundering, which turns a refusal into a detour.
+- Class: rule-not-acting
+- Seen: 2026-11-23 — the lead's brief of 2026-11-24 for its owed failure lines (claimed; the lead's own) — the lead
+  (JH ORQ) asked JH PLAN to open a work session that the guard had refused the lead under
+  `rule:sessions-open-in-sidebar`; JH PLAN refused, correctly, and no session was opened. What stops it: a step the
+  guard refused a session is never asked of another session; the session puts it to him, or waits for the turn the
+  rule allows
 
 ### remerge-chase
 Each code merge sent every other open code pull request back to merge `main` and pass a whole gate
