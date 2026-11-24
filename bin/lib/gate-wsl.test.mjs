@@ -69,7 +69,7 @@ test('the runner prints the node it runs, and the version is read from its mark'
   const script = runnerScript({ source: '/mnt/d/p', mirror: 'p', node: '/home/u/.local/node/bin', command: 'npm test', held: false, heldVariable: 'H', seconds: 60 });
   // Asked on the PATH the command runs on, so the version is of the node the command finds first (reliability lens).
   const runPath = "PATH='/home/u/.local/node/bin'':/usr/local/bin:/usr/bin:/bin'";
-  assert.ok(script.includes(`echo "${NODE_MARK}$(timeout -k 1 5 env -i HOME="$home" ${runPath} node -v 2>/dev/null)" >&2`), script);
+  assert.ok(script.includes(`node_version=$(timeout -k 1 5 env -i HOME="$home" ${runPath} node -v 2>/dev/null)`), script);
   assert.ok(script.includes(` ${runPath} \\\n`), 'the command runs on that same PATH');
   assert.equal(nodeVersionOf(`noise\n${NODE_MARK}v24.15.0\nmore`), 'v24.15.0');
   assert.equal(nodeVersionOf(`${NODE_MARK}\n`), null, 'a node that said nothing');
@@ -82,7 +82,7 @@ test('the runner prints the node it runs, and the version is read from its mark'
 test('the runner asks node in the mirror, as the command will, under a bound, and the version is its own whole line', () => {
   const script = runnerScript({ source: '/mnt/d/p', mirror: 'p', node: '/home/u/.local/node/bin', command: 'npm test', held: false, heldVariable: 'H', seconds: 60 });
   const lines = script.split('\n');
-  const probe = lines.findIndex((line) => line.includes(NODE_MARK));
+  const probe = lines.findIndex((line) => line.startsWith('node_version=$('));
   assert.ok(probe > lines.indexOf('cd "$mirror" || exit 1'), 'asked in the mirror');
   assert.ok(probe < lines.indexOf('ran=$(date +%s%N)'), 'its bound is not counted as the command\'s time');
   assert.match(lines[probe], /timeout -k 1 5 env -i HOME="\$home" /, 'under its own bound, with the command\'s HOME');
@@ -90,6 +90,18 @@ test('the runner asks node in the mirror, as the command will, under a bound, an
   assert.equal(nodeVersionOf(`a sample says ${NODE_MARK}v1.0.0\n${NODE_MARK}v24.15.0\n`), 'v24.15.0', 'a mark inside another line is no mark');
   assert.equal(nodeVersionOf(`${NODE_MARK}v24.15.0 extra\n`), null, 'a version line holds the version alone');
   assert.equal(nodeVersionOf(`${NODE_MARK}v24.15.0\r\n${NODE_MARK}v1.0.0\n`), 'v24.15.0', 'the runner\'s line comes first; the sensor writes after it');
+});
+
+// Codex on b07b9cb2 (P2, gate-wsl.mjs:180, :134): the runner's own line is the first that opens with the mark, and what
+// it holds is final, so a sensor's later line cannot stand in for an empty or malformed one; and a probe that fails
+// prints no version, whatever it wrote before failing.
+test('the version is the runner\'s first mark line alone, and a failed probe prints none', () => {
+  assert.equal(nodeVersionOf(`${NODE_MARK}\n${NODE_MARK}v26.0.0\n`), null, 'an empty mark is final');
+  assert.equal(nodeVersionOf(`${NODE_MARK}v24.15.0 extra\n${NODE_MARK}v26.0.0\n`), null, 'a malformed mark is final');
+  const script = runnerScript({ source: '/mnt/d/p', mirror: 'p', node: '/home/u/.local/node/bin', command: 'npm test', held: false, heldVariable: 'H', seconds: 60 });
+  const runPath = "PATH='/home/u/.local/node/bin'':/usr/local/bin:/usr/bin:/bin'";
+  assert.ok(script.includes(`node_version=$(timeout -k 1 5 env -i HOME="$home" ${runPath} node -v 2>/dev/null) || node_version=''\n`), script);
+  assert.ok(script.includes(`echo "${NODE_MARK}$node_version" >&2\n`), script);
 });
 
 test('the sync is read from the mark, and no mark is a mirror never reached', () => {

@@ -1155,7 +1155,7 @@ export async function checkSensor(cwd, sensor, { spawn = runSensor, sensorTimeou
   else if (plan) detail += `; exact tests: skipped ${skip.skipped} of ${skip.files} test files`;
   // A run of none in WSL2 is proven by the traces of the mirror, the place its tree key names (`checkSensors`).
   const provenIn = ranIn || (plan?.none && inWsl);
-  return { name, pass, detail, ...(shadowed && { shadow: shadowed }), ...(skip && { skip }), output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(provenIn && { ranIn: 'wsl' }), ...(ranIn?.node && { node: ranIn.node }), ...(left.length > 0 && { left }), ...(times.length > 0 && { times }), ...(!pass && { next: sensorStep(command, { timedOut, result }) }) };
+  return { name, pass, detail, ...(shadowed && { shadow: shadowed }), ...(skip && { skip }), output: pass ? '' : `${result.stdout ?? ''}${result.stderr ?? ''}`, seconds, timedOut, ...(provenIn && { ranIn: 'wsl' }), ...(ranIn?.node && { pathNode: ranIn.node }), ...(left.length > 0 && { left }), ...(times.length > 0 && { times }), ...(!pass && { next: sensorStep(command, { timedOut, result }) }) };
 }
 
 /** The step that clears a sensor that did not pass, as the way it ended says: a bound that ran out, a command that could not
@@ -1584,7 +1584,7 @@ export async function checkSensors(cwd, deps = {}, lock) {
       // A sensor that failed keeps the names of its failing tests, where its output says them (`failingTests`).
       // A skip gate's tests row keeps `skip`, never `shadow`, so S6's count (`s6Count`) never reads it.
       const failing = ({ pass, output, rerun }) => (pass && !rerun ? [] : failingTests(output));
-      record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(row.node && { node: row.node }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }), ...(row.skip && { skip: row.skip }) })), code, files, tried });
+      record?.end({ result, sensors: ran.map((row) => ({ name: row.name, seconds: row.seconds, pass: row.pass, timedOut: row.timedOut, ...(row.ranIn && { ranIn: row.ranIn }), ...(row.pathNode && { pathNode: row.pathNode }), ...(failing(row).length > 0 && { failing: failing(row) }), ...(row.shadow && { shadow: shadowCounts(row.shadow) }), ...(row.skip && { skip: row.skip }) })), code, files, tried });
       // Beside the log, under the gate's id: a list of every file on the end line would rotate the log far sooner.
       record?.testTimes(ran.flatMap((row) => row.times ?? []));
     }
@@ -1803,7 +1803,7 @@ export function passLine(rows) {
   const debts = ['review', 'codex-review'].map((name) => rows.find((row) => row.name === name)).filter(Boolean);
   const inner = rows.find((row) => row.inner === true);
   const counted = `${rows.length} row${rows.length === 1 ? '' : 's'} passed${info > 0 ? `, ${info} of them INFO` : ''}`;
-  return `PASS  check  ${counted}; --verbose prints each${debts.map((row) => `; ${row.name}: ${row.detail}`).join('')}${inner ? `; sensors: ${inner.detail}` : ''}${[...new Set(rows.filter((row) => row.ranIn === 'wsl' && row.node).map((row) => row.node))].map((node, i) => `${i === 0 ? '; WSL2 PATH node' : ','} ${node}`).join('')}`;
+  return `PASS  check  ${counted}; --verbose prints each${debts.map((row) => `; ${row.name}: ${row.detail}`).join('')}${inner ? `; sensors: ${inner.detail}` : ''}${[...new Set(rows.filter((row) => row.ranIn === 'wsl' && row.pathNode).map((row) => row.pathNode))].map((node, i) => `${i === 0 ? '; WSL2 PATH node' : ','} ${node}`).join('')}`;
 }
 
 /** Runs all check rows and prints them; returns the process exit code. Exits 2, printing usage to

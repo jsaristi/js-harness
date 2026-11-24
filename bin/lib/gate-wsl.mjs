@@ -131,7 +131,9 @@ export function runnerScript({ source, mirror, node, command, held, heldVariable
     'cd "$mirror" || exit 1',
     // Asked where and as the command runs (the mirror, its HOME, its PATH), so it is the node the command finds first
     // unless it names another; bounded on its own, so a node that hangs leaves the version unset, not the sensor stopped.
-    `echo "${NODE_MARK}$(timeout -k 1 5 env -i HOME="$home" ${runPath} node -v 2>/dev/null)" >&2`,
+    // What a probe that failed or ran out printed is dropped, as wslNodeVersion drops it (Codex on b07b9cb2).
+    `node_version=$(timeout -k 1 5 env -i HOME="$home" ${runPath} node -v 2>/dev/null) || node_version=''`,
+    `echo "${NODE_MARK}$node_version" >&2`,
     'ran=$(date +%s%N)',
     `env -i HOME="$home" ${Object.entries(RUNNER_ENV).map(([key, value]) => `${key}=${value}`).join(' ')} ${runPath} \\`,
     `  JS_HARNESS_CHECK_INNER=1 ${held ? `${heldVariable}=1 ` : ''}${traced}npm_config_cache="$home/.npm-cache" \\`,
@@ -171,13 +173,14 @@ export function wslNodeVersion(distro, node, { spawnSync = childProcess.spawnSyn
 }
 
 /** The version of the node the runner's PATH finds, such as `v24.15.0`, from the runner's own line on standard error
- * (`stderr`): the first line that is `NODE_MARK` and the version alone, so a line that only quotes the mark is not it,
- * and the runner's comes before anything the sensor writes. `null` where it printed none, or the node said nothing
- * within the probe's bound. It is the node of the PATH the command runs with, not always the one it runs: a command
- * can name another. */
+ * (`stderr`): the first line that opens with `NODE_MARK`, so a line that only quotes the mark is not it, and the
+ * runner's comes before anything the sensor writes. What that line holds is final: the version alone, or `null` when
+ * it is empty (no node, or a probe that failed or ran out) or holds anything else, so no later line of a sensor stands
+ * in for it (Codex on b07b9cb2). It is the node of the PATH the command runs with, not always the one it runs: a
+ * command can name another. */
 export function nodeVersionOf(stderr) {
-  const mark = NODE_MARK.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const said = new RegExp(`^${mark}(v\\d+\\.\\d+\\.\\d+\\S*)\\r?$`, 'm').exec(String(stderr ?? ''));
+  const line = String(stderr ?? '').split('\n').find((one) => one.startsWith(NODE_MARK));
+  const said = line === undefined ? null : /^(v\d+\.\d+\.\d+\S*)\r?$/.exec(line.slice(NODE_MARK.length));
   return said ? said[1] : null;
 }
 

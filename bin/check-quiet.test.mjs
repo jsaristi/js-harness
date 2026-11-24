@@ -106,8 +106,8 @@ test('the one line carries the verdict of the review row, which a commit shows s
 test('the one line names the node of the PATH a sensor ran with in WSL2', () => {
   const rows = [
     { name: 'budget', pass: true, detail: '10 estimated tokens (budget 1500)' },
-    { name: 'tests', pass: true, detail: 'npm test passed in WSL2', ranIn: 'wsl', node: 'v24.15.0' },
-    { name: 'docs', pass: true, detail: 'npm run docs passed in WSL2', ranIn: 'wsl', node: 'v24.15.0' },
+    { name: 'tests', pass: true, detail: 'npm test passed in WSL2', ranIn: 'wsl', pathNode: 'v24.15.0' },
+    { name: 'docs', pass: true, detail: 'npm run docs passed in WSL2', ranIn: 'wsl', pathNode: 'v24.15.0' },
   ];
   assert.equal(passLine(rows), 'PASS  check  3 rows passed; --verbose prints each; WSL2 PATH node v24.15.0');
   assert.equal(passLine(rows.slice(0, 1)), 'PASS  check  1 row passed; --verbose prints each');

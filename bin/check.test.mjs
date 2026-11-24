@@ -5345,7 +5345,8 @@ test('the gate log keeps the node of the PATH a sensor ran with in WSL2', () => 
   const { code, output } = await runCheck(['--cwd', dir, '--home', home], {}, wslDeps(spawn));
   assert.equal(code, 0, output);
   const ends = readGateLog(home).events.filter((event) => event.event === 'end');
-  assert.deepEqual(ends.map((end) => end.sensors.map(({ name, node }) => ({ name, node }))), [[{ name: 'tests', node: 'v24.15.0' }]]);
+  // Codex on b07b9cb2 (P2, check.mjs:1096): named as the PATH's node, never as the node the sensor ran.
+  assert.deepEqual(ends.map((end) => end.sensors.map(({ name, node, pathNode }) => ({ name, node, pathNode }))), [[{ name: 'tests', node: undefined, pathNode: 'v24.15.0' }]]);
 }));
 
 test('a sensor that fails in WSL2 fails the gate there, and is not run again on Windows', () => withGate({ tests: 'npm run test' }, async (dir, home) => {

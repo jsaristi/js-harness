@@ -158,10 +158,11 @@ test('a sensor that ran in WSL2 names the node it ran under in its row (gate-pas
     const row = await checkSensor(root, sensor, options({ traces: null, spawn: printed(`${SYNCED_MARK}1200 ms\n${NODE_MARK}v24.15.0\n`) }));
     assert.equal(row.pass, true, row.output);
     assert.equal(row.detail, 'node --test passed in WSL2 (Ubuntu, PATH node v24.15.0, its mirror synced in 1.2 s)');
-    assert.equal(row.node, 'v24.15.0');
+    assert.equal(row.pathNode, 'v24.15.0');
+    assert.equal('node' in row, false, 'named as the PATH\'s node, not the sensor\'s (Codex on b07b9cb2)');
     const silent = await checkSensor(root, sensor, options({ traces: null, spawn: printed(`${SYNCED_MARK}1200 ms\n`) }));
     assert.equal(silent.detail, 'node --test passed in WSL2 (Ubuntu, its mirror synced in 1.2 s)');
-    assert.equal('node' in silent, false);
+    assert.equal('pathNode' in silent, false);
   } finally {
     done();
   }
