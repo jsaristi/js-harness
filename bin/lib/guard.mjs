@@ -218,11 +218,15 @@ const STAMP = /^(?:From\b[^.:\n]{0,90}?[,(]\s*|[A-Z][A-Za-z]{0,3} ?\d{1,3}(?: ·
 // all right (odd/tasks/wake-and-flag.md, T4).
 const HOUR_FIRST = /^((?:[01]?\d|2[0-3]):[0-5]\d)\s+(?=[A-Z])/;
 
+// A sender's label, "<sender> to <session, all, or (the) lead or role in either case>", a session's title or a role's word ("Lead"), then the hour in parentheses ending the opening ("Lead to JH 302 (22:20):", FAILURES.md hours-guessed); "The gate finished (14:20):" is an event (Codex on 7a02fb17); a capitalized word before " to " is no sender unless a role's word, so "Sent to JH 302 (14:20):" reports a delivery, and "From <someone>", the sender STAMP reads with a comma, keeps an approximate stamp: "From the lead (about 14:50):" (Codex on 7fb9627c).
+const PAREN_ROLES = 'Lead|Writer|Reviewer|Reader|Worker|Orchestrator|Owner|Senior|Verifier';
+const PAREN_OPENING = ((sender = String.raw`[A-Z][A-Za-z]{0,3} ?\d{1,3}|[A-Z]{2,4} [A-Z]{2,4}|(?:${PAREN_ROLES})(?: [A-Z])?\b`, recipient = String.raw`all|(?:the )?(?:${PAREN_ROLES}|${PAREN_ROLES.toLowerCase()})(?: [A-Z])?\b|[A-Z]{2,4}(?: ?\d{1,3}| [A-Z]{2,4})`) => new RegExp(String.raw`^(?:(?:${sender}) to (?:${recipient})(?:(?:,| and) (?:${recipient}))*|${sender}|From [^.:()\n]{1,60}?)(?: ·[^:()\n]{0,40}?)?\s*\((?:about\s+)?((?:[01]?\d|2[0-3]):[0-5]\d)(?:\s+local)?\)\s*:`))();
+
 const pad = (n) => String(n).padStart(2, '0');
 
 /** The `HH:MM` that `text` stamps as the time it is sent, or null when its opening carries none. */
 export function stampedHour(text) {
-  const match = STAMP.exec(String(text ?? '')) ?? HOUR_FIRST.exec(String(text ?? ''));
+  const match = STAMP.exec(String(text ?? '')) ?? HOUR_FIRST.exec(String(text ?? '')) ?? PAREN_OPENING.exec(String(text ?? ''));
   if (match === null) return null;
   const [hours, minutes] = match[1].split(':').map(Number);
   return `${pad(hours)}:${pad(minutes)}`;

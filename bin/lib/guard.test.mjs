@@ -554,6 +554,72 @@ test('a stamp that opens the text before the label is read, and a label never cr
   assert.match(hourRefusal('19:48 JH ORQ: PR 300 landed.', AT_1444), /stamps 19:48, and the clock says 14:44/);
 });
 
+// Codex on 7a02fb17 (P2, guard.mjs:222): an hour in parentheses is a stamp only after a sender's label, as in
+// "Lead to JH 302 (22:20):"; a sentence that opens a message, "The gate finished (14:20):", reports an event.
+test('an hour in parentheses at the opening is read after a sender label only, not after any capitalized phrase', () => {
+  for (const [text, hour] of Object.entries({
+    'Lead to JH 302 (22:20): order v3 noted.': '22:20',
+    'Writer to lead (about 09:05): done.': '09:05',
+    'JH 302 (14:20 local): the gate passed.': '14:20',
+    'JH ORQ to JH 5 (07:40): go on.': '07:40',
+    'JH ORQ (22:20): noted.': '22:20',
+    'JH ORQ to all (22:20): stop.': '22:20',
+    'Lead to JH 302 and JH 303 (22:20): go on.': '22:20',
+    // The lenses on 7a02fb1..851440e: a role's word, as sender, recipient or bare label, is a sender's label too.
+    'Lead to Writer (14:50): go on.': '14:50',
+    'Writer to Reviewer (14:50): ready.': '14:50',
+    'Lead (14:50): noted.': '14:50',
+    // The lenses on 7a02fb1..6ec2be3: a role's word in lower case, after "the" or not, and a sender of a word and a letter.
+    'Lead to writer (14:50): go on.': '14:50',
+    'Lead to the reviewer (14:50): ready?': '14:50',
+    'Reader A to lead (14:50): read.': '14:50',
+  })) assert.equal(stampedHour(text), hour, text);
+  for (const text of [
+    'Merged (14:20): done.',
+    'Moved to Friday (14:20): done.',
+    'The gate finished (14:20): all checks passed.',
+    'Merge ran (14:20): done.',
+    'All checks passed on the run of today (14:20): done.',
+  ]) assert.equal(stampedHour(text), null, text);
+});
+
+// Codex on 7fb9627c (P2, guard.mjs:222, twice): a capitalized word before " to " is a sender only when it is one
+// ("Sent to JH 302 (14:20):" reports a delivery), and the documented "From <someone>" sender keeps an approximate stamp.
+// Every example of the three reviews of this regex, in one table.
+test('an hour in parentheses at the opening: every example of the reviews of PAREN_OPENING', () => {
+  for (const [text, hour] of Object.entries({
+    'Lead to JH 302 (22:20): order v3 noted.': '22:20',
+    'Writer to lead (about 09:05): done.': '09:05',
+    'JH 302 (14:20 local): the gate passed.': '14:20',
+    'JH ORQ to JH 5 (07:40): go on.': '07:40',
+    'JH ORQ (22:20): noted.': '22:20',
+    'JH ORQ to all (22:20): stop.': '22:20',
+    'Lead to JH 302 and JH 303 (22:20): go on.': '22:20',
+    'Lead to Writer (14:50): go on.': '14:50',
+    'Writer to Reviewer (14:50): ready.': '14:50',
+    'Lead (14:50): noted.': '14:50',
+    'Lead to writer (14:50): go on.': '14:50',
+    'Lead to the reviewer (14:50): ready?': '14:50',
+    'Reader A to lead (14:50): read.': '14:50',
+    'From the lead (about 14:50): merged.': '14:50',
+    'From JH 5 (14:50): merged.': '14:50',
+    // The lenses on 7fb9627..ed73480: a recipient of a role's word and a letter, as a sender may be.
+    'Lead to Reader A (14:50): go on.': '14:50',
+    'Lead to reader B and JH 5 (14:50): go on.': '14:50',
+  })) assert.equal(stampedHour(text), hour, text);
+  for (const text of [
+    'Merged (14:20): done.',
+    'Moved to Friday (14:20): done.',
+    'The gate finished (14:20): all checks passed.',
+    'Merge ran (14:20): done.',
+    'All checks passed on the run of today (14:20): done.',
+    'Sent to JH 302 (14:20): delivery confirmed.',
+    'Handed to the lead (14:20): done.',
+  ]) assert.equal(stampedHour(text), null, text);
+  assert.match(hourRefusal('From the lead (about 14:50): merged.', AT_1444) ?? '', /stamps 14:50, and the clock says 14:44/);
+  assert.equal(hourRefusal('Sent to JH 302 (14:20): delivery confirmed.', AT_1444), null);
+});
+
 // gate-wait T11: gentle-ai diffs the tree of `--base-ref` against the head's, and walks up to 64 first-parent ancestors
 // of the head for it; a base off that line costs about 216 git runs against 31 (reader A, 2026-10-17), and one the
 // head is behind also puts the default branch's newer work in the candidate, reversed (20 s and 470 lines).
