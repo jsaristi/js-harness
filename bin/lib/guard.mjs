@@ -218,8 +218,8 @@ const STAMP = /^(?:From\b[^.:\n]{0,90}?[,(]\s*|[A-Z][A-Za-z]{0,3} ?\d{1,3}(?: ·
 // all right (odd/tasks/wake-and-flag.md, T4).
 const HOUR_FIRST = /^((?:[01]?\d|2[0-3]):[0-5]\d)\s+(?=[A-Z])/;
 
-// A sender's label, "<sender> to <session, lead or role>", a session's title or a role's word ("Lead"), then the hour in parentheses ending the opening ("Lead to JH 302 (22:20):", FAILURES.md hours-guessed); "The gate finished (14:20):" is an event (Codex on 7a02fb17).
-const PAREN_OPENING = /^(?:(?:[A-Z][A-Za-z]{0,3} ?\d{1,3}|[A-Z]{2,4} [A-Z]{2,4}|[A-Z][a-z]+) to (?:the lead|lead|all|(?:Lead|Writer|Reviewer|Worker|Orchestrator|Owner|Senior|Verifier)\b|[A-Z]{2,4}(?: ?\d{1,3}| [A-Z]{2,4}))(?:(?:,| and) (?:the lead|lead|(?:Lead|Writer|Reviewer|Worker|Orchestrator|Owner|Senior|Verifier)\b|[A-Z]{2,4}(?: ?\d{1,3}| [A-Z]{2,4})))*|[A-Z][A-Za-z]{0,3} ?\d{1,3}|[A-Z]{2,4} [A-Z]{2,4}|(?:Lead|Writer|Reviewer|Worker|Orchestrator|Owner|Senior|Verifier)\b)(?: ·[^:()\n]{0,40}?)?\s*\((?:about\s+)?((?:[01]?\d|2[0-3]):[0-5]\d)(?:\s+local)?\)\s*:/;
+// A sender's label, "<sender> to <session, all, or (the) lead or role in either case>", a session's title or a role's word ("Lead"), then the hour in parentheses ending the opening ("Lead to JH 302 (22:20):", FAILURES.md hours-guessed); "The gate finished (14:20):" is an event (Codex on 7a02fb17).
+const PAREN_OPENING = /^(?:(?:[A-Z][A-Za-z]{0,3} ?\d{1,3}|[A-Z]{2,4} [A-Z]{2,4}|[A-Z][a-z]+(?: [A-Z]\b)?) to (?:all|(?:the )?(?:[Ll]ead|[Ww]riter|[Rr]eviewer|[Ww]orker|[Oo]rchestrator|[Oo]wner|[Ss]enior|[Vv]erifier)\b|[A-Z]{2,4}(?: ?\d{1,3}| [A-Z]{2,4}))(?:(?:,| and) (?:all|(?:the )?(?:[Ll]ead|[Ww]riter|[Rr]eviewer|[Ww]orker|[Oo]rchestrator|[Oo]wner|[Ss]enior|[Vv]erifier)\b|[A-Z]{2,4}(?: ?\d{1,3}| [A-Z]{2,4})))*|[A-Z][A-Za-z]{0,3} ?\d{1,3}|[A-Z]{2,4} [A-Z]{2,4}|(?:Lead|Writer|Reviewer|Worker|Orchestrator|Owner|Senior|Verifier)\b)(?: ·[^:()\n]{0,40}?)?\s*\((?:about\s+)?((?:[01]?\d|2[0-3]):[0-5]\d)(?:\s+local)?\)\s*:/;
 
 const pad = (n) => String(n).padStart(2, '0');
 

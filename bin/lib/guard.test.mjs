@@ -569,6 +569,10 @@ test('an hour in parentheses at the opening is read after a sender label only, n
     'Lead to Writer (14:50): go on.': '14:50',
     'Writer to Reviewer (14:50): ready.': '14:50',
     'Lead (14:50): noted.': '14:50',
+    // The lenses on 7a02fb1..6ec2be3: a role's word in lower case, after "the" or not, and a sender of a word and a letter.
+    'Lead to writer (14:50): go on.': '14:50',
+    'Lead to the reviewer (14:50): ready?': '14:50',
+    'Reader A to lead (14:50): read.': '14:50',
   })) assert.equal(stampedHour(text), hour, text);
   for (const text of [
     'Merged (14:20): done.',
