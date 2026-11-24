@@ -341,6 +341,9 @@ test('a message whose opening stamps its hour in parentheses is denied when off 
     assert.deepEqual(await hook({ tool_name, tool_input: { message: 'Lead to JH 302: the merge ran (14:50) and the record says (09:12): noted.' } }), { code: 0, out: '', err: '' }, tool_name);
     // Codex on 7a02fb17 (P2): a sentence opening the message reports an event; only a sender's label stamps.
     assert.deepEqual(await hook({ tool_name, tool_input: { message: 'The gate finished (14:20): all checks passed.' } }), { code: 0, out: '', err: '' }, tool_name);
+    // Codex on 7fb9627c (P2): a capitalized word before " to " is no sender; "From <someone>" keeps an approximate stamp.
+    assert.deepEqual(await hook({ tool_name, tool_input: { message: 'Sent to JH 302 (14:20): delivery confirmed.' } }), { code: 0, out: '', err: '' }, tool_name);
+    assert.match(denied(await hook({ tool_name, tool_input: { message: 'From the lead (about 14:50): merged.' } })).permissionDecisionReason, /stamps 14:50, and the clock says 14:44/, tool_name);
   }
 });
 
