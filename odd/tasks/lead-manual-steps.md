@@ -191,6 +191,11 @@ Read 2026-10-29 from each command's `--help` on main 1c6b6c2:
   deleted keeps running the code it loaded, and only a later lazy import fails; the static graphs of `wait.mjs`
   (97 modules) and `quiet.mjs` hold no lazy import and start no js-harness; and a real `js-harness.mjs wait` run
   from a temporary copy, the copy then deleted, still ended on its notice with exit 3. So the waits run through the
-  swap and end as they would have; the stop, the notes and the session reading (`sessionOf`, `waitAgain`,
+  swap, neither stopped nor told; the stop, the notes and the session reading (`sessionOf`, `waitAgain`,
   `reArmNote`, `openSessions`) left with their last caller. Cost: a wait runs the old copy's code until it ends, up
   to its 480 minutes. Not known: where the exit 127 of a stopped wait comes from.
+  Codex on 85e45a1..70d5c4e (fix/1009): a wait is left running only when it runs alone, has run 30 seconds (its
+  code loaded), and started no copy command; a shell that runs more after its wait (`wait --pr <n> && notify`), a
+  wait still starting and a copy command a wait started refuse the refresh like other work. The temporary-copy probe
+  is now a test (`merge-queue-refresh.test.mjs`). A chain typed into an interactive shell is not seen: the listing
+  shows a shell's typed line only when it is in the shell's command line, as claude's Bash tool puts it.

@@ -7,8 +7,9 @@
 
 //
 // `merge-queue --refresh-copy` run alone (`refreshNow`, S4 and S5 of odd/tasks/lead-manual-steps.md) refreshes the copy
-// to origin's main at once, as the lead did by hand when that wait gave up: it refuses while anything but a wait runs
-// from the copy (merge-queue-waits.mjs), and leaves the waits running, since a wait outlives its folder's swap (JH 284).
+// to origin's main at once, as the lead did by hand when that wait gave up: it refuses while anything but a lone, loaded
+// wait runs from the copy, or a shell runs more after its wait (merge-queue-waits.mjs), and leaves the waits running,
+// since a wait outlives its folder's swap (JH 284).
 
 import path from 'node:path';
 import { atWork, within } from './background.mjs';
@@ -131,7 +132,12 @@ export const COPY_LOOKS = 3;
 const COPY_LOOK_PAUSE_MS = 10_000;
 
 const sinceOf = (ms) => (Number.isFinite(ms) ? `, since ${new Date(ms).toISOString()}` : '');
-const blockersWhy = (blockers) => `${blockers.length === 1 ? 'a process other than a wait runs' : `${blockers.length} processes other than a wait run`} from the installed copy: ${blockers.map((one) => `${one.pid} (${one.verb ?? 'no command named'}${sinceOf(one.createdAt)})`).join(', ')}`;
+const BLOCKER_KINDS = {
+  chained: () => 'a shell that runs more after its js-harness wait',
+  starting: () => 'a js-harness wait still starting, its code maybe not loaded',
+};
+const blockerOf = (one) => `${one.pid} (${BLOCKER_KINDS[one.kind]?.() ?? `${one.verb ?? 'no command named'} from the installed copy`}${sinceOf(one.createdAt)})`;
+const blockersWhy = (blockers) => `${blockers.length === 1 ? 'a process runs' : `${blockers.length} processes run`} that the installed copy cannot be swapped under: ${blockers.map(blockerOf).join(', ')}`;
 
 /** `merge-queue --refresh-copy` run alone: brings the installed copy up to `main.sha` (origin's main, or `main.why`
  * when it could not be read: exit 1) unless the copy already names it (`copySha`: exit 0). `look()` gives the copy's

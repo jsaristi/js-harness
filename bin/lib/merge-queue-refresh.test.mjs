@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { NOTICE_SCHEMA, recordPath } from './channel.mjs';
+import { projectSlug } from './sessions.mjs';
 import { QUIET_WAIT_MINUTES, atWorkIn, lookOnce, refreshAfterLand, refreshNow, waitForQuiet } from './merge-queue-refresh.mjs';
 import { REFRESH_FAILED } from './refresh-copy.mjs';
 
@@ -181,7 +187,7 @@ const T0 = 1_800_000_000_000;
 const waitOf = (pid, ppid, args) => ({ pid, createdAt: T0 + pid, commandLine: `node "C:\\pnpm\\global\\v11\\h\\node_modules\\js-harness\\bin\\js-harness.mjs" wait ${args}`, targets: [{ pid, createdAt: T0 + pid }], ppid });
 const WAITS = [waitOf(120, 100, '--pr 674'), waitOf(140, 130, '--notice-to orchestrator'), waitOf(160, 1, '--main-has 1c6b6c2')];
 const SNAP = [{ pid: 100, ppid: 1, createdAt: T0 }, { pid: 130, ppid: 1, createdAt: T0 }, ...WAITS.map(({ pid, ppid, createdAt }) => ({ pid, ppid, createdAt }))];
-const BLOCKER = { pid: 220, createdAt: T0, verb: 'codex-review', commandLine: 'node codex-review' };
+const BLOCKER = { pid: 220, createdAt: T0, verb: 'codex-review', commandLine: 'node codex-review', kind: 'copy' };
 
 function refreshingNow({ copySha = 'f'.repeat(40), main = { sha: MAIN }, looks = [{ waits: WAITS, blockers: [], snapshot: SNAP }], code = 0, unanswered } = {}) {
   const said = [];
@@ -256,10 +262,10 @@ test('refreshNow refuses, with exit 1, when main cannot be read', async () => {
   assert.match(run.said, /could not fetch origin: nothing was refreshed/);
 });
 
-test('refreshNow refuses while work other than a wait still runs from the copy after three looks', async () => {
+test('refreshNow refuses while other work still runs from the copy after three looks', async () => {
   const run = await refreshingNow({ looks: [{ waits: WAITS, blockers: [BLOCKER], snapshot: SNAP }] });
   assert.equal(run.exit, 75);
-  assert.match(run.said, /a process other than a wait runs from the installed copy: 220 \(codex-review, since .*\), after 3 looks 10 seconds apart: nothing was refreshed/);
+  assert.match(run.said, /a process runs that the installed copy cannot be swapped under: 220 \(codex-review from the installed copy, since .*\), after 3 looks 10 seconds apart: nothing was refreshed/);
   assert.deepEqual([run.looked, run.sleeps, run.asked.length], [3, [10_000, 10_000], 0]);
 });
 
@@ -284,11 +290,66 @@ test('refreshNow goes on once the blocker is gone, looks once more under the loc
 test('refreshNow refuses under the lock when work began meanwhile, and names its lock by its own mode', async () => {
   const began = await refreshingNow({ looks: [{ waits: WAITS, blockers: [], snapshot: SNAP }, { waits: WAITS, blockers: [BLOCKER], snapshot: SNAP }] });
   assert.equal(began.exit, 75);
-  assert.match(began.said, /why: a process other than a wait runs from the installed copy: 220/);
+  assert.match(began.said, /why: a process runs that the installed copy cannot be swapped under: 220 \(codex-review from the installed copy/);
   assert.equal(began.asked[0].command, 'merge-queue --refresh-copy');
+});
+
+// Codex P2 and P3 on 85e45a1..70d5c4e: a wait chained to other work, and a wait still starting, refuse the refresh
+// under their own names, not as a command of the copy.
+test('refreshNow names a chained wait and a wait still starting by what they are when it refuses on them', async () => {
+  const chained = { pid: 500, createdAt: T0, verb: null, commandLine: 'bash -c "js-harness wait --pr 748 && js-harness notify"', kind: 'chained' };
+  const starting = { ...WAITS[0], verb: 'wait', kind: 'starting' };
+  const run = await refreshingNow({ looks: [{ waits: [], blockers: [starting, chained], snapshot: SNAP }] });
+  assert.equal(run.exit, 75);
+  assert.match(run.said, /2 processes run that the installed copy cannot be swapped under: 120 \(a js-harness wait still starting, its code maybe not loaded, since .*\), 500 \(a shell that runs more after its js-harness wait, since .*\), after 3 looks/);
 });
 
 test('refreshNow returns the exit of a refresh that fails', async () => {
   const run = await refreshingNow({ code: REFRESH_FAILED });
   assert.equal(run.exit, REFRESH_FAILED);
+});
+
+// Codex P3 on 85e45a1..70d5c4e: the refresh leaves a wait running because it outlives its folder's swap (JH 284), and
+// the stand-ins above never replace a file. Here a real wait runs from a scratch copy of bin/, as pnpm installs it, the
+// copy is removed under it as the swap removes the old one, the wait polls with its files gone, and then it ends on its
+// notice as it would have. A lazy import in the wait's path would fail at that poll.
+test('a wait run from a scratch copy polls on after the copy is removed, and ends on its notice', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'js-harness-swap-'));
+  let child = null;
+  t.after(() => {
+    child?.kill();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  const binDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const copy = path.join(dir, 'copy');
+  const work = path.join(dir, 'work');
+  const home = path.join(dir, 'home');
+  fs.cpSync(binDir, path.join(copy, 'bin'), { recursive: true, filter: (from) => !/\.test(kit)?\.mjs$/.test(from) });
+  fs.copyFileSync(path.join(path.dirname(binDir), 'package.json'), path.join(copy, 'package.json'));
+  fs.mkdirSync(work);
+  fs.mkdirSync(home);
+  const env = { ...process.env };
+  for (const name of ['CLAUDE_CODE_SESSION_ID', 'JS_HARNESS_HOME', 'CLAUDE_CONFIG_DIR']) delete env[name];
+  child = spawn(process.execPath, [path.join(copy, 'bin', 'js-harness.mjs'), 'wait', '--notice-to', '7', '--every', '1', '--for', '2', '--cwd', work, '--home', home], { cwd: work, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+  let out = '';
+  let err = '';
+  child.stderr.on('data', (chunk) => { err += chunk; });
+  const ended = new Promise((resolve) => child.on('exit', (code) => resolve(code)));
+  await new Promise((resolve, reject) => {
+    child.stdout.on('data', (chunk) => {
+      out += chunk;
+      if (out.includes('\n')) resolve();
+    });
+    child.on('exit', () => reject(new Error(`the wait ended before its first line: ${err}`)));
+  });
+  assert.match(out, /^js-harness wait: waits for a notice to 7;/);
+  fs.rmSync(copy, { recursive: true, force: true });
+  await new Promise((resolve) => setTimeout(resolve, 2500));
+  const notice = { schema: NOTICE_SCHEMA, at: new Date().toISOString(), from: { host: 'claude-code', id: 'aaaaaaaa-1111-4111-8111-111111111111', source: 'environment', title: 'JH 5 · swap', permissionMode: 'bypassPermissions', context: null }, to: { role: 'work', number: 7 }, kind: 'note', text: 'after the swap', cwd: work, worktree: work, branch: 'feat/swap' };
+  const record = recordPath(home, projectSlug(work));
+  fs.mkdirSync(path.dirname(record), { recursive: true });
+  fs.writeFileSync(record, `${JSON.stringify(notice)}\n`);
+  assert.equal(await ended, 0, `${out}\n${err}`);
+  assert.match(out, /note from JH 5 · swap: after the swap/);
+  assert.equal(err, '');
 });

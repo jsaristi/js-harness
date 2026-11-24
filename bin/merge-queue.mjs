@@ -83,11 +83,13 @@ asks the user's yes to apply a pull request main holds (a question notice with "
 under the gate lock, before anything is installed or stopped.
 --refresh-copy alone, run from a checkout (odd/tasks/lead-manual-steps.md), brings the installed copy up to origin's
 default branch now, landing nothing; exit 0 when the copy already names it, 1 when main or pnpm's bin folder cannot be
-read. It reads the processes that run from the copy (Windows): a js-harness wait or quiet --wait, with what it started,
-is a wait, and anything else (a gate, a review, an eval batch) refuses it, exit 75, after three looks ten seconds apart,
-stopping nothing. Under the gate lock it looks again, refuses the same way on such work, and refreshes as above,
-exit 77 as above for an open question that asks to apply what main holds. A wait is left running: it outlives its
-folder's swap and ends as it would have. It can wait up to an hour for the gate lock: run it in the background.
+read. It reads the processes that run from the copy (Windows): a js-harness wait or quiet --wait is a wait, and anything
+else (a gate, a review, an eval batch, a command a wait started, a wait still starting (under 30 seconds), or a shell
+that runs more after its wait, as wait --pr <n> && notify) refuses it, exit 75, after three looks ten seconds apart,
+stopping nothing. Under the gate lock it looks once more and refuses at once, with no retry, exit 75, on such work;
+else it refreshes as above, exit 77 as above for an open question that asks to apply what main holds. A wait is left
+running, neither stopped nor told: it outlives its folder's swap, though a quiet --wait counts the refresh as work while
+it holds the gate lock. It can wait up to an hour for the gate lock: run it in the background.
 A landed pull request whose branch moved during the land is named after the landing: its new commits
 are not in main, so it needs another run of the queue.
 Each --land appends one JSON line to <git common dir>/js-harness/lands.jsonl: the pull requests it looked at, each

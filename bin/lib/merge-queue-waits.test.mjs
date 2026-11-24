@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { onlyWaits, readCopy, verbOf } from './merge-queue-waits.mjs';
+import { WAIT_LOADED_MS, onlyWaits, readCopy, verbOf } from './merge-queue-waits.mjs';
 
 // The machine of S4 and S5 (odd/tasks/lead-manual-steps.md): pnpm's global folder holds the installed copy, and the
 // processes below run from it or not.
@@ -9,6 +9,8 @@ const ENTRY = `${GLOBAL}\\v11\\h-1\\node_modules\\js-harness\\bin\\js-harness.mj
 const T = 1_800_000_000_000;
 const row = (pid, ppid, createdAt, name = 'node.exe') => ({ pid, ppid, createdAt, name });
 const line = (pid, createdAt, commandLine) => ({ pid, createdAt, commandLine });
+// A minute after the newest process below started: every wait of the fixture has loaded its code.
+const LATER = T + 60_000;
 
 // claude (100) > bash (110) > node wait (120) > git (130); claude (200) > bash (210) > node codex-review (220);
 // the refresh itself (300) under a shell (290), and its held child (310); a checkout's wait (400), not the copy's.
@@ -35,41 +37,88 @@ test('verbOf names the command a copy process runs: the verb after the dispatche
 });
 
 test("readCopy finds the copy's waits with what they started, and every other copy process as a blocker, leaving out the refresh's own family", () => {
-  const seen = readCopy({ snapshot: SNAPSHOT, processes: PROCESSES, globalDir: GLOBAL, self: 300 });
+  const seen = readCopy({ snapshot: SNAPSHOT, processes: PROCESSES, globalDir: GLOBAL, self: 300, now: LATER });
   assert.deepEqual(seen.waits.map((wait) => wait.pid), [120]);
   assert.deepEqual(seen.waits[0].targets, [{ pid: 120, createdAt: T + 20 }, { pid: 130, createdAt: T + 30 }]);
   assert.deepEqual(seen.blockers.map(({ pid, verb }) => ({ pid, verb })), [{ pid: 220, verb: 'codex-review' }]);
 });
 
-test("readCopy counts a process started by a wait as the wait's, and a wait with no creation time as a blocker", () => {
+// Codex P3 on 85e45a1..70d5c4e: a copy command a wait's git hook starts runs code of the copy that is not the wait's,
+// and the swap can take its files from under it.
+test('readCopy takes a copy process a wait started for a blocker, and a wait with no creation time too', () => {
   const child = [...PROCESSES, line(130, T + 30, `node "${ENTRY}" sessions --json`)];
-  const seen = readCopy({ snapshot: SNAPSHOT, processes: child, globalDir: GLOBAL, self: 300 });
-  assert.deepEqual(seen.blockers.map((one) => one.pid), [220]);
-  const unknown = readCopy({ snapshot: SNAPSHOT.map((one) => (one.pid === 120 ? { ...one, createdAt: null } : one)), processes: PROCESSES.map((one) => (one.pid === 120 ? { ...one, createdAt: null } : one)), globalDir: GLOBAL, self: 300 });
+  const seen = readCopy({ snapshot: SNAPSHOT, processes: child, globalDir: GLOBAL, self: 300, now: LATER });
+  assert.deepEqual(seen.blockers.map(({ pid, verb }) => ({ pid, verb })), [{ pid: 130, verb: 'sessions' }, { pid: 220, verb: 'codex-review' }]);
+  assert.deepEqual(seen.waits.map((wait) => wait.pid), [120]);
+  const unknown = readCopy({ snapshot: SNAPSHOT.map((one) => (one.pid === 120 ? { ...one, createdAt: null } : one)), processes: PROCESSES.map((one) => (one.pid === 120 ? { ...one, createdAt: null } : one)), globalDir: GLOBAL, self: 300, now: LATER });
   assert.deepEqual(unknown.waits, []);
   assert.deepEqual(unknown.blockers.map((one) => one.pid).sort(), [120, 220]);
+});
+
+// Codex P3 on 85e45a1..70d5c4e: the dispatcher imports a command when it starts, so a wait still starting has not
+// loaded the code a swap would take from it; a wait loads in about 0.3 s on this machine (2026-11-24).
+test('readCopy takes a wait younger than WAIT_LOADED_MS for a blocker still starting, and an older one for a wait', () => {
+  const young = readCopy({ snapshot: SNAPSHOT, processes: PROCESSES, globalDir: GLOBAL, self: 300, now: T + 20 + WAIT_LOADED_MS - 1 });
+  assert.deepEqual([young.waits, young.blockers.map(({ pid, kind }) => ({ pid, kind }))], [[], [{ pid: 120, kind: 'starting' }, { pid: 220, kind: 'copy' }]]);
+  const loaded = readCopy({ snapshot: SNAPSHOT, processes: PROCESSES, globalDir: GLOBAL, self: 300, now: T + 20 + WAIT_LOADED_MS });
+  assert.deepEqual([loaded.waits.map((wait) => wait.pid), loaded.blockers.map((one) => one.pid)], [[120], [220]]);
+});
+
+// The shell claude's Bash tool runs a command in, as this machine listed it on 2026-11-24 (the snapshot's exports cut):
+// the typed line is the body of the `eval`, its single quotes written '\'' and its double quotes \", and the fork
+// that runs it carries the same command line. pnpm's shim (sh) runs the node wait, and the shell is no ancestor of it
+// in the process table: MSYS leaves a dead parent pid between them.
+const claudeShell = (typed) => {
+  const body = typed.replaceAll("'", "'\\''").replaceAll('"', '\\"');
+  return `"C:\\Program Files\\Git\\bin\\bash.exe" -c "source /c/Users/me/.claude/shell-snapshots/snapshot-bash-1-x.sh 2>/dev/null || true && export TEMP='C:\\Users\\me\\AppData\\Local\\Temp' && : && \\builtin shopt -u extglob 2>/dev/null || true && { \\builtin unalias -- 'which'; \\builtin unset -f -- 'which'; } >/dev/null 2>&1 || true && eval '${body}' < /dev/null && pwd -P >| /c/Users/me/AppData/Local/Temp/claude-5c48-cwd"`;
+};
+const shim = (rest) => `"C:\\Program Files\\Git\\usr\\bin\\sh.exe" /c/Users/me/AppData/Local/pnpm/bin/js-harness ${rest}`;
+const shelled = (typed) => [...PROCESSES, line(500, T + 5, claudeShell(typed)), line(501, T + 6, claudeShell(typed)), line(502, T + 15, shim('wait --pr 674 --every 60'))];
+
+test("readCopy leaves a wait typed alone in claude's shell running, quoted or after a cd", () => {
+  for (const typed of ['js-harness wait --pr 674 --every 60', 'cd "D:/a b" && js-harness wait --notice-to 130 2>&1 | tail -3', "cd /d/x; js-harness wait --main-file docs/a.md --contains 'it'\\''s new'"]) {
+    const seen = readCopy({ snapshot: SNAPSHOT, processes: shelled(typed), globalDir: GLOBAL, self: 300, now: LATER });
+    assert.deepEqual([seen.waits.map((wait) => wait.pid), seen.blockers.map((one) => one.pid)], [[120], [220]], typed);
+  }
+});
+
+// Codex P2 on 85e45a1..70d5c4e: a command chained after a wait starts when the wait ends, which can be inside the swap,
+// against a copy half replaced. The listing writes a line break as a space, so a second line reads as more words of
+// the wait.
+test('readCopy takes the shell of a wait chained to other work for a blocker, a line break flattened by the listing too', () => {
+  for (const typed of ['js-harness wait --pr 748 && js-harness notify --to 4 --kind note "merged"', 'js-harness wait --pr 748; npm run check', 'js-harness wait --pr 748 js-harness notify --to 4 --kind note merged', 'js-harness wait --pr 748 || echo closed']) {
+    const seen = readCopy({ snapshot: SNAPSHOT, processes: shelled(typed), globalDir: GLOBAL, self: 300, now: LATER });
+    assert.deepEqual(seen.blockers.map(({ pid, kind }) => ({ pid, kind })), [{ pid: 220, kind: 'copy' }, { pid: 500, kind: 'chained' }, { pid: 501, kind: 'chained' }], typed);
+    assert.deepEqual(seen.waits.map((wait) => wait.pid), [120], typed);
+  }
+  // A shell another tool started, with the line as its -c word.
+  const plain = [...PROCESSES, line(510, T, 'bash -c "js-harness wait --pr 748 && js-harness notify --to 4 --kind note merged"')];
+  assert.deepEqual(readCopy({ snapshot: SNAPSHOT, processes: plain, globalDir: GLOBAL, self: 300, now: LATER }).blockers.map((one) => one.pid), [220, 510]);
+  // The refresh's own shell is never its blocker, whatever it chains.
+  const own = PROCESSES.map((one) => (one.pid === 290 ? { ...one, commandLine: 'bash -c "js-harness wait --for 1 && js-harness merge-queue --refresh-copy"' } : one));
+  assert.deepEqual(readCopy({ snapshot: SNAPSHOT, processes: own, globalDir: GLOBAL, self: 300, now: LATER }).blockers.map((one) => one.pid), [220]);
 });
 
 // The verifier's cases (T5): the process table and the listing are two reads, so a pid one held may be another's in
 // the next; a process is the refresh's own family or a wait's child only when its creation time agrees too.
 test('readCopy takes a pid reused between the two reads for a blocker, and keeps the refresh\'s own ancestors out', () => {
   const reused = [...PROCESSES, line(130, T + 900, `node "${ENTRY}" eval --batch 3`), line(310, T + 900, `node "${ENTRY}" lens-review --base abc`)];
-  const seen = readCopy({ snapshot: SNAPSHOT, processes: reused, globalDir: GLOBAL, self: 300 });
+  const seen = readCopy({ snapshot: SNAPSHOT, processes: reused, globalDir: GLOBAL, self: 300, now: LATER });
   assert.deepEqual(seen.blockers.map((one) => one.pid), [130, 220, 310]);
   // The refresh run from a loop of the copy: the loop is its ancestor, and is left out.
   const looped = [...PROCESSES.filter((one) => one.pid !== 290), line(290, T, `node "${ENTRY}" loop --heartbeat`)];
-  assert.deepEqual(readCopy({ snapshot: SNAPSHOT, processes: looped, globalDir: GLOBAL, self: 300 }).blockers.map((one) => one.pid), [220]);
+  assert.deepEqual(readCopy({ snapshot: SNAPSHOT, processes: looped, globalDir: GLOBAL, self: 300, now: LATER }).blockers.map((one) => one.pid), [220]);
   // The refresh's own process with no creation time in the listing is still its own: it never blocks itself.
   const untimed = PROCESSES.map((one) => (one.pid === 300 ? { ...one, createdAt: null } : one));
-  assert.deepEqual(readCopy({ snapshot: SNAPSHOT, processes: untimed, globalDir: GLOBAL, self: 300 }).blockers.map((one) => one.pid), [220]);
+  assert.deepEqual(readCopy({ snapshot: SNAPSHOT, processes: untimed, globalDir: GLOBAL, self: 300, now: LATER }).blockers.map((one) => one.pid), [220]);
 });
 
 test('readCopy takes a wait whose two creation times disagree for a blocker, and a script of pnpm\'s global folder outside the package for none', () => {
   const late = PROCESSES.map((one) => (one.pid === 120 ? { ...one, createdAt: T + 900 } : one));
-  const seen = readCopy({ snapshot: SNAPSHOT, processes: late, globalDir: GLOBAL, self: 300 });
+  const seen = readCopy({ snapshot: SNAPSHOT, processes: late, globalDir: GLOBAL, self: 300, now: LATER });
   assert.deepEqual([seen.waits, seen.blockers.map((one) => one.pid)], [[], [120, 220]]);
   const other = [line(220, T + 20, `node "${GLOBAL}\\v11\\h-1\\node_modules\\other-tool\\bin\\cli.mjs" run`)];
-  assert.deepEqual(readCopy({ snapshot: SNAPSHOT, processes: other, globalDir: GLOBAL, self: 300 }), { waits: [], blockers: [] });
+  assert.deepEqual(readCopy({ snapshot: SNAPSHOT, processes: other, globalDir: GLOBAL, self: 300, now: LATER }), { waits: [], blockers: [] });
 });
 
 // As this machine's listing gave them on 2026-10-29: pnpm's shim runs the copy through `bin/../global`, and the lead's
@@ -77,7 +126,7 @@ test('readCopy takes a wait whose two creation times disagree for a blocker, and
 test('readCopy reads a copy named through pnpm/bin/.., and takes quiet --wait for a wait and quiet alone for work', () => {
   const shimmed = 'C:\\nvm4w\\nodejs\\node.exe C:\\Users\\me\\AppData\\Local\\pnpm\\bin/../global/v11/8851b7/node_modules/js-harness/bin/js-harness.mjs';
   const processes = [line(120, T + 20, `${shimmed} quiet --wait`), line(220, T + 20, `${shimmed} quiet`)];
-  const seen = readCopy({ snapshot: SNAPSHOT, processes, globalDir: GLOBAL, self: 300 });
+  const seen = readCopy({ snapshot: SNAPSHOT, processes, globalDir: GLOBAL, self: 300, now: LATER });
   assert.deepEqual([seen.waits.map((wait) => wait.pid), seen.blockers.map((one) => one.pid)], [[120], [220]]);
 });
 

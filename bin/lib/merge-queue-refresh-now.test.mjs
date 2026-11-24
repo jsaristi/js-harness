@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { appendReading, newReading } from './channel.mjs';
 import { agentOnlyWaits } from './merge-queue-refresh-now.mjs';
+import { USAGE } from '../merge-queue.mjs';
 
 // Whether a session the land's refresh finds busy only waits, read from its transcript (agentOnlyWaits). Transcripts
 // and the channel are written in a scratch home.
@@ -61,4 +62,15 @@ test('agentOnlyWaits reads the transcript claude agents names, by its folder or 
   for (const sessionId of ['ffffffff-0000-4000-8000-000000000000', '../D--js-harness/main-1', undefined]) {
     assert.equal(agentOnlyWaits({ sessionId, cwd: 'D:\\js-harness' }, { claudeHome }), false, String(sessionId));
   }
+});
+
+// Codex P3s on 85e45a1..70d5c4e: the help said the look under the lock "refuses the same way" (it looks once, with no
+// retry) and that a wait "ends as it would have" (a quiet --wait reads the refresh's lock as work); it names the
+// refusals of a chained wait, a wait still starting and a command a wait started.
+test('the help of --refresh-copy alone says the look under the lock does not retry, and promises a wait only that it is not stopped', () => {
+  const help = USAGE.replace(/\s+/g, ' ');
+  assert.match(help, /Under the gate lock it looks once more and refuses at once, with no retry, exit 75, on such work/);
+  assert.match(help, /a command a wait started, a wait still starting \(under 30 seconds\), or a shell that runs more after its wait/);
+  assert.match(help, /A wait is left running, neither stopped nor told: it outlives its folder's swap, though a quiet --wait counts the refresh as work/);
+  assert.doesNotMatch(help, /refuses the same way|ends as it would have/);
 });

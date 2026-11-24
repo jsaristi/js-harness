@@ -39,7 +39,7 @@ export async function refreshNowRun(args, { run = spawnSync, env, stdout, stderr
   const globalDir = binDir ? path.join(path.dirname(binDir), 'global') : null;
   const look = () => {
     const snapshot = takeSnapshot({ spawnSync: run });
-    return { snapshot, ...readCopy({ snapshot, processes: listCommandLines(utf8, process.platform, 'js-harness'), globalDir, self: process.pid }) };
+    return { snapshot, ...readCopy({ snapshot, processes: listCommandLines(utf8, process.platform, 'js-harness'), globalDir, self: process.pid, now: Date.now() }) };
   };
   const home = harnessHome({ env, homedir: os.homedir });
   return refreshNow({
