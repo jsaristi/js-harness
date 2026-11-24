@@ -6,7 +6,8 @@ import path from 'node:path';
 import { spawn as spawnChild, spawnSync as spawnChildSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
-  LOG_CHECK_MS, cleanServerEnv, isLoginLauncher, launcherFileName, launcherStart, locate, logNote, loginLauncher, lookUpProcesses, nextDelay, readPersistentEnv,
+  LOG_CHECK_MS, cleanServerEnv, clearStopped, isLoginLauncher, launcherFileName, launcherStart, locate, logNote, loginLauncher, lookUpProcesses, markStopped,
+  nextDelay, readPersistentEnv,
   readState, remoteFiles, remoteStartCommand, resolveClaude, serverArgs, supervise, trimFailureNote, trimLog, watchdogTask, watchdogTaskXml,
 } from './remote.mjs';
 import { createReaper } from './process-tree.testkit.mjs';
@@ -1213,6 +1214,19 @@ test('readState gives the record of a supervisor, null for no file, and says why
     assert.equal(typeof readState(file).unreadable, 'string', text);
   }
   assert.equal(typeof readState(dir).unreadable, 'string', 'a folder where the file should be');
+});
+
+test('markStopped leaves the marker of a stop beside the state file, clearStopped removes it, and each says why it could not', () => {
+  const files = remoteFiles(tempDir(), 'proj-0123456789ab');
+  fs.mkdirSync(path.dirname(files.stoppedPath), { recursive: true });
+  assert.equal(clearStopped(files), undefined, 'no marker to remove is no failure');
+  assert.equal(markStopped(files), undefined);
+  assert.match(fs.readFileSync(files.stoppedPath, 'utf8'), /^stopped on purpose by js-harness remote stop at \d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z; the next js-harness remote start removes this file\n$/);
+  assert.equal(clearStopped(files), undefined);
+  assert.equal(fs.existsSync(files.stoppedPath), false);
+  fs.mkdirSync(files.stoppedPath);
+  assert.equal(typeof markStopped(files), 'string', 'a folder where the marker should be');
+  assert.equal(typeof clearStopped(files), 'string', 'a folder is not a marker to remove');
 });
 
 test('lookUpProcesses keeps the rows of the pids asked for, from one look', () => {

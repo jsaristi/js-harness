@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, rootRefusal, setupRefusal, readGitRoot, setupRefusalWithGit, markerContent, ownsFolder,
   realHomeFiles, contentHash, compareSnapshots, gateLogFolder, JOURNEY, ALWAYS_RUN, walkJourney, adoptionCommands, recordLine, parseArgs, HARNESS_HOOKS, hooksOfHost, hostHooksProblem,
-  pauseReplyLine, pauseHookInput, pauseHookProblem, TEMPLATE_SECTIONS, templateLinesProblem, OPENING_TOOLS, openingToolInput, openingToolsProblem, replyHookInput, replyHookProblem, uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout, hostEnv, redacted, HOST_STEP, secondInitProblem, uninstallExpected,
-  channelEnv, channelStepProblem, channelRecord, releasePracticeVerdict,
+  TEMPLATE_SECTIONS, templateLinesProblem, uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout, hostEnv, redacted, HOST_STEP, secondInitProblem, uninstallExpected,
+  releasePracticeVerdict,
 } from './practice-lib.mjs';
+import { OPENING_TOOLS, channelEnv, channelRecord, channelStepProblem, openingToolInput, openingToolsProblem, pauseHookInput, pauseHookProblem, pauseReplyLine, replyHookInput, replyHookProblem } from './practice-hook-checks.mjs';
 import { checkProjectRules } from '../bin/lib/project-rules.mjs';
 import { recordPath } from '../bin/lib/channel.mjs';
 import { entryComponents } from '../bin/lib/manifest.mjs';

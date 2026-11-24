@@ -75,11 +75,7 @@ const CEILINGS = {
   'evals/isolation-probe.mjs': 1681,
   'bin/lib/profiles-data.mjs': 1598,
   'bin/backup.mjs': 1299,
-  'bin/remote.mjs': 1118,
-  'scripts/practice-lib.mjs': 1174,
   'bin/resume.mjs': 1111,
-  'evals/suite.mjs': 1129,
-  'evals/codex-isolation-probe.mjs': 1021,
 };
 
 /** What `text`, the module at `file`, imports from a command: each `bin/<name>.mjs` its static and literal dynamic

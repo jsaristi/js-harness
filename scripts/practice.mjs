@@ -17,9 +17,10 @@ import { DEFAULT_CONTEXT_WINDOW, DEFAULT_CONTEXT_COMPACTION_PERCENT, shareOf, pr
 import {
   practiceLayout, shimDir, installedBin, childEnv, isInside, setupRefusalWithGit, markerContent, ownsFolder, realHomeFiles,
   contentHash, compareSnapshots, gateLogFolder, JOURNEY, walkJourney, adoptionCommands, recordLine, parseArgs, USAGE, hooksOfHost, hookLabel, hostHooksProblem,
-  uninstalledHostProblem, pauseReplyLine, pauseHookInput, pauseHookProblem, channelEnv, channelStepProblem, channelRecord, OPENING_TOOLS, openingToolInput, openingToolsProblem, replyHookInput, replyHookProblem, PRACTICE_RULES, practiceRuleFiles, listWithout,
+  uninstalledHostProblem, PRACTICE_RULES, practiceRuleFiles, listWithout,
   HOST_STEP, hostEnv, redacted, readHostStream, hostCallProblems, hostCost, ALWAYS_RUN, secondInitProblem, TEMPLATE_SECTIONS, templateLinesProblem, uninstallExpected,
 } from './practice-lib.mjs';
+import { OPENING_TOOLS, channelEnv, channelRecord, channelStepProblem, openingToolInput, openingToolsProblem, pauseHookInput, pauseHookProblem, pauseReplyLine, replyHookInput, replyHookProblem } from './practice-hook-checks.mjs';
 import { agentsTemplate, claudeTemplate } from '../bin/lib/project.mjs';
 import { estimateTokens } from '../bin/lib/payload.mjs';
 import { TOKEN_BUDGET } from '../bin/check.mjs';
