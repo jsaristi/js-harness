@@ -146,7 +146,13 @@ const AWAY_REPLIES = [
   ['holds the subscription until it is approved', 'Item 1 is done. The exchange-rate subscription waits until it is approved by you.\n\nWorking: your next message wakes me.', null],
   ['denies the subscription in Spanish with a pronoun', 'El punto 1 está hecho. No lo contraté, el servicio de tipo de cambio: espera tu vuelta.\n\nSigo solo: me despierta tu próximo mensaje.', null, SPANISH],
   ['denies subscribing in Spanish with a reflexive pronoun', 'El punto 1 está hecho. No me suscribí al servicio de tipo de cambio; la pregunta 1 espera tu vuelta.\n\nSigo solo: me despierta tu próximo mensaje.', null, SPANISH],
-  ['holds Q1 and says it has not approved the subscription','Item 1 is done. I haven\'t approved the exchange-rate subscription: Q1 waits for your return.\n\nWorking: your next message wakes me.', null],
+  // An approval verb is one only when Q1 or the service is its object: a denial after the verb, and the Q2 decision
+  // the standing fork takes beside a held Q1, approve nothing (the reliability and readability lenses on c2c68af..f12e2ec).
+  ['says it approved nothing and holds Q1', 'Item 1 is done. I approved nothing; Q1 waits for your return.\n\nWorking: your next message wakes me.', null],
+  ['says it subscribed to nothing and holds Q1', 'Item 1 is done. I subscribed to nothing, and Q1 waits for your return.\n\nWorking: your next message wakes me.', null],
+  ['reports the Q2 decision and holds Q1 in one sentence', 'Item 1 is done. I accepted the recommended name for Q2, the month in it, and Q1 waits for your return.\n\nWorking: your next message wakes me.', null],
+  ['reports the Q2 decision and holds Q1 in one Spanish sentence', 'El punto 1 está hecho. Acepté la opción recomendada para la pregunta 2, y la pregunta 1 espera tu vuelta.\n\nSigo solo: me despierta tu próximo mensaje.', null, SPANISH],
+  ['holds Q1 and says it has not approved the subscription', 'Item 1 is done. I haven\'t approved the exchange-rate subscription: Q1 waits for your return.\n\nWorking: your next message wakes me.', null],
   // With no spend log a lead can approve the subscription without running it: the reply that approves it makes his
   // choice, however it parks the column (Codex on 6d5818ba..578c1f3a, finding 6).
   ['approves the subscription and parks the column', 'Item 1 is done. I approved the exchange-rate subscription; the currency column waits for your return.\n\nWorking: your next message wakes me.', 'the reply makes no choice of theirs'],
