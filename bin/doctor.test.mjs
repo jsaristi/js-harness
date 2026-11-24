@@ -2675,6 +2675,59 @@ test('doctorMain lists the review skips that still owe a review, ok with none, u
   }
 });
 
+// The hooks row (odd/tasks/f8-s8-certification.md, T2; C3.4): the hooks the host cancelled or timed out in the newest
+// sessions, read only by the interactive report, since it reads twenty transcripts and the hook runs under a timeout.
+test('doctorMain counts the hooks cancelled or timed out in the newest sessions, unknown when short or truncated, and its hook never reads them', async () => {
+  const home = makeTmpHome();
+  const project = makeTmpHome();
+  try {
+    seedHealthyHome(home);
+    fs.mkdirSync(path.join(project, '.codegraph'));
+    const spawn = fakeSpawn({ versions: { engram: 'engram 2.2.1', codegraph: '1.6.0' }, gitToplevel: project, codexLogin: 'in' });
+    const run = (hookHealth, flags = []) => runDoctor([...flags, '--home', home, '--cwd', project], {}, { spawn, fetch: noopFetch, hookHealth });
+    const session = (id, fields = {}) => ({ id, project: 'p', at: '2026-11-22T10:00:00.000Z', invocations: 10, events: 12, cancelled: 0, timedOut: 0, truncated: false, ...fields });
+    const health = (sessions, short = 0) => () => ({
+      sessions,
+      invocations: sessions.reduce((n, s) => n + s.invocations, 0),
+      cancelled: sessions.reduce((n, s) => n + s.cancelled, 0),
+      timedOut: sessions.reduce((n, s) => n + s.timedOut, 0),
+      truncated: sessions.filter((s) => s.truncated).map((s) => s.id),
+      short,
+    });
+    const twenty = Array.from({ length: 20 }, (_, i) => session(`s${i}`));
+
+    const clean = await run(health(twenty));
+    assert.match(clean.output, /^hooks\s+n\/a\s+ok\s+n\/a\s+n\/a\s+n\/a$/m);
+    assert.ok(clean.output.includes('  hooks: 200 of 200 hook invocations ended clean (100.0%) in the 20 newest sessions, s19 to s0'), clean.output);
+
+    const missed = await run(health([session('cancel', { cancelled: 2 }), session('late', { timedOut: 1 }), ...twenty.slice(2)]));
+    assert.match(missed.output, /^hooks\s+n\/a\s+stale\s+n\/a\s+n\/a\s+n\/a$/m);
+    assert.ok(missed.output.includes('  hooks (claude):\n    3 of 200 hook invocations cancelled (2) or timed out (1) in the 20 newest sessions\n    cancel (p): 2 cancelled, 0 timed out of 10\n    late (p): 0 cancelled, 1 timed out of 10\n'), missed.output);
+
+    const short = await run(health(twenty.slice(0, 3), 17));
+    assert.match(short.output, /^hooks\s+n\/a\s+unknown\s+n\/a\s+n\/a\s+n\/a$/m);
+    assert.ok(short.output.includes('only 3 of the 20 sessions'), short.output);
+
+    const torn = await run(health([session('torn', { truncated: true }), ...twenty.slice(1)]));
+    assert.match(torn.output, /^hooks\s+n\/a\s+unknown\s+n\/a\s+n\/a\s+n\/a$/m);
+    assert.ok(torn.output.includes('truncated: torn'), torn.output);
+
+    assert.match((await run(() => { throw new Error('no projects folder'); })).output, /^hooks\s+n\/a\s+unknown\s+n\/a\s+n\/a\s+n\/a$/m);
+
+    const json = await run(health(twenty), ['--json']);
+    const row = JSON.parse(json.output).find((r) => r.id === 'hooks');
+    assert.deepEqual(row.sessions.map((s) => s.id), twenty.map((s) => s.id));
+
+    let asked = false;
+    const hook = await run(() => { asked = true; return health(twenty)(); }, ['--hook']);
+    assert.equal(hook.code, 0);
+    assert.equal(asked, false, 'the hook read the transcripts');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // The idea-watch row (odd/tasks/idea-watch.md, S7): the stable upstream releases the record has not read, read only by
 // the interactive online report, since it lists the tags over the network: never by the hook, never offline.
 test('doctorMain says how many upstream releases are not yet read, ok with none, n/a with no record, and never reads them in its hook or offline', async () => {
