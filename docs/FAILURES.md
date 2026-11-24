@@ -1322,6 +1322,8 @@ thread's name, so a listener was left alone as "not engram".
   `evals/ports.mjs:168-169` got `MainThread` for a Node child; whether the real engram binary is
   named right is not known. It can be reproduced only on Linux: a run there in which the probe
   names a Node listener and the engram binary by what they are would prove a fix
+- Control: check — evals/ports.test.mjs — "on Linux the name of a listener is the image its process runs, read from
+  /proc, not the name of its main thread" — since 2026-10-13
 
 ### live-board-read-off-project
 `sessions live` run from a folder that holds no project counted that folder's empty record and answered "0 rows wait
@@ -1588,6 +1590,11 @@ the test asked again, so a gate failed on a commit that touched no port code.
   "real allocations are distinct, bindable once released, and none is the real engram port" said
   "nothing holds it", actual true; 1 failure of 6692 tests, on the commit of the walk fix
   (`scripts/tui-walk.mjs`, `odd/tasks/release-095.md`)
+- Seen: 2026-11-22 — run 45074363392 of the gate on GitHub's machines (JH 299's own commit gate, branch
+  claude/jh299-platform-skips, which touched no port code) — the same test, "nothing holds it", on main's version of
+  it, before this control; the commit went through on its retry
+- Control: check — evals/ports.test.mjs — "a candidate something already accepts connections on is skipped when the
+  caller asks to probe it" — since 2026-11-22
 
 ### probe-end-hook-flake
 A gate failed on `evals/codex-isolation-probe.test.mjs` as a whole, with no test of it red, and the

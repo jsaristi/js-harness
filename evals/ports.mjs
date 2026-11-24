@@ -61,8 +61,11 @@ function bindFreePort() {
  * port. Allocated per trial, at trial start, by binding port 0 and releasing it: that is the one way to a
  * port that is free on this machine now, and the gap between the release and the server binding it is the
  * only race left. `reserved` keeps overlapping trials apart until `releasePort`, and `recent` keeps a trial
- * off the port one before it just gave back. `listen` returns a candidate and is injectable. */
-export async function allocatePort({ listen = bindFreePort, attempts = 20, reserved = RESERVED, recent = RECENT } = {}) {
+ * off the port one before it just gave back. `listen` returns a candidate and is injectable. `isPortListening`, when given
+ * (`isListening`), is asked of each candidate, and one it answers true for is skipped: another process took it in
+ * that gap (docs/FAILURES.md, ports-test-free-port-race). It is not the default, so a trial's allocation stays as
+ * it was, with no connect added. */
+export async function allocatePort({ listen = bindFreePort, attempts = 20, reserved = RESERVED, recent = RECENT, isPortListening = null } = {}) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const port = await listen();
     try {
@@ -70,6 +73,9 @@ export async function allocatePort({ listen = bindFreePort, attempts = 20, reser
     } catch {
       continue;
     }
+    if (reserved.has(port) || recent.includes(port)) continue;
+    if (isPortListening !== null && (await isPortListening(port))) continue;
+    // While the probe was pending, an allocation that overlaps may have reserved the port, or a release put it in recent.
     if (reserved.has(port) || recent.includes(port)) continue;
     reserved.add(port);
     return port;
