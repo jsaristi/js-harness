@@ -23,6 +23,7 @@ import {
   tagVersion,
   throwawayTags,
   upgradePmCommand,
+  upgradeProblem,
   versionProblem,
   EARLIER_CODEX_HOOKS,
   codexHooksOf,
@@ -134,6 +135,43 @@ test('stepsFor lists the steps of an install-only proof, and adds the project an
     'uninstall',
     'compare-home',
   ]);
+});
+
+// `upgrade` exits 1 by design when a stack tool is behind and no terminal consents (upgradeAll in bin/update.mjs), so
+// the proof failed at its upgrade step on any machine whose real codegraph or codex had a newer release, before the
+// harness was judged (S8's C4.1, its Result row in odd/tasks/f8-s8-certification.md).
+const NO_TERMINAL = 'js-harness stack upgrade runs nothing without a terminal: pass --yes with --tool <id> for each tool the person said yes to.\n';
+const UPGRADE = 'js-harness upgrade to 0.98.0';
+
+test('upgradeProblem passes an upgrade whose harness moved to the version and whose stack only waited for a terminal', () => {
+  assert.equal(upgradeProblem({ status: 0, stdout: 'upgraded to 0.98.0\n', stderr: '' }, '0.98.0', UPGRADE), null);
+  assert.equal(upgradeProblem({ status: 1, stdout: 'upgraded to 0.98.0\n', stderr: NO_TERMINAL }, '0.98.0', UPGRADE), null);
+});
+
+test('upgradeProblem fails an upgrade whose harness did not reach the version, or whose exit has another cause', () => {
+  assert.match(upgradeProblem({ status: 1, stdout: '', stderr: NO_TERMINAL }, '0.98.0', UPGRADE), /^js-harness upgrade to 0\.98\.0 exited 1/);
+  assert.match(upgradeProblem({ status: 1, stdout: 'upgraded to 0.97.1\n', stderr: NO_TERMINAL }, '0.98.0', UPGRADE), /exited 1/);
+  assert.match(upgradeProblem({ status: 1, stdout: 'upgraded to 0.98.0\n', stderr: 'codex: the update failed\n' }, '0.98.0', UPGRADE), /exited 1/);
+  assert.match(upgradeProblem({ status: 1, stdout: 'upgraded to 0.98.0\n', stderr: `codex: the update failed\n${NO_TERMINAL}` }, '0.98.0', UPGRADE), /exited 1/);
+  assert.match(upgradeProblem({ status: 2, stdout: 'upgraded to 0.98.0\n', stderr: NO_TERMINAL }, '0.98.0', UPGRADE), /exited 2/);
+  assert.match(upgradeProblem({ status: null, error: { code: 'ENOENT' } }, '0.98.0', UPGRADE), /exited ENOENT/);
+});
+
+// Codex on ecfa7967 (P2, release-proof-lib.mjs:113): pnpm on Windows can exit 1 in its cleanup after installing the
+// version, and upgrade then says so and goes on (upgradeMain in bin/update.mjs); a try it repeated says so too. Beside
+// the no-terminal line, those are no fault of the upgrade; any other line still is.
+test('upgradeProblem passes the upgrade\'s own notes of an install it went on from, beside the no-terminal line', () => {
+  const goingOn = 'pnpm exited 1, but the copy it installed answers 0.98.0: going on\n';
+  const tryAgain = 'upgrade: pnpm exited 1 and the copy is not 0.98.0 yet: trying again in 5 s (try 2 of 3)\n';
+  assert.equal(upgradeProblem({ status: 1, stdout: 'upgraded to 0.98.0\n', stderr: `${goingOn}${NO_TERMINAL}` }, '0.98.0', UPGRADE), null);
+  assert.equal(upgradeProblem({ status: 1, stdout: 'upgraded to 0.98.0\n', stderr: `${tryAgain}${goingOn}${NO_TERMINAL}` }, '0.98.0', UPGRADE), null);
+  assert.match(upgradeProblem({ status: 1, stdout: 'upgraded to 0.98.0\n', stderr: goingOn }, '0.98.0', UPGRADE), /exited 1/, 'a note alone is no stack that waited');
+  assert.match(upgradeProblem({ status: 1, stdout: 'upgraded to 0.98.0\n', stderr: `pnpm exited 1, but the copy it installed answers 0.97.1: going on\n${NO_TERMINAL}` }, '0.98.0', UPGRADE), /exited 1/, 'a note of another version');
+  // Codex on c7b664b4 (P2, release-proof-lib.mjs:117): the same cleanup can leave pnpm's bin lock, which upgrade
+  // removes and says so (clearPnpmLock in bin/update.mjs).
+  const lock = 'removed pnpm\'s bin lock C:\\pnpm\\bin\\.lock, left by this install\n';
+  assert.equal(upgradeProblem({ status: 1, stdout: 'upgraded to 0.98.0\n', stderr: `${lock}${goingOn}${NO_TERMINAL}` }, '0.98.0', UPGRADE), null);
+  assert.match(upgradeProblem({ status: 1, stdout: 'upgraded to 0.98.0\n', stderr: `pnpm's bin lock C:\\pnpm\\bin\\.lock, left by this install, stays: rmdir refused it (EPERM)\n${NO_TERMINAL}` }, '0.98.0', UPGRADE), /exited 1/, 'a lock that stays');
 });
 
 test('installProblem judges an install by the copy it left, as upgrade does: a copy of the version passes whatever the exit', () => {

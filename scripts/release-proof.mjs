@@ -28,6 +28,7 @@ import {
   tagVersion,
   throwawayTags,
   upgradePmCommand,
+  upgradeProblem,
   versionProblem,
 } from './release-proof-lib.mjs';
 
@@ -194,7 +195,10 @@ async function main() {
     },
     upgrade: () => {
       const pm = upgradePmCommand(opts.pm, { execPath: process.execPath, npmCli });
-      assertRun(js(copyOf(fromVersion), ['upgrade', '--home', home, '--repo', repo, '--pm', pm, '--prefix', prefix]), `js-harness upgrade to ${toVersion}`);
+      // The stack step's no-terminal exit is no failure of the harness's upgrade (upgradeProblem); check-to judges the copy.
+      const result = js(copyOf(fromVersion), ['upgrade', '--home', home, '--repo', repo, '--pm', pm, '--prefix', prefix]);
+      const upgradeFault = upgradeProblem(result, toVersion, `js-harness upgrade to ${toVersion}`);
+      assertThat(upgradeFault === null, upgradeFault && `${upgradeFault}: ${lastLines(`${result.stdout ?? ''}${result.stderr ?? ''}`)}`);
     },
     'check-to': () => checkInstalled(toVersion),
     'move-pin': () => {
