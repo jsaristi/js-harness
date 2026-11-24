@@ -652,8 +652,12 @@ export const COVERAGE = {
       "d3261928bbbc",
       "a440cb5134de",
       "0796f9f55a1d",
+      {
+        "hash": "ab7b7c27d7a0",
+        "context": "the skill's line for js-harness spend: what the command prints, why a sum over lines is wrong and that --self --line records the stop line the guard holds, facts of the command (bin/spend.test.mjs, bin/lib/spend-stop.test.mjs), no obligation"
+      },
       "3380c3e633c3",
-      "7b5e679cf345",
+      "e3d4df24b086",
       "bb7c472cb9cf",
       "38a703685b7a",
       "4eee354ceae4",

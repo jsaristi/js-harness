@@ -603,6 +603,13 @@ The temporary folder's copy is written only when the home cannot be; a read take
 - `told`: array of `{ at, tokens }`, each time the session was told (ISO time and the tokens it held).
 - `written`: ISO time of this write.
 
+### `channel/spend/<session>.json`
+
+A session's stop line in cache-read tokens, written by `js-harness spend --self --line` (`bin/lib/spend-stop.mjs` `recordStopLine`, one compact JSON line through a temp file and a rename) and read by `js-harness guard --hook` before each step (`spendStopRefusal`). A write that would raise the line is refused.
+
+- `line`: the stop line, a positive token count.
+- `setAt`: ISO time of this write.
+
 ### `channel/rules-seen/<session>.json`
 
 - `top`: the project's git top folder.

@@ -15,6 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { PRICE_SOURCE, listCost, usd } from './prices.mjs';
+import { TOKEN_COUNTS, UNREADABLE, requestFold } from '../bin/lib/transcript-requests.mjs';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -71,49 +72,7 @@ export function keepTranscripts({ projectsDir, dest }) {
 
 // ---- reading them --------------------------------------------------------------------------------------------------
 
-/** What Claude Code 2.1.292 writes as the model of an `assistant` line it made up itself, where the API gave no
- * answer (read in the installed binary: `model: "<synthetic>"` with a usage of its own; the probe session holds none).
- * No request was made, so it is no request here: counted, it would be a model without a price. */
-const SYNTHETIC_MODEL = '<synthetic>';
-
-const TOKEN_COUNTS = ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWrite5mTokens', 'cacheWrite1hTokens'];
-const isCount = (value) => Number.isInteger(value) && value >= 0;
-/** A cache count of the API's usage as a number. The API gives these as a number or `null`, and a usage may leave
- * one out: either way the request used none of that kind. */
-const tokens = (value) => (isCount(value) ? value : 0);
-/** What `requestOf` returns for an `assistant` line whose usage cannot be read. */
-const UNREADABLE = Symbol('unreadable');
-
-/** The request an `assistant` line stands for, `{ key, model, tokens, unsplit }`; `null` for a line that is none;
- * or `UNREADABLE` for one whose usage lacks its input or its output count, which every answer of the API has: priced
- * as 0 it would be a cost that looks measured, so it is counted with the lines that could not be read.
- * `key` is what the lines of one API message share: its id, else the id of the request, else nothing (`null`).
- *
- * A cache write is split by how long it lives, which is what its price depends on. A usage that names the total and
- * not the split has the rest counted as 5-minute writes, the cheaper kind, and in `unsplit`, so the summary says how
- * many tokens that assumption covers. */
-function requestOf(line) {
-  const message = line.message;
-  if (line.type !== 'assistant' || !isObject(message) || !isObject(message.usage) || message.model === SYNTHETIC_MODEL) return null;
-  const { usage } = message;
-  if (!isCount(usage.input_tokens) || !isCount(usage.output_tokens)) return UNREADABLE;
-  const split = isObject(usage.cache_creation) ? usage.cache_creation : {};
-  const cacheWrite1hTokens = tokens(split.ephemeral_1h_input_tokens);
-  const named5m = tokens(split.ephemeral_5m_input_tokens);
-  const unsplit = Math.max(0, tokens(usage.cache_creation_input_tokens) - named5m - cacheWrite1hTokens);
-  return {
-    key: typeof message.id === 'string' ? `message ${message.id}` : typeof line.requestId === 'string' ? `request ${line.requestId}` : null,
-    model: typeof message.model === 'string' && message.model !== '' ? message.model : 'unknown',
-    tokens: {
-      inputTokens: usage.input_tokens,
-      outputTokens: usage.output_tokens,
-      cacheReadTokens: tokens(usage.cache_read_input_tokens),
-      cacheWrite5mTokens: named5m + unsplit,
-      cacheWrite1hTokens,
-    },
-    unsplit,
-  };
-}
+// `requestOf` and `requestFold` live in bin/lib/transcript-requests.mjs, which `js-harness spend` reads with too.
 
 /** A running total of requests. `nanoUsd` is `null` once it holds a request of a model without a price: a cost that
  * left that request out would read as the whole. */
@@ -173,14 +132,13 @@ export function summarizeTranscripts(dir) {
     }
   }
 
-  const requests = new Map();
+  const fold = requestFold();
   const agents = new Map();
   const agentOf = (agentId) => {
     if (!agents.has(agentId)) agents.set(agentId, { agentId, efforts: [], first: null, last: null });
     return agents.get(agentId);
   };
   let unreadableLines = 0;
-  let unkeyed = 0;
   for (const file of files.filter((name) => name.endsWith('.jsonl'))) {
     const fileAgent = /^agent-(.+)\.jsonl$/.exec(path.basename(file))?.[1] ?? null;
     // A subagent that was stopped before it wrote a line was spawned all the same.
@@ -202,21 +160,13 @@ export function summarizeTranscripts(dir) {
         if (agent.first === null || at < agent.first.at) agent.first = { at, text: line.timestamp };
         if (agent.last === null || at > agent.last.at) agent.last = { at, text: line.timestamp };
       }
-      const request = requestOf(line);
+      const request = fold.add(line, { agent });
       if (request === null) continue;
       if (request === UNREADABLE) {
         unreadableLines += 1;
         continue;
       }
       if (agent !== null && typeof line.effort === 'string' && !agent.efforts.includes(line.effort)) agent.efforts.push(line.effort);
-      const key = request.key ?? `line ${unkeyed++}`;
-      const earlier = requests.get(key);
-      if (earlier === undefined) {
-        requests.set(key, { ...request, agent });
-      } else {
-        for (const name of TOKEN_COUNTS) earlier.tokens[name] = Math.max(earlier.tokens[name], request.tokens[name]);
-        earlier.unsplit = Math.max(earlier.unsplit, request.unsplit);
-      }
     }
   }
 
@@ -226,7 +176,7 @@ export function summarizeTranscripts(dir) {
   const perAgent = new Map([...agents.values()].map((agent) => [agent, { tally: emptyTally(), models: [] }]));
   const unpricedModels = [];
   let unsplitCacheWriteTokens = 0;
-  for (const request of requests.values()) {
+  for (const request of fold.requests.values()) {
     request.cost = listCost(request.model, request.tokens);
     if (request.cost === null && !unpricedModels.includes(request.model)) unpricedModels.push(request.model);
     unsplitCacheWriteTokens += request.unsplit;

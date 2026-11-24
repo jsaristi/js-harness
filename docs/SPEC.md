@@ -219,7 +219,7 @@ family by folder and child names; the fields of each are in `docs/RECORDS.md`, a
 | Test traces | `<git common dir>/js-harness/traces/<place>/<test>/<key>.json` | `bin/check.mjs` `tracesDir`; `bin/lib/trace-reads.cjs` `writeTrace` | `check`, `gate` |
 | Codex review homes | `~/.js-harness/codex-review-homes/` | `bin/lib/codex-review-home.mjs` `createLeanHome` | `codex-review` (`--keep-home`) |
 | The channel | `~/.js-harness/channel/<project>.jsonl`; a session's opening in `channel/openings/<project>/`; the lead's relief file in `~/.js-harness/relief/<project>.md` | `bin/lib/channel.mjs` `appendNotice` `writeOpening` `appendRelief` | `wait`, `sessions`, `report`, `sessions live`, `resume` |
-| A session's pause and reach | `~/.js-harness/channel/pause/<session>.json`, its copy `js-harness-pause-<session>.json` in the temporary folder; `channel/rules-seen/<session>.json`; `channel/inbox/<session>.json` | `bin/lib/pause.mjs` `pauseNotice`; `bin/lib/rules-reach.mjs` `reachHook`; `bin/lib/inbox.mjs` `inboxNotice` | the hooks that wrote them, once a session |
+| A session's pause and reach | `~/.js-harness/channel/pause/<session>.json`, its copy `js-harness-pause-<session>.json` in the temporary folder; `channel/rules-seen/<session>.json`; `channel/inbox/<session>.json`; `channel/spend/<session>.json` | `bin/lib/pause.mjs` `pauseNotice`; `bin/lib/rules-reach.mjs` `reachHook`; `bin/lib/inbox.mjs` `inboxNotice`; `bin/lib/spend-stop.mjs` `recordStopLine` | the hooks that wrote them, once a session |
 | The live board's cursor | `~/.js-harness/channel/live/<project>.json`; `board-checked.json` in the folder that `sessions live` is given with `--out` | `bin/sessions-live.mjs` `sessionsLiveMain`; `bin/lib/live-rows.mjs` `liveCursorPath` | `sessions live` |
 | The permit relay | `~/.js-harness/channel/permits/<project>/`: `lease.json`, `log.jsonl`, `requests/<id>.json`, `verdicts/<id>.json` | `bin/permit.mjs` `permitMain` | `permit`, the lead |
 | Background sessions | `~/.js-harness/background/`: `sessions.jsonl`, `briefs/`, `stranded/<id>.json`; `~/.js-harness/kept/<id>-<time>/kept.json` | `bin/lib/background.mjs` `appendRecord` `strandEntry`; `bin/sessions-background.mjs` `sessionsStartMain`; `bin/lib/background-close.mjs` `closeFinished` `keepUnkept` | `sessions`, `sessions stop`, `merge-queue --land`, `doctor`, `uninstall` |
@@ -813,6 +813,24 @@ check or an eval case ("After F8", directive coverage).
 **Proof:** `node --test bin/quiet.test.mjs`
 **Discarded:** Sending the notification from the command: the push notification is a tool of the host, which no command can call. Counting a waiting session as work: it never ends on its own, and the wait would never settle while it waits for him.
 **Today:** `bin/quiet.mjs`, `bin/lib/quiet.mjs`, `bin/lib/process-list.mjs`, `js-harness quiet`
+
+### A session reads one true figure of what it spent
+
+**Problem:** A session given a cap in cache-read tokens read its spend by summing the transcript's lines, and one API message is written on several lines that each repeat its usage: the 17 sessions measured on 2026-11-21 read 1.68 to 2.70 times what they spent, and three stopped at half the cap they were given (his words of 2026-11-22: "solucionemos todos esos errores y dime cuanto nos podemos ahorrar").
+**Requirement:** `js-harness spend` reads one session's transcript, by its path, its id or `--self`, and prints the main chain's calls, cache-read, input, output and cache-write tokens, the context of its last call and of its first, and its sub-agents apart, with the lines of one API message counted as one call.
+**Reason:** The eval cost already folded lines into requests by message id; the reader moved to `bin/lib` so the command and the eval read a session the same way, and a figure that disagrees with the eval's would be a third count.
+**Proof:** `node --test bin/spend.test.mjs bin/lib/transcript-requests.test.mjs`
+**Discarded:** The app's usage tool: a command or a hook cannot call it, and it is not on every host. A second parser in `bin/`: two readers of one transcript drift.
+**Today:** `bin/spend.mjs`, `bin/lib/transcript-requests.mjs`, `js-harness spend`
+
+### A session stops at its spend line
+
+**Problem:** A session given a stop line in its brief had to remember it and read its own figure before each step; tonight's sessions ran to their caps or stopped at half of them (the measure of 2026-11-21; his words of 2026-11-22: "incluye primero que todo las mejoras para que nos nos vuelva a fallar").
+**Requirement:** `js-harness spend --self --line <tokens>` records the line once for the session the host names, beside its pause state; it can be lowered, never raised. `js-harness guard --hook` refuses the session's next step once its cache-read, main chain and sub-agents, reaches the line, with one line naming the figure, the line and "write your state and stop"; a Read, Write or Edit of a `.md` file, a lone `js-harness notify` and a lone `js-harness loop stop` still pass, and still meet the guard's other checks. A session with no line reads nothing; a transcript that cannot be read lets the call run.
+**Reason:** The hook is where every step already passes, and the record is outside the conversation, so neither a compaction nor a forgetful session loses it.
+**Proof:** `node --test bin/lib/spend-stop.test.mjs bin/spend.test.mjs bin/guard.test.mjs`
+**Discarded:** A rule value for the line: the line is per session, from its brief. A cache of the running sum: the whole transcript of a session at a 20M line sums in about 60 ms.
+**Today:** `bin/lib/spend-stop.mjs`, `bin/spend.mjs`, `bin/guard.mjs`, `js-harness spend`, `js-harness guard`
 
 ### The board above the message box
 
