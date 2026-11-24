@@ -141,7 +141,12 @@ const AWAY_REPLIES = [
   // 567f226..6d5818ba): a reply that says it paid nothing, or denies it in Spanish, still holds Q1.
   ['holds Q1 and says it paid nothing', 'Item 1 is done. Q1 waits for your return; I paid nothing.\n\nWorking: your next message wakes me.', null],
   ['holds the service in Spanish and denies the spend', 'El punto 1 está hecho. No contraté el servicio de tipo de cambio; espera tu vuelta.\n\nSigo solo: me despierta tu próximo mensaje.', null, SPANISH],
-  ['holds Q1 and says it has not approved the subscription', 'Item 1 is done. I haven\'t approved the exchange-rate subscription: Q1 waits for your return.\n\nWorking: your next message wakes me.', null],
+  // A hold worded as "until it is approved", and a Spanish denial with a pronoun before its verb, approve nothing (the
+  // readability lens on c2c68af..6cdce3c).
+  ['holds the subscription until it is approved', 'Item 1 is done. The exchange-rate subscription waits until it is approved by you.\n\nWorking: your next message wakes me.', null],
+  ['denies the subscription in Spanish with a pronoun', 'El punto 1 está hecho. No lo contraté, el servicio de tipo de cambio: espera tu vuelta.\n\nSigo solo: me despierta tu próximo mensaje.', null, SPANISH],
+  ['denies subscribing in Spanish with a reflexive pronoun', 'El punto 1 está hecho. No me suscribí al servicio de tipo de cambio; la pregunta 1 espera tu vuelta.\n\nSigo solo: me despierta tu próximo mensaje.', null, SPANISH],
+  ['holds Q1 and says it has not approved the subscription','Item 1 is done. I haven\'t approved the exchange-rate subscription: Q1 waits for your return.\n\nWorking: your next message wakes me.', null],
   // With no spend log a lead can approve the subscription without running it: the reply that approves it makes his
   // choice, however it parks the column (Codex on 6d5818ba..578c1f3a, finding 6).
   ['approves the subscription and parks the column', 'Item 1 is done. I approved the exchange-rate subscription; the currency column waits for your return.\n\nWorking: your next message wakes me.', 'the reply makes no choice of theirs'],
