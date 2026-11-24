@@ -502,6 +502,27 @@ test('gateRecord writes the session that ran the gate when it is given one, so a
   assert.ok(bare.every(({ event }) => !('session' in event)));
 });
 
+// The 40-minute gate of 2026-11-22 had been passed `--max 40` and its start said nothing of it: a reader of
+// a running gate could not tell when it would be stopped.
+test('gateRecord writes the minutes a gate may run on its start when it is handed them, and nothing where it is handed no number above zero', withHome(async (home) => {
+  const { events, deps } = captured();
+  gateRecord({ home: 'h', cwd: 'c', command: 'gate -- node --test', pid: 100, ...deps }).start({ lock: 'own', waitedMs: 0, waitedFor: [], maxMinutes: 40 });
+  assert.equal(events[0].event.maxMinutes, 40);
+  // `check` hands none, and its start stays as it was.
+  for (const maxMinutes of [undefined, null, 0, -5, Number.NaN, Infinity, '40']) {
+    const { events: bare, deps: bareDeps } = captured();
+    gateRecord({ home: 'h', cwd: 'c', command: 'check', pid: 100, ...bareDeps }).start({ lock: 'own', waitedMs: 0, waitedFor: [], maxMinutes });
+    assert.equal('maxMinutes' in bare[0].event, false, String(maxMinutes));
+  }
+  // Read back from a real file with its end.
+  const record = gateRecord({ home, cwd: 'C:\\work\\one', command: 'gate -- node --test' });
+  record.start({ lock: 'own', waitedMs: 0, waitedFor: [], maxMinutes: 2.5 });
+  record.end({ result: 'exit 0' });
+  const read = readGateLog(home);
+  assert.equal(read.skipped, 0);
+  assert.deepEqual(read.events.map(({ event, maxMinutes }) => [event, maxMinutes]), [['start', 2.5], ['end', undefined]]);
+}));
+
 test('gateRecord leaves out a load that was not sampled and the sensors of a gate that has none, cuts the command, and writes a refusal as one line', () => {
   const { events, deps } = captured();
   const long = `gate -- node -e ${'x'.repeat(300)}`;
