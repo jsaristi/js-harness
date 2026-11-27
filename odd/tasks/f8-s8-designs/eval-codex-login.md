@@ -69,3 +69,11 @@ con su prueba y sus dos revisiones".
 - L3 (2026-11-22, the lead to JH 301): "The login page's two free code reads, as you suggest, read-only, folded into
   that page". Done under "The two reads": the first refutes C as written (a fixture `harness.json` stops `init`
   writing the arm's project layer), so the recommendation becomes C', the switch written after `init`.
+- L4 (2026-11-22, the lead to JH 302, as written): "the C' build as a draft (odd/tasks/f8-s8-designs/eval-codex-login.md,
+  "Recommendation: C'"): the long session's current arm writes "functions": {"codexReview": "off"} into the harness.json
+  init wrote, before the first turn; test first, lenses, Codex skip recorded; nothing paid, no eval run." Built as
+  `codexReviewOff` in `evals/long-session/run.mjs`, in a draft pull request; his yes and the priced run that reads the
+  release turn for a lens-review hold are both still owed. Read after (the lead's unit of 22:07): the fixture's first commit,
+  which holds no `harness.json`, never counts as made with the review on, since the trial workspace has no remote
+  (`evals/configs.mjs:189-207`) and `madeWithReviewOn` returns null on a range it cannot read
+  (`bin/lib/codex-review-rows.mjs:44-50`, `:297`) [c].
