@@ -10,7 +10,7 @@ context. It does not repeat what the documents below say; it points to them.
 js-harness is a small, zero-dependency Node package that sets up Claude Desktop's Code tab, with Codex as
 its reviewer, on top of a stack it does not rebuild (engram, codegraph, `/goal`). Its bet, that a stronger
 model needs a smaller harness, and how the repository works are in `AGENTS.md`, which every session loads.
-How sessions work with the owner is in `CLAUDE.md`. The map is `docs/SPEC.md`: one entry per capability,
+How sessions work with the owner is in `CLAUDE.md`, which imports `AGENTS.md`. The map is `docs/SPEC.md`: one entry per capability,
 each with its problem, requirement, reason, proof, what was discarded and the files that hold it today,
 then the architecture as it stands. The plan, with what is decided, done and open, is `docs/ROADMAP.md`;
 the reasoning it came from is `docs/origin.md`, frozen. Each piece of work has a feature document under
