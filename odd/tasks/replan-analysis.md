@@ -189,7 +189,7 @@ instructions and many sensors, every component earning its place by measurement.
 
 ### A7. Who the harness has served
 - Claude transcripts since 2026-09-26 (`~/.claude/projects/`): js-harness and its worktrees 230 transcripts, 1,675 MB;
-  abogadaclaudiajimenez 13, 46 MB; plataforma-preproyecto 1, 2 MB. By bytes 97% went to the harness, by count 94%.
+  client-project 13, 46 MB; plataforma-preproyecto 1, 2 MB. By bytes 97% went to the harness, by count 94%.
 - His two projects were moved to js-harness on 2026-10-30 (S12, question 112, "Ambos proyectos"), with the changes
   left uncommitted there and two items owed (`docs/ROADMAP.md:568-574`). No feature has yet been built in either
   with the harness; the onboarding design is open (`docs/ROADMAP.md`, Onboarding).
@@ -283,7 +283,7 @@ change. Every step below that changes one of his decisions is his.
    not stop a fix of shipped behaviour or an F8 step. No means things go on as today. His time: one answer. Done
    when: the rule is recorded (`js-harness rules <id>` exits 0) and `progress --pace` over the next 7 days shows
    closed at or above added.
-2. **His choice of the real feature.** Which project (abogadaclaudiajimenez or plataforma-preproyecto) and which
+2. **His choice of the real feature.** Which project (client-project or plataforma-preproyecto) and which
    feature, small enough for one session. His time: one answer and a review of the result. Cost: one session
    (estimate). Done when: the feature is merged in his project with both reviews recorded, and the session's notes
    name what the harness helped or got in the way of.

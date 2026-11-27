@@ -41,7 +41,7 @@ user message). The brief's items, quoted, are S1-S3 of `odd/tasks/claude-md-bloc
 ## Left
 - Untested: an ignored file and a UTF-16 file through `init` (only `withImport`'s `null` is), L5.
 - Not this session's: the owed tests of S12's L16 and L17; the session probe in his two projects (S12's L23).
-- His projects were not touched; `D:\abogadaclaudiajimenez` keeps the hand-added line of S12's L22.
+- His projects were not touched; `D:\client-project` keeps the hand-added line of S12's L22.
 
 ## Cost
 - Time: brief at 10:39Z, this summary at about 11:30Z; context share not read at the end.

@@ -74,7 +74,7 @@ gentle-ai only after his listed projects moved. The roadmap's order puts S12 aft
   the range; PRs, ready notices, summary — L9-L18; PRs 689, 693-696
 - [x] T7 (kind: verify) move `D:\plataforma-preproyecto`: `migrate --check`, then `migrate`, `doctor` inside it —
   his decision of question 112; L19, L20; branch `f8-s12-moves`
-- [x] T8 (kind: verify) move `D:\abogadaclaudiajimenez`: `init`, `migrate --check`, the import line, `doctor`
+- [x] T8 (kind: verify) move `D:\client-project`: `init`, `migrate --check`, the import line, `doctor`
   inside it — his decision of question 112; L19, L21-L23
 
 ## Decisions
@@ -145,7 +145,7 @@ owed tests of L16 and L17.
   all, his Max plan) found one defect, the same in each: the undo reversed its list in place, then named a step it
   could not take back by comparing it with the list's first item, so the message named the other file.
 - L10 (2026-10-30, T4, read-only): `migrate list` on his machine lists one initialized project,
-  `D:\plataforma-preproyecto` (pin 0.97.0, newest session 6 days ago), and, not initialized, `D:\abogadaclaudiajimenez`
+  `D:\plataforma-preproyecto` (pin 0.97.0, newest session 6 days ago), and, not initialized, `D:\client-project`
   (2 days), `D:\harness` (8 days, a read-only reference), `D:\js-harness` (0 days) and a job's scratch folder. It
   also listed six folders under `D:\js-harness\.claude\worktrees\` as their own: they are no longer linked worktrees
   (`git rev-parse --git-dir` equals the common dir), so git reads them as folders of the main checkout; the scan now
@@ -219,7 +219,7 @@ owed tests of L16 and L17.
   held its record's range; reviewing each cut again would have cost about 600,000 tokens for code already reviewed.
   The chain: 689 the document; 693 the scans, plan, writes and command; 694 D; 695 E; 696 this branch.
 - L19 (2026-10-30 10:05Z, his decision, question 112, transcript `0f71b2c6-cbce-43ca-a031-276a4b2c381f` line 28102):
-  "Ambos proyectos". The list, frozen: `D:\plataforma-preproyecto` and `D:\abogadaclaudiajimenez` move;
+  "Ambos proyectos". The list, frozen: `D:\plataforma-preproyecto` and `D:\client-project` move;
   `D:\harness` stays, a read-only reference; `D:\js-harness` and the job's scratch folder do not move (L10). The
   installed copy (`js-harness --version` 0.97.0, main at `297efbcd`) ran every command below; nothing was committed,
   stashed or reset in either project.
@@ -240,37 +240,37 @@ owed tests of L16 and L17.
   from `.git/info/exclude` and the keys `outputStyle` and `permissions` from `.claude/settings.local.json`, and the
   `coverage` key and the `CLAUDE.md` entry from `.git/js-harness/manifest.json`; or `js-harness uninstall project`
   inside it, which undoes init and the move together, each write recorded.
-- L21 (2026-10-30, `D:\abogadaclaudiajimenez`, branch `main` at `22e25d2`, even with `origin/main`). Before: `git
+- L21 (2026-10-30, `D:\client-project`, branch `main` at `22e25d2`, even with `origin/main`). Before: `git
   status --short` held only `?? .codegraph/` and `?? graphify-out/`; no `AGENTS.md`, `harness.json`,
   `docs/FAILURES.md`, `.git/js-harness/` or git hooks; `CLAUDE.md` (214 lines), `.atl/` and
   `.claude/settings.local.json` tracked. `init` has no dry form: its plan was read in `bin/init.mjs:120-170` and
   `bin/lib/project.mjs:795-830` (an own `CLAUDE.md` is kept and `AGENTS.md` gets the whole block); nothing it writes
-  existed. `js-harness init --cwd D:/abogadaclaudiajimenez`, exit 0: wrote `harness.json`, kept `CLAUDE.md`
+  existed. `js-harness init --cwd D:/client-project`, exit 0: wrote `harness.json`, kept `CLAUDE.md`
   (exists), wrote `AGENTS.md`, `docs/FAILURES.md`, `.git/hooks/pre-commit`, `.git/hooks/pre-push`; "codegraph init
   skipped: .codegraph already exists"; wrote `.claude/settings.local.json`'s `outputStyle`, `permissions/deny` and
   `env/CODEGRAPH_NO_PROMPT_HOOK`; excluded `.atl/` in `.git/info/exclude`; manifest format 3 with the baseline
-  2026-10-30. `js-harness migrate --check --cwd D:/abogadaclaudiajimenez`, exit 1: "commit first: AGENTS.md", a note
+  2026-10-30. `js-harness migrate --check --cwd D:/client-project`, exit 1: "commit first: AGENTS.md", a note
   that `CLAUDE.md` "does not import AGENTS.md, so Claude never loads it: add a line `@AGENTS.md`", and `.atl/` tracked
   ("git rm -r .atl once gentle-ai is gone"); nothing else to write. `js-harness doctor` inside it, exit 0, with
   `claude-import` missing; also his, outside the project: `typescript-lsp` missing in claude, `codex` outdated,
   `memory-rules` stale (four notes of this project's memory), `codex-trust` missing, `host-update` outdated.
   Undo, exact: `js-harness uninstall project` inside it (each write recorded in `.git/js-harness/manifest.json`); by
-  hand, `git -C D:/abogadaclaudiajimenez checkout -- .claude/settings.local.json`, delete `harness.json`,
+  hand, `git -C D:/client-project checkout -- .claude/settings.local.json`, delete `harness.json`,
   `AGENTS.md`, `docs/FAILURES.md`, `.git/hooks/pre-commit`, `.git/hooks/pre-push` and `.git/js-harness/`, and remove
   the line `.atl/` from `.git/info/exclude`.
 - L22 (2026-10-30 ~10:20Z, the lead's answer to this session's `waiting` notice): "yes, add the @AGENTS.md line at
-  the top of D:/abogadaclaudiajimenez/CLAUDE.md, uncommitted, with its undo (git checkout -- CLAUDE.md) in the log;
+  the top of D:/client-project/CLAUDE.md, uncommitted, with its undo (git checkout -- CLAUDE.md) in the log;
   it is part of the move he chose (Q112 "Ambos proyectos"). Record as a finding that init keeps an own CLAUDE.md
   without the import, so doctor's claude-import row is red after init: a follow-up, not yours to fix." Done: the
   lines `@AGENTS.md` and an empty one prepended, CRLF as the file is (`git diff --stat -- CLAUDE.md`: 2 insertions),
   left uncommitted. `js-harness doctor` inside it, exit 0, `claude-import` ok, `context7` ok in claude, codex and
   project, `codegraph` ok. `migrate --check`, exit 1, asks only to commit `AGENTS.md` first and names `.atl/`
-  tracked. Undo of this line: `git -C D:/abogadaclaudiajimenez checkout -- CLAUDE.md`.
+  tracked. Undo of this line: `git -C D:/client-project checkout -- CLAUDE.md`.
   Finding, owed, not this session's: `init` keeps a project's own `CLAUDE.md` that does not import `AGENTS.md` and
   writes the whole block into `AGENTS.md` (`bin/lib/project.mjs:808-830`), so doctor's `claude-import` row is red
   right after `init` and Claude loads none of the harness's lines until the import is added by hand.
 - L23 (2026-10-30): both projects pass: doctor exit 0 inside each with `claude-import` ok. Left for him in his
-  projects, uncommitted: in `D:\plataforma-preproyecto` `AGENTS.md` and `CLAUDE.md`; in `D:\abogadaclaudiajimenez`
+  projects, uncommitted: in `D:\plataforma-preproyecto` `AGENTS.md` and `CLAUDE.md`; in `D:\client-project`
   `CLAUDE.md`, `.claude/settings.local.json`, `AGENTS.md`, `harness.json` and `docs/FAILURES.md`. Not checked here:
   a new session in each project showing its `CLAUDE.md`, the style and context7 (the roadmap's probe), which needs a
   session started there. Context7's OAuth in Codex stays open (S8): never started.

@@ -10,7 +10,7 @@ read it, and `init` on a project with its own `CLAUDE.md` leaves doctor's `claud
 ## Why
 S12 found both while moving his two projects (`odd/tasks/f8-s12-migration.md`, L13 and L22): through a `CLAUDE.md`
 linked to `AGENTS.md`, sync renders `AGENTS.md` with the reviewer's half alone, so Claude loses its half; and `init`
-kept `D:\abogadaclaudiajimenez`'s own `CLAUDE.md` without the import, so Claude loaded none of the harness's lines
+kept `D:\client-project`'s own `CLAUDE.md` without the import, so Claude loaded none of the harness's lines
 until `@AGENTS.md` was prepended by hand.
 
 ## Done when

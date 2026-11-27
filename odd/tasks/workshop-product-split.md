@@ -87,7 +87,7 @@ review (T6) finds.
   - The import graph of `bin/`, static and literal dynamic imports, read by a scratch script
     (`<scratchpad>/tools/closure.mjs` and `cut.mjs`, not in the repository). Every module of the seven workshop
     commands is reached from product commands today, through the 14 import sites of table B.
-  - His other two projects: `D:\abogadaclaudiajimenez` (13 transcripts) and `D:\plataforma-preproyecto`. Their
+  - His other two projects: `D:\client-project` (13 transcripts) and `D:\plataforma-preproyecto`. Their
     transcripts name `onboard`, `notify`, `init`, `reply`, `sessions`, `doctor`, `check`, `stretch`, `report`,
     `functions`, `summary`, `rules`, `memory`, `failures`, `backup`, `guard`, `resume`, `clean`, `sync`, `stack`,
     `install` and `uninstall`. Their channel records (`~/.js-harness/channel/D--plataforma-preproyecto.jsonl`, 10
@@ -390,7 +390,7 @@ The bar, three measures, each taken before the first cut and after each one:
 
 Measured 2026-11-05, read only (scratch scripts `<scratchpad>/tools/fl.mjs`, `hooks.mjs`, `time-hooks.mjs` and
 `proj-tokens.mjs`, not in the repository):
-| Measure | `D:\plataforma-preproyecto` | `D:\abogadaclaudiajimenez` | fresh project, scratch home |
+| Measure | `D:\plataforma-preproyecto` | `D:\client-project` | fresh project, scratch home |
 |---|---|---|---|
 | Project `CLAUDE.md` / `AGENTS.md` | 418 / 647 | 3,017 / 666 | 419 / 312 |
 | His home `CLAUDE.md` (shared by both) | 1,583, its js-harness Rules block lines 7-40 | the same | Rules block 1,333 |
@@ -583,7 +583,7 @@ The slices:
    on another machine. His words (L6): "Necesito que sea mucho mas facil se instalar".
 7. The product's diet, built together with the split: fixed tokens a turn, hook registrations and their running
    cost, and skill bodies, each measured before and after in `D:\plataforma-preproyecto` and
-   `D:\abogadaclaudiajimenez`; each cut moved, never deleted, and undoable. His answer to question 190 (L11):
+   `D:\client-project`; each cut moved, never deleted, and undoable. His answer to question 190 (L11):
    "Separar y aligerar juntos".
 
 ## Tasks

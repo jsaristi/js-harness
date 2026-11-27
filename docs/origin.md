@@ -65,7 +65,7 @@ Limits of this measurement:
 - The single largest item on Claude is a claude.ai connector (Magnific) that no part of the stack
   uses. Disconnecting it is an account setting — Sebastián's call; F2 re-measures after.
 
-Safeguard: `harness-lab` pushed to `origin/codex/consumer-recovery`; `abogadaclaudiajimenez` pushed
+Safeguard: `harness-lab` pushed to `origin/codex/consumer-recovery`; `client-project` pushed
 to `origin/wip/harness-v2-f0-safeguard` — **not `main`, because `main` deploys to production** —
 and its local checkout was left on that branch. Its `.codegraph/` index stays local and untracked.
 
@@ -82,7 +82,7 @@ and its local checkout was left on that branch. Its `.codegraph/` index stays lo
 
 | Phase | Goal | Done when | Effort |
 |-------|------|-----------|--------|
-| **F0 Safeguard and baseline** | Lose nothing; know the starting point | `harness-lab` (162 uncommitted files) and `abogadaclaudiajimenez` (27) committed and pushed; per-turn payload measured on Claude **and** Codex; the three old folders marked read-only reference | medium |
+| **F0 Safeguard and baseline** | Lose nothing; know the starting point | `harness-lab` (162 uncommitted files) and `client-project` (27) committed and pushed; per-turn payload measured on Claude **and** Codex; the three old folders marked read-only reference | medium |
 | **F1 Skeleton** | New minimal repo | `AGENTS.md` ≤ ~1.5k tokens written with the prompt audit applied; a dependency-free `check` command; pre-commit wired | high |
 | **F2 Context diet** | Shrink what loads each turn | Budget gate measures the full payload (global CLAUDE.md + hooks + AGENTS.md); codegraph prompt hook measured with/without; gentle-ai v4 adopted when released; block exclusion via #4036 if it ships | medium |
 | **F3 Task contract** | The loop with a stop condition | Template below + a validator that rejects a contract without a done-when command + fit with the ODD feature doc + `/goal` | high |

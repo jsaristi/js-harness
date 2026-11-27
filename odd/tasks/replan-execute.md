@@ -146,9 +146,9 @@ Today's line (`node bin/js-harness.mjs progress --pace`, 2026-11-01): "Last 7 da
 - L4 2026-11-01 — JH 128's branch (a179007a, documents only, no pull request) merged into this one, so the roadmap's
   record points at an analysis that lands with it.
 - L5 2026-11-01 13:57 local — question 151 recorded for the lead: which project for the outside outcome,
-  abogadaclaudiajimenez (recommended: it has code, `astro build` and `astro check`, and a list in `docs/roadmap.md`),
+  client-project (recommended: it has code, `astro build` and `astro check`, and a list in `docs/roadmap.md`),
   plataforma-preproyecto (documents of onboarding only, no commit since 2026-10-22), or not yet. Its text says a merge
-  to abogadaclaudiajimenez's `main` deploys the site, so the merge stays his. Its roadmap is stale: items 3 and 6 are
+  to client-project's `main` deploys the site, so the merge stays his. Its roadmap is stale: items 3 and 6 are
   done in the code (`src/styles/global.css:117-129`, `src/pages/404.astro`), so the feature's options are read from
   the code, not the list.
 - L6 2026-11-01 — the double review (`rule:double-review`), two blind Claude readers on 234f0f75. The claims reader,
