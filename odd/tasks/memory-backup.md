@@ -264,7 +264,7 @@ host, unverified for Codex; the second fallback is a scheduled task (`schtasks`)
 
 Open after round 1, not settled by this session:
 - A-open-1 (his): `engram export --all` holds every project's memories, among them his client
-  project (reader B: 490 observations of `abogadaclaudiajimenez`, and a 21 KB Claude memory
+  project (reader B: 490 observations of `client-project`, and a 21 KB Claude memory
   folder). The lead's brief says "every project"; whether a client's matters go to GitHub, even
   private, is his. Asked of the lead before T2 pushes anything. The lead, by message: "Until then
   push nothing that holds another project's memories; keep building, and make the scope one
@@ -453,7 +453,7 @@ another scope say nothing about a wipe, and the manifest records the scope. His 
   - gentle-ai: 4fb74595 assessed medium at its own head (base f8518ae6), not due: under_budget.
 - L19 2026-10-19. Sebastián's answers, through the lead: Pregunta 20 "Todos los proyectos
   (Recommended)": every project goes to jsaristi/js-harness-memory, secrets blanked,
-  abogadaclaudiajimenez included; set as `"scope": "all"` in config.json (init keeps it).
+  client-project included; set as `"scope": "all"` in config.json (init keeps it).
   Pregunta 22 "Publicarlo (Recommended)": init --summary-repo D:/js-harness, run, verify
   --summary. The lead added: "Do the summary's commit to the public repo through a branch and PR,
   never a direct push to main; I land it with merge-queue", and not to touch package.json. The

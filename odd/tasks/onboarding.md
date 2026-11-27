@@ -1383,7 +1383,7 @@ ceiling.
   does (`bin/lib/refresh-copy.mjs:284`, `:303`, `:319`, `:322`: settings backup, `pnpm add -g` by sha, `install`,
   `doctor`), the one way that runs the binary, hooks and both hosts' skills 0.98.0 ships; a source checkout's
   stage lines print `js-harness` commands the old copy would run, and `sync --global` from source mixes v4 skills
-  with a 0.97.0 binary. Two findings on `D:\abogadaclaudiajimenez`, read without writing: it is not initialized
+  with a 0.97.0 binary. Two findings on `D:\client-project`, read without writing: it is not initialized
   (v4's bare `onboard` there: "not an initialized project"), and after `init` its `docs/roadmap.md` (the site's
   April roadmap) stops the onboarding, "This project has a plan of its own: docs/ROADMAP.md.", reproduced in a
   scratch repository (removed). The opening prompt for the T4 session went to the lead with both steps.

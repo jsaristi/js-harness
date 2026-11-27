@@ -29,7 +29,7 @@ test scheduled tasks, empty folders, and caches.
 The lead's measurements, verified: branches (635 local, 613 merged; 698 remote-tracking, 662 merged; the lead had 634
 and 699, one more local branch since and one fewer remote), `git stash list` 2, `memory-backup` 3.0 GB, the relief
 file 1,980 lines (1,979 plus one appended since), the five empty worktree folders, doctor's one `mismatch`, and the
-two modified `.atl` files of `D:\abogadaclaudiajimenez` (by modification time only, see F15).
+two modified `.atl` files of `D:\client-project` (by modification time only, see F15).
 
 ## Findings, by risk
 
@@ -56,8 +56,8 @@ two modified `.atl` files of `D:\abogadaclaudiajimenez` (by modification time on
 ### F2. engram doctor reports error: orphan cloud sync targets and untitled observations
 
 - **What:** `engram doctor` (3.6.0, read-only): `error`, 10 checks, 8 ok, 1 blocked, 1 error.
-  - `sync_target_closed_space` (error): 13 sync targets (`cloud:abogadaclaudiajimenez`, `cloud:app`,
-    `cloud:claudia-jimenez-plataforma`, `cloud:como-hago-para-limpiar-un-piso`, `cloud:harness`, `cloud:harness-lab`,
+  - `sync_target_closed_space` (error): 13 sync targets (`cloud:client-project`, `cloud:app`,
+    `cloud:client-project-plataforma`, `cloud:como-hago-para-limpiar-un-piso`, `cloud:harness`, `cloud:harness-lab`,
     `cloud:loadtest`, `cloud:magnific-plugin-app-…`, `cloud:oficina`, `cloud:skill-creator-c-users-oficina-codex-3`,
     `cloud:temp`, `cloud:tengo-un-chevrolet-spark-gt-2014`, `cloud:v`) hold 6,883 unacknowledged mutations in all,
     while `engram cloud status` says "Cloud status: not configured (no effective server URL)".
@@ -271,7 +271,7 @@ two modified `.atl` files of `D:\abogadaclaudiajimenez` (by modification time on
 
 ### F15. A gentle-ai hook keeps modifying a tracked file in his other project
 
-- **What:** `D:\abogadaclaudiajimenez\.atl\skill-registry.md` and `.skill-registry.cache.json` were rewritten at 10:55
+- **What:** `D:\client-project\.atl\skill-registry.md` and `.skill-registry.cache.json` were rewritten at 10:55
   local today. The `UserPromptSubmit` hook `gentle-ai skill-registry refresh --quiet --no-gitignore --cwd …` in
   `~/.claude/settings.json` rewrites them at every prompt in any project; this repository keeps `.atl/` out through
   `.git/info/exclude:9`, that one does not list it in its `.gitignore`.
@@ -337,7 +337,7 @@ two modified `.atl` files of `D:\abogadaclaudiajimenez` (by modification time on
 
 ## Not checked
 
-- `git status` of `D:\js-harness` (the main checkout) and of `D:\abogadaclaudiajimenez`: refused by this session's
+- `git status` of `D:\js-harness` (the main checkout) and of `D:\client-project`: refused by this session's
   worktree guard.
 - `claude agents`: not run; `~/.claude/jobs/*/state.json` was read instead.
 - Which process holds the five empty folders.

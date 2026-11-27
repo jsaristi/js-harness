@@ -153,4 +153,4 @@ matters, who holds it, and where it was seen.
   whose branches are merged or abandoned; the old branch feat/codex-parity (unpushed, three
   uncommitted lines) and its raw trial output (2.7 MB).
 - In the app's list: a second session carrying the orchestrator's title (another machine, by Remote
-  Control) and five sessions of abogadaclaudiajimenez from 2026-10-03 to 2026-10-06.
+  Control) and five sessions of client-project from 2026-10-03 to 2026-10-06.

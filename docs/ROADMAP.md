@@ -590,7 +590,7 @@ before it runs. Reviews (Codex and the lenses on every slice) draw on his plans 
 - **State:** done 2026-10-30 (PRs 689, 693-696 the migration, JH 93; the moves, JH 94; `odd/tasks/f8-s12-migration.md`).
   `js-harness migrate`, `--check` and `migrate list`, proven on a copy of a project v0.97.0's own `init` set up in a
   scratch home; context7 is said with doctor's fix, never registered. His list (question 112, "Ambos proyectos"):
-  `D:\plataforma-preproyecto` migrated, `D:\abogadaclaudiajimenez` initialized and its own `CLAUDE.md` given the
+  `D:\plataforma-preproyecto` migrated, `D:\client-project` initialized and its own `CLAUDE.md` given the
   `@AGENTS.md` import; `D:\harness` stays, a read-only reference. Doctor exits 0 inside each with `claude-import` ok;
   the changes stay uncommitted in his projects, each undo in the document's L20-L22. The `init` import fix of
   L22 landed in PR 698 (ca64cfe3). Owed: the session probe in each project (L23).
@@ -1001,7 +1001,7 @@ of the first version.
   README gives Claude Code 57% to 88% of its own checks (its row of 2026-11-08) and a fixed cost near 205 tokens;
   note inc., on a Next.js codebase, went from 60.8% to 94.0% when the prompt named it and to 76.5% with it only
   installed, so a project's `AGENTS.md` would name it; it sends the agent's search queries to Google unless
-  `DISABLE_TELEMETRY=1`. Run once, on 2026-11-17: its `legacy-scan` on `D:\abogadaclaudiajimenez` changed no file
+  `DISABLE_TELEMETRY=1`. Run once, on 2026-11-17: its `legacy-scan` on `D:\client-project` changed no file
   and found 5 items, 2 in his code and minor, over about 20% of the guides, so it proves little. This session's
   reading, not his words: no gain in this repository (one HTML file), and what would decide is one real UI task in
   one Astro or Next.js project, with and without it; turning it on would be a switch in `harness.json` beside

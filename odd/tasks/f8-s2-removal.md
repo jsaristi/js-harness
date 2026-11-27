@@ -33,7 +33,7 @@ lost, which he accepted once the project's documentation and its memory were on 
 - `fixed load` at most 80,000 in each of five restarted desktop sessions (the `check` row read once in each), the
   five readings in `## Log`
 - every session restarted and checked by the lead; in `D:\js-harness`, `D:\plataforma-preproyecto` and
-  `D:\abogadaclaudiajimenez` a restarted session shows the output style he chose, its `CLAUDE.md` and context7 (the
+  `D:\client-project` a restarted session shows the output style he chose, its `CLAUDE.md` and context7 (the
   probe S12 owes), and `/context` holds one engram text (row 11); each in `## Log`
 
 ## In scope / Out of scope
@@ -155,7 +155,7 @@ lost, which he accepted once the project's documentation and its memory were on 
     receipt and no uninstaller: `~/.herdr` (its release folder on his user PATH), `%APPDATA%\herdr`,
     `%LOCALAPPDATA%\herdr`; no process or autostart.
   - GGA: `~/bin/gga`, `gga.bat`, `gga.cmd`, `gga.ps1` and `~/bin/lib/`; no GGA hook in `D:\js-harness`
-    (`core.hooksPath` is `.githooks`), `D:\plataforma-preproyecto` or `D:\abogadaclaudiajimenez`, so no `gga
+    (`core.hooksPath` is `.githooks`), `D:\plataforma-preproyecto` or `D:\client-project`, so no `gga
     uninstall` is owed in a project. gentle-ai's project leftovers, `.atl/` and its review store under the git common
     folder, are what `bin/lib/project-migrate.mjs:238-254` lists.
   - `D:\js-harness\.claude\settings.local.json` selects no output style (read 2026-11-02).
@@ -395,7 +395,7 @@ leftover is read before S2 closes.
 - L9 2026-11-02 ~21:40Z, state (written at 85% of the window): running in the background, started on `628bace0`:
   `js-harness codex-review --base 84997f7d` and `js-harness lens-review --base 84997f7d --lenses
   risk,reliability,resilience --doc odd/tasks/f8-s2-removal.md` (plan: about 37,578 input tokens a lens); a `js-harness
-  wait --notice-to 134`. T6's read: `D:\plataforma-preproyecto` and `D:\abogadaclaudiajimenez` select `outputStyle:
+  wait --notice-to 134`. T6's read: `D:\plataforma-preproyecto` and `D:\client-project` select `outputStyle:
   js-harness` in their `.claude/settings.local.json`; `D:\js-harness` selects none, so after the removal only this
   repository loses the style it has (gentle-ai's user-level "Neutral"), which goes to him as the style question. Next:
   read both reviews, answer each finding (`double-review answer`), fix test first; the independent verifier over
@@ -556,7 +556,7 @@ leftover is read before S2 closes.
   third (item 2), so the other three, about 500 lines, would stay and load in every session once T9 reverts the
   exclusion. They are removed by hand, inside the gentle-ai question; the `graphify` lines (609-614) and the
   js-harness Rules block (616-627) stay. Gap 2: his other projects get only G12's nine Rules lines; neither
-  `CLAUDE.md` nor `AGENTS.md` of `D:\plataforma-preproyecto` or `D:\abogadaclaudiajimenez` holds the remote-operation
+  `CLAUDE.md` nor `AGENTS.md` of `D:\plataforma-preproyecto` or `D:\client-project` holds the remote-operation
   authorization (`grep -l -i "remote operation"`, no match), so removing `agent-routing` takes it from them. It is
   his (G12 chose the Rules block), so it goes to him first as its own question, and the revised gentle-ai question
   after its answer, one at a time.
@@ -706,7 +706,7 @@ leftover is read before S2 closes.
   `0f71b2c6`, line 64610, read with `js-harness sessions --quote`). Read before it: each `.atl/` held
   `skill-registry.md` and `.skill-registry.cache.json` (about 9 KB), ignored in every repository (`.gitignore` or
   `.git/info/exclude`; `git ls-files .atl` empty here). Deleted in `D:\js-harness`, `D:\plataforma-preproyecto`,
-  `D:\abogadaclaudiajimenez` and `D:\claudia-jimenez-plataforma`, each checked gone; `D:\harness` and
+  `D:\client-project` and `D:\client-project-plataforma`, each checked gone; `D:\harness` and
   `D:\harness-lab` (read-only references) and the eval folders keep theirs. Left of T14: `~/.gentle-ai`, asked at the
   end of S2, after T9 checks the entries against its snapshot. Next: T9; its session restart goes to him as a
   question through the lead before anything restarts (the lead's note, 12:47).
@@ -724,7 +724,7 @@ leftover is read before S2 closes.
   and readability 0 findings), merged with PR 768 (main `b0d55ebb`, `git merge-base --is-ancestor 85d17a02
   origin/main` exit 0); the lead installed it (install and doctor exit 0, by its message). Question 189, the session
   restart of T9 (needs him present; a yes covers closing and reopening every open session and the lead's checks in
-  js-harness, plataforma-preproyecto and abogadaclaudiajimenez; it does not authorize the smoke walk, ~$5, the
+  js-harness, plataforma-preproyecto and client-project; it does not authorize the smoke walk, ~$5, the
   incident set, ~$13, or the style), sent to the lead at 14:16 local. The host compacted this session at 14:16;
   resumed from this document. Next, after his answer: T9's checks, then `~/.gentle-ai` with its PATH entry (T14),
   then the output style, then T10 and T11.
@@ -732,7 +732,7 @@ leftover is read before S2 closes.
   `0f71b2c6`, line 64993, checked with `js-harness sessions --quote`). Paused for the restart: nothing left mid-way,
   `f8-s2-removal` pushed at L41's commit, worktree clean. T9's checks left, after the reopen, each its own Log line:
   (1) the permissions and MCP entries equal to gentle-ai's snapshot (L20, `~/.gentle-ai/backups/20261104122417.084958800`);
-  (2) in `D:\js-harness`, `D:\plataforma-preproyecto` and `D:\abogadaclaudiajimenez`, a reopened session loads its
+  (2) in `D:\js-harness`, `D:\plataforma-preproyecto` and `D:\client-project`, a reopened session loads its
   `CLAUDE.md`, context7, and one engram text in `/context`, and the global file's Rules block with the kept groups;
   (3) `fixed load` at most 80,000 in five reopened sessions; (4) the smoke walk (~$5) and (5) the incident set
   (~$13, at least 10 of 20), each asked first as its own question, since a yes to 189 authorized no spend. Then
@@ -757,7 +757,7 @@ leftover is read before S2 closes.
   plugin's hook and skill listing are engram's own, no gentle-ai block), and the global file's 40 lines: graphify
   and the Rules block with its groups CodeGraph, Delegation, Task Size and scratch, Remote operation
   authorization. It is a CLI background session, not a desktop one, and the repo sets no output style (still his
-  question). `D:\plataforma-preproyecto` and `D:\abogadaclaudiajimenez`: no session opened there since the
+  question). `D:\plataforma-preproyecto` and `D:\client-project`: no session opened there since the
   restart (their newest transcripts are of 2026-10-27 and 2026-10-30), so no `/context` to read; on disk each has
   `CLAUDE.md` importing `AGENTS.md`, `outputStyle` "js-harness" in `.claude/settings.local.json`, no project MCP
   entry and no disabled server in `~/.claude.json`, and context7 and engram are user-level, so both would load;
@@ -781,7 +781,7 @@ leftover is read before S2 closes.
   `f8-s2-removal` at `b2632260`, equal to origin, worktree clean. T9 check (2) passes in the three projects. The lead
   opened six Desktop sessions at his word ("Listo soluciona todo para que avancemos", 2026-11-05 13:25 local, claimed
   by the lead's brief), each read-only with one brief; their answers read here from their transcripts: JH 146
-  (`D:\plataforma-preproyecto`, `b3ce3a6b`), JH 147 (`D:\abogadaclaudiajimenez`, `d78581f6`), JH 148-151
+  (`D:\plataforma-preproyecto`, `b3ce3a6b`), JH 147 (`D:\client-project`, `d78581f6`), JH 148-151
   (`D:\js-harness`, `505c3955`, `ea079628`, `6de12297`, `0df67b89`). Each holds the project's `CLAUDE.md` and
   `AGENTS.md` once each, context7's server instructions, engram's server instructions as its one engram text (with
   the engram plugin's own skill listing and hooks), and the global Rules block with its four groups CodeGraph,
@@ -792,7 +792,7 @@ leftover is read before S2 closes.
   loads them in every session; nothing of `bin/` reads them (`bin/lib/lens-prompts.mjs` holds its own prompts), so
   they are T14's to ask with `~/.gentle-ai`. (b) engram's plugin hook asks for `mcp__plugin_engram_engram__*` tools
   that no session has, beside the `mcp__engram__*` it has; engram's own text, harmless. (c) In
-  `D:\abogadaclaudiajimenez` (JH 147): its `AGENTS.md` still holds `init`'s unfilled template lines; six
+  `D:\client-project` (JH 147): its `AGENTS.md` still holds `init`'s unfilled template lines; six
   `.claude/rules/` files load, one of them, `engram-speckit-wiring.md:13`, pointing to
   `~/.claude/skills/_shared/persistence-contract.md`, gone with gentle-ai; two notes of its Claude memory name
   gentle-ai. Each is his project's, reported to the lead, nothing changed there.
@@ -800,7 +800,7 @@ leftover is read before S2 closes.
   (`bin/lib/fixed-load.mjs`) from each transcript's first turn. `D:\js-harness`, five sessions started after the
   restart, each at most 80,000: JH 148 77,144; JH 149 77,193; JH 150 77,236; JH 151 77,288 (Desktop) and this
   session 55,671 (a CLI background session whose first message is its brief, the fifth reading the lead's brief
-  named). `D:\plataforma-preproyecto`: JH 146 76,007. `D:\abogadaclaudiajimenez`: JH 147 96,881, over 80,000, its
+  named). `D:\plataforma-preproyecto`: JH 146 76,007. `D:\client-project`: JH 147 96,881, over 80,000, its
   six rules files and memory, outside spec 8's measure of this repo. The `check` row's median of its latest five is
   77,236, but that row still counts the lead's resumed session `0f71b2c6` (105,624, a first turn of 2026-10-27), so
   it is read here per session, not from the row.

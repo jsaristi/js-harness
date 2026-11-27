@@ -224,7 +224,7 @@ touch nine modules of `bin` that other features also change, so the lead places 
   `enable`, `disable`, `update`; `codex plugin add`, `remove`, `marketplace`. Not known: what each scope writes,
   which key keeps this plugin's skill out of a project, and whether Codex can hold a plugin out of one project.
   `npx` and `pnpm` are both on this machine's PATH.
-- L4 (2026-11-17, evidence, run once): its `legacy-scan` on `D:\abogadaclaudiajimenez` through `pnpm dlx` changed no
+- L4 (2026-11-17, evidence, run once): its `legacy-scan` on `D:\client-project` through `pnpm dlx` changed no
   file and found 5 items, 2 in his code and minor (`src/pages/blog/[...slug].astro:17`,
   `src/scripts/web3forms.ts:135`), over about 20% of the guides. Not known: whether `DISABLE_TELEMETRY=1` was set
   and which version ran; a search of this session's transcript for `dlx` beside the package's name finds no such

@@ -61,7 +61,7 @@ All relayed by the lead and read here with `js-harness sessions --quote` on the 
 ## Left
 - T15 and T16, follow-ups proposed to him through the lead, not authorized.
 - `D:\js-harness\.claude\worktrees\f8-s2-nobackup`: deleting it is his call, untouched.
-- In `D:\abogadaclaudiajimenez`: an unfilled `AGENTS.md` template, a rule pointing to a file gone with gentle-ai,
+- In `D:\client-project`: an unfilled `AGENTS.md` template, a rule pointing to a file gone with gentle-ai,
   memory notes naming gentle-ai (L47); his project, reported only.
 - D4, the `fixed load` budget, his right after S2 (the roadmap).
 

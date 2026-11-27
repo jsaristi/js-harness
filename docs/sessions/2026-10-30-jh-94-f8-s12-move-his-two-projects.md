@@ -16,7 +16,7 @@ before anything else, and do the work it gives you. Its last section says how yo
 - `D:\plataforma-preproyecto`: `migrate --check` (exit 1, six writes named), then `migrate` (exit 0): `CLAUDE.md`
   importing `AGENTS.md`, the baseline 2026-10-30, the style and 24 denies in `.claude/settings.local.json`, the
   `.atl/` exclude line, `AGENTS.md`'s block rendered again. `doctor` inside it exit 0, `claude-import` ok. Log L20.
-- `D:\abogadaclaudiajimenez`: `init` (exit 0, its own `CLAUDE.md` kept, the whole block in a new `AGENTS.md`), then
+- `D:\client-project`: `init` (exit 0, its own `CLAUDE.md` kept, the whole block in a new `AGENTS.md`), then
   `migrate --check` (nothing left to write but a note: its `CLAUDE.md` does not import `AGENTS.md`); on the lead's
   yes the line `@AGENTS.md` prepended. `doctor` inside it exit 0, `claude-import` ok. Log L21, L22.
 - Nothing committed, stashed or reset in either project; each project's changes stay uncommitted for him (L23).
@@ -26,7 +26,7 @@ before anything else, and do the work it gives you. Its last section says how yo
 
 ## Decisions
 - His: both projects move, `D:\harness` stays (question 112, L19).
-- The lead's: add `@AGENTS.md` at the top of `D:\abogadaclaudiajimenez\CLAUDE.md`, uncommitted, and record that
+- The lead's: add `@AGENTS.md` at the top of `D:\client-project\CLAUDE.md`, uncommitted, and record that
   `init` leaves the import out as an owed finding (L22, answering this session's `waiting` notice of 10:10Z).
 - This session's: `init` has no dry form, so its plan was read in the code before the write (L21); the branch was
   renamed from `worktree-f8-s12-moves` to the brief's `f8-s12-moves`.
@@ -41,7 +41,7 @@ before anything else, and do the work it gives you. Its last section says how yo
 - The owed finding of L22 (a follow-up session); the session probe in each project, a new session showing its
   `CLAUDE.md`, the style and context7 (L23); his commits of the changes in both projects.
 - Open and his, outside the projects: `codex-trust` (answer Codex's hook prompt), `host-update`, `typescript-lsp` and
-  `codex` outdated, four stale memory notes of `abogadaclaudiajimenez` (L21). Context7's OAuth in Codex stays open,
+  `codex` outdated, four stale memory notes of `client-project` (L21). Context7's OAuth in Codex stays open,
   never started.
 - Not this session's: L13's sync symlink defect; the owed tests of L16 and L17.
 

@@ -23,7 +23,7 @@ deep review of what else needs cleaning or fixing before F8 goes on.
 
 ## Failures and lessons
 - This session's worktree guard refuses `git` against another checkout, so `git status` of `D:\js-harness` and of
-  `D:\abogadaclaudiajimenez` could not be read; the inventory says so where it matters (F15).
+  `D:\client-project` could not be read; the inventory says so where it matters (F15).
 
 ## Left
 - Every finding's action, for the lead or for him as the inventory marks it. The most important: F1 (the remote

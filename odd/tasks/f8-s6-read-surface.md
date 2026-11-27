@@ -167,7 +167,7 @@ orchestrator skill's wording or of `CLAUDE.md`, were one needed, would be asked 
     constants beside that row. The five questions of a new check: the growth happened (12.8k to 15.5k in fifteen
     days, resume sections of a thousand lines); more than twice; it is a check; no row counts it, and `budget`
     counts `AGENTS.md` alone; it costs one row and removes the hand count. Other projects: their whole roadmaps are
-    6,438 and 17,624 bytes (`D:/abogadaclaudiajimenez`, `D:/plataforma-preproyecto`), far under, so the row turns
+    6,438 and 17,624 bytes (`D:/client-project`, `D:/plataforma-preproyecto`), far under, so the row turns
     no check of his red.
   - `## State` is the template's first section, so "the task contract comes first" (`CLAUDE.md`) stays true as
     written: the head is part of what `contract template` prints. It is rewritten, never appended to; history goes to
