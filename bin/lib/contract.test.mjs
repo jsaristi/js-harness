@@ -59,7 +59,7 @@ test('the template opens on its State head, then is a contract with every sectio
   assert.deepEqual([...parseContract(CONTRACT_TEMPLATE).keys()], ['State', ...SECTIONS, 'Depth pass', 'Tasks']);
   assert.match(parseContract(CONTRACT_TEMPLATE).get('State'), /rewritten at each step and never appended to/);
   assert.match(parseContract(CONTRACT_TEMPLATE).get('Depth pass'), /- 1\. Method:[\s\S]*- 5\. Request:[\s\S]*Adds: none/);
-  assert.match(parseContract(CONTRACT_TEMPLATE).get('Tasks'), /^- \[ \] T1 \(kind: design \| build \| verify \| docs\)/);
+  assert.match(parseContract(CONTRACT_TEMPLATE).get('Tasks'), /^- \[ \] T1 \(kind: design \| build \| verify \| docs \| his\)/);
 });
 
 test('a filled-in contract passes', () => {
@@ -410,7 +410,7 @@ test('modeLine prints the mode, one model and one level, and the off reasons', (
 test('an unknown kind is a contract error naming the task and the kinds', () => {
   const { ok, errors } = validateContract(`${GOOD}\n## Tasks\n- [ ] T3 (kind: bild) The parser\n`);
   assert.equal(ok, false);
-  assert.ok(errors.includes('task T3 names the kind "bild": one of design, build, verify, docs'), errors.join('\n'));
+  assert.ok(errors.includes('task T3 names the kind "bild": one of design, build, verify, docs, his'), errors.join('\n'));
 });
 
 test('## Effort is optional: a contract without it passes, one with a wrong value still fails', () => {

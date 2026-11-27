@@ -894,7 +894,7 @@ queued 6-9 h in 2 lanes; 10 session-hours idle from hour 2
 Task contracts: `template` prints the skeleton a feature document opens with, `check`
 validates every contract, `run` runs a contract's done-when commands, and `goal` prints the
 `/goal` condition that runs them. Each task names its kind of work, `(kind: design | build |
-verify | docs)`; `modes` prints the model and the effort each open task runs on, from
+verify | docs | his)`, his being a step only the owner can do, which holds a land; `modes` prints the model and the effort each open task runs on, from
 the project's rules (`--task <id>` for one), and `goal` prints the same lines on stderr. `check`
 takes files to validate in place of all, `run` takes `--timeout <minutes>`, and every verb but
 `template` takes `--cwd <dir>`.

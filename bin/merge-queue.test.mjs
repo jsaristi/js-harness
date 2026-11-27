@@ -272,7 +272,11 @@ test('a conflict with main names its fix where git names no file of it (merge-tr
 
 test('a merge that fails with no conflict says what git said, not that it conflicts', async () => {
   const { root, heads } = makeQueueRepo();
-  const { code, out } = await dryRun(root, [pr(1, 'feat/a', 'f'.repeat(40))]);
+  // A head git does not have; the read of its feature documents (S11) is answered empty, so the merge is what fails.
+  const { run: real } = runner([pr(1, 'feat/a', 'f'.repeat(40))]);
+  const run = (command, args, options) => (command === 'git' && args[0] === 'diff' && args[1] === '--name-only' ? { status: 0, stdout: '', stderr: '' } : real(command, args, options));
+  const out = [];
+  const code = await mergeQueueMain(['--dry-run', '--cwd', root], { run, covered: () => ({ pass: true }), stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
   assert.equal(code, 0, out.join('\n'));
   assert.match(out[0], /^PR 1 is left out: it does not merge into the candidate so far: .+\.$/);
   assert.ok(heads);
@@ -285,6 +289,155 @@ test('a pull request whose code commits have no Codex review record is left out,
   assert.equal(code, 0, out.join('\n'));
   assert.equal(out[0], 'PR 2 is left out: 1 of 1 code commit since origin/main have no Codex review record.');
   assert.match(out[1], /with 1 pull request merged in order: PR 1 \(feat\/a\)\.$/);
+});
+
+/** A branch of `root` off main, pushed to origin, whose one commit writes `files` (`{ path: text }`): its head. */
+function branchWith(root, main, branch, files) {
+  git(root, 'checkout', '--quiet', '-b', branch, main);
+  for (const [name, text] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true });
+    fs.writeFileSync(path.join(root, name), text, 'utf8');
+  }
+  git(root, 'add', '.');
+  git(root, 'commit', '--quiet', '-m', branch);
+  git(root, 'push', '--quiet', 'origin', branch);
+  const head = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', '--detach', main);
+  git(root, 'fetch', '--quiet', 'origin');
+  return head;
+}
+
+const featureDoc = (task) => `## State\nx\n\n## Goal\nx\n\n## Tasks\n- [x] T1 (kind: build) built\n${task}\n`;
+
+// docs/FAILURES.md, land-took-pending-pr: PR 596 was taken by a land while his walk through the console was pending.
+test('a pull request whose feature document holds an open step of his (kind: his) is left out, naming it; ticked, it is ready (S11)', async () => {
+  const { root, main, heads } = makeQueueRepo();
+  const open = branchWith(root, main, 'feat/walk', { 'odd/tasks/walk.md': featureDoc('- [ ] T2 (kind: his) the real-console walk') });
+  const done = branchWith(root, main, 'feat/walked', { 'odd/tasks/walked.md': featureDoc('- [x] T2 (kind: his) the real-console walk') });
+  const { code, out } = await dryRun(root, [pr(1, 'feat/a', heads['feat/a']), pr(5, 'feat/walk', open), pr(6, 'feat/walked', done)]);
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(out[0], 'PR 5 is left out: odd/tasks/walk.md holds T2, a step of his still open (kind: his): it lands once he has done it and the task is ticked.');
+  assert.match(out.join('\n'), /with 2 pull requests merged in order: PR 1 \(feat\/a\), PR 6 \(feat\/walked\)\.$/m);
+});
+
+test('an open step of his in a feature document the pull request does not touch, or deletes, holds nothing; other kinds hold nothing (S11)', async () => {
+  const { root, main: first } = makeQueueRepo();
+  // Main itself holds a document with an open step of his, which neither pull request below may be held by.
+  git(root, 'checkout', '--quiet', '--detach', first);
+  fs.mkdirSync(path.join(root, 'odd', 'tasks'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'odd', 'tasks', 'held.md'), featureDoc('- [ ] T2 (kind: his) a walk of his'), 'utf8');
+  git(root, 'add', '.');
+  git(root, 'commit', '--quiet', '-m', 'held');
+  git(root, 'push', '--quiet', 'origin', 'HEAD:main');
+  const main = git(root, 'rev-parse', 'HEAD');
+  const other = branchWith(root, main, 'feat/other', { 'odd/tasks/other.md': featureDoc('- [ ] T2 (kind: verify) a check of mine') });
+  git(root, 'checkout', '--quiet', '-b', 'feat/gone', main);
+  git(root, 'rm', '--quiet', 'odd/tasks/held.md');
+  git(root, 'commit', '--quiet', '-m', 'gone');
+  git(root, 'push', '--quiet', 'origin', 'feat/gone');
+  const gone = git(root, 'rev-parse', 'HEAD');
+  git(root, 'checkout', '--quiet', '--detach', main);
+  git(root, 'fetch', '--quiet', 'origin');
+  const { code, out } = await dryRun(root, [pr(7, 'feat/other', other), pr(8, 'feat/gone', gone)]);
+  assert.equal(code, 0, out.join('\n'));
+  assert.match(out.join('\n'), /with 2 pull requests merged in order: PR 7 \(feat\/other\), PR 8 \(feat\/gone\)\.$/m);
+});
+
+test('a feature document of the pull request that cannot be read leaves it out: could not look is never none (S11)', async () => {
+  const { root, main } = makeQueueRepo();
+  const head = branchWith(root, main, 'feat/walk', { 'odd/tasks/walk.md': featureDoc('- [x] T2 (kind: his) walked') });
+  const { run: real } = runner([pr(5, 'feat/walk', head)]);
+  const run = (command, args, options) => (command === 'git' && args[0] === 'show' && String(args[1]).endsWith(':odd/tasks/walk.md') ? refused() : real(command, args, options));
+  const out = [];
+  const code = await mergeQueueMain(['--dry-run', '--cwd', root], { run, covered: () => ({ pass: true }), stdout: (line) => out.push(line), stderr: (line) => out.push(line) });
+  assert.equal(code, 0, out.join('\n'));
+  assert.equal(out[0], 'PR 5 is left out: its feature document odd/tasks/walk.md could not be read at its head (fatal: refused by the test), so whether a step of his is open cannot be told.');
+});
+
+/** A repository whose main moved after a pull request's merge ref was computed: `{ root, origin, oldMain, newMain,
+ * stale, fresh }`, `stale` the merge commit on the old main that origin's refs/pull/5/merge names, `fresh` the one on
+ * the new main that GitHub computes later. */
+function movedMainRepo() {
+  const { root, origin, main: oldMain, heads } = makeQueueRepo();
+  git(root, 'checkout', '--quiet', '--detach', oldMain);
+  fs.writeFileSync(path.join(root, 'c.txt'), 'c\n', 'utf8');
+  git(root, 'add', '.');
+  git(root, 'commit', '--quiet', '-m', 'main moves');
+  git(root, 'push', '--quiet', 'origin', 'HEAD:main');
+  const newMain = git(root, 'rev-parse', 'HEAD');
+  const tree = git(root, 'rev-parse', `${heads['feat/a']}^{tree}`);
+  const stale = git(root, 'commit-tree', tree, '-p', oldMain, '-p', heads['feat/a'], '-m', 'stale merge');
+  const fresh = git(root, 'commit-tree', tree, '-p', newMain, '-p', heads['feat/a'], '-m', 'fresh merge');
+  git(root, 'push', '--quiet', 'origin', `${stale}:refs/pull/5/merge`);
+  // The fresh merge commit goes to origin under a branch of its own, so the test can point the ref at it later.
+  git(root, 'push', '--quiet', 'origin', `${fresh}:refs/heads/fresh-merge`);
+  git(root, 'checkout', '--quiet', '--detach', oldMain);
+  // The push moved this clone's origin/main; put it back, so only --reopen's own fetch can see the new main.
+  git(root, 'update-ref', 'refs/remotes/origin/main', oldMain);
+  return { root, origin, oldMain, newMain, stale, fresh };
+}
+
+/** `merge-queue --reopen` over `root` with gh answering `reopen`, a clock that moves only by the waits, and `onSleep`
+ * run at each wait: `{ code, out, calls }`. */
+async function reopen(root, argv, { reopenAnswer = { status: 0, stdout: '', stderr: '' }, onSleep = () => {}, fetchAnswer = null } = {}) {
+  const { run: real, calls } = runner([]);
+  const run = (command, args, options) => {
+    if (command === 'gh' && args[0] === 'pr' && args[1] === 'reopen') {
+      calls.push([command, ...args].join(' '));
+      return reopenAnswer;
+    }
+    if (fetchAnswer && command === 'git' && args[0] === 'fetch') {
+      calls.push([command, ...args].join(' '));
+      return fetchAnswer;
+    }
+    return real(command, args, options);
+  };
+  let clock = 0;
+  const out = [];
+  const code = await mergeQueueMain([...argv, '--cwd', root], {
+    run, now: () => clock, sleep: async (ms) => { clock += ms; onSleep(); },
+    stdout: (line) => out.push(line), stderr: (line) => out.push(line),
+  });
+  return { code, out, calls };
+}
+
+// docs/FAILURES.md, reopen-tested-old-base: a pull request reopened right after a merge was tested on the old base.
+test('--reopen reopens the pull request and trusts its run only once GitHub\'s merge ref of it sits on main (S12)', async () => {
+  const { root, origin, newMain, fresh } = movedMainRepo();
+  let waits = 0;
+  const { code, out, calls } = await reopen(root, ['--reopen', '5'], { onSleep: () => { waits += 1; if (waits === 2) git(origin, 'update-ref', 'refs/pull/5/merge', fresh); } });
+  assert.equal(code, 0, out.join('\n'));
+  assert.ok(calls.includes('gh pr reopen 5'), calls.join('\n'));
+  assert.equal(out.at(-1), `PR 5's merge ref ${fresh.slice(0, 7)} has main ${newMain.slice(0, 7)} as its first parent: trust a run of PR 5 only on ${fresh.slice(0, 7)}.`);
+  assert.ok(waits >= 2, 'it waited while the merge ref was on the old main');
+});
+
+test('--reopen past its bound says no run is to be trusted yet, and exits 5 (S12)', async () => {
+  const { root, oldMain, newMain, stale } = movedMainRepo();
+  const { code, out } = await reopen(root, ['--reopen', '5']);
+  assert.equal(code, 5, out.join('\n'));
+  assert.equal(out.at(-1), `PR 5's merge ref ${stale.slice(0, 7)} still has ${oldMain.slice(0, 7)} as its first parent, not main ${newMain.slice(0, 7)}, after 10 minutes: no run of PR 5 is to be trusted yet.`);
+});
+
+// The resilience lens on 4b9fd455: an origin that cannot be read is said at once, with git's words, not after 10 minutes.
+test('--reopen over an origin it cannot fetch says git\'s words and exits 1 without waiting (S12)', async () => {
+  const { root } = movedMainRepo();
+  let waits = 0;
+  const { code, out } = await reopen(root, ['--reopen', '5'], { fetchAnswer: { status: 128, stdout: '', stderr: 'fatal: could not read from remote' }, onSleep: () => { waits += 1; } });
+  assert.equal(code, 1, out.join('\n'));
+  assert.equal(out.at(-1), "merge-queue: git fetch of origin's main failed (fatal: could not read from remote): no run of PR 5 is to be trusted yet.");
+  assert.equal(waits, 0);
+});
+
+test('--reopen that gh refuses waits for nothing and exits 1; a number that is no number is a usage error (S12)', async () => {
+  const { root } = movedMainRepo();
+  const { code, out, calls } = await reopen(root, ['--reopen', '5'], { reopenAnswer: { status: 1, stdout: '', stderr: 'GraphQL: Could not reopen' } });
+  assert.equal(code, 1, out.join('\n'));
+  assert.equal(out.at(-1), 'merge-queue: gh pr reopen 5 failed (GraphQL: Could not reopen): nothing was waited for.');
+  assert.ok(!calls.some((line) => line.includes('refs/pull/5/merge')), calls.join('\n'));
+  for (const argv of [['--reopen'], ['--reopen', 'x'], ['--reopen', '0'], ['--reopen', '5', '--land']]) assert.equal((await reopen(root, argv)).code, 2, argv.join(' '));
+  const twoDigits = await reopen(root, ['--reopen', '12'], { reopenAnswer: { status: 1, stdout: '', stderr: 'no' } });
+  assert.equal(twoDigits.code, 1, 'a number of two digits is a number');
 });
 
 test('with no pull request ready the queue says so and exits 0 having built nothing', async () => {

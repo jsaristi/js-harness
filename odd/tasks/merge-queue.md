@@ -31,6 +31,32 @@ high
 ## Ask me before
 - Nothing beyond the repository's rules: the first `--land` that pushes main is run by the orchestrator, after the CircleCI project exists (L5).
 
+## Depth pass
+Written by JH 298 (2026-11-22) before T6 and T7, the two holds of docs/FAILURES.md entries land-took-pending-pr and
+reopen-tested-old-base.
+- 1. Method: a merge queue lands only what is ready, and "ready" is read from a record, never from a session's
+  word: the smallest change is one more reason a pull request is left out (`leaveOut`, in the readiness loop
+  that `--dry-run` and `--land` share), and one waiting step that trusts GitHub's merge ref only once its first
+  parent is the base.
+- 2. Raw material: docs/FAILURES.md, land-took-pending-pr (PR 596 on 2026-10-30, PR 894 on 2026-11-15) and
+  reopen-tested-old-base (relief file, line 765, 2026-10-14: the lead's loop "reopens only once
+  `refs/pull/<n>/merge^1` equals `main`"); PR 596's head 1954ed46, odd/tasks/tui-gentle-level.md:42, wrote the
+  pending step as `- [ ] T4 (kind: verify) the real-console walk, below. Sebastián's`; PR 894's head 6fc6541e
+  wrote its pending approval only in the prose of odd/tasks/plan-orchestrator.md's State; `tasksOf`
+  (bin/lib/contract.mjs:260) reads a task's kind; `taskModes` (bin/lib/contract.mjs:298) no longer maps a kind to
+  a rule, so a new kind needs no rule change.
+- 3. The bar:
+  spec 11: `node --test bin/merge-queue.test.mjs`: none, new behaviour
+  spec 12: `node --test bin/merge-queue.test.mjs`: none, new behaviour
+- 4. Refutation: a word match ("his", "Sebastián's") over open tasks would have caught PR 596, but over today's
+  feature documents it matches open boxes in 10 documents (`grep -l` of open tasks naming him), most of them
+  not a step only he can do, so it would hold lands that are ready. An explicit kind holds none today and catches a
+  step only where its document names it so: it is a rule a session follows when it writes a step of his, which
+  the contract template now shows.
+  Verdict: supports, with the limit said
+- 5. Request: S11 and S12 as written below.
+  Adds: the task kind `his` (TASK_KINDS), shown in the contract template.
+
 ## Specs
 - S1. His ask, typed (transcript b878a67f, line 3974, 2026-10-14T21:18:29Z): "quiero es que podamos hacer en paralelo y como hacemos para no perder funcionalidades y tampoco calidad para que no se rompa nada, si quieres investiga muy bien en internet y dame una mejor solucion."
 - S2. His answer, tapped (b878a67f, line 4162, 2026-10-14T21:26:16Z), to "¿Construimos el plan en este orden: tests exactos por commit y memoria de resultados (JH 8), cola de fusión local por tandas (JH 10), corridas de GitHub de a dos tests y lista de tests inestables?": "Sí, en ese orden (Recomendada)".
@@ -42,6 +68,14 @@ high
 - S8. Red: the batch is bisected locally, halves tested under the lock until the pull request that breaks it is named; it leaves the batch and the rest is tried again.
 - S9. Only pusher: the pre-push hook refuses a push of main from anywhere but the queue.
 - S10. `--dry-run` builds and prints the candidate and pushes nothing.
+- S11. A step only he can do holds the land (docs/FAILURES.md, land-took-pending-pr; the lead's order to JH 298,
+  2026-11-22): a pull request is left out while a feature document its diff touches, read at its head, holds an
+  open task of kind `his`; a document that cannot be read leaves it out too, since "could not look" is never "none".
+- S12. A reopened pull request's run is trusted only on the base (reopen-tested-old-base; the lead's order to JH 298,
+  2026-11-22: "a reopen step that waits until refs/pull/<n>/merge^1 equals origin/main before it trusts the run"):
+  `merge-queue --reopen <n>` reopens it, then waits until GitHub's merge ref of it has the default branch as its
+  first parent, and says which merge commit a run must have tested; past its bound it says the run is not to be
+  trusted.
 
 ## Tasks
 - [x] T1 (S4, S5, S10): the candidate, built and printed. Route: inline. RED: bin/merge-queue.test.mjs failed on the missing module, then on the two hook cases (L4); GREEN 6 of 6. Real run, 2026-10-14: "Candidate: main eb6abf7 with 2 pull requests merged in order: PR 137 (docs/gate-turn-guards-followups), PR 146 (fix/codegraph-home-files)."
@@ -49,6 +83,8 @@ high
 - [x] T3 (S8): bisection on a red local suite: the shortest red prefix of the candidate's merges names the pull request; it leaves, the rest are merged again on the green prefix and landed. Route: inline. RED then GREEN: "a candidate red on this machine is bisected..." (suites seen: red, green, green); 11 of 11. A candidate green here and red on CircleCI is not bisected: it is reported, and main is not pushed.
 - [x] T4 (S9): the pre-push hook refuses a push or delete of main unless `JS_HARNESS_MERGE_QUEUE=1`, which `--land` sets on its push of main. Route: inline. RED: two of the three new tests of bin/pre-push-hook.test.mjs; GREEN 10 of 10. High risk (a guard): independent verifier pending. Its limit, L6.
 - [x] T5: help and README say what `--land` does, its bisection and the hook's refusal (L12). Route: inline. The keeper script is the orchestrator's to retire, once the first real `--land` has run.
+- [x] T6 (kind: build) (S11) the land holds a pull request with an open step of his. Route: inline, test first. RED 2 of 3 on main; GREEN 3 of 3.
+- [x] T7 (kind: build) (S12) `--reopen <n>` waits for the merge ref on the base. Route: inline, test first. RED 3 of 3; GREEN 3 of 3.
 
 ## Log
 - L1. 2026-10-14 16:26, the orchestrator's order to JH 10 (cross-session message): "Yours is step 3 ... Order: merge-ready first as planned, then the queue, then the conflict-hunk review. Specs in your document with his words from the file, test first." His words in S1 and S2 were read with `js-harness sessions --quote`.
@@ -68,3 +104,12 @@ high
 - L6. 2026-10-14, the limit of S9: the hook sees only a push made from a clone. `gh pr merge`, which merges on GitHub's side and is how main moves today, never passes through it, and neither does the merge button. The queue is the only pusher of main when the lead's keeper script is retired (T5) and nobody merges by hand; GitHub's branch protection would hold it on the server, and that is a setting of the repository, his. The environment variable is a mark against mistakes, not a lock against a session that sets it on purpose.
 - L5. 2026-10-14, L3 settled by his choice of CircleCI (tapped "Sí, ya", b878a67f line 4267, to "¿Sumamos CircleCI gratis como segundo sistema de pruebas para las corridas completas de la cola de fusión? Vos creás la cuenta y autorizás su app en GitHub; JH 10 lo conecta y mide."; and typed, line 4404: "ahh ok listo entonces ya cree la cuenta, ya puedes continua con eso cierto?"). CircleCI builds branches, so a pushed `queue/*` branch gets its full run with no pull request and no change to gate.yml; .circleci/config.yml (branch ci/circleci) runs only for `queue/*`. S6's GitHub run is that CircleCI run, read from the commit's check runs and statuses. CircleCI bills by the second, then the whole credit ("First we round up to the nearest second, and then up to the nearest credit", https://circleci.com/docs/reference/faq/). Pushing main is `--land`, a mode of its own: a run that changes main is never the default.
 - L4. 2026-10-14, found by the first real dry run: every pull request read as "conflicts with the candidate so far", with no file named. The repository's pre-merge-commit hook runs the gate on every `git merge`; in the candidate it waited for a turn and then refused. The candidate's merges now run with `--no-verify`, since the queue runs the suite once on the whole candidate (S6), and a merge that fails with no conflicted file says what git said.
+- L9. 2026-11-22, JH 298: the lead's brief (brief-298-roadmap-owed.md, unit 4) and messages give this document T6 and
+  T7, one branch and one draft pull request for both, since both edit bin/merge-queue.mjs. Codex is held at its 70%
+  stop until 2026-11-23 23:45, so its review is recorded unavailable; the lenses run on each commit.
+- L18. 2026-11-22, JH 299 for JH 298, which stopped with this line owed: the Control lines of the two failures this
+  branch controls are in draft pull request 992, from main. land-took-pending-pr names the S11 test "a pull request
+  whose feature document holds an open step of his (kind: his) is left out, naming it", and reopen-tested-old-base
+  names the S12 test "--reopen reopens the pull request and trusts its run only once". 992 lands after this pull
+  request: before it, the tests are not on main and the register reads both as "control lost". Numbered L18, not
+  L10, because L10 to L17 of 2026-10 are above.
