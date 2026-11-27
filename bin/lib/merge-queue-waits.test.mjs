@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { onlyWaits, readCopy, reArmNote, sessionOf, verbOf, waitAgain } from './merge-queue-waits.mjs';
-import { NOTICE_TEXT_MAX } from './channel.mjs';
+import { onlyWaits, readCopy, verbOf } from './merge-queue-waits.mjs';
 
 // The machine of S4 and S5 (odd/tasks/lead-manual-steps.md): pnpm's global folder holds the installed copy, and the
 // processes below run from it or not.
@@ -80,45 +79,6 @@ test('readCopy reads a copy named through pnpm/bin/.., and takes quiet --wait fo
   const processes = [line(120, T + 20, `${shimmed} quiet --wait`), line(220, T + 20, `${shimmed} quiet`)];
   const seen = readCopy({ snapshot: SNAPSHOT, processes, globalDir: GLOBAL, self: 300 });
   assert.deepEqual([seen.waits.map((wait) => wait.pid), seen.blockers.map((one) => one.pid)], [[120], [220]]);
-  assert.equal(waitAgain(`${shimmed} quiet --wait`), 'js-harness quiet --wait');
-});
-
-// On 2026-10-29 a background wait's sh.exe named a parent that had exited: its parents never reach the session.
-test("sessionOf finds the one open session whose transcript holds the same wait, and names none when none or several do", () => {
-  const plan = [
-    { id: 'a', title: 'JH 86 · rules and evals', waits: ['cd "D:/js-harness/.claude/worktrees/f8" && js-harness wait --pr 674 --every 60 2>&1 | tail -3'] },
-    { id: 'b', title: 'JH 85 · x', waits: ['js-harness wait --pr 675'] },
-    { id: 'c', title: 'JH 84 · y', waits: ['js-harness wait --main-has 1c6b6c2', 'node bin/js-harness.mjs wait --main-has 1c6b6c2'] },
-    { id: 'd', title: 'JH 83 · z', waits: ['js-harness wait --main-has 1c6b6c2'] },
-  ];
-  assert.equal(sessionOf({ commandLine: PROCESSES[0].commandLine, plan }).session.title, 'JH 86 · rules and evals');
-  assert.deepEqual(sessionOf({ commandLine: `node "${ENTRY}" wait --pr 999`, plan }), { session: null, why: 'no open session ran it' });
-  assert.deepEqual(sessionOf({ commandLine: `node "${ENTRY}" wait --main-has 1c6b6c2`, plan }), { session: null, why: 'several sessions ran it (JH 84 · y, JH 83 · z)' });
-  assert.equal(sessionOf({ commandLine: `node "${ENTRY}" quiet --wait`, plan }).session, null);
-  // A typed wait is read as its shell reads it: single quotes, a quote inside double ones, a redirection after it.
-  const quoted = [
-    { id: 'e', title: 'JH 82 · q', waits: ["js-harness wait --main-file README.md --contains 'ready now'>/dev/null 2>&1"] },
-    { id: 'f', title: 'JH 81 · r', waits: ['js-harness wait --main-file a.md --contains "it\'s here" &'] },
-  ];
-  assert.equal(sessionOf({ commandLine: `node "${ENTRY}" wait --main-file README.md --contains "ready now"`, plan: quoted }).session.title, 'JH 82 · q');
-  assert.equal(sessionOf({ commandLine: `node "${ENTRY}" wait --main-file a.md --contains "it's here"`, plan: quoted }).session.title, 'JH 81 · r');
-  // A quoted argument that begins with `<` is an argument (Codex P2 on 183b473..e387c13), not a redirection.
-  const html = [{ id: 'g', title: 'JH 80 · s', waits: ['js-harness wait --main-file index.html --contains "<html" 2>&1'] }];
-  assert.equal(sessionOf({ commandLine: `node "${ENTRY}" wait --main-file index.html --contains "<html"`, plan: html }).session.title, 'JH 80 · s');
-});
-
-test('waitAgain gives the wait to run again, as js-harness and its arguments', () => {
-  assert.equal(waitAgain(PROCESSES[0].commandLine), 'js-harness wait --pr 674 --every 60');
-  assert.equal(waitAgain(`node "${ENTRY}" wait --notice-to 88 --cwd "D:\\a b"`), "js-harness wait --notice-to 88 --cwd 'D:\\a b'");
-  // A session runs it again in its shell: a word the shell would read is quoted whole, a quote in it closed and kept.
-  assert.equal(waitAgain(`node "${ENTRY}" wait --main-file README.md --contains "a&b $HOME \`x\` it's" --cwd D:\\repo`), "js-harness wait --main-file README.md --contains 'a&b $HOME `x` it'\\''s' --cwd 'D:\\repo'");
-});
-
-test("reArmNote names the copy's sha, the refresh's end and the waits to run again, within a notice's length", () => {
-  const sha = '0123456789abcdef0123456789abcdef01234567';
-  assert.equal(reArmNote({ sha, code: 0, again: ['js-harness wait --pr 1'] }), 'The installed copy was refreshed to 0123456 by merge-queue --refresh-copy, and the wait you ran from it was stopped for it: run it again: js-harness wait --pr 1');
-  assert.match(reArmNote({ sha, code: 6, again: ['a', 'b'] }), /^The refresh of the installed copy to 0123456 ended with exit 6 \(merge-queue --refresh-copy says why\), and the 2 waits you ran from it were stopped for it: run them again: a; b$/);
-  assert.ok(reArmNote({ sha, code: 0, again: ['x'.repeat(900)] }).length <= NOTICE_TEXT_MAX);
 });
 
 // Transcripts for onlyWaits, in the shapes of bin/lib/wake.test.mjs. On 2026-11-02 at 10:05Z claude agents listed JH 130

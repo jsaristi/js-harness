@@ -4,12 +4,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { appendReading, newReading } from './channel.mjs';
-import { agentOnlyWaits, openSessions } from './merge-queue-refresh-now.mjs';
+import { agentOnlyWaits } from './merge-queue-refresh-now.mjs';
 
-// Whose waits `merge-queue --refresh-copy` stops (S5 of odd/tasks/lead-manual-steps.md): the installed copy is the
-// machine's, so the sessions are read from every project's transcripts, and a session opened from the phone, whose
-// transcript holds no title, is named by the opening it read. Transcripts and the channel are written in a scratch
-// home.
+// Whether a session the land's refresh finds busy only waits, read from its transcript (agentOnlyWaits). Transcripts
+// and the channel are written in a scratch home.
 const made = [];
 after(() => {
   for (const dir of made) fs.rmSync(dir, { recursive: true, force: true });
@@ -45,26 +43,6 @@ function machine() {
   appendReading(home, 'D--js-harness', newReading({ at: at(40), reader: { id: 'phone-1' }, title: 'JH 84 · from the phone' }));
   return { claudeHome, home, here: { slug: 'D--js-harness', root: 'D:\\js-harness', dirs: [path.join(claudeHome, 'projects', 'D--js-harness'), path.join(claudeHome, 'projects', 'D--js-harness--claude-worktrees-f8')] } };
 }
-
-test("openSessions reads every project's open sessions, each with its main checkout's channel, a phone's named by its reading", () => {
-  const slugOf = (cwd) => (cwd === 'D:\\other\\.claude\\worktrees\\x' ? 'D--other' : cwd.startsWith('D:\\else') ? null : `slug of ${cwd}`);
-  const found = openSessions({ ...machine(), now: () => NOW, slugOf });
-  const brief = found.map(({ title, slug, waits }) => [title, slug, waits]).sort((a, b) => a[0].localeCompare(b[0]));
-  assert.deepEqual(brief, [
-    ['JH 3 · other work', 'slug of D:\\proj', ['js-harness wait --pr 12']],
-    ['JH 4 · other tree', 'D--other', ['js-harness wait --pr 13']],
-    ['JH 5 · landed tree', 'D--js-harness', ['js-harness wait --pr 14']],
-    ['JH 6 · lost tree', null, ['js-harness wait --pr 15']],
-    ['JH 84 · from the phone', 'D--js-harness', ['js-harness wait --main-has 1c6b6c2']],
-    ['JH 85 · follow-ups', 'D--js-harness', ['js-harness wait --notice-to 85']],
-    ['JH 86 · rules and evals', 'D--js-harness', ['js-harness wait --pr 674']],
-  ]);
-});
-
-test('openSessions reads none when the projects folder is missing', () => {
-  const { home, here } = machine();
-  assert.deepEqual(openSessions({ claudeHome: path.join(home, 'none'), home, here, now: () => NOW }), []);
-});
 
 // JH 131 (odd/tasks/defect-trio.md, spec 3): the land's refresh reads a busy session's transcript by the id and folder
 // claude agents gives, as JH 130's was on 2026-11-02 under D--js-harness--claude-worktrees-e3-answers.

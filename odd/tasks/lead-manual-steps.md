@@ -182,3 +182,15 @@ Read 2026-10-29 from each command's `--help` on main 1c6b6c2:
   correct (0.94); one new P2 (0.99): a quoted argument that begins with `<` (`--contains "<html"`) was read as an
   input redirection, so its wait matched no session. `shellWords` tells no input redirection, so no word ends a typed
   wait by its first character any more; a wait typed with an unquoted `<` after it is printed, not told.
+- L11. 2026-11-21, JH 284 (brief of JH ORQ, `brief-refresh-waits.md`): the refresh alone no longer stops the waits.
+  Evidence: on 2026-11-21 a refresh stopped JH 270's `wait --notice-to 270` at 12:14:45Z; the stop woke its session,
+  which read its dead task's output (exit 127), found no note and ended its turn with no wait at 12:15:33Z, and the
+  note to run it again reached the channel at 12:15:45Z, after the refresh, to no one (its transcript ded096a6; the
+  channel's merge-queue notices at 12:15:45Z). A note before the stop would wake the session inside the swap, where
+  its hooks run from a half-replaced copy. A wait need not stop: on this machine a node process whose folder is
+  deleted keeps running the code it loaded, and only a later lazy import fails; the static graphs of `wait.mjs`
+  (97 modules) and `quiet.mjs` hold no lazy import and start no js-harness; and a real `js-harness.mjs wait` run
+  from a temporary copy, the copy then deleted, still ended on its notice with exit 3. So the waits run through the
+  swap and end as they would have; the stop, the notes and the session reading (`sessionOf`, `waitAgain`,
+  `reArmNote`, `openSessions`) left with their last caller. Cost: a wait runs the old copy's code until it ends, up
+  to its 480 minutes. Not known: where the exit 127 of a stopped wait comes from.

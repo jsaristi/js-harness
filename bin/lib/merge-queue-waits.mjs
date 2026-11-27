@@ -2,14 +2,13 @@
 // odd/tasks/lead-manual-steps.md). The lead refreshed the copy by hand while sessions held only waits on it: he listed
 // the copy's node processes by its folder, stopped the waits, and told each session whose wait he stopped to run it
 // again; anything else running from the copy (an eval batch, a Codex or lens review, a gate) meant no refresh. This
-// reads the same from one process table and one listing of command lines, so the refresh stops a wait and never other
-// work. A wait's session is the one whose transcript holds the same wait still open (wakePlan, ./wake.mjs). The land's
-// refresh asks here too whether a session claude calls busy only waits (`onlyWaits`). Pure: the listings and the
-// transcripts are handed in. Zero dependencies.
+// reads the same from one process table and one listing of command lines, so the refresh refuses on other work and
+// leaves a wait running, since a wait outlives its folder's swap (JH 284). The land's refresh asks here too whether a
+// session claude calls busy only waits (`onlyWaits`). Pure: the listings and the transcripts are handed in. Zero
+// dependencies.
 import path from 'node:path';
 import { CLOCK_TOLERANCE_MS, selectDescendants } from './process-tree.mjs';
 import { argumentsOf, comparable, DISPATCHER_PATTERN, parseTranscript, sessionFacts } from './sessions.mjs';
-import { NOTICE_TEXT_MAX } from './channel.mjs';
 import { shellWords } from './guard.mjs';
 import { isWaitCommand } from './wake.mjs';
 
@@ -158,80 +157,4 @@ export function readCopy({ snapshot, processes, globalDir, self }) {
   }
   const blockers = copy.filter((one) => !(started.has(one.pid) && agrees(one, false))).map(({ pid, createdAt, commandLine }) => ({ pid, createdAt, verb: verbOf(commandLine), commandLine }));
   return { waits, blockers };
-}
-
-/** The arguments of the wait in a command a session typed, as its shell reads them (`shellWords`): after the command
- * name or the dispatcher followed by `wait`, or after `wait.mjs`, up to the end, the next operator or an output
- * redirection; null when it holds no wait. `shellWords` takes the quotes off and tells no input redirection, so a word
- * that begins with `<` is an argument (`--contains "<html"`, Codex P2 on 183b473..e387c13): a wait typed with `<` after
- * it matches no session and is printed, not told. */
-function typedWait(typed) {
-  const words = shellWords(typed, { redirections: true });
-  const ends = (at) => words.operators.has(at) || words.redirections.has(at);
-  for (let at = 0; at < words.length; at += 1) {
-    if (ends(at)) continue;
-    const verbAt = /(^|[/\\])js-harness(\.mjs)?$/.test(words[at]) && words[at + 1] === 'wait' && !ends(at + 1) ? at + 2 : /(^|[/\\])wait\.mjs$/.test(words[at]) ? at + 1 : -1;
-    if (verbAt < 0) continue;
-    let end = verbAt;
-    while (end < words.length && !ends(end)) end += 1;
-    return words.slice(verbAt, end);
-  }
-  return null;
-}
-
-/** The words of a wait's arguments, without quotes: of a running process (`commandLine`, after its verb), or of a
- * command a session typed (`typed`); null when it holds no wait. */
-function waitWords({ commandLine, typed }) {
-  if (typed !== undefined) return typedWait(typed);
-  const words = verbAndArguments(commandLine);
-  return words === null || words[0] !== 'wait' ? null : words.slice(1);
-}
-
-/** The session that runs the wait `commandLine`, from `plan` (wakePlan at this moment: each open session's `title`,
- * `role` and background `waits` launched and not ended, read from its transcript). A background wait's shell outlives
- * the shell that started it, so its parents do not lead to the session; its arguments do. `{ session }` when exactly
- * one session has a wait with the same arguments open, else `{ session: null, why }`. */
-export function sessionOf({ commandLine, plan }) {
-  const words = waitWords({ commandLine });
-  if (words === null) return { session: null, why: 'no session runs it as js-harness wait' };
-  const same = (typed) => {
-    const theirs = waitWords({ typed });
-    return theirs !== null && theirs.join('\0') === words.join('\0');
-  };
-  const ran = plan.filter((one) => one.waits.some(same));
-  if (ran.length === 1) return { session: ran[0] };
-  return { session: null, why: ran.length === 0 ? 'no open session ran it' : `several sessions ran it (${ran.map((one) => one.title ?? one.id).join(', ')})` };
-}
-
-/** `arg` as the session's shell (sh, as its Bash tool runs) reads it back unchanged: bare when it holds only characters
- * no shell reads, else in single quotes, each quote in it closed, escaped and reopened. */
-const shellArg = (arg) => (/^[\w@%+=:,./-]+$/.test(arg) ? arg : `'${arg.replace(/'/g, "'\\''")}'`);
-
-/** The wait a command line runs, to run again: `js-harness wait` (or `quiet`) and its arguments, quoted for the shell
- * the session runs it in; null when it runs no wait. */
-export function waitAgain(commandLine) {
-  const words = verbAndArguments(commandLine);
-  return words === null ? null : ['js-harness', ...words.map(shellArg)].join(' ');
-}
-
-/** The verb of the wait a command line runs and its arguments, unquoted; null when it runs no wait. */
-function verbAndArguments(commandLine) {
-  const args = argumentsOf(commandLine ?? '');
-  const at = scriptAt(args);
-  if (at < 0 || !isWait(commandLine)) return null;
-  return DISPATCHER_PATTERN.test(args[at]) ? args.slice(at + 1) : [verbOf(commandLine), ...args.slice(at + 1)];
-}
-
-/** The note a session gets for the waits `again` the refresh stopped: the sha the copy was refreshed to, whether the
- * refresh ended well (`code` 0), and the waits to run again, cut to a notice's length. With `maybe`, the stop failed
- * partway, so a wait may still run and is run again only if it does not. */
-export function reArmNote({ sha, code, again, maybe = false }) {
-  const short = String(sha).slice(0, 7);
-  const head = code === 0 ? `The installed copy was refreshed to ${short} by merge-queue --refresh-copy` : `The refresh of the installed copy to ${short} ended with exit ${code} (merge-queue --refresh-copy says why)`;
-  const one = again.length === 1;
-  const waits = maybe
-    ? `${one ? 'the wait you ran from it' : `the ${again.length} waits you ran from it`} may have been stopped for it: run ${one ? 'it' : 'each'} again if it no longer runs`
-    : one ? 'the wait you ran from it was stopped for it: run it again' : `the ${again.length} waits you ran from it were stopped for it: run them again`;
-  const text = `${head}, and ${waits}: ${again.join('; ')}`;
-  return text.length <= NOTICE_TEXT_MAX ? text : `${text.slice(0, NOTICE_TEXT_MAX - 1)}…`;
 }
